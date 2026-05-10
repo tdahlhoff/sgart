@@ -36,7 +36,7 @@ Development of a privacy-friendly, collaborative household app for intelligent m
 
 | Aggregate | Stream Key | Primary Responsibility |
 |---|---|---|
-| `Household` | `household-{id}` | Membership, roles, store definitions |
+| `Household` | `household-{id}` | Membership, roles, store definitions, notification settings |
 | `ShoppingList` | `list-{id}` | Item consistency, status |
 | `ShoppingTrip` | `trip-{id}` | Routing, live status per store, receipt linkage |
 | `Receipt` | `receipt-{id}` | OCR workflow, confirmation, deduplication |
@@ -48,14 +48,21 @@ Development of a privacy-friendly, collaborative household app for intelligent m
 
 **Events:**
 ```
-HouseholdCreated        { householdId, name, createdBy }
-MemberInvited           { inviteId, email, role: ADMIN | MEMBER, expiresAt }
-MemberJoined            { keycloakUserId }
-MemberLeft              { keycloakUserId }
-MemberRoleChanged       { keycloakUserId, newRole }
-InviteExpired           { inviteId }
-StoreAdded              { storeId, name, chainId? }
-StoreRemoved            { storeId }
+HouseholdCreated            { householdId, name, createdBy }
+MemberInvited               { inviteId, email, role: ADMIN | MEMBER, expiresAt }
+MemberJoined                { keycloakUserId }
+MemberLeft                  { keycloakUserId }
+MemberRoleChanged           { keycloakUserId, newRole }
+InviteExpired               { inviteId }
+StoreAdded                  { storeId, name, chainId? }
+StoreRemoved                { storeId }
+NotificationSettingsUpdated { keycloakUserId, settings: {
+                                householdChanges: bool,
+                                listChanged: bool,
+                                listChangedDebounceMinutes: int,  // default: 5
+                                tripStatus: bool,
+                                receiptScanned: bool
+                              }}
 ```
 
 **Invariants:**
@@ -64,11 +71,28 @@ StoreRemoved            { storeId }
 - An expired invite cannot be redeemed (`InviteExpired`)
 - A store name must be unique within a household
 - User management is fully delegated to Keycloak; only `keycloakUserId` is referenced in events
+- An ADMIN can only leave the household if at least one other ADMIN exists
+- An ADMIN cannot be removed by others if they are the only ADMIN
+- Only an ADMIN can remove other members; a MEMBER can only remove themselves
+
+**Roles & Permissions:**
+
+| Action | MEMBER | ADMIN |
+|---|---|---|
+| Create / edit / delete lists | ✅ | ✅ |
+| Start / complete a trip | ✅ | ✅ |
+| Invite members | ✅ | ✅ |
+| Remove other members | ❌ | ✅ |
+| Remove themselves | ✅ | ⚠️ only if at least 1 other ADMIN exists |
+| Promote member to ADMIN | ❌ | ✅ |
+| Delete household | ❌ | ✅ |
 
 **Notes:**
 - Invitation flow: Admin enters email → system sends email with personal invite link via Keycloak → link opens app (Deep Link if installed) or web version → recipient registers or logs in → `MemberJoined`
 - Store names are household-scoped and free-form (e.g. "Edeka Schiedemann", "E Center Stroetmann")
 - Stores are linked to a `StoreChain` reference (see Section 4.6) for aggregated reporting
+- Notification settings are per household per member — a user can have different settings for each household they belong to
+- Invitation notifications are global (not household-scoped) since they arrive before membership
 
 ---
 
@@ -76,7 +100,8 @@ StoreRemoved            { storeId }
 
 **Events:**
 ```
-ShoppingListCreated         { listId, householdId, name, createdBy }
+ShoppingListCreated         { listId, householdId, createdBy, name? }
+ShoppingListRenamed         { listId, newName }
 ItemAdded                   { itemId, name, quantity, unit, note?, addedBy }
 ItemUpdated                 { itemId, quantity?, unit?, note? }
 ItemRemoved                 { itemId, removedBy }
@@ -87,15 +112,24 @@ ListDuplicated              { newListId, sourceListId }
 ListArchivedAsTemplate      { templateName }
 ```
 
+**List States:**
+```
+OPEN      → Being planned, no active trip started
+IN_TRIP   → Currently linked to an active trip
+DONE      → Trip completed, list archived
+```
+
 **Invariants:**
-- List name must not be empty
+- `name` is optional — if not set, a display name is generated automatically (see Notes)
 - Item quantity must be > 0
 - Items are identified by name + note combination; identical name + note is not allowed (prevents unintended duplicates while allowing e.g. "Milk (Bio)" and "Milk (normal)")
 - An empty list cannot be archived or duplicated
-- An archived list accepts no further commands
+- An archived list (`DONE`) accepts no further commands
+- Multiple `OPEN` lists are allowed per household
 
 **Notes:**
-- Default list name: `"Shopping Week {KW} / {YYYY}"` — generated server-side, overridable by user
+- `name` is optional. When no name is set, the UI generates a display name `"Liste {N}"` where N is the position of this list sorted by `createdAt` among all lists in state `OPEN` or `IN_TRIP`. Lists in state `DONE` are excluded from this numbering. The numbering is a projection, not a stored value.
+- The user can set or change the name at any time via `ShoppingListRenamed` (e.g. "Monday Edeka Route")
 - `ItemPostponed`: `targetListId` is optional. If set, a Process Manager fires `ItemAddedFromPostponed` on the target list. If not set, item is flagged as postponed without assignment. UI prompts: "Where should this item go?" → select existing list / create new list / keep as postponed
 
 ---
@@ -105,11 +139,14 @@ ListArchivedAsTemplate      { templateName }
 **Events:**
 ```
 TripStarted                 { tripId, householdId, shoppingListId, selectedStoreIds }
+StoreAddedToTrip            { storeId, reason: MANUAL | SUGGESTED }
 ItemRoutedToStore           { itemId, storeId, reason: PINNED | CHEAPEST | MANUAL }
 ItemStoreOverridden         { itemId, originalStoreId, overrideStoreId, updatePinning: bool }
+ItemReroutedOnTrip          { itemId, storeId, reason: MANUAL | SUGGESTED }
 ItemCheckedOnTrip           { itemId, storeId }
 ItemUncheckedOnTrip         { itemId }
-ItemPostponedOnTrip         { itemId, targetStoreId?, nextTrip: bool }
+ItemPostponedOnTrip         { itemId }
+OpenItemsReviewed           { decisions: [{ itemId, action: TRANSFER | DISCARD, targetListId? }] }
 ReceiptScanInitiated        { receiptId, storeId }
 ReceiptLinkedToTrip         { receiptId, storeId }
 TripPaused                  { reason? }
@@ -121,7 +158,7 @@ TripCompleted               { completedBy }
 - A trip requires at least one store
 - A trip requires a linked `ShoppingList`
 - `ReceiptScanInitiated` is rejected if a receipt for the given `storeId` is already linked
-- `ReceiptScanInitiated` is rejected if trip is `PAUSED`, `DONE`
+- `ReceiptScanInitiated` is rejected if trip is `PAUSED` or `DONE`
 - Only one trip per shopping list may be in state `ACTIVE` or `PAUSED` at any time
 - `TripCompleted` is user-triggered — no forced completion based on receipt status
 
@@ -132,10 +169,66 @@ PAUSED  → Trip is deferred (e.g. postponed to next day); list and open items r
 DONE    → User declares trip finished; missing receipts remain visible but are not a blocker
 ```
 
+**Usage Scenarios:**
+The app supports three equally valid usage modes:
+- **Analog:** Print the list, shop without the app, confirm trip completion afterwards, optionally scan receipts later
+- **Digital-Active:** Check off items directly in the app during shopping
+- **Hybrid:** Mix of both — e.g. shop analog but scan receipts afterwards for price tracking
+
+**Trip View — Grouped by Store:**
+When a trip is started, the shopping list is presented grouped by store. Items not assigned to any store are listed separately at the bottom. This applies to both the in-app view and the PDF printout.
+
+```
+📍 Edeka Schiedemann
+  ☐ Milk (2L)
+  ☐ Butter
+
+📍 Netto
+  ☐ Coffee (500g)
+
+──────────────────────
+Not yet assigned
+──────────────────────
+  ☐ Muesli
+  ☐ Yoghurt (4-pack)
+```
+
+**Store Assignment:**
+- The user can manually assign any item to any store before or during the trip
+- Items with no store assignment appear in the "Not yet assigned" section
+- Post-MVP: automatic routing suggestions based on price history
+
+**Rerouting vs. Postpone during a Trip:**
+
+| Action | Meaning | Event |
+|---|---|---|
+| **Reroute (A1)** | Item goes to another store already in the trip | `ItemReroutedOnTrip { reason: MANUAL }` |
+| **Reroute (A2)** | User adds a new store spontaneously to the trip | `StoreAddedToTrip { reason: MANUAL }` + `ItemReroutedOnTrip` |
+| **Reroute (A3)** | App suggests a store based on price history; user confirms | `StoreAddedToTrip { reason: SUGGESTED }` + `ItemReroutedOnTrip { reason: SUGGESTED }` |
+| **Postpone** | Item is moved to the next shopping list | `ItemPostponedOnTrip` → Process Manager |
+
+**Trip Completion Flow (multi-step dialog):**
+```
+1. "Have you finished your shopping trip?"
+   → Yes / No (trip remains ACTIVE)
+
+2. "Did you get everything?"
+   → Yes, everything → proceed to step 3
+   → No → per open item: TRANSFER (to which list?) | DISCARD
+   → OpenItemsReviewed event emitted
+
+3. "Would you like to scan receipts?"
+   → Per visited store: Scan receipt | Skip
+   → Receipts can also be scanned later
+
+4. TripCompleted
+```
+
 **Notes:**
-- Receipt scan is always initiated from within a trip for a specific store — no free-standing scan in the primary flow
+- Receipt scan is always initiated from within a trip for a specific store — no free-standing scan in the primary flow (see Backlog for standalone scan)
 - `ItemStoreOverridden { updatePinning: true }` triggers a Process Manager to fire `ProductPinnedToStore` on the `Product` aggregate — the permanent pinning is updated transparently
 - UI shows receipt status per store: ✅ scanned / ⏳ pending
+- The app may proactively prompt "Have you finished your shopping?" based on inactivity or time elapsed
 
 ---
 
@@ -160,6 +253,18 @@ ReceiptConfirmed            { confirmedBy }
 - At least one item must exist after parsing
 - After `ReceiptConfirmed`, the receipt is immutable — no further changes
 - Duplicate detection via fingerprint (`hash(storeId + date + total + sortedItemNames)`) is evaluated after `ReceiptParsed`; duplicate prompts user confirmation, not automatic rejection
+
+**Receipt Confirmation Flow:**
+After OCR and parsing, the user sees a single summary screen:
+```
+"These items were recognised and marked as purchased:"
+  ✅ Milk 2L — 1,09€
+  ✅ Butter — 1,79€
+  ⚠️ "Bio Joghurt 4x125g" → not matched → "Assign to product or ignore?"
+
+→ User taps OK → ItemChecked (bulk) + PriceObserved (bulk) emitted
+```
+No per-item confirmation required for matched items — one overview, one confirmation.
 
 **Notes:**
 - `ReceiptConfirmed` triggers a Process Manager: for each matched item, `ObservePriceCommand` is issued on the corresponding `Product` aggregate (eventual consistency, idempotent)
@@ -208,6 +313,10 @@ StoreChain { chainId, normalizedName, logoUrl? }
 | `ReceiptConfirmed` | Issue `ObservePriceCommand` for each matched `Product` |
 | `ItemStoreOverridden { updatePinning: true }` | Issue `UnpinFromStoreCommand` + `PinToStoreCommand` on `Product` |
 | `ItemPostponed { targetListId }` | Issue `AddItemFromPostponedCommand` on target `ShoppingList` |
+| `ItemPostponedOnTrip` | Check if OPEN list exists → if yes: `AddItemCommand` on selected list; if no: `CreateShoppingListCommand` + `AddItemCommand` |
+| `OpenItemsReviewed` | For each `TRANSFER` decision: `AddItemCommand` on target list (create list first if none exists) |
+| `StoreAddedToTrip { reason: SUGGESTED }` | Based on `PriceObserved` history of the `Product` aggregate |
+| `TripCompleted` | Check for unreviewed open items → if any: trigger OpenItemsReviewed dialog |
 
 ---
 
@@ -215,56 +324,133 @@ StoreChain { chainId, normalizedName, logoUrl? }
 
 ### Shopping Lists & Live Mode
 - Collaborative lists with multi-tenancy (households & user roles)
+- Multiple OPEN lists allowed per household simultaneously (e.g. "Monday Edeka route", "Thursday Aldi run")
+- Optional list name — auto-generated display name `"Liste {N}"` based on creation order among OPEN + IN_TRIP lists
 - Quantity input with flexible units (pieces, kg, litres)
 - Free-text notes (e.g. for preferred brands)
 - Reusability (duplicate lists / templates)
 - Print function (PDF export for offline users)
-- Granular item status in the supermarket: *Open*, *Done*, *Postponed* (to another store or next trip)
-- Default list name: `"Shopping Week {KW} / {YYYY}"`
+- Granular item status in the supermarket: *Open*, *Done*, *Postponed*
 
-### Smart Features & Routing
-- **Shopping Trips:** User selects stores for current trip (e.g. only Edeka and Aldi)
+### Shopping Trip — Usage Modes
+- **Analog:** Print list → shop → confirm trip done → optionally scan receipts
+- **Digital-Active:** Check off items in app during shopping
+- **Hybrid:** Any combination of the above
+
+### Shopping Trip — Routing & Store Assignment
+- Trip view grouped by store; unassigned items listed separately at bottom
+- Manual store assignment per item (always available)
+- **Shopping Trips:** User selects stores for current trip
 - **Store Pinning:** Lock items to specific stores (e.g. coffee always at Netto)
 - **Per-trip Override:** User can manually reroute a pinned item for the current trip only, with optional "Always use this store from now on" checkbox
-- Automatic routing of remaining items based on cheapest historical price
+- Spontaneous store addition during trip (user knows they can get the item there)
+- Post-MVP: Automatic routing suggestions based on cheapest historical price
 
-### Dashboard & Reporting
-- Expenses per month (bar/pie charts)
-- Expenses per store (local and chain-level aggregation)
-- Price history of individual items per store (line charts)
+### Notifications (per household, per member)
+Configurable per household — a user may have different settings for each household:
+
+| Notification | Default | Configurable |
+|---|---|---|
+| Household changes (member joined/left) | ✅ On | ✅ |
+| List changed (debounced, default 5 min) | ✅ On | ✅ |
+| Trip started / completed | ✅ On | ✅ |
+| Receipt scanned | ❌ Off | ✅ |
+| Invitation received | ✅ On | ❌ (always on) |
+
+- "List changed" notifications are debounced — at most one notification per list per debounce interval, even if many items changed
+- Notification content is always a content-free ping; the app fetches real data from own server
+
+### Offline Behaviour
+- **Offline Queue (MVP):** Actions performed while offline are stored locally and synced when connection is restored. UI shows "X changes not yet synchronised"
+- **Post-MVP — Presence:** Heartbeat mechanism detects when a member is offline; other members see "⚠️ Anna was last seen 5 min ago — her changes may be missing"
+- **Post-MVP — Delivery Status:** Server tracks which members have received each event via SSE; UI shows "⚠️ Not yet received by Anna"
+- **Post-MVP — Conflict Handling:** When offline actions conflict with online changes, the affected member receives an inline notification (e.g. "You checked off Milk, but it was removed from the list by Peter")
+
+### Dashboard & Reporting (Post-MVP)
+- Expenses per month / quarter (bar / pie charts)
+- Expenses per store (local store and chain-level aggregation)
+- Price history per article per store (line chart) — e.g. select "Milk" → see all purchases, all stores, price over time
+- All dashboard views are analytical/read-only — no actions triggered from dashboard
+- Routing suggestions during trip planning are based on the same price data but are part of the Trip flow, not the Dashboard
 
 ---
 
-## 6. Milestone Plan
+## 6. MVP Scope
 
-### Phase 1: Infrastructure & Docker Setup
+The MVP focuses on the core collaborative shopping list experience. All intelligence features (OCR, routing, price history, dashboard) are Post-MVP.
+
+**MVP User Journey:**
+```
+Create household → Invite members →
+Create list → Add items (collaboratively, real-time) →
+Assign items to stores (manually) →
+Print list (PDF) OR use app during shopping →
+Start trip → Check off items →
+Complete trip → Review open items (transfer or discard) →
+Create next list
+```
+
+**MVP Includes:**
+- Household creation & member invitation (Keycloak)
+- Multiple collaborative shopping lists per household
+- Real-time sync via SSE (BLoC state management in Flutter)
+- Manual store assignment per item
+- Trip view grouped by store with "Not yet assigned" section
+- PDF export / print
+- Trip completion dialog (open items review)
+- Offline queue (local pending actions)
+- Basic notifications (invitation, list changed, trip status)
+- Roles: ADMIN / MEMBER (all permissions equal except household deletion and member removal)
+
+**Post-MVP (planned, not in first release):**
+- OCR & receipt scanning
+- Automatic item-to-store routing (price-based)
+- Store pinning & permanent routing preferences
+- Price history & product tracking
+- Dashboard & reporting
+- Configurable notification settings per household
+- Offline presence detection & delivery status
+- Conflict handling for offline edits
+- Standalone receipt scan (without trip context)
+- Store logos from chain reference data
+- Smart item suggestions based on history
+- Debounce configuration for notifications
+
+---
+
+## 7. Milestone Plan
+
+### Phase 1: Infrastructure & Docker Setup ✅ MVP
 - Set up `docker-compose.yml` (Keycloak, Spring Boot, PostgreSQL, EventStoreDB)
 - Network configuration and persistent volumes
 - Keycloak realm configuration (SGART realm, client, roles)
 
-### Phase 2: Domain Model & Write Side (Backend)
-- Define aggregates (`ShoppingList`, `ShoppingTrip`, `Receipt`, `Household`, `Product`) and domain events in Java
+### Phase 2: Domain Model & Write Side (Backend) ✅ MVP
+- Define aggregates (`ShoppingList`, `ShoppingTrip`, `Household`) and domain events in Java
 - Implement command handling and persistence in EventStoreDB
+- MVP aggregates only: `Household`, `ShoppingList`, `ShoppingTrip`
+- Post-MVP aggregates deferred: `Receipt`, `Product`
 
-### Phase 3: Projections & Read Side (Backend)
+### Phase 3: Projections & Read Side (Backend) ✅ MVP
 - Subscribe to EventStoreDB streams via Spring Boot
 - Develop projectors that build relational PostgreSQL tables from events for UI queries
-- StoreChain reference data setup and fuzzy matching logic
+- List state projection (OPEN / IN_TRIP / DONE) and display name generation (`Liste {N}`)
+- StoreChain reference data setup and fuzzy matching logic (Post-MVP)
 
 ### Phase 4: API, SSE & OCR Integration
-- Expose REST endpoints (Queries & Commands)
-- Build SSE broadcaster for real-time updates
-- Implement OCR abstraction (Strategy Pattern) and receipt parser
-- Implement receipt fingerprint deduplication
+- **Phase 4a (MVP):** Expose REST endpoints (Queries & Commands), build SSE broadcaster for real-time updates, offline queue support
+- **Phase 4b (Post-MVP):** Implement OCR abstraction (Strategy Pattern) and receipt parser, implement receipt fingerprint deduplication
 
-### Phase 5: Flutter Frontend & BLoC
-- UI/UX development (lists, live mode, dashboards)
+### Phase 5: Flutter Frontend & BLoC ✅ MVP
+- UI/UX development (lists, trip view grouped by store, PDF print)
 - Integrate SSE client and map server events to BLoC state management
-- Finalize offline sync logic and run end-to-end tests
+- Trip completion dialog (open items review)
+- Offline queue indicator in UI
+- Post-MVP: OCR/receipt flow, dashboard, routing suggestions, notification settings
 
 ---
 
-## 7. Backlog (Low Priority)
+## 8. Backlog (Low Priority / Post-MVP)
 
 - **Standalone Receipt Scan:** Scan a receipt without a trip context, purely for price tracking
   ```
@@ -273,3 +459,9 @@ StoreChain { chainId, normalizedName, logoUrl? }
 - **Store Logos:** Automatically enrich store entries with chain logos from reference data
 - **Smart Item Suggestions:** Suggest items based on historical shopping patterns
 - **Cross-device sync:** Real-time sync across multiple devices per household member
+- **Offline Presence:** Heartbeat-based detection of offline members with UI indicator
+- **Delivery Status:** Track which household members have received each SSE event
+- **Conflict Handling:** Inline notifications when offline edits conflict with concurrent changes
+- **Configurable Notification Debounce:** Let users choose "immediately / every 5 min / every 30 min"
+- **Routing Suggestions:** Automatic item-to-store routing based on cheapest historical price
+- **Dashboard & Reporting:** Full analytics suite (expenses by month/store, price history per article)
