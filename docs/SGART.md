@@ -90,7 +90,7 @@ NotificationSettingsUpdated { keycloakUserId, settings: {
 **Notes:**
 - Invitation flow: Admin enters email → system sends email with personal invite link via Keycloak → link opens app (Deep Link if installed) or web version → recipient registers or logs in → `MemberJoined`
 - Store names are household-scoped and free-form (e.g. "Edeka Schiedemann", "E Center Stroetmann")
-- Stores are linked to a `StoreChain` reference (see Section 4.6) for aggregated reporting
+- Stores are linked to a `StoreChain` reference (see Section 4.7) for aggregated reporting
 - Notification settings are per household per member — a user can have different settings for each household they belong to
 - Invitation notifications are global (not household-scoped) since they arrive before membership
 
@@ -176,7 +176,7 @@ The app supports three equally valid usage modes:
 - **Hybrid:** Mix of both — e.g. shop analog but scan receipts afterwards for price tracking
 
 **Trip View — Grouped by Store:**
-When a trip is started, the shopping list is presented grouped by store. Items not assigned to any store are listed separately at the bottom. This applies to both the in-app view and the PDF printout.
+When a trip is started, the shopping list is presented grouped by store. Items not assigned to any store are listed separately at the bottom. This applies to both the in-app view and the print view.
 
 ```
 📍 Edeka Schiedemann
@@ -300,8 +300,11 @@ StoreChain { chainId, normalizedName, logoUrl? }
 // Examples: { "edeka", "Edeka" }, { "aldi", "Aldi" }, { "rewe", "Rewe" }
 ```
 
-- On `StoreAdded`, the backend suggests a `chainId` via fuzzy matching (Levenshtein distance) against known chains
-- User confirms or overrides — final decision always with the user
+- The full list of StoreChains is loaded by the Flutter client at app start via `GET /api/v1/store-chains` and cached locally (TTL: 24h)
+- Fuzzy matching (e.g. Levenshtein distance) runs client-side as the user types the store name
+- The matching suggestion is shown inline in the form; the user confirms or overrides before submitting
+- `POST /api/v1/households/{id}/stores` receives the final `{ name, chainId? }` — no server-side suggestion needed
+- The final decision on chain assignment always rests with the user
 - Enables dual-level reporting: per local store ("Edeka Schiedemann") and per chain ("All Edeka branches")
 
 ---
@@ -329,7 +332,7 @@ StoreChain { chainId, normalizedName, logoUrl? }
 - Quantity input with flexible units (pieces, kg, litres)
 - Free-text notes (e.g. for preferred brands)
 - Reusability (duplicate lists / templates)
-- Print function (PDF export for offline users)
+- **Print / Druckansicht:** Direct printing via native OS print dialog (Flutter `printing` package) — no PDF is saved on device. The print view uses the same grouped-by-store layout as the trip view. Secondary action: "Share as PDF" (generated in-memory, not saved) for sharing the list e.g. via WhatsApp.
 - Granular item status in the supermarket: *Open*, *Done*, *Postponed*
 
 ### Shopping Trip — Usage Modes
@@ -384,7 +387,7 @@ The MVP focuses on the core collaborative shopping list experience. All intellig
 Create household → Invite members →
 Create list → Add items (collaboratively, real-time) →
 Assign items to stores (manually) →
-Print list (PDF) OR use app during shopping →
+Print list (native print dialog) OR use app during shopping →
 Start trip → Check off items →
 Complete trip → Review open items (transfer or discard) →
 Create next list
@@ -392,11 +395,12 @@ Create next list
 
 **MVP Includes:**
 - Household creation & member invitation (Keycloak)
+- First app start without household: prompt to create a new household or wait for an invitation
 - Multiple collaborative shopping lists per household
 - Real-time sync via SSE (BLoC state management in Flutter)
 - Manual store assignment per item
 - Trip view grouped by store with "Not yet assigned" section
-- PDF export / print
+- Print via native OS print dialog; secondary "Share as PDF" action (in-memory)
 - Trip completion dialog (open items review)
 - Offline queue (local pending actions)
 - Basic notifications (invitation, list changed, trip status)
@@ -435,17 +439,18 @@ Create next list
 - Subscribe to EventStoreDB streams via Spring Boot
 - Develop projectors that build relational PostgreSQL tables from events for UI queries
 - List state projection (OPEN / IN_TRIP / DONE) and display name generation (`Liste {N}`)
-- StoreChain reference data setup and fuzzy matching logic (Post-MVP)
+- StoreChain reference data setup (static seed data in PostgreSQL; fuzzy matching is client-side)
 
 ### Phase 4: API, SSE & OCR Integration
-- **Phase 4a (MVP):** Expose REST endpoints (Queries & Commands), build SSE broadcaster for real-time updates, offline queue support
+- **Phase 4a (MVP):** Expose REST endpoints (Queries & Commands) per Section 9, build SSE broadcaster for real-time updates, offline queue support
 - **Phase 4b (Post-MVP):** Implement OCR abstraction (Strategy Pattern) and receipt parser, implement receipt fingerprint deduplication
 
 ### Phase 5: Flutter Frontend & BLoC ✅ MVP
-- UI/UX development (lists, trip view grouped by store, PDF print)
+- UI/UX development (lists, trip view grouped by store, print via `printing` package)
 - Integrate SSE client and map server events to BLoC state management
 - Trip completion dialog (open items review)
 - Offline queue indicator in UI
+- StoreChain cache + client-side fuzzy matching for store name input
 - Post-MVP: OCR/receipt flow, dashboard, routing suggestions, notification settings
 
 ---
@@ -465,3 +470,137 @@ Create next list
 - **Configurable Notification Debounce:** Let users choose "immediately / every 5 min / every 30 min"
 - **Routing Suggestions:** Automatic item-to-store routing based on cheapest historical price
 - **Dashboard & Reporting:** Full analytics suite (expenses by month/store, price history per article)
+
+---
+
+## 9. API Kontrakt
+
+All endpoints are prefixed with `/api/v1`.
+Authentication: JWT issued by Keycloak, validated by the Spring Boot backend. The `keycloakUserId` is extracted from the token — no user ID in request body or path needed.
+
+### Error Format
+All error responses use a uniform JSON structure:
+```json
+{
+  "code": "INVITE_ALREADY_EXISTS",
+  "message": "A pending invite for this email already exists.",
+  "details": {}
+}
+```
+- `code` — machine-readable error identifier, evaluated by the Flutter client for user-facing messages
+- `message` — for logging/debugging only, not shown to the end user
+- `details` — optional additional context (e.g. which field failed validation)
+
+### Pagination
+No pagination in MVP. All list endpoints return the full result set.
+
+---
+
+### StoreChain
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/store-chains` | Returns all known store chains. Loaded at app start, cached client-side (TTL 24h). Used for client-side fuzzy matching when adding a store. |
+
+Response:
+```json
+[
+  { "chainId": "edeka", "normalizedName": "Edeka", "logoUrl": null },
+  { "chainId": "aldi", "normalizedName": "Aldi", "logoUrl": null }
+]
+```
+
+---
+
+### Household
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/households` | All households of the authenticated user. If empty → first-start flow (create or await invite). If 1 → load directly. If n → show selection screen. |
+| `POST` | `/api/v1/households` | Create a new household |
+| `GET` | `/api/v1/households/{id}` | Load household details |
+| `POST` | `/api/v1/households/{id}/invites` | Invite a member by email |
+| `POST` | `/api/v1/invites/{inviteId}/accept` | Accept an invite (called after Deep Link / web redirect) |
+| `DELETE` | `/api/v1/households/{id}/members/{userId}` | Remove a member (ADMIN only, or self-removal) |
+| `PATCH` | `/api/v1/households/{id}/members/{userId}/role` | Change member role (ADMIN only) |
+| `POST` | `/api/v1/households/{id}/stores` | Add a store. Body: `{ name, chainId? }`. The `chainId` is determined client-side via fuzzy matching and confirmed by the user before submission. |
+| `DELETE` | `/api/v1/households/{id}/stores/{storeId}` | Remove a store |
+
+---
+
+### ShoppingList
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/households/{id}/lists` | All lists for a household |
+| `POST` | `/api/v1/households/{id}/lists` | Create a new list |
+| `GET` | `/api/v1/lists/{id}` | Load a single list with items |
+| `PATCH` | `/api/v1/lists/{id}` | Rename a list |
+| `POST` | `/api/v1/lists/{id}/items` | Add an item |
+| `PATCH` | `/api/v1/lists/{id}/items/{itemId}` | Update an item (quantity, unit, note) |
+| `DELETE` | `/api/v1/lists/{id}/items/{itemId}` | Remove an item |
+| `POST` | `/api/v1/lists/{id}/items/{itemId}/check` | Check an item |
+| `POST` | `/api/v1/lists/{id}/items/{itemId}/uncheck` | Uncheck an item |
+| `POST` | `/api/v1/lists/{id}/items/{itemId}/postpone` | Postpone an item |
+| `POST` | `/api/v1/lists/{id}/duplicate` | Duplicate a list |
+| `POST` | `/api/v1/lists/{id}/archive` | Archive a list as template |
+
+---
+
+### ShoppingTrip
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/households/{id}/trips` | Start a trip |
+| `GET` | `/api/v1/trips/{id}` | Load trip details |
+| `POST` | `/api/v1/trips/{id}/stores` | Add a store to the trip spontaneously |
+| `PATCH` | `/api/v1/trips/{id}/items/{itemId}/store` | Reroute an item to another store |
+| `POST` | `/api/v1/trips/{id}/items/{itemId}/check` | Check off an item during the trip |
+| `POST` | `/api/v1/trips/{id}/items/{itemId}/uncheck` | Uncheck an item during the trip |
+| `POST` | `/api/v1/trips/{id}/items/{itemId}/postpone` | Postpone an item during the trip |
+| `POST` | `/api/v1/trips/{id}/pause` | Pause the trip |
+| `POST` | `/api/v1/trips/{id}/resume` | Resume a paused trip |
+| `POST` | `/api/v1/trips/{id}/complete` | Complete the trip (includes OpenItemsReviewed payload) |
+| `POST` | `/api/v1/trips/{id}/receipts` | Initiate a receipt scan for a specific store |
+
+---
+
+### SSE
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/households/{id}/stream` | Subscribe to the SSE event stream for a household |
+
+---
+
+## 10. Offene Punkte (Concretization Backlog)
+
+### 10.1 PostgreSQL Read-Model-Schema ⬜
+- Tabellen & Spalten pro Projektor
+- Datentypen, Constraints, Indizes
+- Welche Queries treiben die UI?
+
+### 10.2 SSE-Protokoll ⬜
+- Event-Format (JSON-Struktur, Event-Typen)
+- Welche Events werden an den Client gesendet? (alle Domain-Events? oder dedizierte Read-Events?)
+- Client-Subscription-Logik in Flutter (Reconnect-Strategie, Auth-Header via SSE)
+
+### 10.3 Flutter Screen-Map & Navigation ⬜
+- Übersicht aller Screens
+- Navigationsstruktur (Bottom Nav, Stack, Routing)
+- Welcher BLoC gehört zu welchem Screen?
+
+### 10.4 Keycloak-Konfiguration ⬜
+- Realm- & Client-Settings
+- Invite-Flow technisch (Token-Link, Deep Link, Fallback Web)
+- JWT-Claims die das Backend erwartet (z.B. `sub`, `email`, custom claims?)
+
+### 10.5 Offline-Queue ⬜
+- Lokaler Speicher (SQLite / Hive?)
+- Sync-Strategie beim Reconnect (Reihenfolge, Idempotenz)
+- Fehlerbehandlung (Konflikt, abgelaufener Token, Server-seitige Ablehnung)
+
+### 10.6 Docker Compose ⬜
+- Vollständiges Service-Setup (Ports, Volumes, Depends-on)
+- Environment-Variablen pro Service
+- Lokale Dev- vs. Prod-Konfiguration
