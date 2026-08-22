@@ -1,0 +1,188 @@
+<!--
+  SGART — KEY SCREEN: Haushalt verwalten (CAP-2 members/invites/roles, CAP-3 stores)
+  Reached from the switcher sheet. Foundations: Inter, System 3, 48px rows, text-only
+  buttons, locked palette. German product UI. Enforces: HouseholdRole {Admin, Participant}
+  → "Admin"/"Mitglied"; last-Admin guard; one pending invite per email; store removal =
+  ARCHIVE (history preserved); advisory chain suggestion (CAP-3). 3 frames: Verwalten-Hub ·
+  Einladen · Geschäfte.
+-->
+<title>SGART · Haushalt verwalten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; } }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font); -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .head{ max-width:1120px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+  .stage{ display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:320px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.76rem; text-align:center; max-width:29ch; }
+
+  .phone{ width:312px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .backrow{ display:flex; align-items:center; gap:8px; padding:8px 12px 10px; }
+  .backrow .chev{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .backrow .tt{ flex:1; min-width:0; }
+  .backrow h2{ font-size:1.18rem; font-weight:600; letter-spacing:-.01em; }
+  .backrow .sub{ font-size:.72rem; color:var(--n500); }
+
+  .content{ flex:1; overflow:auto; padding:12px 14px 18px; }
+  .sect{ font-size:.66rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n500); padding:8px 4px 7px; }
+  .group{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 8px 22px -18px rgba(25,23,22,.3); overflow:hidden; margin-bottom:8px; }
+  .row{ display:flex; align-items:center; gap:11px; padding:8px 13px; min-height:50px; }
+  .row + .row{ border-top:1px solid var(--n100); }
+  .av{ width:36px; height:36px; border-radius:11px; background:var(--n100); color:var(--n600); display:grid; place-items:center; font-size:.9rem; font-weight:700; flex:none; }
+  .av.admin{ background:var(--baltic); color:var(--ghost-white); }
+  .rl{ flex:1; min-width:0; }
+  .rt{ font-size:.92rem; font-weight:500; }
+  .rs{ font-size:.74rem; color:var(--n500); margin-top:1px; }
+  /* dense status label on its own line under the name — role & chain share it */
+  .rbadge{ display:flex; align-items:center; gap:7px; margin-top:3px; flex-wrap:wrap; }
+  .rbtime{ font-size:.68rem; color:var(--n500); }
+  .slabel{ display:inline-flex; align-items:center; line-height:1.3; white-space:nowrap; font-size:.62rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink); background:var(--tint); border-radius:5px; padding:2px 7px; }
+  .t-admin{ --tint:rgba(69,105,144,.12); --ink:#3a5a7d; }
+  .t-member{ --tint:var(--n100); --ink:var(--n600); }
+  .t-pending{ --tint:#f9ecd8; --ink:#8a5a12; }
+  .t-chain{ --tint:rgba(30,168,150,.13); --ink:#0f6f61; }
+  .act{ width:26px; height:26px; display:grid; place-items:center; color:var(--n400); flex:none; }
+  .more{ color:var(--n400); flex:none; }
+  .chev{ color:var(--n400); flex:none; }
+  .rt.danger{ color:var(--pink); font-weight:600; }
+  .di{ color:var(--pink); }
+
+  .link{ font-size:.84rem; font-weight:600; color:var(--baltic); padding:10px 4px 2px; display:inline-block; }
+  .helper{ font-size:.75rem; color:var(--n500); padding:6px 4px 0; }
+
+  .field{ display:flex; align-items:center; min-height:52px; border:1.5px solid var(--n300); border-radius:var(--r-btn); padding:0 13px; font-size:.95rem; color:var(--carbon-black); margin:2px 0 4px; }
+  .field.focused{ border-color:var(--baltic); box-shadow:0 0 0 3px rgba(69,105,144,.15); }
+  .caret{ display:inline-block; width:1.5px; height:19px; background:var(--baltic); margin-left:1px; animation:blink 1s steps(1) infinite; }
+  @keyframes blink{ 50%{ opacity:0; } }
+  @media (prefers-reduced-motion:reduce){ .caret{ animation:none; } }
+  .suggest{ border:1px solid var(--n200); border-radius:var(--r-card); background:#fff; padding:11px 13px; display:flex; align-items:center; gap:9px; margin-bottom:6px; }
+  .suggest .nm{ flex:1; font-size:.9rem; font-weight:600; }
+  .suggest .add{ color:var(--baltic); font-weight:700; font-size:.84rem; }
+  .cbadge{ display:inline-flex; align-items:center; gap:6px; font-size:.74rem; color:var(--n600); margin-top:2px; }
+  .cbadge .b{ background:rgba(30,168,150,.14); color:#0f6f61; border-radius:var(--r-pill); padding:2px 8px; font-weight:600; }
+
+  .btn{ width:100%; display:flex; align-items:center; justify-content:center; min-height:50px; border-radius:var(--r-btn); font-family:inherit; font-size:.94rem; font-weight:600; cursor:pointer; text-align:center; line-height:1.2; border:none; margin-top:8px; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); }
+  .btn.secondary{ background:transparent; color:var(--baltic); border:1px solid rgba(69,105,144,.35); }
+
+  .legend{ max-width:1120px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Screens</div>
+  <h1>Haushalt verwalten</h1>
+  <p>Erreichbar aus dem Umschalter. Mitglieder, Einladungen &amp; Rollen (CAP-2) und Geschäfte
+     (CAP-3). Regeln sichtbar gemacht: <b>Admin/Mitglied</b>, <b>letzter Admin geschützt</b>,
+     <b>eine Einladung pro E-Mail</b>, und <b>Entfernen = Archivieren</b> (Verlauf bleibt).</p>
+</div>
+
+<div class="stage">
+
+  <!-- FRAME 1: hub / members -->
+  <div class="col">
+    <div class="label">1 · Mitglieder &amp; Rollen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:22</span><span>▂▄▆ ⏦</span></div>
+        <div class="backrow"><span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span><div class="tt"><h2>Haushalt verwalten</h2><div class="sub">Rita &amp; Werner</div></div></div>
+      </div>
+      <div class="content">
+        <div class="sect">Mitglieder</div>
+        <div class="group">
+          <div class="row"><span class="av admin">W</span><div class="rl"><div class="rt">Werner Bergmann</div><div class="rbadge"><span class="slabel t-admin">Admin</span></div></div><span class="act"></span></div>
+          <div class="row"><span class="av">R</span><div class="rl"><div class="rt">Rita Bergmann</div><div class="rbadge"><span class="slabel t-member">Mitglied</span></div></div><span class="act"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        </div>
+        <div class="helper">Nur Admins können Rollen ändern oder Mitglieder entfernen. Der letzte Admin kann nicht entfernt werden.</div>
+
+        <div class="sect">Einladungen</div>
+        <div class="group">
+          <div class="row"><span class="av"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 6l8 6 8-6"/></svg></span><div class="rl"><div class="rt">anna@example.de</div><div class="rbadge"><span class="slabel t-pending">Ausstehend</span><span class="rbtime">vor 2 Tagen</span></div></div><span class="act"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        </div>
+        <button class="btn secondary">Person einladen</button>
+
+        <div class="sect">Haushalt</div>
+        <div class="group">
+          <div class="row"><div class="rl"><div class="rt">Geschäfte</div><div class="rs">3 Geschäfte</div></div><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+          <div class="row"><div class="rl"><div class="rt">Haushalt umbenennen</div></div><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+          <div class="row"><div class="rl"><div class="rt danger">Haushalt löschen</div></div></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="note">Rollen als Chips, „letzter Admin"-Regel als Hinweis. Verwalten-Aktionen nur für Admins.</div>
+  </div>
+
+  <!-- FRAME 2: invite -->
+  <div class="col">
+    <div class="label">2 · Person einladen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:23</span><span>▂▄▆ ⏦</span></div>
+        <div class="backrow"><span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span><div class="tt"><h2>Person einladen</h2></div></div>
+      </div>
+      <div class="content">
+        <div class="sect">E-Mail-Adresse</div>
+        <div class="field focused">stefan@example.de<span class="caret"></span></div>
+        <div class="helper">Der Link öffnet die App — oder den Browser, falls SGART noch nicht installiert ist. Eine Person wird als „Mitglied" hinzugefügt.</div>
+        <button class="btn primary">Einladung senden</button>
+        <div class="helper" style="padding-top:14px">Eine zweite offene Einladung an dieselbe Adresse ist nicht möglich.</div>
+      </div>
+    </div></div>
+    <div class="note">Einladen per E-Mail (CAP-2). Neue Mitglieder erhalten die Rolle „Mitglied". Keine Doppel-Einladung.</div>
+  </div>
+
+  <!-- FRAME 3: stores -->
+  <div class="col">
+    <div class="label">3 · Geschäfte</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:24</span><span>▂▄▆ ⏦</span></div>
+        <div class="backrow"><span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span><div class="tt"><h2>Geschäfte</h2><div class="sub">Rita &amp; Werner</div></div></div>
+      </div>
+      <div class="content">
+        <div class="group">
+          <div class="row"><div class="rl"><div class="rt">Edeka Schiedemann</div><div class="rbadge"><span class="slabel t-chain">Edeka</span></div></div><span class="act"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="row"><div class="rl"><div class="rt">Netto</div><div class="rbadge"><span class="slabel t-chain">Netto</span></div></div><span class="act"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="row"><div class="rl"><div class="rt">dm Drogerie</div><div class="rbadge"><span class="slabel t-chain">dm</span></div></div><span class="act"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        </div>
+
+        <div class="sect">Geschäft hinzufügen</div>
+        <div class="field focused">Aldi Süd<span class="caret"></span></div>
+        <div class="suggest"><div class="rl"><div class="nm">Aldi Süd</div><div class="rbadge"><span class="slabel t-chain">Aldi</span></div></div><span class="add">Hinzufügen</span></div>
+        <div class="helper">Entfernen <b>archiviert</b> ein Geschäft — es verschwindet aus der Auswahl, vergangene Einkäufe bleiben erhalten.</div>
+      </div>
+    </div></div>
+    <div class="note">Kette wird vorgeschlagen (CAP-3), bestätigen/ändern/löschen. Entfernen = Archivieren, Verlauf bleibt.</div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Design decisions:</b> roles shown as chips („Admin" = baltic tint / „Mitglied" = neutral); the
+     <b>last-Admin invariant</b> stated inline (CAP-2); pending invites listed with a <span style="color:#8a5a12">pending</span> chip and
+     „eine Einladung pro E-Mail" enforced; new members join as „Mitglied"; store add reuses the advisory client-side
+     chain suggestion (CAP-3); <b>removing a store archives it</b> (hidden from selection, history preserved) — never a hard delete;
+     admin-only actions; text-only buttons; 52px rows.</p>
+</div>

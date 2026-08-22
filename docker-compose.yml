@@ -1,0 +1,74 @@
+# Local development infrastructure for SGART (Story 1.1).
+#
+# Stands up the three backing services the modular monolith needs:
+#   - PostgreSQL  — read-model projections (CQRS read side, AD-4)
+#   - KurrentDB   — event store / write model (event sourcing, AD-4)
+#   - Keycloak    — identity provider fronted by the Identity ACL (AD-5)
+#
+# Credentials come from a local .env (see .env.example) and are DEV-ONLY. Production topology
+# (managed secrets, TLS, backups, resource limits, network policy) is a separate concern and is
+# intentionally deferred — see the "Deferred / concretization backlog" in ARCHITECTURE-SPINE.md.
+name: sgart
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ recommends a single mount at /var/lib/postgresql (data lives in a subdir),
+      # which keeps pg_upgrade --link working across major-version bumps.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kurrentdb:
+    image: docker.kurrent.io/kurrent-latest/kurrentdb:25.1.4
+    environment:
+      # Single insecure node is a DEV convenience only; never for production.
+      KURRENTDB_CLUSTER_SIZE: 1
+      KURRENTDB_RUN_PROJECTIONS: All
+      KURRENTDB_START_STANDARD_PROJECTIONS: "true"
+      KURRENTDB_INSECURE: "true"
+      KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
+      KURRENTDB_NODE_PORT: 2113
+    ports:
+      - "2113:2113"
+    volumes:
+      - kurrentdb-data:/var/lib/kurrentdb
+      - kurrentdb-logs:/var/log/kurrentdb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:2113/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    command: ["start-dev", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "8080:8080"   # Keycloak HTTP (dev)
+      - "9000:9000"   # management port — health & metrics
+    healthcheck:
+      # The Keycloak image ships no curl/wget, but its bash supports /dev/tcp — a successful TCP
+      # connect to the management port (9000, health-enabled) is a sufficient readiness signal.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  kurrentdb-data:
+  kurrentdb-logs:

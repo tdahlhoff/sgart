@@ -1,0 +1,263 @@
+<!--
+  SGART — KEY SCREEN: Conflict resolution (offline-replay) · CAP-8 / AD-8
+  A conflict = a QUEUED OFFLINE command rejected because the target aggregate advanced
+  meanwhile (stale expected-version). Resolution is COARSE, per-command: keep mine / discard
+  (no field-level merge). Convergent/idempotent actions (same add, same check-off, online
+  simultaneous edits) resolve SILENTLY — no UI. Entry points: (A) reconnect summary banner,
+  (B) inline "Konflikt" badge → same sheet. Foundations: Inter, System 3, 48px, text-only
+  buttons, locked palette (pink = conflict). German product UI; calm, Rita-safe copy.
+-->
+<title>SGART · Konflikt lösen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+    --pink-tint:rgba(244,91,105,.12); --pink-border:rgba(244,91,105,.34); --pink-ink:#a3283a;
+    --card2-bg:#ffffff;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; --pink-ink:#f6717d; --card2-bg:#2b2825; }
+  }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; --pink-ink:#f6717d; --card2-bg:#2b2825; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+
+  .head{ max-width:900px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:66ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:36px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:340px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.78rem; text-align:center; max-width:30ch; }
+
+  .phone{ width:330px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .apphdr{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 10px; }
+  .hh{ display:inline-flex; align-items:center; gap:6px; font-size:.86rem; font-weight:600; background:var(--n50); border:1px solid var(--n200); border-radius:var(--r-pill); padding:6px 11px; }
+  .hh .car{ font-size:.66rem; color:var(--n500); }
+  .sync{ display:inline-flex; align-items:center; gap:6px; font-size:.7rem; font-weight:600; color:var(--verdigris); }
+
+  .listctx{ padding:6px 14px 12px; }
+  .listctx .row{ display:flex; align-items:center; gap:10px; }
+  .listctx .chev,.listctx .more{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .listctx .more{ margin-left:auto; }
+  .listctx .titles{ flex:1; min-width:0; }
+  .listctx .kicker{ font-size:.64rem; letter-spacing:.12em; text-transform:uppercase; color:var(--n500); font-weight:600; }
+  .listctx h2{ font-size:1.22rem; font-weight:600; letter-spacing:-.01em; margin-top:1px; }
+
+  /* reconnect summary banner (conflict = pink) */
+  .banner{ margin:0 14px 12px; display:flex; align-items:center; gap:11px; background:var(--pink-tint);
+    border:1px solid var(--pink-border); border-radius:var(--r-card); padding:12px 13px; }
+  .banner .bi{ color:var(--pink); flex:none; }
+  .banner .bt{ flex:1; min-width:0; }
+  .banner .bt strong{ font-size:.88rem; font-weight:600; color:var(--carbon-black); display:block; }
+  .banner .bt span{ font-size:.76rem; color:var(--n600); }
+  .banner .review{ flex:none; font-size:.82rem; font-weight:700; color:var(--pink-ink); }
+
+  .content{ flex:1; overflow:hidden; padding:2px 12px 0; }
+  .card{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 10px 26px -20px rgba(25,23,22,.3); overflow:hidden; }
+  .item{ display:flex; align-items:center; gap:12px; padding:9px 13px; min-height:48px; }
+  .item + .item{ border-top:1px solid var(--n100); }
+  .box{ width:22px; height:22px; border-radius:var(--r-ctrl); flex:none; display:grid; place-items:center; border:2px solid var(--n300); }
+  .box.conflict{ border-color:var(--pink); }
+  .it-main{ flex:1; min-width:0; }
+  .it-name{ font-size:.92rem; font-weight:500; }
+  .it-meta{ font-size:.76rem; color:var(--n500); margin-top:1px; }
+  .badge{ font-size:.66rem; font-weight:700; padding:3px 8px; border-radius:var(--r-pill); flex:none; background:var(--pink); color:var(--carbon-black); }
+  .chip{ font-size:.68rem; font-weight:600; padding:4px 9px; border-radius:var(--r-pill); flex:none; background:var(--n50); border:1px solid var(--n200); color:var(--n600); }
+
+  .nav{ position:absolute; left:0; right:0; bottom:0; display:flex; background:#fff; border-top:1px solid var(--n200); padding:7px 8px 16px; }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.66rem; color:var(--n500); text-decoration:none; }
+  .nav a.active{ color:var(--baltic); font-weight:600; }
+  .nav svg{ display:block; }
+
+  /* ===== resolution sheet ===== */
+  .backdrop{ position:absolute; inset:0; background:rgba(25,23,22,.42); z-index:2; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; z-index:3; background:var(--ghost-white);
+    border-radius:22px 22px 0 0; box-shadow:0 -14px 40px -16px rgba(25,23,22,.5); display:flex; flex-direction:column; max-height:88%; }
+  .grab{ width:38px; height:4px; border-radius:999px; background:var(--n300); margin:9px auto 2px; flex:none; }
+  .sh-head{ padding:8px 18px 12px; border-bottom:1px solid var(--n200); flex:none; }
+  .sh-head h3{ font-size:1.06rem; font-weight:600; color:var(--carbon-black); }
+  .sh-head p{ font-size:.8rem; color:var(--n600); margin-top:4px; }
+  .sh-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 14px 20px; display:flex; flex-direction:column; gap:12px; }
+
+  /* compact conflict card — everything fits, buttons never cut */
+  .cf{ border:1px solid var(--n200); border-radius:var(--r-card); background:#fff; padding:12px 14px; }
+  .cf-top{ display:flex; align-items:center; gap:8px; }
+  .cf-top .dot{ width:8px; height:8px; border-radius:50%; background:var(--pink); flex:none; }
+  .cf-top .nm{ font-size:.96rem; font-weight:600; }
+  .cf-why{ font-size:.76rem; color:var(--n600); margin-top:4px; }
+  .cf-rows{ margin-top:9px; display:flex; flex-direction:column; gap:5px; }
+  .cf-row{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .cf-row .k{ font-size:.72rem; font-weight:600; color:var(--n500); flex:none; }
+  .cf-row.mine .k{ color:var(--baltic); }
+  .cf-row .v{ font-size:.88rem; font-weight:600; color:var(--carbon-black); text-align:right; }
+  .cf-actions{ display:flex; gap:8px; margin-top:11px; }
+  .btn{ flex:1; display:flex; align-items:center; justify-content:center; min-height:44px; border-radius:var(--r-btn);
+    font-family:inherit; font-size:.86rem; font-weight:600; cursor:pointer; text-align:center; line-height:1.2; border:none; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); }
+  .btn.secondary{ background:transparent; color:var(--baltic); border:1px solid rgba(69,105,144,.35); }
+
+  .callout{ display:flex; flex-direction:column; gap:10px; align-items:center; max-width:290px; }
+  .callout .card2{ background:var(--card2-bg); border:1px solid var(--studio-line); border-radius:var(--r-card); padding:14px 16px; color:var(--studio-strong); }
+  .callout .card2 p{ color:var(--studio-text); }
+  .callout .card2 h4{ font-size:.82rem; font-weight:600; margin-bottom:6px; }
+  .callout .card2 p{ font-size:.8rem; }
+  .callout .card2 .silent{ color:var(--verdigris); font-weight:600; }
+
+  .legend{ max-width:900px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Key Screen</div>
+  <h1>Konflikt lösen — grob, „meine oder verwerfen"</h1>
+  <p>A conflict is a <b>queued offline change that couldn't be applied</b> because someone
+     changed the same thing first (CAP-8 / AD-8). Resolution is deliberately <b>coarse</b>:
+     keep mine, or discard — no field-level merge. Adding the same article, checking the same
+     item, or simultaneous <i>online</i> edits all converge <b>silently</b> — no prompt.</p>
+</div>
+
+<div class="stage">
+
+  <!-- STATE A: reconnect banner -->
+  <div class="col">
+    <div class="label">A · Nach dem Reconnect</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>18:22</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh">Zuhause <span class="car">▾</span></span>
+          <span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Wieder online</span>
+        </div>
+        <div class="listctx">
+          <div class="row">
+            <span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+            <div class="titles"><div class="kicker">Offene Liste</div><h2>Wocheneinkauf</h2></div>
+            <span class="more"><svg width="4" height="18" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="banner">
+        <span class="bi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+        <div class="bt"><strong>2 Änderungen konnten nicht übernommen werden</strong><span>Jemand war schneller, während du offline warst.</span></div>
+        <span class="review">Prüfen</span>
+      </div>
+
+      <div class="content">
+        <div class="card">
+          <div class="item"><span class="box"></span><div class="it-main"><div class="it-name">Vollkornbrot</div><div class="it-meta tnum">1 Laib</div></div><span class="chip">Edeka</span></div>
+          <div class="item"><span class="box conflict"></span><div class="it-main"><div class="it-name">Naturjoghurt</div><div class="it-meta tnum">Menge strittig</div></div><span class="badge">Konflikt</span></div>
+          <div class="item"><span class="box conflict"></span><div class="it-main"><div class="it-name">Kaffee</div><div class="it-meta">wurde entfernt</div></div><span class="badge">Konflikt</span></div>
+          <div class="item"><span class="box"></span><div class="it-main"><div class="it-name">Äpfel</div><div class="it-meta tnum">1,5 kg</div></div><span class="chip">Edeka</span></div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Ruhiges Banner (kein blockierender Dialog) + „Konflikt"-Markierung an den betroffenen Artikeln.</div>
+  </div>
+
+  <!-- STATE B: resolution sheet -->
+  <div class="col">
+    <div class="label">B · Konflikte prüfen &amp; lösen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>18:22</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh">Zuhause <span class="car">▾</span></span>
+          <span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Wieder online</span>
+        </div>
+      </div>
+      <div class="content" style="padding-top:10px"><div class="card" style="opacity:.5"><div class="item"><span class="box"></span><div class="it-main"><div class="it-name">Vollkornbrot</div></div></div></div></div>
+
+      <div class="backdrop"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sh-head">
+          <h3>Nicht übernommene Änderungen</h3>
+          <p>Wähle je Artikel: deine Änderung übernehmen oder verwerfen. Zusammenführen ist nicht nötig.</p>
+        </div>
+        <div class="sh-body">
+
+          <div class="cf">
+            <div class="cf-top"><span class="dot"></span><span class="nm">Naturjoghurt</span></div>
+            <div class="cf-why">Anna hat die Menge zuerst geändert.</div>
+            <div class="cf-rows">
+              <div class="cf-row mine"><span class="k">Deine Änderung</span><span class="v tnum">2 L → 3 L</span></div>
+              <div class="cf-row"><span class="k">Jetzt in der Liste</span><span class="v tnum">2 L · Anna</span></div>
+            </div>
+            <div class="cf-actions"><button class="btn primary">Meine übernehmen</button><button class="btn secondary">Verwerfen</button></div>
+          </div>
+
+          <div class="cf">
+            <div class="cf-top"><span class="dot"></span><span class="nm">Kaffee</span></div>
+            <div class="cf-why">Inzwischen aus der Liste entfernt.</div>
+            <div class="cf-rows">
+              <div class="cf-row mine"><span class="k">Deine Änderung</span><span class="v">Abgehakt</span></div>
+              <div class="cf-row"><span class="k">Jetzt in der Liste</span><span class="v">Entfernt · Ben</span></div>
+            </div>
+            <div class="cf-actions"><button class="btn primary">Wiederherstellen</button><button class="btn secondary">Verwerfen</button></div>
+          </div>
+
+        </div>
+      </div>
+    </div></div>
+    <div class="note">Je Konflikt: was du wolltest ↔ was jetzt gilt (von wem). Zwei klare Wege, kein Feld-Merge.</div>
+  </div>
+
+  <!-- callout -->
+  <div class="col">
+    <div class="label">Das Modell</div>
+    <div class="callout">
+      <div class="card2">
+        <h4>Was einen Konflikt auslöst</h4>
+        <p>Nur eine <b>offline gemachte</b> Änderung, die beim Zurückkommen nicht mehr passt,
+           weil jemand denselben Artikel zuerst geändert hat (z. B. Menge). Grob lösbar:
+           <b>meine übernehmen</b> oder <b>verwerfen</b>.</p>
+      </div>
+      <div class="card2">
+        <h4>Was <span class="silent">still</span> gelöst wird</h4>
+        <p>Denselben Artikel hinzufügen · denselben Artikel abhaken · gleichzeitige Änderungen,
+           während beide <b>online</b> sind. Kein Hinweis nötig — alle landen beim selben Ergebnis.</p>
+      </div>
+      <div class="card2">
+        <h4>Zwei Einstiege</h4>
+        <p>Das Reconnect-Banner <b>und</b> die „Konflikt"-Markierung am Artikel öffnen dieselbe
+           Lösen-Ansicht.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Design decisions:</b> conflict = <span style="color:var(--pink)">pink</span>, distinct from
+     <span style="color:var(--amber)">amber</span> offline/pending and <span style="color:var(--verdigris)">verdigris</span> done ·
+     non-blocking reconnect banner (never a hard modal) + inline „Konflikt" badge, both open the same sheet ·
+     coarse per-command keep/discard, <b>no field-level merge</b> (AD-8) · each conflict shows <i>your change ↔ current (by whom)</i>
+     with names resolved live (AD-6) · plain, non-blaming German copy (Rita-safe) · 48px targets · text-only buttons ·
+     convergent/idempotent actions never surface here.</p>
+</div>

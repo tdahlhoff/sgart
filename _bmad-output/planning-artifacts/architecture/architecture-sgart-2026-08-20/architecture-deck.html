@@ -1,0 +1,584 @@
+<title>SGART — Architecture Deck</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bg: #f4f7f4;
+    --surface: #ffffff;
+    --surface-2: #eaefe9;
+    --ink: #19201c;
+    --muted: #57635b;
+    --line: #d2dbd3;
+    --line-strong: #b7c3b9;
+    --accent: #1f6f5c;
+    --accent-soft: rgba(31,111,92,.12);
+    --danger: #b23a3a;
+    --danger-soft: rgba(178,58,58,.10);
+    --warn: #b26a2e;
+    --warn-soft: rgba(178,106,46,.12);
+    --shadow: 0 1px 2px rgba(20,40,30,.05), 0 6px 24px rgba(20,40,30,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10140f;
+      --surface: #171d18;
+      --surface-2: #1e261f;
+      --ink: #e7ece7;
+      --muted: #98a69c;
+      --line: #2b342d;
+      --line-strong: #3a463c;
+      --accent: #56c3a4;
+      --accent-soft: rgba(86,195,164,.14);
+      --danger: #e58080;
+      --danger-soft: rgba(229,128,128,.12);
+      --warn: #d99a5c;
+      --warn-soft: rgba(217,154,92,.14);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f7f4; --surface: #ffffff; --surface-2: #eaefe9; --ink: #19201c;
+    --muted: #57635b; --line: #d2dbd3; --line-strong: #b7c3b9; --accent: #1f6f5c;
+    --accent-soft: rgba(31,111,92,.12); --danger: #b23a3a; --danger-soft: rgba(178,58,58,.10);
+    --warn: #b26a2e; --warn-soft: rgba(178,106,46,.12);
+    --shadow: 0 1px 2px rgba(20,40,30,.05), 0 6px 24px rgba(20,40,30,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #10140f; --surface: #171d18; --surface-2: #1e261f; --ink: #e7ece7;
+    --muted: #98a69c; --line: #2b342d; --line-strong: #3a463c; --accent: #56c3a4;
+    --accent-soft: rgba(86,195,164,.14); --danger: #e58080; --danger-soft: rgba(229,128,128,.12);
+    --warn: #d99a5c; --warn-soft: rgba(217,154,92,.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- nav ---- */
+  nav {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 18px; height: 52px; overflow-x: auto; }
+  nav .brand { font-family: var(--mono); font-weight: 600; letter-spacing: .04em; color: var(--accent); white-space: nowrap; }
+  nav a { font-family: var(--mono); font-size: 12.5px; color: var(--muted); text-decoration: none; white-space: nowrap; letter-spacing: .02em; }
+  nav a:hover { color: var(--ink); }
+  nav a:focus-visible, .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+  /* ---- header ---- */
+  header { padding: 68px 0 40px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); line-height: 1.04; letter-spacing: -.02em; margin: 0 0 18px; text-wrap: balance; font-weight: 680; }
+  .lede { font-size: 1.16rem; color: var(--muted); max-width: 62ch; margin: 0 0 28px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .02em;
+    padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-strong);
+    color: var(--muted); background: var(--surface);
+  }
+  .chip strong { color: var(--ink); font-weight: 600; }
+  .chip.ok { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--accent); }
+
+  /* ---- sections ---- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-num { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  h2 { font-size: 1.7rem; letter-spacing: -.01em; margin: 0; font-weight: 650; text-wrap: balance; }
+  .sec-sub { color: var(--muted); max-width: 66ch; margin: 10px 0 30px; }
+
+  /* ---- legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 16px 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; margin-top: 26px; }
+  .legend .item { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .swatch { width: 26px; height: 0; border-top: 2px solid var(--ink); flex: none; }
+  .swatch.accent { border-color: var(--accent); }
+  .swatch.danger { border-color: var(--danger); }
+  .swatch.warn { border-color: var(--warn); }
+  .swatch.dash { border-top-style: dashed; }
+  .swatch.box { height: 16px; border: 1.5px solid var(--accent); border-radius: 4px; background: var(--accent-soft); }
+  .swatch.boxwarn { height: 16px; border: 1.5px dashed var(--warn); border-radius: 4px; background: var(--warn-soft); }
+
+  /* ---- figures / diagrams ---- */
+  figure { margin: 0; }
+  .diagram {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; box-shadow: var(--shadow); overflow-x: auto;
+  }
+  .diagram svg { display: block; width: 100%; min-width: 560px; height: auto; color: var(--ink); }
+  .diagram svg text { font-family: var(--mono); fill: currentColor; }
+  figcaption { color: var(--muted); font-size: .95rem; margin-top: 14px; max-width: 74ch; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---- context cards ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 28px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .card .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .card.core { border-top: 3px solid var(--accent); }
+  .card.core .tag { color: var(--accent); }
+  .card.support { border-top: 3px solid var(--line-strong); }
+  .card.support .tag { color: var(--muted); }
+  .card.generic { border-top: 3px solid var(--muted); }
+  .card.generic .tag { color: var(--muted); }
+  .card.future { border-top: 3px dashed var(--warn); }
+  .card.future .tag { color: var(--warn); }
+  .card h3 { margin: 8px 0 8px; font-size: 1.06rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .93rem; }
+  .card code { font-family: var(--mono); font-size: .85em; color: var(--ink); }
+
+  /* ---- ledger table ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .93rem; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); position: sticky; top: 52px; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.id { font-family: var(--mono); color: var(--accent); font-weight: 600; white-space: nowrap; }
+  td .prevents { color: var(--muted); display: block; margin-top: 4px; font-size: .88rem; }
+  code, .mono { font-family: var(--mono); }
+  td code { font-size: .86em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  .stack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 12px; margin-top: 10px; }
+  .stk { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .stk .k { font-size: .82rem; color: var(--muted); font-family: var(--mono); letter-spacing: .02em; }
+  .stk .v { font-size: 1.02rem; font-weight: 600; margin-top: 3px; }
+  .stk .v span { font-family: var(--mono); font-weight: 500; color: var(--accent); font-size: .92rem; }
+  .note { font-size: .85rem; color: var(--warn); margin-top: 4px; font-family: var(--mono); }
+
+  .scopebar { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 26px; }
+  @media (max-width: 640px) { .scopebar { grid-template-columns: 1fr; } }
+  .scopebox { border: 1px solid var(--line); border-radius: 12px; padding: 18px; background: var(--surface); }
+  .scopebox.mvp { border-left: 4px solid var(--accent); }
+  .scopebox.later { border-left: 4px dashed var(--warn); }
+  .scopebox h4 { margin: 0 0 10px; font-size: .95rem; font-family: var(--mono); letter-spacing: .03em; }
+  .scopebox.mvp h4 { color: var(--accent); }
+  .scopebox.later h4 { color: var(--warn); }
+  .scopebox ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .92rem; }
+  .scopebox li { margin: 5px 0; }
+
+  footer { padding: 40px 0 70px; color: var(--muted); font-size: .87rem; }
+  footer .mono { display: block; margin-top: 6px; font-size: .82rem; }
+
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<!-- shared arrowhead markers (theme-aware via tokens) -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <defs>
+    <marker id="ah-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"></path>
+    </marker>
+    <marker id="ah-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"></path>
+    </marker>
+    <marker id="ah-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--danger)"></path>
+    </marker>
+    <marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"></path>
+    </marker>
+  </defs>
+</svg>
+
+<nav>
+  <div class="wrap">
+    <span class="brand">SGART</span>
+    <a href="#contexts">Contexts</a>
+    <a href="#state">State flow</a>
+    <a href="#identity">Identity &amp; erasure</a>
+    <a href="#offline">Offline</a>
+    <a href="#ledger">Decisions</a>
+    <a href="#stack">Stack</a>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Architecture Spine · Feature altitude</p>
+    <h1>SGART — a privacy-first household grocery &amp; receipt tracker</h1>
+    <p class="lede">One shared, live shopping list for a household — that quietly grows into a private record of what things cost where. Built domain-first, event-sourced, and self-hosted in Germany so grocery habits never touch a US cloud.</p>
+    <div class="meta">
+      <span class="chip"><strong>Paradigm:</strong>&nbsp;DDD · CQRS · Event Sourcing · hexagonal</span>
+      <span class="chip"><strong>Shape:</strong>&nbsp;modular monolith</span>
+      <span class="chip ok"><strong>Status:</strong>&nbsp;final · 2026-08-20</span>
+      <span class="chip"><strong>Data:</strong>&nbsp;DSGVO by design</span>
+    </div>
+    <div class="legend" aria-label="Diagram legend">
+      <span class="item"><span class="swatch accent"></span> core write path</span>
+      <span class="item"><span class="swatch dash"></span> async / event-driven</span>
+      <span class="item"><span class="swatch danger"></span> personal data / rejected path</span>
+      <span class="item"><span class="swatch box"></span> core context</span>
+      <span class="item"><span class="swatch boxwarn"></span> Post-MVP · reserved</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 1 · CONTEXTS ============ -->
+<section id="contexts">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Four bounded contexts, one deployable</h2></div>
+    <p class="sec-sub">Contexts are <b>code modules</b> in a single Spring Boot application — never separate services. Each talks to another only through a published port or an async domain event, never by reaching into another's model or tables. For the MVP, the whole shopping experience lives in one core context.</p>
+
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 900 590" role="img" aria-label="Context map: the Flutter client and Keycloak on the outside; a Spring Boot modular monolith containing the Identity ACL, the Collaboration core context, Store Reference, and the Post-MVP Price Intelligence context; and two datastores, KurrentDB for the write model and PostgreSQL for the read model.">
+          <!-- external row -->
+          <rect x="30" y="30" width="250" height="72" rx="10" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="155" y="60" text-anchor="middle" font-size="14" font-weight="600">Flutter client</text>
+          <text x="155" y="80" text-anchor="middle" font-size="11.5" fill="var(--muted)">iOS · Android · BLoC · offline queue</text>
+
+          <rect x="640" y="30" width="230" height="72" rx="10" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="755" y="60" text-anchor="middle" font-size="14" font-weight="600">Keycloak</text>
+          <text x="755" y="80" text-anchor="middle" font-size="11.5" fill="var(--muted)">self-hosted identity</text>
+
+          <!-- monolith container -->
+          <rect x="30" y="150" width="840" height="270" rx="14" fill="none" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="2 4"></rect>
+          <text x="50" y="176" font-size="12.5" fill="var(--muted)" letter-spacing="1">SPRING BOOT · MODULAR MONOLITH</text>
+
+          <!-- identity ACL -->
+          <rect x="52" y="196" width="196" height="86" rx="10" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"></rect>
+          <text x="150" y="230" text-anchor="middle" font-size="13.5" font-weight="600">Identity ACL</text>
+          <text x="150" y="249" text-anchor="middle" font-size="11" fill="var(--muted)">generic context</text>
+          <text x="150" y="266" text-anchor="middle" font-size="11" fill="var(--muted)">JWT → MemberId</text>
+
+          <!-- collaboration core -->
+          <rect x="286" y="196" width="330" height="196" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect>
+          <text x="451" y="224" text-anchor="middle" font-size="14.5" font-weight="700" fill="var(--accent)">Collaboration — core</text>
+          <text x="451" y="244" text-anchor="middle" font-size="11.5" fill="var(--muted)">the shared, live shopping experience</text>
+          <rect x="308" y="262" width="128" height="52" rx="8" fill="var(--surface)" stroke="var(--line-strong)"></rect>
+          <text x="372" y="284" text-anchor="middle" font-size="12" font-weight="600">Household</text>
+          <text x="372" y="301" text-anchor="middle" font-size="10.5" fill="var(--muted)">members · stores</text>
+          <rect x="308" y="324" width="128" height="52" rx="8" fill="var(--surface)" stroke="var(--line-strong)"></rect>
+          <text x="372" y="346" text-anchor="middle" font-size="12" font-weight="600">ShoppingList</text>
+          <text x="372" y="363" text-anchor="middle" font-size="10.5" fill="var(--muted)">items · status</text>
+          <rect x="454" y="293" width="140" height="52" rx="8" fill="var(--surface)" stroke="var(--line-strong)"></rect>
+          <text x="524" y="315" text-anchor="middle" font-size="12" font-weight="600">ShoppingTrip</text>
+          <text x="524" y="332" text-anchor="middle" font-size="10.5" fill="var(--muted)">routing · completion</text>
+
+          <!-- store reference -->
+          <rect x="652" y="196" width="196" height="86" rx="10" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="750" y="230" text-anchor="middle" font-size="13.5" font-weight="600">Store Reference</text>
+          <text x="750" y="249" text-anchor="middle" font-size="11" fill="var(--muted)">supporting context</text>
+          <text x="750" y="266" text-anchor="middle" font-size="11" fill="var(--muted)">StoreChain · markets</text>
+
+          <!-- price intelligence future -->
+          <rect x="652" y="300" width="196" height="92" rx="10" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="6 4"></rect>
+          <text x="750" y="330" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--warn)">Price Intelligence</text>
+          <text x="750" y="349" text-anchor="middle" font-size="11" fill="var(--muted)">core · Post-MVP</text>
+          <text x="750" y="366" text-anchor="middle" font-size="11" fill="var(--muted)">Receipt · Product</text>
+          <text x="750" y="382" text-anchor="middle" font-size="11" fill="var(--muted)">price observations</text>
+
+          <!-- datastores -->
+          <g>
+            <path d="M300,470 a80,12 0 0 0 160,0 v66 a80,12 0 0 1 -160,0 z" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"></path>
+            <ellipse cx="380" cy="470" rx="80" ry="12" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"></ellipse>
+            <text x="380" y="505" text-anchor="middle" font-size="13" font-weight="600">KurrentDB</text>
+            <text x="380" y="523" text-anchor="middle" font-size="11" fill="var(--muted)">event streams · write</text>
+          </g>
+          <g>
+            <path d="M520,470 a80,12 0 0 0 160,0 v66 a80,12 0 0 1 -160,0 z" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></path>
+            <ellipse cx="600" cy="470" rx="80" ry="12" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></ellipse>
+            <text x="600" y="505" text-anchor="middle" font-size="13" font-weight="600">PostgreSQL</text>
+            <text x="600" y="523" text-anchor="middle" font-size="11" fill="var(--muted)">projections · read</text>
+          </g>
+
+          <!-- edges -->
+          <!-- client -> monolith REST -->
+          <line x1="120" y1="102" x2="120" y2="194" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="112" y="140" text-anchor="end" font-size="11">REST /api/v1</text>
+          <text x="112" y="154" text-anchor="end" font-size="11" fill="var(--muted)">+ JWT</text>
+          <!-- monolith -> client SSE -->
+          <line x1="200" y1="194" x2="200" y2="102" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ah-accent)"></line>
+          <text x="208" y="140" font-size="11" fill="var(--accent)">SSE live sync</text>
+          <!-- ACL -> keycloak -->
+          <line x1="248" y1="212" x2="638" y2="82" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah-ink)"></line>
+          <text x="450" y="150" text-anchor="middle" font-size="11" fill="var(--muted)">resolve identity · read name/email live</text>
+          <!-- collaboration -> kurrentdb -->
+          <line x1="410" y1="392" x2="392" y2="456" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ah-accent)"></line>
+          <text x="300" y="432" text-anchor="end" font-size="11" fill="var(--accent)">append events</text>
+          <!-- kurrentdb -> postgres project -->
+          <line x1="460" y1="500" x2="518" y2="500" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="489" y="492" text-anchor="middle" font-size="10.5">project</text>
+          <!-- collaboration -> postgres query -->
+          <line x1="516" y1="392" x2="588" y2="456" stroke="var(--ink)" stroke-width="1.4" marker-end="url(#ah-ink)"></line>
+          <text x="600" y="430" font-size="11" fill="var(--muted)">query</text>
+          <!-- price intelligence -> collaboration async -->
+          <line x1="650" y1="330" x2="618" y2="318" stroke="var(--warn)" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ah-warn)"></line>
+          <text x="628" y="418" text-anchor="middle" font-size="10.5" fill="var(--warn)">async: TripCompleted / ReceiptConfirmed</text>
+        </svg>
+      </div>
+      <figcaption><b>The MVP is essentially one core context.</b> Household, ShoppingList and ShoppingTrip reference each other only by id inside Collaboration. Price Intelligence is reserved but unbuilt — it will hang off the core purely through async events, so the MVP never depends on it.</figcaption>
+    </figure>
+
+    <div class="cards">
+      <div class="card core"><span class="tag">Core</span><h3>Collaboration</h3><p><code>Household · ShoppingList · ShoppingTrip</code> — the one shared truth and the real-time differentiator.</p></div>
+      <div class="card support"><span class="tag">Supporting</span><h3>Store Reference</h3><p><code>StoreChain</code>, per-market seed, read-mostly. Client-side fuzzy matching as you type a store name.</p></div>
+      <div class="card generic"><span class="tag">Generic</span><h3>Identity ACL</h3><p>The one place Keycloak's JWT becomes an internal <code>MemberId</code>. Owns the only link to a real person.</p></div>
+      <div class="card future"><span class="tag">Post-MVP</span><h3>Price Intelligence</h3><p><code>Receipt · Product · PriceObservation</code> — the long-term cost-awareness payoff. Reserved, event-integrated.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 · STATE FLOW ============ -->
+<section id="state">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">02</span><h2>How state changes — one way, always</h2></div>
+    <p class="sec-sub">Every change is a command handled by an aggregate that appends events under an optimistic-concurrency check. Read models are <b>projected</b> from those events and are never written directly — so there is exactly one source of truth, and reads can lag writes without ever contradicting them.</p>
+
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 880 300" role="img" aria-label="State-change pipeline: a command flows into an aggregate, which appends events to KurrentDB under an expected-version check; a projector subscribes to the stream and builds the PostgreSQL read model, which serves queries and the SSE stream. Command handlers never write the read model directly.">
+          <!-- command -->
+          <rect x="20" y="70" width="168" height="70" rx="10" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="104" y="98" text-anchor="middle" font-size="13.5" font-weight="600">Command</text>
+          <text x="104" y="116" text-anchor="middle" font-size="10.5" fill="var(--muted)">intent + basedOnVersion</text>
+          <text x="104" y="130" text-anchor="middle" font-size="10.5" fill="var(--muted)">+ commandId</text>
+          <!-- aggregate -->
+          <rect x="248" y="70" width="168" height="70" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect>
+          <text x="332" y="98" text-anchor="middle" font-size="13.5" font-weight="700" fill="var(--accent)">Aggregate</text>
+          <text x="332" y="118" text-anchor="middle" font-size="10.5" fill="var(--muted)">checks invariants</text>
+          <text x="332" y="132" text-anchor="middle" font-size="10.5" fill="var(--muted)">emits events</text>
+          <!-- kurrentdb -->
+          <path d="M480,88 a70,11 0 0 0 140,0 v40 a70,11 0 0 1 -140,0 z" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"></path>
+          <ellipse cx="550" cy="88" rx="70" ry="11" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"></ellipse>
+          <text x="550" y="112" text-anchor="middle" font-size="12.5" font-weight="600">KurrentDB</text>
+          <text x="550" y="128" text-anchor="middle" font-size="10.5" fill="var(--muted)">event stream</text>
+          <!-- projector -->
+          <rect x="480" y="205" width="140" height="60" rx="10" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="550" y="232" text-anchor="middle" font-size="13" font-weight="600">Projector</text>
+          <text x="550" y="250" text-anchor="middle" font-size="10.5" fill="var(--muted)">subscribes</text>
+          <!-- read model -->
+          <path d="M680,223 a70,11 0 0 0 140,0 v30 a70,11 0 0 1 -140,0 z" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></path>
+          <ellipse cx="750" cy="223" rx="70" ry="11" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></ellipse>
+          <text x="750" y="244" text-anchor="middle" font-size="12.5" font-weight="600">PostgreSQL</text>
+          <text x="750" y="260" text-anchor="middle" font-size="10.5" fill="var(--muted)">read model</text>
+          <!-- query/sse -->
+          <rect x="680" y="70" width="140" height="70" rx="10" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="750" y="100" text-anchor="middle" font-size="13" font-weight="600">Query · SSE</text>
+          <text x="750" y="120" text-anchor="middle" font-size="10.5" fill="var(--muted)">to the client</text>
+
+          <!-- arrows -->
+          <line x1="188" y1="105" x2="244" y2="105" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="216" y="96" text-anchor="middle" font-size="10.5">handle</text>
+          <line x1="416" y1="105" x2="474" y2="105" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ah-accent)"></line>
+          <text x="445" y="80" text-anchor="middle" font-size="10.5" fill="var(--accent)">append</text>
+          <text x="445" y="94" text-anchor="middle" font-size="9.5" fill="var(--muted)">expected-version</text>
+          <line x1="550" y1="140" x2="550" y2="203" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="558" y="176" font-size="10.5">subscribe</text>
+          <line x1="620" y1="235" x2="678" y2="235" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="649" y="226" text-anchor="middle" font-size="10.5">build</text>
+          <line x1="750" y1="212" x2="750" y2="142" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="758" y="180" font-size="10.5">read</text>
+
+          <!-- forbidden edge -->
+          <line x1="300" y1="140" x2="690" y2="212" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="6 5"></line>
+          <line x1="486" y1="168" x2="504" y2="186" stroke="var(--danger)" stroke-width="2.2"></line>
+          <line x1="504" y1="168" x2="486" y2="186" stroke="var(--danger)" stroke-width="2.2"></line>
+          <text x="470" y="163" text-anchor="end" font-size="10.5" fill="var(--danger)">never writes read model directly</text>
+        </svg>
+      </div>
+      <figcaption>This single mechanism is load-bearing: it gives event-sourced history for free, lets projections be reshaped per screen (the <code>Liste {N}</code> numbering, the FR-27 autocomplete lookup), and — with a version and a command-id on each command — powers offline sync without any separate machinery.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 3 · IDENTITY & ERASURE ============ -->
+<section id="identity">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Identity &amp; the right to be forgotten</h2></div>
+    <p class="sec-sub">Event sourcing keeps an immutable log; DSGVO demands erasure. SGART reconciles them by keeping <b>no personal data in the log at all</b>. Events reference a person only by a household-scoped pseudonym; one small mapping table is the sole link back to a real identity, and erasing it leaves the history intact but anonymous.</p>
+
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 880 400" role="img" aria-label="Identity and erasure mechanism: a JWT carrying keycloakUserId and email is personal data; the Identity ACL translates it into a household-scoped MemberId and stores the only mapping; event streams carry MemberId only and no personal data; erasing the mapping leaves orphaned pseudonyms that are anonymous under GDPR Recital 26.">
+          <!-- JWT (PII) -->
+          <rect x="24" y="40" width="230" height="84" rx="10" fill="var(--danger-soft)" stroke="var(--danger)" stroke-width="1.6"></rect>
+          <text x="139" y="66" text-anchor="middle" font-size="13.5" font-weight="600">JWT from Keycloak</text>
+          <text x="139" y="86" text-anchor="middle" font-size="11" fill="var(--muted)">keycloakUserId · email · name</text>
+          <text x="139" y="108" text-anchor="middle" font-size="10.5" fill="var(--danger)">personal data</text>
+
+          <!-- Identity ACL with mapping -->
+          <rect x="330" y="30" width="286" height="170" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect>
+          <text x="473" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">Identity ACL</text>
+          <text x="473" y="76" text-anchor="middle" font-size="11" fill="var(--muted)">mints &amp; owns the only mapping</text>
+          <rect x="352" y="92" width="242" height="90" rx="8" fill="var(--surface)" stroke="var(--line-strong)"></rect>
+          <text x="366" y="112" font-size="11" fill="var(--muted)">householdId</text>
+          <text x="366" y="134" font-size="11" fill="var(--muted)">memberId</text>
+          <text x="366" y="156" font-size="11" fill="var(--muted)">keycloakUserId</text>
+          <text x="366" y="176" font-size="10" fill="var(--danger)">← the single de-linking key</text>
+          <line x1="470" y1="98" x2="470" y2="182" stroke="var(--line)" stroke-width="1"></line>
+
+          <!-- Keycloak -->
+          <rect x="690" y="40" width="166" height="84" rx="10" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="773" y="72" text-anchor="middle" font-size="13" font-weight="600">Keycloak</text>
+          <text x="773" y="92" text-anchor="middle" font-size="10.5" fill="var(--muted)">name/email</text>
+          <text x="773" y="107" text-anchor="middle" font-size="10.5" fill="var(--muted)">read live only</text>
+
+          <!-- event streams (safe) -->
+          <rect x="330" y="270" width="286" height="96" rx="12" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+          <text x="473" y="300" text-anchor="middle" font-size="13.5" font-weight="600">KurrentDB event streams</text>
+          <text x="473" y="322" text-anchor="middle" font-size="11.5" fill="var(--muted)"><tspan fill="var(--accent)" font-weight="600">MemberId</tspan> only — never name, email, or</text>
+          <text x="473" y="339" text-anchor="middle" font-size="11.5" fill="var(--muted)">keycloakUserId. Per household, so the</text>
+          <text x="473" y="356" text-anchor="middle" font-size="11.5" fill="var(--muted)">same person is unlinkable across households.</text>
+
+          <!-- erasure -->
+          <rect x="24" y="250" width="252" height="120" rx="10" fill="var(--surface)" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="5 4"></rect>
+          <text x="150" y="278" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--danger)">Erase this person</text>
+          <text x="40" y="301" font-size="11" fill="var(--muted)">→ destroy mapping rows</text>
+          <text x="40" y="320" font-size="11" fill="var(--muted)">→ scrub read models &amp; caches</text>
+          <text x="40" y="339" font-size="11" fill="var(--muted)">→ delete Keycloak account</text>
+          <text x="40" y="360" font-size="11" fill="var(--muted)">→ log is <b>never</b> rewritten</text>
+
+          <!-- arrows -->
+          <line x1="254" y1="82" x2="326" y2="82" stroke="var(--danger)" stroke-width="1.6" marker-end="url(#ah-danger)"></line>
+          <text x="290" y="72" text-anchor="middle" font-size="10">resolve</text>
+          <line x1="616" y1="82" x2="686" y2="82" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah-ink)" marker-start="url(#ah-ink)"></line>
+          <line x1="473" y1="200" x2="473" y2="266" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ah-accent)"></line>
+          <text x="483" y="238" font-size="11" fill="var(--accent)">MemberId only</text>
+          <line x1="276" y1="300" x2="348" y2="270" stroke="var(--danger)" stroke-width="1.6" marker-end="url(#ah-danger)"></line>
+          <text x="300" y="392" text-anchor="middle" font-size="10.5" fill="var(--muted)">what remains: orphaned pseudonyms = anonymous (Recital 26)</text>
+        </svg>
+      </div>
+      <figcaption><b>Erasure by de-linking, not by deletion.</b> Because events never held personal data, replaying them after erasure resurrects nothing. Invite emails get the same treatment: only a salted HMAC lives in the event (enough to block duplicate invites); the raw address sits in a purgeable side-store. Receipt images (Post-MVP) — which can carry real PII — fall back to crypto-shredding.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 4 · OFFLINE ============ -->
+<section id="offline">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Offline edits, honest conflicts</h2></div>
+    <p class="sec-sub">Shopping happens in stores with bad signal. Actions queue locally and replay on reconnect. The same expected-version check that guards every write also detects offline conflicts — so the MVP surfaces a genuine conflict for a simple choice instead of silently overwriting, and never needs a merge engine.</p>
+
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 880 330" role="img" aria-label="Offline replay flow: a queued command carrying its based-on version and command-id replays on reconnect; if the target aggregate's version still matches, the event is appended and committed; if it is stale, the command is rejected and the client shows a coarse keep-or-discard prompt; convergent actions resolve silently and the command-id makes retries idempotent.">
+          <!-- queued command -->
+          <rect x="20" y="120" width="196" height="86" rx="10" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.5"></rect>
+          <text x="118" y="150" text-anchor="middle" font-size="13.5" font-weight="600">Queued command</text>
+          <text x="118" y="170" text-anchor="middle" font-size="10.5" fill="var(--muted)">basedOnVersion = v</text>
+          <text x="118" y="186" text-anchor="middle" font-size="10.5" fill="var(--muted)">commandId (idempotent)</text>
+
+          <!-- decision diamond -->
+          <polygon points="430,163 520,120 610,163 520,206" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></polygon>
+          <text x="520" y="158" text-anchor="middle" font-size="11.5" font-weight="600">root version</text>
+          <text x="520" y="174" text-anchor="middle" font-size="11.5" font-weight="600">still = v ?</text>
+
+          <!-- committed -->
+          <rect x="690" y="60" width="170" height="70" rx="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+          <text x="775" y="88" text-anchor="middle" font-size="13" font-weight="600" fill="var(--accent)">Append &amp; commit</text>
+          <text x="775" y="108" text-anchor="middle" font-size="10.5" fill="var(--muted)">change syncs live</text>
+
+          <!-- keep/discard -->
+          <rect x="690" y="200" width="170" height="82" rx="10" fill="var(--danger-soft)" stroke="var(--danger)" stroke-width="1.6"></rect>
+          <text x="775" y="228" text-anchor="middle" font-size="13" font-weight="600" fill="var(--danger)">Reject → ask</text>
+          <text x="775" y="248" text-anchor="middle" font-size="10.5" fill="var(--muted)">keep mine / discard</text>
+          <text x="775" y="264" text-anchor="middle" font-size="10.5" fill="var(--muted)">coarse, per item (FR-26)</text>
+
+          <!-- arrows -->
+          <line x1="216" y1="163" x2="426" y2="163" stroke="var(--ink)" stroke-width="1.6" marker-end="url(#ah-ink)"></line>
+          <text x="320" y="153" text-anchor="middle" font-size="10.5">reconnect · replay</text>
+          <line x1="610" y1="150" x2="686" y2="110" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ah-accent)"></line>
+          <text x="628" y="128" font-size="11" fill="var(--accent)">yes</text>
+          <line x1="610" y1="176" x2="686" y2="224" stroke="var(--danger)" stroke-width="1.8" marker-end="url(#ah-danger)"></line>
+          <text x="624" y="212" font-size="11" fill="var(--danger)">stale</text>
+
+          <!-- silent note -->
+          <text x="118" y="250" text-anchor="middle" font-size="10.5" fill="var(--muted)">convergent actions</text>
+          <text x="118" y="266" text-anchor="middle" font-size="10.5" fill="var(--muted)">(both check same item)</text>
+          <text x="118" y="282" text-anchor="middle" font-size="10.5" fill="var(--accent)">→ resolve silently</text>
+        </svg>
+      </div>
+      <figcaption>No last-writer-wins, no automatic merge, no presence tracking — all of that stays out of the MVP. What ships is one inline prompt with two buttons, and it costs almost nothing because the event store's optimistic concurrency does the detection.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 5 · DECISION LEDGER ============ -->
+<section id="ledger">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Decision ledger</h2></div>
+    <p class="sec-sub">The eleven invariants a future builder can't read off the code. Each fixes one way two independently-built units could otherwise diverge.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>ID</th><th>Decision</th><th>Rule &amp; what it prevents</th></tr></thead>
+        <tbody>
+          <tr><td class="id">AD-1</td><td>DDD + CQRS + Event Sourcing, hexagonal</td><td>Domain imports no framework/infra type; state changes only via command → aggregate → event.<span class="prevents">Prevents business rules leaking into controllers or persistence.</span></td></tr>
+          <tr><td class="id">AD-2</td><td>Modular monolith; contexts are modules</td><td>Cross-context contact only via a published port or async event.<span class="prevents">Prevents two owners of one entity; avoids premature microservices.</span></td></tr>
+          <tr><td class="id">AD-3</td><td>Household + Shopping stay one context (MVP)</td><td>Aggregates reference each other by id, never by object graph.<span class="prevents">Prevents boundary overhead an MVP doesn't need.</span></td></tr>
+          <tr><td class="id">AD-4</td><td>Single source of truth + optimistic concurrency</td><td>Append events under expected-version; read models are projection-only.<span class="prevents">Prevents lost updates and a second write path.</span></td></tr>
+          <tr><td class="id">AD-5</td><td>People referenced only by household-scoped pseudonym</td><td>Events carry <code>MemberId</code>; the ACL is its sole minter &amp; the only mapping owner.<span class="prevents">Prevents PII in the log and cross-household correlation.</span></td></tr>
+          <tr><td class="id">AD-6</td><td>No persisted PII; identity read live</td><td>Name/email never stored; invite email only as a stable-secret HMAC.<span class="prevents">Prevents stale PII copies each needing erasure.</span></td></tr>
+          <tr><td class="id">AD-7</td><td>Erasure by de-linking, never rewriting history</td><td>Destroy mapping + scrub read models/caches + delete Keycloak account.<span class="prevents">Prevents non-compliant retention and event rewriting.</span></td></tr>
+          <tr><td class="id">AD-8</td><td>Offline queue rides the concurrency check</td><td>Command carries target root's version + command-id; stale → keep/discard.<span class="prevents">Prevents silent LWW and double-apply on retry.</span></td></tr>
+          <tr><td class="id">AD-9</td><td>Money &amp; Quantity are value objects</td><td><code>Money</code> = integer cents + currency; <code>Unit</code> from a controlled vocabulary.<span class="prevents">Prevents float-money bugs and unanalysable free-text units.</span></td></tr>
+          <tr><td class="id">AD-10</td><td>Aggregate boundaries own their entities</td><td><code>Item</code> lives in ShoppingList, <code>Store</code> in Household; cross-effects via process managers with idempotent commands.<span class="prevents">Prevents cross-aggregate direct mutation.</span></td></tr>
+          <tr><td class="id">AD-11</td><td>Vocabulary spelled out &amp; unambiguous</td><td>Entity <code>Member</code> vs role <code>HouseholdRole{Admin,Participant}</code>; no abbreviations.<span class="prevents">Prevents one term meaning two things.</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6 · STACK ============ -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Stack &amp; scope</h2></div>
+    <p class="sec-sub">Seed versions, web-verified on 2026-08-20 — the code owns them once it exists. Note the rebrand: <b>EventStoreDB is now KurrentDB</b>.</p>
+    <div class="stack-grid">
+      <div class="stk"><div class="k">language</div><div class="v">Java <span>25 LTS</span></div></div>
+      <div class="stk"><div class="k">backend</div><div class="v">Spring Boot <span>4.1.0</span></div></div>
+      <div class="stk"><div class="k">client</div><div class="v">Flutter <span>3.44</span> · BLoC</div></div>
+      <div class="stk"><div class="k">identity</div><div class="v">Keycloak <span>26.7.0</span></div><div class="note">no LTS — track newest</div></div>
+      <div class="stk"><div class="k">write model</div><div class="v">KurrentDB <span>25.x</span></div><div class="note">confirm LTS line at build</div></div>
+      <div class="stk"><div class="k">read model</div><div class="v">PostgreSQL <span>18.6</span></div></div>
+      <div class="stk"><div class="k">real-time</div><div class="v">Server-Sent Events</div></div>
+      <div class="stk"><div class="k">hosting</div><div class="v">Docker · German/EU</div><div class="note">no US cloud, ever</div></div>
+    </div>
+
+    <div class="scopebar">
+      <div class="scopebox mvp">
+        <h4>MVP — built now</h4>
+        <ul>
+          <li>Households, invites, roles; multiple live shared lists</li>
+          <li>Store-grouped trips: start → route → check off → complete</li>
+          <li>Real-time sync + offline queue with conflict surfacing</li>
+          <li>Print &amp; share; content-free notifications; German-first UI</li>
+        </ul>
+      </div>
+      <div class="scopebox later">
+        <h4>Post-MVP — reserved, not built</h4>
+        <ul>
+          <li>Receipts &amp; on-device OCR → price observations</li>
+          <li>Product pinning, price history, routing suggestions, dashboard</li>
+          <li>Configurable notifications; list templates</li>
+          <li>Geolocation store discovery; multi-market + more languages</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Architecture spine · SGART · feature altitude · status final.
+    <span class="mono">Sources: _bmad-output/planning-artifacts/prds/prd-sgart-2026-08-06/ · docs/SGART.md · CLAUDE.md<br>
+    Full spine: _bmad-output/planning-artifacts/architecture/architecture-sgart-2026-08-20/ARCHITECTURE-SPINE.md</span>
+  </div>
+</footer>
+
+<script>
+  // reflect saved theme if the host stamped one; otherwise follow prefers-color-scheme
+  (function () {
+    var root = document.documentElement;
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "dark" || t === "light") root.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>

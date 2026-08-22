@@ -1,0 +1,176 @@
+<!--
+  SGART — KEY SCREENS: Listen overview (CAP-4) + Invite acceptance (CAP-2)
+  Listen: several Open lists at once, optional names ("Liste N" auto), an "Erledigt" filter
+  for Done lists (read-only archive), "+ Neue Liste". Invite acceptance: the recipient path —
+  a personal link opens the app (deep link) or web fallback; authenticate & join as Mitglied.
+  Foundations: Inter, System 3, 48px, text-only buttons, locked palette. German UI.
+-->
+<title>SGART · Listen &amp; Einladung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; } }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font); -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+  .head{ max-width:1000px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+  .stage{ display:flex; flex-wrap:wrap; gap:34px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:320px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.76rem; text-align:center; max-width:29ch; }
+
+  .phone{ width:312px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .apphdr{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 10px; }
+  .hh{ display:inline-flex; align-items:center; gap:6px; font-size:.84rem; font-weight:600; background:var(--n50); border:1px solid var(--n200); border-radius:var(--r-pill); padding:6px 11px; }
+  .hh .car{ font-size:.64rem; color:var(--n500); }
+  .sync{ display:inline-flex; align-items:center; gap:6px; font-size:.7rem; font-weight:600; color:var(--verdigris); }
+
+  .ovtop{ display:flex; align-items:center; justify-content:space-between; padding:4px 16px 10px; }
+  .ovtop h2{ font-size:1.34rem; font-weight:600; letter-spacing:-.01em; }
+  .newlist{ font-size:.82rem; font-weight:600; color:var(--baltic); }
+  .filters{ display:flex; gap:8px; padding:0 14px 12px; }
+  .fl{ font-size:.78rem; font-weight:600; padding:7px 14px; border-radius:var(--r-pill); border:1px solid var(--n200); color:var(--n600); background:#fff; }
+  .fl.on{ background:var(--baltic); color:var(--ghost-white); border-color:var(--baltic); }
+
+  .content{ flex:1; overflow:auto; padding:2px 14px 12px; }
+  .lcard{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 8px 22px -18px rgba(25,23,22,.3); padding:14px; margin-bottom:11px; }
+  .lcard .lt{ font-size:1rem; font-weight:600; }
+  .lcard .ls{ font-size:.78rem; color:var(--n500); margin-top:3px; }
+  .lcard .bar{ height:6px; border-radius:999px; background:var(--n100); overflow:hidden; margin-top:10px; }
+  .lcard .bar > span{ display:block; height:100%; background:var(--verdigris); border-radius:999px; }
+  .lcard.done .lt{ color:var(--n600); }
+  .lcard.done{ opacity:.9; }
+  .donetag{ display:inline-flex; align-items:center; gap:5px; font-size:.7rem; font-weight:600; color:#0f6f61; margin-top:6px; }
+
+  .nav{ display:flex; background:#fff; border-top:1px solid var(--n200); padding:7px 8px 16px; }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.66rem; color:var(--n500); text-decoration:none; }
+  .nav a.active{ color:var(--baltic); font-weight:600; }
+  .nav svg{ display:block; }
+
+  /* invite acceptance */
+  .invite{ flex:1; display:flex; flex-direction:column; padding:26px 22px 20px; text-align:center; }
+  .invite .logo{ width:54px; height:54px; border-radius:16px; background:var(--baltic); color:var(--ghost-white); display:grid; place-items:center; font-size:1.4rem; font-weight:700; margin:6px auto 20px; }
+  .invite .inv-av{ width:64px; height:64px; border-radius:50%; background:rgba(69,105,144,.12); color:var(--baltic); display:grid; place-items:center; font-size:1.5rem; font-weight:700; margin:0 auto 16px; }
+  .invite h3{ font-size:1.28rem; font-weight:600; color:var(--carbon-black); line-height:1.3; }
+  .invite h3 b{ color:var(--baltic); }
+  .invite .who{ font-size:.86rem; color:var(--n600); margin-top:10px; }
+  .invite .card2{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); padding:13px 14px; margin-top:18px; text-align:left; display:flex; align-items:center; gap:11px; }
+  .invite .card2 .ic{ width:38px; height:38px; border-radius:11px; background:var(--n50); border:1px solid var(--n200); display:grid; place-items:center; color:var(--baltic); flex:none; }
+  .invite .card2 .t{ font-size:.9rem; font-weight:600; color:var(--carbon-black); }
+  .invite .card2 .s{ font-size:.75rem; color:var(--n500); }
+  .invite .spacer{ flex:1; }
+  .invite .priv{ display:flex; align-items:center; gap:7px; justify-content:center; font-size:.75rem; color:var(--n500); margin-top:16px; }
+  .btn{ width:100%; display:flex; align-items:center; justify-content:center; min-height:52px; border-radius:var(--r-btn); font-family:inherit; font-size:.96rem; font-weight:600; cursor:pointer; text-align:center; border:none; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); }
+  .btn.ghost{ background:transparent; color:var(--n600); min-height:46px; margin-top:6px; }
+  .weblink{ font-size:.74rem; color:var(--n500); margin-top:14px; }
+
+  .legend{ max-width:1000px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Screens</div>
+  <h1>Listen-Übersicht &amp; Einladung annehmen</h1>
+  <p><b>Listen:</b> mehrere offene Listen gleichzeitig (Name optional → „Liste N"), ein
+     „Erledigt"-Filter für abgeschlossene Listen (nur lesbar), „+ Neue Liste". <b>Einladung
+     annehmen:</b> der persönliche Link öffnet die App (oder den Browser); anmelden &amp; als
+     „Mitglied" beitreten (CAP-2).</p>
+</div>
+
+<div class="stage">
+
+  <!-- FRAME 1: Listen overview (offen) -->
+  <div class="col">
+    <div class="label">1 · Listen — Offen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>8:05</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr"><span class="hh">Zuhause <span class="car">▾</span></span><span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktuell</span></div>
+        <div class="ovtop"><h2>Listen</h2><span class="newlist">+ Neue Liste</span></div>
+        <div class="filters"><span class="fl on">Offen</span><span class="fl">Erledigt</span></div>
+      </div>
+      <div class="content">
+        <div class="lcard"><div class="lt">Wocheneinkauf</div><div class="ls tnum">12 Artikel · 2 Geschäfte</div><div class="bar"><span style="width:58%"></span></div></div>
+        <div class="lcard"><div class="lt">Getränke</div><div class="ls tnum">4 Artikel</div><div class="bar"><span style="width:0"></span></div></div>
+        <div class="lcard"><div class="lt">Liste 3</div><div class="ls tnum">1 Artikel · ohne Namen</div><div class="bar"><span style="width:0"></span></div></div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Mehrere offene Listen. Fortschrittsbalken, Auto-Name „Liste 3" wenn ohne Namen.</div>
+  </div>
+
+  <!-- FRAME 2: Listen overview (erledigt filter) -->
+  <div class="col">
+    <div class="label">2 · Listen — Erledigt</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>8:05</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr"><span class="hh">Zuhause <span class="car">▾</span></span><span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktuell</span></div>
+        <div class="ovtop"><h2>Listen</h2><span class="newlist">+ Neue Liste</span></div>
+        <div class="filters"><span class="fl">Offen</span><span class="fl on">Erledigt</span></div>
+      </div>
+      <div class="content">
+        <div class="lcard done"><div class="lt">Wocheneinkauf</div><div class="ls tnum">14 Artikel</div><div class="donetag"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Erledigt · 18.08.2026</div></div>
+        <div class="lcard done"><div class="lt">Wochenmarkt</div><div class="ls tnum">6 Artikel</div><div class="donetag"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Erledigt · 11.08.2026</div></div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">„Erledigt"-Filter: abgeschlossene Listen als nur lesbares Archiv (kein eigener Tab).</div>
+  </div>
+
+  <!-- FRAME 3: invite acceptance -->
+  <div class="col">
+    <div class="label">3 · Einladung annehmen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome"><div class="statusbar"><span>19:30</span><span>▂▄▆ ⏦</span></div></div>
+      <div class="invite">
+        <div class="logo">S</div>
+        <div class="inv-av">A</div>
+        <h3><b>Anna</b> lädt dich zu<br>„Zuhause" ein</h3>
+        <div class="who">Ihr teilt dann dieselben Einkaufslisten.</div>
+        <div class="card2"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01"/></svg></span><div><div class="t">Zuhause</div><div class="s">Du trittst als „Mitglied" bei</div></div></div>
+        <div class="spacer"></div>
+        <button class="btn primary">Beitreten</button>
+        <button class="btn ghost">Jetzt nicht</button>
+        <div class="priv"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Nur der Haushalt sieht eure Listen.</div>
+        <div class="weblink">Ohne App? Der Link öffnet auch im Browser.</div>
+      </div>
+    </div></div>
+    <div class="note">Persönlicher Link → App (Deep Link) oder Web-Fallback; anmelden &amp; als „Mitglied" beitreten (CAP-2).</div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Design decisions:</b> Listen shows several Open lists with progress bars and the auto-name „Liste N"
+     for unnamed lists; a segmented <b>Offen / Erledigt</b> filter replaces a history tab — Done lists are a
+     read-only archive · invite acceptance is the recipient path: who invited you + which household, join as
+     „Mitglied", privacy stated, and an explicit web-fallback note (CAP-2); „Jetzt nicht" is a calm way out.</p>
+</div>

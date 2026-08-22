@@ -1,0 +1,56 @@
+name: CI
+
+# A red build blocks merge (NFR6). Configure branch protection on the default branch to require
+# both jobs below to pass before merging — the setting lives in the repository settings, outside
+# this file (see README "Continuous integration").
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Spring Boot / Java 25)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test (includes architecture/dependency tests)
+        run: ./gradlew test
+
+  client:
+    name: Client (Flutter 3.44)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter 3.44.9
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+
+      - name: Fetch dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

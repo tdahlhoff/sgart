@@ -1,0 +1,214 @@
+<!--
+  SGART — Shape / rounding / elevation / density specimen · Coaching-mode UX flow
+  PURPOSE: judge three coherent "physical feel" systems on the SAME German SGART
+  screen, with type (Inter, decided) and palette (locked) held constant.
+    1 · Ruhig       — soft radius ~18px, flat + hairlines, comfortable density
+    2 · Kompakt     — crisp radius ~8px, soft card shadow, tight density
+    3 · Ausgewogen  — medium radius ~12px, hairline + faint lift, comfy-compact
+  Only radius / elevation / spacing / row-height vary between the three.
+-->
+<title>SGART Shape &amp; Density</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic-blue:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-card:#f3f0eb; --studio-text:#5c554f;
+    --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --studio:#211f1d; --studio-card:#2b2825; --studio-text:#c2b9b1;
+      --studio-strong:#f2f4ff; --studio-line:#3a3531;
+    }
+  }
+  :root[data-theme="dark"]{
+    --studio:#211f1d; --studio-card:#2b2825; --studio-text:#c2b9b1;
+    --studio-strong:#f2f4ff; --studio-line:#3a3531;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 24px 72px; }
+  .tnum{ font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; }
+
+  .head{ max-width:1180px; margin:0 auto 40px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.6rem; font-weight:600; color:var(--studio-strong);
+    margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:12px; }
+  .head .prov{ display:inline-block; margin-top:16px; font-size:.7rem;
+    border:1px solid var(--studio-line); border-radius:999px; padding:5px 13px; }
+
+  .grid{ max-width:1180px; margin:0 auto; display:grid;
+    grid-template-columns:repeat(3,1fr); gap:28px; align-items:start; }
+  @media (max-width:940px){ .grid{ grid-template-columns:1fr; max-width:420px; } }
+  .col{ display:flex; flex-direction:column; gap:14px; }
+  .caption{ text-align:center; }
+  .caption .tag{ font-size:.82rem; font-weight:700; color:var(--studio-strong); }
+  .caption .spec{ font-size:.7rem; opacity:.8; margin-top:2px; }
+
+  /* ---- shared screen (Inter + locked palette) ---- */
+  .screen{ background:var(--ghost-white); color:var(--carbon-black);
+    border-radius:var(--r-screen); overflow:hidden; }
+  .app-head{ padding:var(--pad); border-bottom:1px solid var(--n200); }
+  .kicker{ font-size:.66rem; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--n500); }
+  .title{ font-size:1.3rem; font-weight:600; margin-top:3px; letter-spacing:-.01em; }
+  .meta{ font-size:.78rem; color:var(--n600); margin-top:7px; display:flex; gap:8px; }
+  .meta b{ font-weight:600; color:var(--carbon-black); }
+  .meta .dot{ opacity:.5; }
+
+  .group{ padding:var(--pad); padding-bottom:6px; }
+  .group h3{ display:flex; align-items:baseline; gap:6px; font-size:.8rem;
+    font-weight:700; padding-bottom:var(--gap-h); }
+  .group h3 .chain{ font-weight:400; color:var(--n500); font-size:.74rem; }
+  .group h3 .count{ margin-left:auto; font-weight:500; color:var(--n500); font-size:.72rem; }
+
+  .item{ display:flex; align-items:center; gap:11px; padding:var(--row) 0;
+    border-top:1px solid var(--n100); }
+  .item:first-of-type{ border-top:none; }
+  .box{ width:21px; height:21px; border-radius:var(--r-box); flex:none;
+    display:grid; place-items:center; }
+  .box.open{ border:2px solid var(--n300); }
+  .box.done{ background:var(--verdigris); }
+  .box.done svg{ color:var(--carbon-black); }
+  .item .name{ flex:1; min-width:0; font-size:.92rem; }
+  .item .qty{ font-size:.8rem; color:var(--n600); }
+  .item.doneRow .name{ text-decoration:line-through; color:var(--n400); }
+  .badge{ font-size:.66rem; font-weight:700; padding:3px 8px;
+    border-radius:var(--r-badge); flex:none; }
+  .badge.conflict{ background:var(--pink); color:var(--carbon-black); }
+  .badge.pending{ background:var(--amber); color:var(--carbon-black); }
+
+  .sum{ display:flex; justify-content:space-between; align-items:baseline;
+    padding:var(--pad); padding-top:12px; padding-bottom:12px; margin-top:4px;
+    border-top:1px solid var(--n200); background:var(--n50); }
+  .sum .lbl{ font-size:.78rem; color:var(--n600); }
+  .sum .val{ font-size:1.05rem; font-weight:700; }
+
+  .cta{ padding:var(--pad); }
+  .cta button{ width:100%; border:none; border-radius:var(--r-btn);
+    padding:14px; font-size:.94rem; font-weight:600; background:var(--baltic-blue);
+    color:var(--ghost-white); cursor:pointer; font-family:inherit; }
+
+  /* the card wraps the screen; carries elevation + outer radius */
+  .card{ border-radius:var(--r-card); }
+
+  /* ============ SYSTEM 1 · RUHIG ============ */
+  .s1{
+    --r-card:20px; --r-screen:20px; --r-btn:14px; --r-box:8px; --r-badge:999px;
+    --pad:18px; --row:14px; --gap-h:9px;
+  }
+  .s1 .card{ border:1px solid var(--studio-line); box-shadow:none; }
+
+  /* ============ SYSTEM 2 · KOMPAKT ============ */
+  .s2{
+    --r-card:8px; --r-screen:8px; --r-btn:8px; --r-box:5px; --r-badge:6px;
+    --pad:12px; --row:9px; --gap-h:6px;
+  }
+  .s2 .card{ border:none; box-shadow:0 6px 20px -8px rgba(25,23,22,.35),0 1px 3px rgba(25,23,22,.12); }
+
+  /* ============ SYSTEM 3 · AUSGEWOGEN ============ */
+  .s3{
+    --r-card:14px; --r-screen:14px; --r-btn:12px; --r-box:6px; --r-badge:999px;
+    --pad:15px; --row:12px; --gap-h:8px;
+  }
+  .s3 .card{ border:1px solid var(--n200); box-shadow:0 10px 26px -18px rgba(25,23,22,.4); }
+
+  footer{ max-width:1180px; margin:36px auto 0; font-size:.76rem;
+    color:var(--studio-text); border-top:1px solid var(--studio-line); padding-top:16px; }
+  footer b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX-Richtung</div>
+  <h1>Form &amp; Dichte — drei Systeme im Vergleich</h1>
+  <p>The same screen (Inter type + locked palette) in three physical-feel systems.
+     Only corner radius, elevation and density change. Note how many list items each
+     system shows before the fold, how big the tap targets feel for one-handed aisle
+     use, and whether the softness matches the calm, privacy-forward tone.</p>
+  <span class="prov">Direction specimen · shape / elevation / density is the only variable</span>
+</div>
+
+<div class="grid">
+
+  <!-- SYSTEM 1 -->
+  <div class="col s1">
+    <div class="caption"><div class="tag">1 · Ruhig</div><div class="spec">Radius 20 · flach + Haarlinie · locker</div></div>
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+  </div>
+
+  <!-- SYSTEM 2 -->
+  <div class="col s2">
+    <div class="caption"><div class="tag">2 · Kompakt</div><div class="spec">Radius 8 · weicher Schatten · dicht</div></div>
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+  </div>
+
+  <!-- SYSTEM 3 -->
+  <div class="col s3">
+    <div class="caption"><div class="tag">3 · Ausgewogen</div><div class="spec">Radius 14 · Haarlinie + Lift · mittel</div></div>
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+  </div>
+
+</div>
+
+<footer>
+  <b>How to read this:</b> <b>1 · Ruhig</b> feels calmest and most domestic, biggest tap targets, but shows the fewest items.
+  <b>2 · Kompakt</b> shows the most list at once and reads efficient, but tighter targets and the shadow adds visual weight.
+  <b>3 · Ausgewogen</b> aims for aisle-friendly targets while still fitting a long list, with a barely-there lift.
+</footer>

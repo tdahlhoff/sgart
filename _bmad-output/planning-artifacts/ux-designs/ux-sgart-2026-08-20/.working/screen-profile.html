@@ -1,0 +1,219 @@
+<!--
+  SGART — KEY SCREEN: Profil + Meine Daten (CAP-13 locale, CAP-12 notif info, CAP-14 data rights)
+  Profil is PURELY PERSONAL (household mgmt lives in the switcher sheet). Foundations: Inter,
+  System 3, 48px rows, text-only buttons, locked palette. German product UI. Erasure/export
+  are GDPR-sensitive → plain, calm, Rita-safe, clearly irreversible; erasure = de-linking
+  (AD-7). Last-Admin guard surfaced (CAP-2 invariant). 3 frames: Profil · Meine Daten ·
+  Löschen-Bestätigung.
+-->
+<title>SGART · Profil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+    --card2-bg:#ffffff;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; --card2-bg:#2b2825; } }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; --card2-bg:#2b2825; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font); -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .head{ max-width:1120px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+  .stage{ display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:320px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.76rem; text-align:center; max-width:29ch; }
+
+  .phone{ width:312px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .apphdr{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 10px; }
+  .hh{ display:inline-flex; align-items:center; gap:6px; font-size:.84rem; font-weight:600; background:var(--n50); border:1px solid var(--n200); border-radius:var(--r-pill); padding:6px 11px; }
+  .hh .car{ font-size:.64rem; color:var(--n500); }
+  .backrow{ display:flex; align-items:center; gap:8px; padding:8px 12px 12px; }
+  .backrow .chev{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .backrow h2{ font-size:1.22rem; font-weight:600; letter-spacing:-.01em; }
+
+  .content{ flex:1; overflow:auto; padding:14px 14px 18px; }
+  .ident{ display:flex; align-items:center; gap:12px; padding:4px 4px 16px; }
+  .ident .av{ width:46px; height:46px; border-radius:14px; background:var(--baltic); color:var(--ghost-white); display:grid; place-items:center; font-size:1.1rem; font-weight:700; flex:none; }
+  .ident .who .nm{ font-size:1rem; font-weight:600; }
+  .ident .who .em{ font-size:.78rem; color:var(--n500); }
+  .sect{ font-size:.66rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n500); padding:6px 4px 7px; }
+  .group{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 8px 22px -18px rgba(25,23,22,.3); overflow:hidden; margin-bottom:16px; }
+  .row{ display:flex; align-items:center; gap:12px; padding:12px 14px; min-height:52px; }
+  .row + .row{ border-top:1px solid var(--n100); }
+  .row .rl{ flex:1; min-width:0; }
+  .row .rt{ font-size:.92rem; font-weight:500; }
+  .row .rs{ font-size:.76rem; color:var(--n500); margin-top:1px; }
+  .row .val{ font-size:.84rem; color:var(--n500); }
+  .row .chev{ color:var(--n400); flex:none; }
+  .row.danger .rt{ color:var(--pink); font-weight:600; }
+  .row.danger .di{ color:var(--pink); }
+  .ri{ width:20px; display:grid; place-items:center; color:var(--n500); flex:none; }
+
+  /* toggle */
+  .sw{ width:44px; height:26px; border-radius:999px; background:var(--verdigris); position:relative; flex:none; }
+  .sw::after{ content:""; position:absolute; top:3px; left:21px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .sw.off{ background:var(--n300); }
+  .sw.off::after{ left:3px; }
+
+  .infobox{ font-size:.78rem; color:var(--n600); background:var(--n50); border:1px solid var(--n100); border-radius:var(--r-card); padding:11px 13px; margin-bottom:16px; }
+
+  /* buttons */
+  .btn{ width:100%; display:flex; align-items:center; justify-content:center; min-height:50px; border-radius:var(--r-btn); font-family:inherit; font-size:.94rem; font-weight:600; cursor:pointer; text-align:center; line-height:1.2; border:none; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); }
+  .btn.secondary{ background:transparent; color:var(--baltic); border:1px solid rgba(69,105,144,.35); }
+  .btn.danger{ background:var(--pink); color:var(--carbon-black); }
+  .btn.ghost{ background:transparent; color:var(--n600); }
+  .stack{ display:flex; flex-direction:column; gap:9px; margin-top:4px; }
+
+  /* erasure sheet */
+  .backdrop{ position:absolute; inset:0; background:rgba(25,23,22,.5); z-index:2; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; z-index:3; background:var(--ghost-white); border-radius:22px 22px 0 0; box-shadow:0 -14px 40px -16px rgba(25,23,22,.5); display:flex; flex-direction:column; max-height:92%; }
+  .grab{ width:38px; height:4px; border-radius:999px; background:var(--n300); margin:9px auto 2px; flex:none; }
+  .sh-body{ overflow-y:auto; padding:8px 18px 18px; }
+  .sh-body h3{ font-size:1.14rem; font-weight:600; color:var(--carbon-black); margin-bottom:8px; }
+  .sh-body .lead{ font-size:.84rem; color:var(--n600); margin-bottom:14px; }
+  .what{ list-style:none; display:flex; flex-direction:column; gap:9px; margin-bottom:14px; }
+  .what li{ display:flex; gap:9px; font-size:.82rem; color:var(--carbon-black); }
+  .what li .ck{ color:var(--pink); flex:none; margin-top:1px; }
+  .warn{ display:flex; gap:9px; font-size:.8rem; color:#8a5a12; background:#f9ecd8; border-radius:var(--r-card); padding:11px 12px; margin-bottom:14px; }
+  .warn .wi{ color:var(--amber); flex:none; }
+
+  .legend{ max-width:1120px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+  .nav{ display:flex; background:#fff; border-top:1px solid var(--n200); padding:7px 8px 16px; }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.66rem; color:var(--n500); text-decoration:none; }
+  .nav a.active{ color:var(--baltic); font-weight:600; }
+  .nav svg{ display:block; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Screens</div>
+  <h1>Profil &amp; Meine Daten</h1>
+  <p><b>Profil ist rein persönlich</b> (Haushalts-Verwaltung liegt im Umschalter). Sprache/Region,
+     Benachrichtigungs-Info, und — DSGVO-sensibel — <b>Export &amp; Löschen</b>.
+     Löschen ist Klartext, ruhig, klar unumkehrbar; technisch = Entkopplung (AD-7). Der
+     „letzter Admin"-Fall wird geführt (CAP-2).</p>
+</div>
+
+<div class="stage">
+
+  <!-- FRAME 1: Profil -->
+  <div class="col">
+    <div class="label">1 · Profil</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:15</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr"><span class="hh">Zuhause <span class="car">▾</span></span></div>
+      </div>
+      <div class="content">
+        <div class="ident">
+          <span class="av">R</span>
+          <div class="who"><div class="nm">Rita Bergmann</div><div class="em">rita@example.de</div></div>
+        </div>
+
+        <div class="sect">Darstellung</div>
+        <div class="group">
+          <div class="row"><span class="ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg></span><div class="rl"><div class="rt">Sprache &amp; Region</div></div><span class="val">Deutsch (DE)</span><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+        </div>
+
+        <div class="sect">Benachrichtigungen</div>
+        <div class="infobox">Du bekommst Hinweise zu Einladungen, Listenänderungen und Einkäufen. Inhalte werden nie mitgeschickt. In dieser Version fest eingestellt.</div>
+
+        <div class="sect">Konto &amp; Daten</div>
+        <div class="group">
+          <div class="row"><span class="ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg></span><div class="rl"><div class="rt">Meine Daten</div><div class="rs">Exportieren oder löschen</div></div><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+          <div class="row"><span class="ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg></span><div class="rl"><div class="rt">Abmelden</div></div></div>
+        </div>
+      </div>
+      <div class="nav">
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Persönliche Einstellungen. (Größere Darstellung: Fast-Follow — MVP nutzt OS-Textskalierung.)</div>
+  </div>
+
+  <!-- FRAME 2: Meine Daten -->
+  <div class="col">
+    <div class="label">2 · Meine Daten</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:16</span><span>▂▄▆ ⏦</span></div>
+        <div class="backrow"><span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span><h2>Meine Daten</h2></div>
+      </div>
+      <div class="content">
+        <div class="infobox">Deine Daten gehören dir. Du kannst jederzeit eine Kopie herunterladen oder alles löschen. SGART speichert keine Werbe- oder Standortdaten.</div>
+
+        <div class="sect">Exportieren</div>
+        <div class="group">
+          <div class="row"><div class="rl"><div class="rt">Daten exportieren</div><div class="rs">Alle deine Listen &amp; Einkäufe als Datei</div></div><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+        </div>
+
+        <div class="sect">Löschen</div>
+        <div class="group">
+          <div class="row danger"><span class="ri di"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></span><div class="rl"><div class="rt">Konto &amp; Daten löschen</div><div class="rs">Entfernt dich endgültig aus SGART</div></div><span class="chev"><svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="infobox">Nach dem Löschen bleiben in gemeinsamen Verläufen nur anonyme, nicht mehr dir zuordenbare Spuren — ohne persönliche Daten.</div>
+      </div>
+    </div></div>
+    <div class="note">Export &amp; Löschen getrennt und klar. Klartext, was passiert (DSGVO, AD-7).</div>
+  </div>
+
+  <!-- FRAME 3: erasure confirm -->
+  <div class="col">
+    <div class="label">3 · Löschen bestätigen</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar"><span>20:16</span><span>▂▄▆ ⏦</span></div>
+        <div class="backrow"><span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span><h2>Meine Daten</h2></div>
+      </div>
+      <div class="content" style="opacity:.4"><div class="infobox">Deine Daten gehören dir …</div></div>
+
+      <div class="backdrop"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sh-body">
+          <h3>Konto &amp; Daten löschen?</h3>
+          <p class="lead">Das kann nicht rückgängig gemacht werden.</p>
+          <ul class="what">
+            <li><span class="ck"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span>Dein Zugang wird gelöscht.</li>
+            <li><span class="ck"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span>Deine persönlichen Daten werden entfernt.</li>
+            <li><span class="ck"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span>In gemeinsamen Listen bleibst du nur als anonyme Spur.</li>
+          </ul>
+          <div class="warn"><span class="wi"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span><span>Du bist letzter Admin von „Rita &amp; Werner". Übertrage zuerst die Admin-Rolle oder lösche den Haushalt.</span></div>
+          <div class="stack">
+            <button class="btn danger">Endgültig löschen</button>
+            <button class="btn ghost">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="note">Unumkehrbar, Klartext-Liste, „letzter Admin"-Schutz (CAP-2). Abbrechen ist der ruhige Standardweg.</div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Design decisions:</b> Profil is personal-only · larger text via OS Dynamic Type in MVP („Größere Darstellung" toggle is fast-follow) ·
+     notifications are info-only in MVP (fixed defaults, CAP-12) · export &amp; erasure are separate, plain-language, calm ·
+     erasure confirm is clearly irreversible with a Klartext list of effects and a <span style="color:var(--pink)">danger</span> primary +
+     quiet „Abbrechen" · the <b>last-Admin invariant</b> (CAP-2) blocks erasure until the role is handed over ·
+     erasure = de-linking, residual traces anonymized (AD-7); no ad/location data ever.</p>
+</div>

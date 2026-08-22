@@ -1,0 +1,307 @@
+<!--
+  SGART — Active Shopping Trip · color-in-context direction mock
+  PURPOSE: react to the palette (.working/palette.md) applied to a real screen.
+  PROVISIONAL (not yet spine decisions): typography (system stack placeholder),
+  corner radius, spacing scale, component shapes. Locked here: the color system —
+  inverted dark chrome, ghost-white content, verdigris=Done, amber=pending/offline,
+  pink=conflict, on-color tokens for text on fills.
+  German-first strings per SPEC. Two device frames: Hell (light) + Dunkel (dark).
+-->
+<title>SGART Active Trip</title>
+<style>
+  :root {
+    /* brand palette */
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic-blue:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    /* warm neutrals */
+    --n900:#191716; --n800:#2b2825; --n700:#423d39; --n600:#5c554f; --n500:#7a726b;
+    --n400:#9c938b; --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    /* lightened chromatics (dark surfaces / chrome accents) */
+    --primary-lt:#7ba3cc; --success-lt:#33c2ad; --error-lt:#f6717d; --amber-lt:#f0a94e;
+    /* studio backdrop */
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-line:#d3cdc4;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-line:#3a3531; }
+  }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    background:var(--studio); color:var(--studio-text);
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.4;
+    padding:40px 20px 64px;
+  }
+  .head{ max-width:760px; margin:0 auto 36px; text-align:center; }
+  .head h1{ font-size:1.05rem; font-weight:650; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--studio-text); }
+  .head p{ font-size:.82rem; margin-top:8px; max-width:52ch; margin-inline:auto; opacity:.85; }
+  .head .prov{ display:inline-block; margin-top:12px; font-size:.7rem; letter-spacing:.04em;
+    border:1px solid var(--studio-line); border-radius:999px; padding:4px 12px; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:44px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .col > .label{ font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; opacity:.7; }
+
+  /* ---- device ---- */
+  .phone{ width:344px; border-radius:42px; padding:11px; background:var(--carbon-black);
+    box-shadow:0 30px 60px -20px rgba(25,23,22,.55), 0 0 0 1px rgba(0,0,0,.2); }
+  .screen{ position:relative; height:724px; border-radius:32px; overflow:hidden;
+    display:flex; flex-direction:column; }
+  .tabular{ font-variant-numeric:tabular-nums; }
+
+  /* status bar + header live on chrome (carbon-black, ghost-white text) */
+  .chrome{ background:var(--carbon-black); color:var(--ghost-white); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center;
+    padding:12px 22px 2px; font-size:.72rem; font-weight:600; }
+  .statusbar .dots{ display:flex; gap:5px; align-items:center; opacity:.9; }
+  .statusbar .dots svg{ display:block; }
+
+  .header{ padding:8px 18px 14px; }
+  .header .row{ display:flex; align-items:center; gap:12px; }
+  .header .chev{ width:28px; height:28px; display:grid; place-items:center; }
+  .header .titles{ flex:1; min-width:0; }
+  .header .kicker{ font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; opacity:.6; }
+  .header h2{ font-size:1.18rem; font-weight:650; margin-top:1px; }
+  .header .sync{ display:flex; align-items:center; gap:6px; font-size:.7rem; font-weight:600;
+    color:var(--amber-lt); background:rgba(224,145,47,.16); padding:5px 10px; border-radius:999px; }
+  .header .sync svg{ display:block; }
+
+  .progress{ padding:12px 18px 14px; }
+  .progress .meta{ display:flex; justify-content:space-between; font-size:.74rem; margin-bottom:7px; }
+  .progress .meta b{ font-weight:650; }
+  .progress .muted{ opacity:.6; }
+  .track{ height:7px; border-radius:999px; background:rgba(242,244,255,.14); overflow:hidden; }
+  .track > span{ display:block; height:100%; width:58%; background:var(--success-lt); border-radius:999px; }
+
+  /* ---- content ---- */
+  .content{ flex:1; overflow:hidden; padding:16px 14px 96px; }
+  .group{ margin-bottom:18px; }
+  .group h3{ display:flex; align-items:center; gap:8px; font-size:.78rem; font-weight:700;
+    letter-spacing:.02em; padding:0 6px 8px; }
+  .group h3 .chain{ font-weight:500; opacity:.55; font-size:.72rem; }
+  .group h3 .count{ margin-left:auto; font-weight:600; opacity:.55; font-size:.72rem; }
+  .card{ border-radius:16px; overflow:hidden; }
+
+  .item{ display:flex; align-items:center; gap:12px; padding:13px 14px; }
+  .item + .item{ border-top:1px solid var(--sep); }
+  .box{ width:23px; height:23px; border-radius:7px; flex:none; display:grid; place-items:center; }
+  .box.open{ border:2px solid var(--ring); }
+  .box.done{ background:var(--verdigris); }
+  .box.done svg{ color:var(--carbon-black); } /* on.success = carbon-black */
+  .item .name{ flex:1; min-width:0; font-size:.92rem; }
+  .item .qty{ font-size:.78rem; opacity:.6; }
+  .item.doneRow .name{ text-decoration:line-through; opacity:.5; }
+  .badge{ font-size:.66rem; font-weight:700; letter-spacing:.02em; padding:3px 8px; border-radius:999px; flex:none; }
+  .badge.conflict{ background:var(--pink); color:var(--carbon-black); } /* on.error = carbon-black */
+  .badge.pending{ background:var(--amber); color:var(--carbon-black); }  /* on.warning = carbon-black */
+  .badge.reroute{ background:transparent; border:1px solid var(--ring); opacity:.7; font-weight:600; }
+
+  /* footer action + nav (chrome) */
+  .footer{ position:absolute; left:0; right:0; bottom:0; }
+  .cta{ margin:0 16px 10px; }
+  .cta button{ width:100%; border:none; border-radius:14px; padding:15px; font-size:.95rem;
+    font-weight:650; background:var(--baltic-blue); color:var(--ghost-white); cursor:pointer;
+    box-shadow:0 8px 22px -8px rgba(69,105,144,.7); }
+  .nav{ display:flex; background:var(--carbon-black); padding:8px 8px 22px; border-top:1px solid var(--n700); }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+    font-size:.66rem; color:rgba(242,244,255,.55); text-decoration:none; }
+  .nav a svg{ display:block; }
+  .nav a.active{ color:var(--primary-lt); } /* chrome.active = #7ba3cc */
+
+  /* ---- LIGHT theme content tokens ---- */
+  .light .content{ background:var(--ghost-white); color:var(--carbon-black); border-top:1px solid var(--n200); }
+  .light .card{ background:#fff; box-shadow:0 1px 0 var(--n200), 0 1px 3px rgba(25,23,22,.05); }
+  .light{ --sep:var(--n100); --ring:var(--n300); }
+  .light .group h3{ color:var(--carbon-black); }
+
+  /* ---- LIGHT chrome (no inversion in light mode) ---- */
+  .light .chrome{ background:#fff; color:var(--carbon-black); }
+  .light .statusbar{ color:var(--carbon-black); }
+  .light .header .sync{ color:#6b4310; background:#f9ecd8; }        /* soft amber chip */
+  .light .track{ background:var(--n200); }
+  .light .track > span{ background:var(--verdigris); }              /* raw verdigris on light */
+  .light .footer.chrome{ background:transparent; }
+  .light .nav{ background:#fff; border-top:1px solid var(--n200); }
+  .light .nav a{ color:var(--n500); }
+  .light .nav a.active{ color:var(--baltic-blue); }                 /* baltic reads on light */
+
+  /* ---- DARK theme content tokens ---- */
+  .dark .content{ background:var(--carbon-black); color:var(--ghost-white); }
+  .dark .card{ background:var(--n800); }
+  .dark{ --sep:var(--n700); --ring:var(--n600); }
+  .dark .box.done{ background:var(--success-lt); }
+  .dark .badge.conflict{ background:var(--error-lt); }
+  .dark .badge.pending{ background:var(--amber-lt); }
+  .dark .progress .track{ background:rgba(242,244,255,.12); }
+  .dark .cta button{ background:var(--primary-lt); color:var(--carbon-black); } /* lightened primary on dark */
+  .dark .header .sync{ color:var(--amber-lt); }
+
+  /* legend */
+  .legend{ max-width:760px; margin:40px auto 0; display:flex; flex-wrap:wrap; gap:10px 20px;
+    justify-content:center; font-size:.74rem; }
+  .legend span{ display:inline-flex; align-items:center; gap:7px; }
+  .legend i{ width:13px; height:13px; border-radius:4px; display:inline-block; }
+</style>
+
+<div class="head">
+  <h1>SGART · Aktiver Einkauf</h1>
+  <p>The supplied palette applied to the store-grouped active-trip screen — inverted dark chrome, ghost-white content, and the semantic state colors in context.</p>
+  <div class="prov">Direction mock · layout &amp; typography still provisional</div>
+</div>
+
+<div class="stage">
+
+  <!-- ================= LIGHT ================= -->
+  <div class="col">
+    <div class="label">Hell</div>
+    <div class="phone">
+      <div class="screen light">
+        <div class="chrome">
+          <div class="statusbar tabular">
+            <span>9:41</span>
+            <span class="dots">
+              <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="4.5" width="3" height="6.5" rx="1"/><rect x="9" y="2" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+              <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="1" y="1" width="17" height="9" rx="2.5" stroke="currentColor" stroke-opacity=".5"/><rect x="2.5" y="2.5" width="12" height="6" rx="1.2" fill="currentColor"/><rect x="19" y="4" width="2" height="3" rx="1" fill="currentColor" fill-opacity=".6"/></svg>
+            </span>
+          </div>
+          <div class="header">
+            <div class="row">
+              <div class="chev"><svg width="11" height="18" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></div>
+              <div class="titles">
+                <div class="kicker">Aktiver Einkauf</div>
+                <h2>Wocheneinkauf</h2>
+              </div>
+              <div class="sync">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg>
+                Offline · 3
+              </div>
+            </div>
+          </div>
+          <div class="progress">
+            <div class="meta"><span><b>7</b> von <b>12</b> erledigt</span><span class="muted">2 Geschäfte</span></div>
+            <div class="track"><span></span></div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="group">
+            <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty">1 Laib</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty">1 kg</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+              <div class="item doneRow"><span class="box done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Milch</span><span class="qty">2 L</span></div>
+              <div class="item doneRow"><span class="box done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Butter</span><span class="qty">250 g</span></div>
+            </div>
+          </div>
+          <div class="group">
+            <h3>dm Drogerie <span class="chain">· dm</span> <span class="count">2 offen</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Zahnpasta</span><span class="badge pending">Wird synchronisiert</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Shampoo</span><span class="qty">500 ml</span></div>
+            </div>
+          </div>
+          <div class="group">
+            <h3>Noch nicht zugeordnet <span class="count">1</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Batterien AA</span><span class="badge reroute">Zuordnen</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer chrome">
+          <div class="cta"><button>Einkauf abschließen</button></div>
+          <div class="nav">
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+            <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Verlauf</a>
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DARK ================= -->
+  <div class="col">
+    <div class="label">Dunkel</div>
+    <div class="phone">
+      <div class="screen dark">
+        <div class="chrome">
+          <div class="statusbar tabular">
+            <span>9:41</span>
+            <span class="dots">
+              <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="4.5" width="3" height="6.5" rx="1"/><rect x="9" y="2" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+              <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="1" y="1" width="17" height="9" rx="2.5" stroke="currentColor" stroke-opacity=".5"/><rect x="2.5" y="2.5" width="12" height="6" rx="1.2" fill="currentColor"/><rect x="19" y="4" width="2" height="3" rx="1" fill="currentColor" fill-opacity=".6"/></svg>
+            </span>
+          </div>
+          <div class="header">
+            <div class="row">
+              <div class="chev"><svg width="11" height="18" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></div>
+              <div class="titles">
+                <div class="kicker">Aktiver Einkauf</div>
+                <h2>Wocheneinkauf</h2>
+              </div>
+              <div class="sync">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg>
+                Offline · 3
+              </div>
+            </div>
+          </div>
+          <div class="progress">
+            <div class="meta"><span><b>7</b> von <b>12</b> erledigt</span><span class="muted">2 Geschäfte</span></div>
+            <div class="track"><span></span></div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="group">
+            <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty">1 Laib</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty">1 kg</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+              <div class="item doneRow"><span class="box done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Milch</span><span class="qty">2 L</span></div>
+              <div class="item doneRow"><span class="box done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Butter</span><span class="qty">250 g</span></div>
+            </div>
+          </div>
+          <div class="group">
+            <h3>dm Drogerie <span class="chain">· dm</span> <span class="count">2 offen</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Zahnpasta</span><span class="badge pending">Wird synchronisiert</span></div>
+              <div class="item"><span class="box open"></span><span class="name">Shampoo</span><span class="qty">500 ml</span></div>
+            </div>
+          </div>
+          <div class="group">
+            <h3>Noch nicht zugeordnet <span class="count">1</span></h3>
+            <div class="card">
+              <div class="item"><span class="box open"></span><span class="name">Batterien AA</span><span class="badge reroute">Zuordnen</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer chrome">
+          <div class="cta"><button>Einkauf abschließen</button></div>
+          <div class="nav">
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+            <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Verlauf</a>
+            <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <span><i style="background:#456990"></i>Primär / Aktion</span>
+  <span><i style="background:#1ea896"></i>Erledigt (Done)</span>
+  <span><i style="background:#e0912f"></i>Ausstehend / Offline</span>
+  <span><i style="background:#f45b69"></i>Konflikt (Error)</span>
+  <span><i style="background:#191716"></i>Chrome / Text</span>
+  <span><i style="background:#f2f4ff;border:1px solid #d3cdc4"></i>Inhalt (Hell)</span>
+</div>

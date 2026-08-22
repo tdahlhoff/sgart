@@ -1,0 +1,36 @@
+name: sgart
+description: "SGART — Smart Grocery And Receipt Tracker (Flutter client)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+  # Pinned alongside the Dart SDK so CI cannot silently build on a different Flutter.
+  flutter: ">=3.44.9"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Bundled so the SIL Open Font Licence ships with the font it covers and can be surfaced
+    # through showLicensePage() (see registerBundledFontLicenses in lib/main.dart).
+    - assets/fonts/OFL.txt
+
+  # Inter is bundled (not fetched at runtime) — offline, no network fetch, privacy-forward
+  # (DESIGN §2). It is a single variable asset (axes: wght 100–900, opsz 14–32), so declaring
+  # a weight here would not move the axis: the weight roles are requested per style via
+  # FontVariation('wght', …) in SgartTypography.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf

@@ -1,0 +1,200 @@
+<!--
+  SGART — Named-protagonist journey map (MVP: J1–J5) · Coaching-mode UX flow
+  Each journey = an end-to-end step flow tying personas → screens → SPEC capabilities,
+  grounded in PRD UJ-1..5. Design language: Inter, locked palette, System 3.
+  German only as quoted product UI labels; all commentary English.
+-->
+<title>SGART Journey Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --bg:#e7e3dd; --surface:#f6f3ef; --surface-2:#ffffff;
+    --ink:#191716; --ink-soft:#5c554f; --ink-mute:#7a726b;
+    --line:#d8d2ca; --line-soft:#e6e0d9; --accent:#456990;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --bg:#1b1917; --surface:#232120; --surface-2:#2b2825;
+      --ink:#f2f4ff; --ink-soft:#c2b9b1; --ink-mute:#9c938b; --line:#3a3531; --line-soft:#302c29; --accent:#7ba3cc; }
+  }
+  :root[data-theme="dark"]{ --bg:#1b1917; --surface:#232120; --surface-2:#2b2825;
+    --ink:#f2f4ff; --ink-soft:#c2b9b1; --ink-mute:#9c938b; --line:#3a3531; --line-soft:#302c29; --accent:#7ba3cc; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--ink-soft); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.5; padding:48px 24px 80px; }
+  .wrap{ max-width:1120px; margin:0 auto; }
+
+  .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mute); }
+  h1{ font-size:1.7rem; font-weight:600; color:var(--ink); margin-top:10px; letter-spacing:-.015em; }
+  .lede{ font-size:.92rem; max-width:70ch; margin-top:12px; }
+
+  /* persona legend */
+  .plegend{ display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:18px; font-size:.8rem; }
+  .pl{ display:inline-flex; align-items:center; gap:7px; }
+  .dot{ width:11px; height:11px; border-radius:50%; flex:none; }
+  .d-anna{ background:var(--verdigris); } .d-ben{ background:var(--amber); }
+  .d-rita{ background:var(--pink); } .d-werner{ background:var(--baltic); } .d-jonas{ background:var(--n400); }
+
+  .journey{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px 18px 20px; margin-top:20px; }
+  .jhead{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  .jn{ width:30px; height:30px; border-radius:9px; background:var(--accent); color:var(--ghost-white); display:grid; place-items:center; font-size:.82rem; font-weight:700; flex:none; }
+  :root[data-theme="dark"] .jn, :root:not([data-theme="light"]) .jn{ color:var(--carbon-black); }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .jn{ color:var(--carbon-black); } }
+  .jhead h2{ font-size:1.06rem; font-weight:600; color:var(--ink); }
+  .pchip{ display:inline-flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; color:var(--ink-soft);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
+  .uj{ margin-left:auto; font-size:.7rem; font-weight:600; color:var(--ink-mute); letter-spacing:.02em; }
+  .jsub{ font-size:.82rem; color:var(--ink-mute); margin:2px 0 14px; }
+
+  /* step flow */
+  .flow{ display:flex; align-items:stretch; gap:0; overflow-x:auto; padding-bottom:6px; }
+  .step{ flex:0 0 172px; background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:11px 12px; display:flex; flex-direction:column; gap:6px; }
+  .step .sn{ font-size:.64rem; font-weight:700; color:var(--ink-mute); letter-spacing:.06em; }
+  .step .sa{ font-size:.86rem; font-weight:600; color:var(--ink); line-height:1.3; }
+  .step .sl{ font-size:.76rem; color:var(--ink-soft); }
+  .step .sl q{ color:var(--accent); font-style:normal; }
+  .step .sl q::before{ content:"„"; } .step .sl q::after{ content:"\201C"; }
+  .step .caps{ margin-top:auto; display:flex; flex-wrap:wrap; gap:4px; }
+  .cap{ font-size:.6rem; font-weight:700; padding:2px 6px; border-radius:999px; background:var(--n100); color:var(--n600); border:1px solid var(--line); white-space:nowrap; }
+  :root[data-theme="dark"] .cap, :root:not([data-theme="light"]) .cap{ background:#302c29; color:var(--n300); }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .cap{ background:#302c29; color:var(--n300); } }
+  .arrow{ flex:0 0 26px; display:grid; place-items:center; color:var(--ink-mute); }
+  .arrow svg{ display:block; }
+  .jedge{ margin-top:12px; font-size:.76rem; color:var(--ink-mute); }
+  .jedge b{ color:var(--ink-soft); font-weight:600; }
+
+  .horizon{ background:transparent; border:1px dashed var(--line); }
+
+  footer{ margin-top:36px; border-top:1px solid var(--line); padding-top:16px; font-size:.8rem; color:var(--ink-soft); }
+  footer b{ color:var(--ink); font-weight:600; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">SGART · UX · Journeys</div>
+  <h1>Named-protagonist journeys</h1>
+  <p class="lede">Each journey walks one or more protagonists end-to-end through the key
+     screens, grounded in the PRD's UJ-1…UJ-5. Steps name the screen and the SPEC capability
+     they exercise. Every MVP capability appears in at least one journey.</p>
+  <div class="plegend">
+    <span class="pl"><span class="dot d-anna"></span>Anna — Organizer</span>
+    <span class="pl"><span class="dot d-ben"></span>Ben — Participant</span>
+    <span class="pl"><span class="dot d-rita"></span>Rita — Elder, 2 households</span>
+    <span class="pl"><span class="dot d-werner"></span>Werner — Elder Admin</span>
+    <span class="pl"><span class="dot d-jonas"></span>Jonas — Solo</span>
+  </div>
+
+  <!-- J1 -->
+  <div class="journey">
+    <div class="jhead"><span class="jn">J1</span><h2>Werner sets up the elder household</h2>
+      <span class="pchip"><span class="dot d-werner"></span>Werner</span><span class="uj">PRD UJ-1 · creator side</span></div>
+    <div class="jsub">First launch, no household, no power user to help — the whole point is that he can do it alone.</div>
+    <div class="flow">
+      <div class="step"><span class="sn">1 · WELCOME</span><span class="sa">Create household</span><span class="sl">Picks <q>Haushalt erstellen</q>; privacy stated</span><span class="caps"><span class="cap">CAP-1</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">2 · NAME</span><span class="sa">Name it</span><span class="sl"><q>Rita &amp; Werner</q> — “change later”</span><span class="caps"><span class="cap">CAP-1</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">3 · STORES</span><span class="sa">Add stores</span><span class="sl">Chain suggested <q>Edeka</q>; skippable</span><span class="caps"><span class="cap">CAP-3</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">4 · INVITE</span><span class="sa">Invite Rita</span><span class="sl">By email, or <q>Später einladen</q></span><span class="caps"><span class="cap">CAP-2</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">5 · DONE</span><span class="sa">In the app</span><span class="sl">Empty Listen overview, ready</span><span class="caps"><span class="cap">CAP-1</span></span></div>
+    </div>
+    <div class="jedge"><b>Edge:</b> skips stores + invite → still lands in a fully usable app (solo works).</div>
+  </div>
+
+  <!-- J2 -->
+  <div class="journey">
+    <div class="jhead"><span class="jn">J2</span><h2>Anna &amp; Ben build the weekly list, live</h2>
+      <span class="pchip"><span class="dot d-anna"></span>Anna</span><span class="pchip"><span class="dot d-ben"></span>Ben</span><span class="uj">PRD UJ-2</span></div>
+    <div class="jsub">Anna plans at home; Ben adds from work — one shared list, correct for both.</div>
+    <div class="flow">
+      <div class="step"><span class="sn">1 · FAST-ADD</span><span class="sa">Autocomplete</span><span class="sl"><q>Milch</q> → prefill 2 L · Edeka</span><span class="caps"><span class="cap">CAP-6</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">2 · ADD</span><span class="sa">Items + notes</span><span class="sl"><q>Kaffee — der dunkle</q></span><span class="caps"><span class="cap">CAP-5</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">3 · LIVE</span><span class="sa">Ben adds too</span><span class="sl">Appears on Anna’s screen in seconds</span><span class="caps"><span class="cap">CAP-7</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">4 · ASSIGN</span><span class="sa">Store chips</span><span class="sl">Coffee→Netto, milk→Edeka</span><span class="caps"><span class="cap">CAP-5</span><span class="cap">CAP-9</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">5 · GUARD</span><span class="sa">No duplicate</span><span class="sl"><q>Milch</q> twice → flagged</span><span class="caps"><span class="cap">CAP-5</span></span></div>
+    </div>
+    <div class="jedge"><b>Edge:</b> Ben adds while offline → queues locally with a pending count (<span style="color:var(--amber)">CAP-8</span>).</div>
+  </div>
+
+  <!-- J3 -->
+  <div class="journey">
+    <div class="jhead"><span class="jn">J3</span><h2>Ben shops digitally and transfers the leftovers</h2>
+      <span class="pchip"><span class="dot d-ben"></span>Ben</span><span class="uj">PRD UJ-3</span></div>
+    <div class="jsub">At Edeka on the way home — the active-trip core loop, list is the hero.</div>
+    <div class="flow">
+      <div class="step"><span class="sn">1 · START</span><span class="sa">Start trip</span><span class="sl"><q>Einkauf starten</q> + pick stores</span><span class="caps"><span class="cap">CAP-9</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">2 · CHECK OFF</span><span class="sa">Grouped by store</span><span class="sl">List fills the screen; tap to done</span><span class="caps"><span class="cap">CAP-9</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">3 · POSTPONE</span><span class="sa">Out of stock</span><span class="sl">Postpones coffee, defers yoghurt</span><span class="caps"><span class="cap">CAP-5</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">4 · OFFLINE</span><span class="sa">Signal drops</span><span class="sl"><q>Offline · 3</q>; syncs on return</span><span class="caps"><span class="cap">CAP-8</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">5 · COMPLETE</span><span class="sa">Quiet, at list end</span><span class="sl"><q>Einkauf abschließen</q></span><span class="caps"><span class="cap">CAP-10</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">6 · TRANSFER</span><span class="sa">Leftovers → new list</span><span class="sl">Trip Done + archived</span><span class="caps"><span class="cap">CAP-10</span></span></div>
+    </div>
+    <div class="jedge"><b>Edge:</b> Anna changed the same item → conflict surfaces inline as keep/discard (<span style="color:var(--pink)">CAP-8</span>).</div>
+  </div>
+
+  <!-- J4 -->
+  <div class="journey">
+    <div class="jhead"><span class="jn">J4</span><h2>Anna shops analog with a printout</h2>
+      <span class="pchip"><span class="dot d-anna"></span>Anna</span><span class="uj">PRD UJ-4</span></div>
+    <div class="jsub">Prefers paper, no phone in the aisle — analog is a first-class path, not a fallback.</div>
+    <div class="flow">
+      <div class="step"><span class="sn">1 · PRINT</span><span class="sa">Print / share</span><span class="sl"><q>Drucken / Teilen</q>, grouped by store</span><span class="caps"><span class="cap">CAP-11</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">2 · SHOP</span><span class="sa">On paper</span><span class="sl">No app in the aisle</span><span class="caps"><span class="cap">—</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">3 · RECONCILE</span><span class="sa">Confirm complete</span><span class="sl">Back home, a couple of taps</span><span class="caps"><span class="cap">CAP-10</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">4 · POSTPONE</span><span class="sa">Missing item</span><span class="sl">Marks the one she couldn’t find</span><span class="caps"><span class="cap">CAP-5</span></span></div>
+    </div>
+    <div class="jedge"><b>Edge:</b> shares the list as an in-memory PDF to WhatsApp instead of printing (never saved to storage) — <span>CAP-11</span>.</div>
+  </div>
+
+  <!-- J5 -->
+  <div class="journey">
+    <div class="jhead"><span class="jn">J5</span><h2>Rita shops for her daughter, across households</h2>
+      <span class="pchip"><span class="dot d-rita"></span>Rita</span><span class="uj">multi-household (new)</span></div>
+    <div class="jsub">Belongs to two households; switches most, least tech-comfortable — the header always tells her where she is.</div>
+    <div class="flow">
+      <div class="step"><span class="sn">1 · TAP</span><span class="sa">Open switcher</span><span class="sl">Taps <q>Rita &amp; Werner ▾</q></span><span class="caps"><span class="cap">CAP-1</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">2 · SWITCH</span><span class="sa">To daughter’s</span><span class="sl">Picks <q>Zuhause</q>, marked “Aktiv”</span><span class="caps"><span class="cap">CAP-1</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">3 · CONFIRM</span><span class="sa">Context changes</span><span class="sl">Header + content + <q>Gewechselt zu…</q></span><span class="caps"><span class="cap">CAP-1</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">4 · SHOP</span><span class="sa">Big &amp; calm</span><span class="sl"><q>Größere Darstellung</q> on; print or check off</span><span class="caps"><span class="cap">a11y</span></span></div>
+      <div class="arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="step"><span class="sn">5 · BACK</span><span class="sa">Switch back</span><span class="sl">Returns to her own household</span><span class="caps"><span class="cap">CAP-1</span></span></div>
+    </div>
+    <div class="jedge"><b>Safeguard:</b> the always-visible header household name prevents adding to the wrong family’s list.</div>
+  </div>
+
+  <!-- J6 horizon -->
+  <div class="journey horizon">
+    <div class="jhead"><span class="jn" style="background:var(--n400)">J6</span><h2>Ben scans a receipt, learns milk is cheaper at Netto</h2>
+      <span class="pchip"><span class="dot d-ben"></span>Ben</span><span class="uj">PRD UJ-5 · Horizon 2 · Post-MVP</span></div>
+    <div class="jsub">Not designed now — reserved for coherence. Depends on post-MVP receipts, Products, Price Observations. MVP screens deliberately assume no prices; the sum/prices land later on a details/summary view.</div>
+  </div>
+
+  <footer>
+    <b>Coverage:</b> every MVP capability appears in at least one journey. CAP-12 (content-free push) is the
+    connective tissue <i>between</i> journeys — Ben’s live add pings Anna, an invite pings Rita. CAP-13/14
+    (locale, data rights) live in Profil and aren’t journey-shaped.
+  </footer>
+</div>

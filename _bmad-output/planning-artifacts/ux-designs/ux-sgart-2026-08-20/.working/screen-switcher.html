@@ -1,0 +1,227 @@
+<!--
+  SGART — KEY SCREEN: Household switcher sheet (Rita) · multi-household
+  CAP-1 (multi-household routing) + entry to CAP-2/3 management. Rita belongs to TWO
+  households; she switches most and is least tech-comfortable → switching must be one
+  obvious tap, the active household unmistakable, and the header always shows where she
+  is (safeguard against adding to the wrong household's list). Foundations: Inter,
+  System 3, 48px+ rows, locked palette, text-only buttons. Two states: (A) sheet open
+  over the Listen overview of "Zuhause", (B) after switching to "Rita & Werner" — header
+  AND content change, with a brief confirmation.
+-->
+<title>SGART · Haushalt wechseln</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --baltic-lt:#7ba3cc; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+  }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+
+  .head{ max-width:900px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:66ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:36px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:340px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.78rem; text-align:center; max-width:30ch; }
+
+  .phone{ width:330px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); z-index:1; }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .apphdr{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 12px; }
+  .hh{ display:inline-flex; align-items:center; gap:7px; font-size:.94rem; font-weight:600; background:var(--n50); border:1px solid var(--n200); border-radius:var(--r-pill); padding:8px 14px; }
+  .hh.open{ border-color:var(--baltic); box-shadow:0 0 0 3px rgba(69,105,144,.15); }
+  .hh .car{ font-size:.7rem; color:var(--n500); }
+  .sync{ display:inline-flex; align-items:center; gap:6px; font-size:.7rem; font-weight:600; color:var(--verdigris); }
+
+  /* listen overview (background context) */
+  .overview{ flex:1; overflow:hidden; padding:14px 14px 0; }
+  .ov-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .ov-top h2{ font-size:1.28rem; font-weight:600; letter-spacing:-.01em; }
+  .newlist{ font-size:.8rem; font-weight:600; color:var(--baltic); }
+  .lcard{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 10px 26px -20px rgba(25,23,22,.3); padding:14px; margin-bottom:11px; }
+  .lcard h3{ font-size:1rem; font-weight:600; }
+  .lcard .sub{ font-size:.78rem; color:var(--n500); margin-top:3px; }
+  .lchips{ display:flex; gap:6px; margin-top:9px; }
+  .lchip{ font-size:.66rem; font-weight:600; padding:3px 8px; border-radius:var(--r-pill); background:var(--n50); border:1px solid var(--n200); color:var(--n600); }
+
+  .nav{ display:flex; background:#fff; border-top:1px solid var(--n200); padding:7px 8px 16px; }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.66rem; color:var(--n500); text-decoration:none; }
+  .nav a.active{ color:var(--baltic); font-weight:600; }
+  .nav svg{ display:block; }
+
+  /* ===== switcher sheet ===== */
+  .backdrop{ position:absolute; inset:0; background:rgba(25,23,22,.42); z-index:2; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; z-index:3; background:#fff;
+    border-radius:22px 22px 0 0; box-shadow:0 -14px 40px -16px rgba(25,23,22,.5); padding-bottom:10px; }
+  .grab{ width:38px; height:4px; border-radius:999px; background:var(--n300); margin:9px auto 4px; }
+  .sh-title{ font-size:.66rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--n500); padding:8px 18px 6px; }
+  .hrow{ display:flex; align-items:center; gap:12px; padding:11px 16px; min-height:56px; }
+  .hrow + .hrow{ border-top:1px solid var(--n100); }
+  .hrow.active{ background:rgba(69,105,144,.07); }
+  .av{ width:38px; height:38px; border-radius:11px; flex:none; display:grid; place-items:center; font-size:1rem; font-weight:700;
+    background:var(--n100); color:var(--n600); }
+  .hrow.active .av{ background:var(--baltic); color:var(--ghost-white); }
+  .hinfo{ flex:1; min-width:0; }
+  .hname{ font-size:.98rem; font-weight:600; }
+  .hmeta{ font-size:.76rem; color:var(--n500); margin-top:1px; }
+  .hcheck{ display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:700; color:var(--verdigris); flex:none; }
+  .sh-actions{ border-top:1px solid var(--n200); margin-top:4px; padding-top:2px; }
+  .arow{ display:flex; align-items:center; gap:12px; padding:12px 16px; min-height:52px; }
+  .arow .aic{ width:38px; height:38px; border-radius:11px; flex:none; display:grid; place-items:center; background:var(--n50); border:1px solid var(--n200); color:var(--n600); }
+  .arow .atxt{ flex:1; }
+  .arow .aname{ font-size:.94rem; font-weight:600; color:var(--carbon-black); }
+  .arow .asub{ font-size:.74rem; color:var(--n500); margin-top:1px; }
+  .arow.create .aname{ color:var(--baltic); }
+  .arow.create .aic{ color:var(--baltic); border-color:rgba(69,105,144,.4); background:rgba(69,105,144,.08); }
+
+  /* toast after switch */
+  .toast{ position:absolute; left:14px; right:14px; top:74px; z-index:4; display:flex; align-items:center; gap:9px;
+    background:var(--carbon-black); color:var(--ghost-white); border-radius:var(--r-btn); padding:11px 14px; font-size:.82rem; font-weight:500;
+    box-shadow:0 12px 30px -12px rgba(25,23,22,.6); }
+  .toast .tc{ color:var(--verdigris); }
+
+  .callout{ display:flex; flex-direction:column; gap:10px; align-items:center; max-width:280px; }
+  .callout .card2{ background:#fff; border:1px solid var(--studio-line); border-radius:var(--r-card); padding:14px 16px; }
+  .callout .card2 h4{ font-size:.82rem; color:var(--studio-strong); font-weight:600; margin-bottom:6px; }
+  .callout .card2 p{ font-size:.8rem; }
+  .dark-card{ color:var(--studio-strong); }
+
+  .legend{ max-width:900px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Key Screen</div>
+  <h1>Haushalts-Umschalter — Ritas wichtigster Weg</h1>
+  <p><b>Rita gehört zu zwei Haushalten</b> (ihr eigener mit Werner und der ihrer Tochter Anna).
+     Sie wechselt am häufigsten und ist am wenigsten technik-affin — also: <b>ein offensichtliches
+     Tippen</b> auf den Haushaltsnamen in der Kopfzeile, der <b>aktive Haushalt unverwechselbar</b>,
+     und die Kopfzeile zeigt <b>immer</b>, wo sie gerade ist (Schutz davor, auf der falschen Liste zu landen).</p>
+</div>
+
+<div class="stage">
+
+  <!-- STATE A: sheet open over Zuhause -->
+  <div class="col">
+    <div class="label">A · Umschalter offen (Zuhause)</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>17:04</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh open">Zuhause <span class="car">▾</span></span>
+          <span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktuell</span>
+        </div>
+      </div>
+      <div class="overview">
+        <div class="ov-top"><h2>Listen</h2><span class="newlist">+ Neue Liste</span></div>
+        <div class="lcard"><h3>Wocheneinkauf</h3><div class="sub tnum">12 Artikel · 5 erledigt</div></div>
+        <div class="lcard"><h3>Getränke</h3><div class="sub tnum">4 Artikel</div></div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+
+      <!-- sheet -->
+      <div class="backdrop"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sh-title">Haushalt wechseln</div>
+        <div class="hrow active">
+          <span class="av">Z</span>
+          <div class="hinfo"><div class="hname">Zuhause</div><div class="hmeta">3 Mitglieder · du: Mitglied</div></div>
+          <span class="hcheck"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktiv</span>
+        </div>
+        <div class="hrow">
+          <span class="av">R</span>
+          <div class="hinfo"><div class="hname">Rita &amp; Werner</div><div class="hmeta">2 Mitglieder · du: Mitglied</div></div>
+        </div>
+        <div class="sh-actions">
+          <div class="arow">
+            <span class="aic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
+            <div class="atxt"><div class="aname">Haushalt verwalten</div><div class="asub">Mitglieder, Einladungen, Geschäfte</div></div>
+          </div>
+          <div class="arow create">
+            <span class="aic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <div class="atxt"><div class="aname">Neuen Haushalt erstellen</div></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="note">Zwei große Zeilen, aktiver Haushalt farbig + „Aktiv". Verwalten &amp; Erstellen direkt darunter.</div>
+  </div>
+
+  <!-- STATE B: after switching -->
+  <div class="col">
+    <div class="label">B · Nach dem Wechsel</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>17:04</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh">Rita &amp; Werner <span class="car">▾</span></span>
+          <span class="sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktuell</span>
+        </div>
+      </div>
+      <div class="toast"><span class="tc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Gewechselt zu „Rita &amp; Werner"</div>
+      <div class="overview">
+        <div class="ov-top"><h2>Listen</h2><span class="newlist">+ Neue Liste</span></div>
+        <div class="lcard"><h3>Wochenmarkt</h3><div class="sub tnum">6 Artikel</div></div>
+        <div class="lcard"><h3>Apotheke &amp; dm</h3><div class="sub tnum">2 Artikel</div></div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Kopfzeile + Inhalt wechseln sichtbar; kurze Bestätigung. Rita weiß immer, wo sie ist.</div>
+  </div>
+
+  <!-- callout -->
+  <div class="col">
+    <div class="label">Warum so</div>
+    <div class="callout">
+      <div class="card2 dark-card">
+        <h4>Der Schutz für Rita</h4>
+        <p>Der Haushaltsname steht <b>dauerhaft</b> in der Kopfzeile — nicht in den Einstellungen
+           vergraben. Wer gerade aktiv ist, ist immer sichtbar, damit ein Artikel nie versehentlich
+           im falschen Haushalt landet.</p>
+      </div>
+      <div class="card2 dark-card">
+        <h4>Ein Menü, drei Dinge</h4>
+        <p>Wechseln · „Haushalt verwalten" (Mitglieder/Einladungen/Geschäfte, CAP-2/3) ·
+           „Neuen Haushalt erstellen" (CAP-1). Verwaltung sitzt im Haushalts-Kontext,
+           nicht im persönlichen Profil.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Kern-Entscheidungen:</b> Umschalter als Bottom-Sheet vom Kopfzeilen-Chip · aktiver Haushalt farbig hervorgehoben + „Aktiv"-Markierung ·
+     56-px-Zeilen mit Initial-Avatar, Mitgliederzahl und eigener Rolle · „Haushalt verwalten" &amp; „Neuen Haushalt erstellen" im selben Sheet ·
+     nach dem Wechsel ändern sich Kopfzeile <i>und</i> Inhalt sichtbar, kurze Bestätigung · reine Text-Buttons, keine Icons in Aktionen.</p>
+</div>

@@ -1,0 +1,285 @@
+<!--
+  SGART — Typography direction specimen · Coaching-mode UX flow
+  PURPOSE: judge three type directions on REAL SGART German UI text, with the
+  already-approved palette held constant so type is the only variable.
+    A · Klar      — Inter throughout (neutral workhorse)
+    B · Warm      — Figtree throughout (warm humanist, one family)
+    C · Editorial — Fraunces (headings) + Figtree (body/UI)
+  Stress-tests: ä ö ü ß, long compounds, tabular figures (quantities / €),
+  de-DE number formatting. Colors are locked (see .working/palette.md);
+  shape/rounding/spacing here are still provisional placeholders.
+-->
+<title>SGART Type Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap">
+<style>
+  :root{
+    /* brand palette (locked) */
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic-blue:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    /* warm neutrals */
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    /* studio backdrop (theme-aware) */
+    --studio:#e7e3dd; --studio-card:#f3f0eb; --studio-text:#5c554f;
+    --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    /* the three candidate type stacks */
+    --font-ui:'Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',sans-serif;
+    --font-inter:'Inter',var(--font-ui);
+    --font-figtree:'Figtree',var(--font-ui);
+    --font-fraunces:'Fraunces',Georgia,'Times New Roman',serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --studio:#211f1d; --studio-card:#2b2825; --studio-text:#c2b9b1;
+      --studio-strong:#f2f4ff; --studio-line:#3a3531;
+    }
+  }
+  :root[data-theme="dark"]{
+    --studio:#211f1d; --studio-card:#2b2825; --studio-text:#c2b9b1;
+    --studio-strong:#f2f4ff; --studio-line:#3a3531;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    background:var(--studio); color:var(--studio-text);
+    font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+    line-height:1.45; padding:44px 24px 72px;
+  }
+  .tnum{ font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; }
+
+  /* ---------- page head ---------- */
+  .head{ max-width:1180px; margin:0 auto 40px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--studio-text); opacity:.75; }
+  .head h1{ font-size:1.6rem; font-weight:600; color:var(--studio-strong);
+    margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:12px; }
+  .head .prov{ display:inline-block; margin-top:16px; font-size:.7rem;
+    letter-spacing:.04em; border:1px solid var(--studio-line);
+    border-radius:999px; padding:5px 13px; }
+
+  /* ---------- three-up grid ---------- */
+  .grid{ max-width:1180px; margin:0 auto; display:grid;
+    grid-template-columns:repeat(3,1fr); gap:28px; align-items:start; }
+  @media (max-width:940px){ .grid{ grid-template-columns:1fr; max-width:420px; } }
+
+  .col{ display:flex; flex-direction:column; gap:18px; }
+  .col > .caption{ text-align:center; }
+  .caption .tag{ font-size:.78rem; font-weight:700; letter-spacing:.02em;
+    color:var(--studio-strong); }
+  .caption .stack{ font-size:.72rem; opacity:.8; margin-top:2px; }
+
+  /* ---------- specimen card (approved palette, light content) ---------- */
+  .card{ background:var(--studio-card); border:1px solid var(--studio-line);
+    border-radius:20px; overflow:hidden;
+    box-shadow:0 18px 40px -24px rgba(25,23,22,.5); }
+  .screen{ background:var(--ghost-white); color:var(--carbon-black); }
+
+  .app-head{ padding:16px 16px 14px; border-bottom:1px solid var(--n200); }
+  .kicker{ font-size:.66rem; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--n500); }
+  .title{ font-size:1.32rem; font-weight:600; margin-top:3px; letter-spacing:-.01em; }
+  .meta{ font-size:.78rem; color:var(--n600); margin-top:8px;
+    display:flex; gap:8px; align-items:center; }
+  .meta b{ font-weight:600; color:var(--carbon-black); }
+  .meta .dot{ opacity:.5; }
+
+  .group{ padding:14px 16px 4px; }
+  .group h3{ display:flex; align-items:baseline; gap:6px; font-size:.8rem;
+    font-weight:700; padding-bottom:6px; }
+  .group h3 .chain{ font-weight:400; color:var(--n500); font-size:.74rem; }
+  .group h3 .count{ margin-left:auto; font-weight:500; color:var(--n500); font-size:.72rem; }
+
+  .item{ display:flex; align-items:center; gap:11px; padding:11px 0;
+    border-top:1px solid var(--n100); }
+  .item:first-of-type{ border-top:none; }
+  .box{ width:21px; height:21px; border-radius:6px; flex:none; display:grid; place-items:center; }
+  .box.open{ border:2px solid var(--n300); }
+  .box.done{ background:var(--verdigris); }
+  .box.done svg{ color:var(--carbon-black); }
+  .item .name{ flex:1; min-width:0; font-size:.92rem; }
+  .item .qty{ font-size:.8rem; color:var(--n600); }
+  .item.doneRow .name{ text-decoration:line-through; color:var(--n400); }
+  .badge{ font-size:.66rem; font-weight:700; padding:3px 8px; border-radius:999px; flex:none; }
+  .badge.conflict{ background:var(--pink); color:var(--carbon-black); }
+  .badge.pending{ background:var(--amber); color:var(--carbon-black); }
+
+  .sum{ display:flex; justify-content:space-between; align-items:baseline;
+    padding:12px 16px; margin-top:4px; border-top:1px solid var(--n200);
+    background:var(--n50); }
+  .sum .lbl{ font-size:.78rem; color:var(--n600); }
+  .sum .val{ font-size:1.05rem; font-weight:700; }
+
+  .cta{ padding:14px 16px 16px; }
+  .cta button{ width:100%; border:none; border-radius:12px; padding:14px;
+    font-size:.94rem; font-weight:600; background:var(--baltic-blue);
+    color:var(--ghost-white); cursor:pointer; font-family:inherit; }
+
+  /* ---------- type scale ramp ---------- */
+  .scale{ background:var(--studio-card); border:1px solid var(--studio-line);
+    border-radius:16px; padding:16px 18px; color:var(--studio-strong); }
+  .scale .rowlbl{ font-family:var(--font-ui); font-size:.62rem; font-weight:600;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--studio-text);
+    opacity:.7; margin-bottom:2px; }
+  .scale .r{ padding:7px 0; border-top:1px solid var(--studio-line); }
+  .scale .r:first-child{ border-top:none; padding-top:0; }
+  .s-display{ font-size:1.7rem; font-weight:600; letter-spacing:-.015em; line-height:1.1; }
+  .s-title{ font-size:1.15rem; font-weight:600; }
+  .s-body{ font-size:.92rem; font-weight:400; line-height:1.5; }
+  .s-cap{ font-size:.75rem; font-weight:500; color:var(--studio-text); }
+
+  /* ---------- glyph + number stress ---------- */
+  .glyph{ background:var(--studio-card); border:1px solid var(--studio-line);
+    border-radius:16px; padding:15px 18px; color:var(--studio-strong); }
+  .glyph .rowlbl{ font-family:var(--font-ui); font-size:.62rem; font-weight:600;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--studio-text);
+    opacity:.7; margin-bottom:8px; }
+  .glyph .umlaut{ font-size:1.05rem; font-weight:500; }
+  .glyph .nums{ font-size:1rem; font-weight:500; margin-top:10px; letter-spacing:.01em; }
+  .glyph .nums span{ display:block; }
+
+  /* apply candidate fonts per column */
+  .fA .screen, .fA .scale, .fA .glyph{ font-family:var(--font-inter); }
+  .fB .screen, .fB .scale, .fB .glyph{ font-family:var(--font-figtree); }
+  .fC .screen, .fC .scale, .fC .glyph{ font-family:var(--font-figtree); }
+  /* editorial: headings switch to Fraunces */
+  .fC .title, .fC .group h3, .fC .s-display, .fC .s-title{
+    font-family:var(--font-fraunces); font-weight:500; letter-spacing:0; }
+  .fC .title{ font-size:1.4rem; }
+
+  footer{ max-width:1180px; margin:36px auto 0; font-size:.76rem;
+    color:var(--studio-text); border-top:1px solid var(--studio-line); padding-top:16px; }
+  footer b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX-Richtung</div>
+  <h1>Typografie — drei Richtungen im Vergleich</h1>
+  <p>The same German SGART screen, rendered in three type directions with the
+     approved color system held constant. Look at the long compounds, the umlauts
+     (Äpfel, Naturjoghurt, Frühstück), and whether the quantities and the € sum
+     line up cleanly (tabular figures). Colors are locked — shape, rounding and
+     spacing here are still provisional.</p>
+  <span class="prov">Direction specimen · type is the only variable</span>
+</div>
+
+<div class="grid">
+
+  <!-- ============ A · KLAR / INTER ============ -->
+  <div class="col fA">
+    <div class="caption"><div class="tag">A · Klar</div><div class="stack">Inter — durchgehend</div></div>
+
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+
+    <div class="scale">
+      <div class="r"><div class="rowlbl">Display</div><div class="s-display">Wocheneinkauf</div></div>
+      <div class="r"><div class="rowlbl">Title</div><div class="s-title">Noch nicht zugeordnet</div></div>
+      <div class="r"><div class="rowlbl">Body</div><div class="s-body">Der Einkauf wird offline gespeichert und synchronisiert, sobald wieder eine Verbindung besteht.</div></div>
+      <div class="r"><div class="rowlbl">Caption</div><div class="s-cap">Zuletzt aktualisiert vor 2 Minuten</div></div>
+    </div>
+
+    <div class="glyph">
+      <div class="rowlbl">Glyphen &amp; Zahlen</div>
+      <div class="umlaut">Äpfel Müsli Weißbrot Frühstück — Groß &amp; Größe</div>
+      <div class="nums tnum"><span>0123456789</span><span>1,49 € · 2,5 kg · 500 ml · 12/07/2026</span></div>
+    </div>
+  </div>
+
+  <!-- ============ B · WARM / FIGTREE ============ -->
+  <div class="col fB">
+    <div class="caption"><div class="tag">B · Warm</div><div class="stack">Figtree — durchgehend</div></div>
+
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+
+    <div class="scale">
+      <div class="r"><div class="rowlbl">Display</div><div class="s-display">Wocheneinkauf</div></div>
+      <div class="r"><div class="rowlbl">Title</div><div class="s-title">Noch nicht zugeordnet</div></div>
+      <div class="r"><div class="rowlbl">Body</div><div class="s-body">Der Einkauf wird offline gespeichert und synchronisiert, sobald wieder eine Verbindung besteht.</div></div>
+      <div class="r"><div class="rowlbl">Caption</div><div class="s-cap">Zuletzt aktualisiert vor 2 Minuten</div></div>
+    </div>
+
+    <div class="glyph">
+      <div class="rowlbl">Glyphen &amp; Zahlen</div>
+      <div class="umlaut">Äpfel Müsli Weißbrot Frühstück — Groß &amp; Größe</div>
+      <div class="nums tnum"><span>0123456789</span><span>1,49 € · 2,5 kg · 500 ml · 12/07/2026</span></div>
+    </div>
+  </div>
+
+  <!-- ============ C · EDITORIAL / FRAUNCES + FIGTREE ============ -->
+  <div class="col fC">
+    <div class="caption"><div class="tag">C · Editorial</div><div class="stack">Fraunces (Titel) + Figtree (Text)</div></div>
+
+    <div class="card"><div class="screen">
+      <div class="app-head">
+        <div class="kicker">Aktiver Einkauf</div>
+        <div class="title">Wocheneinkauf</div>
+        <div class="meta tnum"><span><b>7</b> von <b>12</b> erledigt</span><span class="dot">·</span><span>2 Geschäfte</span></div>
+      </div>
+      <div class="group">
+        <h3>Edeka Schiedemann <span class="chain">· Edeka</span> <span class="count">3 offen</span></h3>
+        <div class="item"><span class="box open"></span><span class="name">Vollkornbrot</span><span class="qty tnum">1 Laib</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Äpfel</span><span class="qty tnum">1,5 kg</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Naturjoghurt</span><span class="badge conflict">Konflikt</span></div>
+        <div class="item"><span class="box open"></span><span class="name">Frühstücksmüsli</span><span class="badge pending">Wird synchronisiert</span></div>
+        <div class="item doneRow"><span class="box done"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="name">Weißbrot</span><span class="qty tnum">2 St.</span></div>
+      </div>
+      <div class="sum"><span class="lbl">Summe (geschätzt)</span><span class="val tnum">23,47 €</span></div>
+      <div class="cta"><button>Einkauf abschließen</button></div>
+    </div></div>
+
+    <div class="scale">
+      <div class="r"><div class="rowlbl">Display</div><div class="s-display">Wocheneinkauf</div></div>
+      <div class="r"><div class="rowlbl">Title</div><div class="s-title">Noch nicht zugeordnet</div></div>
+      <div class="r"><div class="rowlbl">Body</div><div class="s-body">Der Einkauf wird offline gespeichert und synchronisiert, sobald wieder eine Verbindung besteht.</div></div>
+      <div class="r"><div class="rowlbl">Caption</div><div class="s-cap">Zuletzt aktualisiert vor 2 Minuten</div></div>
+    </div>
+
+    <div class="glyph">
+      <div class="rowlbl">Glyphen &amp; Zahlen</div>
+      <div class="umlaut">Äpfel Müsli Weißbrot Frühstück — Groß &amp; Größe</div>
+      <div class="nums tnum"><span>0123456789</span><span>1,49 € · 2,5 kg · 500 ml · 12/07/2026</span></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <b>How to read this:</b> body/UI legibility and number alignment matter most (aisle use, live prices);
+  headings carry identity. <b>A</b> = safest, most neutral. <b>B</b> = warmer, friendlier, one family (simplest to build).
+  <b>C</b> = most character via Fraunces titles, still Figtree for everything you read a lot.
+  All three ship via Flutter's <code>google_fonts</code> package.
+</footer>

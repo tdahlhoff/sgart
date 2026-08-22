@@ -1,0 +1,154 @@
+<!--
+  SGART — STUDY: dense status-row treatments (member role + store chain)
+  Goal: show status via a tinted, dense row (chip-style background) that costs no
+  horizontal space, so names keep full width. Three variants to choose from; the winner
+  is standardized for both member roles and store chains. Locked palette, Inter, System 3.
+-->
+<title>SGART Row Badge Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-row:10px;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; } }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font); -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 22px 72px; }
+  .head{ max-width:1080px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; }
+  .head p{ font-size:.9rem; max-width:70ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:30px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:14px; width:308px; }
+  .vlabel{ text-align:center; }
+  .vlabel .t{ font-size:.9rem; font-weight:700; color:var(--studio-strong); }
+  .vlabel .d{ font-size:.76rem; margin-top:2px; }
+
+  /* a light "app surface" so colors read true in both themes */
+  .surface{ width:100%; background:var(--ghost-white); border:1px solid var(--studio-line); border-radius:20px; padding:14px; color:var(--carbon-black); }
+  .cap{ font-size:.64rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n500); padding:2px 2px 8px; }
+  .card{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); overflow:hidden; }
+
+  .name{ font-size:.92rem; font-weight:500; color:var(--carbon-black); }
+  .sub{ font-size:.74rem; color:var(--n500); }
+  .av{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; font-size:.86rem; font-weight:700; flex:none; background:var(--n100); color:var(--n600); }
+  .av.admin{ background:var(--baltic); color:var(--ghost-white); }
+  .more{ color:var(--n400); flex:none; }
+  .lbl{ font-size:.66rem; font-weight:700; letter-spacing:.02em; text-transform:uppercase; }
+
+  /* semantic tints */
+  .s-admin{ --tint:rgba(69,105,144,.12); --ink:#3a5a7d; --brd:rgba(69,105,144,.30); }
+  .s-member{ --tint:var(--n50); --ink:var(--n600); --brd:var(--n200); }
+  .s-pending{ --tint:#f9ecd8; --ink:#8a5a12; --brd:#f0dcc0; }
+  .s-chain{ --tint:rgba(30,168,150,.13); --ink:#0f6f61; --brd:rgba(30,168,150,.32); }
+
+  /* ---------- Variant A: full-row tint ---------- */
+  .A .rowx{ display:flex; align-items:center; gap:11px; padding:8px 12px; min-height:48px; background:var(--tint); }
+  .A .rowx + .rowx{ border-top:1px solid rgba(255,255,255,.6); }
+  .A .grow{ flex:1; min-width:0; }
+  .A .lbl{ color:var(--ink); flex:none; }
+
+  /* ---------- Variant B: leading color bar ---------- */
+  .B .rowx{ display:flex; align-items:center; gap:11px; padding:8px 12px; min-height:48px; position:relative; }
+  .B .rowx + .rowx{ border-top:1px solid var(--n100); }
+  .B .rowx::before{ content:""; position:absolute; left:0; top:8px; bottom:8px; width:4px; border-radius:0 3px 3px 0; background:var(--ink); }
+  .B .rowx{ padding-left:16px; }
+  .B .grow{ flex:1; min-width:0; }
+  .B .lbl{ color:var(--ink); flex:none; }
+
+  /* ---------- Variant C: filled tag on second line ---------- */
+  .C .rowx{ display:flex; align-items:center; gap:11px; padding:8px 12px; min-height:52px; }
+  .C .rowx + .rowx{ border-top:1px solid var(--n100); }
+  .C .grow{ flex:1; min-width:0; }
+  .C .tag{ display:inline-flex; align-items:center; margin-top:5px; font-size:.64rem; font-weight:700; letter-spacing:.02em; text-transform:uppercase; color:var(--ink); background:var(--tint); border:1px solid var(--brd); border-radius:6px; padding:3px 8px; }
+
+  .legend{ max-width:1080px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Study</div>
+  <h1>Dichte Status-Zeilen — drei Varianten</h1>
+  <p>Status (Rolle / Kette) as a <b>dense, tinted row</b> instead of a floating pill — costs
+     no horizontal space, so names keep full width. Same rows in each variant: three members
+     (Admin / Mitglied / Ausstehend) and a store with its chain. Pick one; we standardize it
+     for <b>both</b> member roles and store chains.</p>
+</div>
+
+<div class="stage">
+
+  <!-- VARIANT A -->
+  <div class="col A">
+    <div class="vlabel"><div class="t">A · Ganze Zeile getönt</div><div class="d">Row background = Status</div></div>
+    <div class="surface">
+      <div class="cap">Mitglieder</div>
+      <div class="card">
+        <div class="rowx s-admin"><span class="av admin">W</span><div class="grow"><div class="name">Werner Bergmann · Du</div></div><span class="lbl">Admin</span></div>
+        <div class="rowx s-member"><span class="av">R</span><div class="grow"><div class="name">Rita Bergmann</div></div><span class="lbl">Mitglied</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        <div class="rowx s-pending"><span class="av"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 6l8 6 8-6"/></svg></span><div class="grow"><div class="name">anna@example.de</div></div><span class="lbl">Ausstehend</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+      <div class="cap" style="margin-top:12px">Geschäfte</div>
+      <div class="card">
+        <div class="rowx s-chain"><div class="grow"><div class="name">Edeka Schiedemann</div></div><span class="lbl">Edeka</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+    </div>
+    <div class="vlabel"><div class="d">Kräftig, sofort scanbar — aber bei vielen Zeilen bunt.</div></div>
+  </div>
+
+  <!-- VARIANT B -->
+  <div class="col B">
+    <div class="vlabel"><div class="t">B · Farbbalken links</div><div class="d">Thin edge bar + Label</div></div>
+    <div class="surface">
+      <div class="cap">Mitglieder</div>
+      <div class="card">
+        <div class="rowx s-admin"><span class="av admin">W</span><div class="grow"><div class="name">Werner Bergmann · Du</div></div><span class="lbl">Admin</span></div>
+        <div class="rowx s-member"><span class="av">R</span><div class="grow"><div class="name">Rita Bergmann</div></div><span class="lbl">Mitglied</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        <div class="rowx s-pending"><span class="av"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 6l8 6 8-6"/></svg></span><div class="grow"><div class="name">anna@example.de</div></div><span class="lbl">Ausstehend</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+      <div class="cap" style="margin-top:12px">Geschäfte</div>
+      <div class="card">
+        <div class="rowx s-chain"><div class="grow"><div class="name">Edeka Schiedemann</div></div><span class="lbl">Edeka</span><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+    </div>
+    <div class="vlabel"><div class="d">Ruhiger, weiße Zeilen; Farbe nur als Akzent links.</div></div>
+  </div>
+
+  <!-- VARIANT C -->
+  <div class="col C">
+    <div class="vlabel"><div class="t">C · Getönter Tag, 2. Zeile</div><div class="d">Filled tag under the name</div></div>
+    <div class="surface">
+      <div class="cap">Mitglieder</div>
+      <div class="card">
+        <div class="rowx s-admin"><span class="av admin">W</span><div class="grow"><div class="name">Werner Bergmann · Du</div><span class="tag">Admin</span></div></div>
+        <div class="rowx s-member"><span class="av">R</span><div class="grow"><div class="name">Rita Bergmann</div><span class="tag">Mitglied</span></div><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        <div class="rowx s-pending"><span class="av"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 6l8 6 8-6"/></svg></span><div class="grow"><div class="name">anna@example.de</div><span class="tag">Ausstehend</span></div><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+      <div class="cap" style="margin-top:12px">Geschäfte</div>
+      <div class="card">
+        <div class="rowx s-chain"><div class="grow"><div class="name">Edeka Schiedemann</div><span class="tag">Edeka</span></div><span class="more"><svg width="4" height="15" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+      </div>
+    </div>
+    <div class="vlabel"><div class="d">Weiße Zeilen; Tag füllt Fläche, aber braucht eine 2. Zeile.</div></div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>All three keep names at full width</b> (status costs no horizontal space). <b>A</b> tints the whole row —
+     boldest, fastest to scan, busiest when the list is long. <b>B</b> keeps rows white with a thin colored edge bar —
+     calmest, most in line with the „flat, ruhig" tone. <b>C</b> is a filled tinted tag on a second line — visible, but the
+     row is taller. Same four semantic colors throughout: <span style="color:#3a5a7d">Admin</span> ·
+     <span style="color:var(--n600)">Mitglied</span> · <span style="color:#8a5a12">Ausstehend</span> ·
+     <span style="color:#0f6f61">Kette</span>.</p>
+</div>

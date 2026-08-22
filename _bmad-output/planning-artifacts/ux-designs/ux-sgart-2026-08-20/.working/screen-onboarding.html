@@ -1,0 +1,242 @@
+<!--
+  SGART — KEY SCREEN: First-run / onboarding (Werner) · the Admin/creator path
+  CAP-1 (create household + first-run routing) → CAP-3 (add stores w/ client-side chain
+  suggestion) → CAP-2 (invite by email). Werner drives this: moderate-tech older Admin of
+  an all-elder household with NO younger organizer to lean on, so the flow is a gentle,
+  one-thing-per-screen wizard — plain language, reassurance ("you can change this later"),
+  big targets, skip options, forgiving. Foundations: Inter, System 3, 48px+ controls,
+  text-only buttons, locked palette. German product UI (German-first, CAP-13).
+-->
+<title>SGART · Erste Schritte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --baltic-lt:#7ba3cc; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+  }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.5; padding:44px 20px 72px; }
+
+  .head{ max-width:1120px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:74ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:30px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:320px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.76rem; text-align:center; max-width:29ch; }
+
+  .phone{ width:312px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:12px 20px 2px; font-size:.7rem; font-weight:600; }
+
+  .wiz{ flex:1; display:flex; flex-direction:column; padding:8px 20px 20px; }
+  /* stepper */
+  .steprow{ display:flex; align-items:center; gap:12px; padding:6px 0 4px; min-height:44px; }
+  .steprow .back{ width:34px; height:34px; margin-left:-6px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .steplabel{ font-size:.72rem; font-weight:600; color:var(--n500); letter-spacing:.02em; }
+  .steptrack{ height:5px; border-radius:999px; background:var(--n200); overflow:hidden; margin:8px 0 22px; }
+  .steptrack > span{ display:block; height:100%; background:var(--baltic); border-radius:999px; }
+
+  .wtitle{ font-size:1.42rem; font-weight:600; letter-spacing:-.01em; line-height:1.25; }
+  .whelp{ font-size:.9rem; color:var(--n600); margin-top:10px; }
+
+  .field{ display:flex; align-items:center; min-height:54px; border:1.5px solid var(--n300); border-radius:var(--r-btn);
+    padding:0 14px; font-size:1rem; margin-top:22px; color:var(--carbon-black); }
+  .field.focused{ border-color:var(--baltic); box-shadow:0 0 0 3px rgba(69,105,144,.15); }
+  .field.placeholder{ color:var(--n400); }
+  .caret{ display:inline-block; width:1.5px; height:20px; background:var(--baltic); margin-left:1px; animation:blink 1s steps(1) infinite; }
+  @keyframes blink{ 50%{ opacity:0; } }
+  @media (prefers-reduced-motion:reduce){ .caret{ animation:none; } }
+
+  .reassure{ display:flex; align-items:flex-start; gap:8px; font-size:.8rem; color:var(--n600); margin-top:12px; }
+  .reassure svg{ color:var(--verdigris); flex:none; margin-top:1px; }
+
+  .spacer{ flex:1; }
+  .btn{ width:100%; display:flex; align-items:center; justify-content:center; min-height:52px; border-radius:var(--r-btn);
+    font-family:inherit; font-size:.98rem; font-weight:600; cursor:pointer; text-align:center; line-height:1.2; border:none; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); }
+  .btn.tertiary{ background:transparent; color:var(--n600); font-weight:600; margin-top:6px; min-height:48px; }
+
+  /* welcome (frame 1) */
+  .brand{ text-align:center; margin:30px 0 6px; }
+  .brand .logo{ width:60px; height:60px; border-radius:18px; background:var(--baltic); color:var(--ghost-white);
+    display:grid; place-items:center; font-size:1.6rem; font-weight:700; margin:0 auto 16px; }
+  .brand h2{ font-size:1.5rem; font-weight:600; letter-spacing:-.01em; }
+  .brand p{ font-size:.9rem; color:var(--n600); margin-top:8px; }
+  .choice{ display:flex; flex-direction:column; gap:12px; margin-top:26px; }
+  .opt{ text-align:left; border:1.5px solid var(--n300); border-radius:var(--r-card); padding:16px; cursor:pointer; background:#fff; }
+  .opt.primary{ border-color:var(--baltic); background:rgba(69,105,144,.06); }
+  .opt .on{ font-size:1.02rem; font-weight:600; }
+  .opt.primary .on{ color:var(--baltic); }
+  .opt .od{ font-size:.82rem; color:var(--n600); margin-top:4px; }
+  .privacy{ display:flex; align-items:center; gap:7px; justify-content:center; font-size:.76rem; color:var(--n500); margin-top:20px; }
+
+  /* store chips + suggestion (frame 3) */
+  .added{ display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .schip{ display:inline-flex; align-items:center; gap:8px; background:var(--n50); border:1px solid var(--n200);
+    border-radius:var(--r-pill); padding:8px 10px 8px 13px; font-size:.84rem; font-weight:500; }
+  .schip .kette{ font-size:.66rem; color:var(--n500); }
+  .schip .x{ color:var(--n500); font-weight:600; }
+  .suggest{ margin-top:12px; border:1px solid var(--n200); border-radius:var(--r-card); overflow:hidden; background:#fff; }
+  .sg-line{ display:flex; align-items:center; gap:11px; padding:12px 14px; min-height:52px; }
+  .sg-line .txt{ flex:1; }
+  .sg-line .nm{ font-size:.94rem; font-weight:600; }
+  .sg-line .chain{ display:inline-flex; align-items:center; gap:6px; font-size:.76rem; color:var(--n600); margin-top:2px; }
+  .sg-line .chain .badge{ background:rgba(30,168,150,.14); color:#0f6f61; border-radius:var(--r-pill); padding:2px 8px; font-weight:600; }
+  .sg-line .add{ color:var(--baltic); font-weight:700; font-size:.86rem; flex:none; }
+  .changelink{ font-size:.78rem; color:var(--baltic); font-weight:600; margin-top:10px; display:inline-block; }
+
+  .legend{ max-width:1120px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Key Screen</div>
+  <h1>Erste Schritte — der Admin-Weg (Werner)</h1>
+  <p>The one flow where the <b>creator/Admin</b> burden lands on a non-expert older user with
+     no power user to help. So it's a <b>gentle, one-step-at-a-time wizard</b>: plain language,
+     reassurance that nothing is permanent, big targets, and a way to skip. Sequence:
+     <b>create household → add stores (with an advisory chain suggestion) → invite someone.</b></p>
+</div>
+
+<div class="stage">
+
+  <!-- FRAME 1: welcome / choice -->
+  <div class="col">
+    <div class="label">1 · Willkommen</div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:03</span><span>▂▄▆ ⏦</span></div>
+      <div class="wiz">
+        <div class="brand">
+          <div class="logo">S</div>
+          <h2>Willkommen bei SGART</h2>
+          <p>Eure gemeinsame Einkaufsliste — privat und einfach.</p>
+        </div>
+        <div class="choice">
+          <div class="opt primary"><div class="on">Haushalt erstellen</div><div class="od">Für dich und alle, mit denen du gemeinsam einkaufst.</div></div>
+          <div class="opt"><div class="on">Auf Einladung warten</div><div class="od">Du wurdest eingeladen? Öffne den Link aus der E-Mail.</div></div>
+        </div>
+        <div class="spacer"></div>
+        <div class="privacy">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Deine Daten bleiben bei dir.
+        </div>
+      </div>
+    </div></div>
+    <div class="note">Kein Konto-Druck, keine Werbung. Zwei klare Wege — erstellen oder beitreten.</div>
+  </div>
+
+  <!-- FRAME 2: name household -->
+  <div class="col">
+    <div class="label">2 · Haushalt benennen</div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:03</span><span>▂▄▆ ⏦</span></div>
+      <div class="wiz">
+        <div class="steprow">
+          <span class="back"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+          <span class="steplabel">Schritt 1 von 3</span>
+        </div>
+        <div class="steptrack"><span style="width:33%"></span></div>
+        <div class="wtitle">Wie soll euer Haushalt heißen?</div>
+        <div class="whelp">Nur ein Name, damit du ihn wiedererkennst.</div>
+        <div class="field focused">Rita &amp; Werner<span class="caret"></span></div>
+        <div class="reassure">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Den Namen kannst du später jederzeit ändern.
+        </div>
+        <div class="spacer"></div>
+        <button class="btn primary">Weiter</button>
+      </div>
+    </div></div>
+    <div class="note">Eine Frage pro Schritt, klarer Fortschritt, beruhigender Hinweis.</div>
+  </div>
+
+  <!-- FRAME 3: add stores + chain suggestion -->
+  <div class="col">
+    <div class="label">3 · Geschäfte hinzufügen</div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:04</span><span>▂▄▆ ⏦</span></div>
+      <div class="wiz">
+        <div class="steprow">
+          <span class="back"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+          <span class="steplabel">Schritt 2 von 3</span>
+        </div>
+        <div class="steptrack"><span style="width:66%"></span></div>
+        <div class="wtitle">Wo kauft ihr ein?</div>
+        <div class="whelp">Später wird die Liste nach Geschäft sortiert.</div>
+
+        <div class="added">
+          <span class="schip">Netto <span class="kette">· Netto</span> <span class="x">×</span></span>
+        </div>
+
+        <div class="field focused" style="margin-top:14px">Edeka Schiedemann<span class="caret"></span></div>
+        <div class="suggest">
+          <div class="sg-line">
+            <div class="txt">
+              <div class="nm">Edeka Schiedemann</div>
+              <div class="chain">Kette erkannt: <span class="badge">Edeka</span></div>
+            </div>
+            <span class="add">Hinzufügen</span>
+          </div>
+        </div>
+        <span class="changelink">Kette ändern oder entfernen</span>
+
+        <div class="spacer"></div>
+        <button class="btn primary">Weiter</button>
+        <button class="btn tertiary">Überspringen — später hinzufügen</button>
+      </div>
+    </div></div>
+    <div class="note">Kette wird beim Tippen vorgeschlagen (CAP-3), nie erzwungen — bestätigen, ändern oder löschen. Überspringen erlaubt.</div>
+  </div>
+
+  <!-- FRAME 4: invite -->
+  <div class="col">
+    <div class="label">4 · Jemanden einladen</div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:05</span><span>▂▄▆ ⏦</span></div>
+      <div class="wiz">
+        <div class="steprow">
+          <span class="back"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+          <span class="steplabel">Schritt 3 von 3</span>
+        </div>
+        <div class="steptrack"><span style="width:100%"></span></div>
+        <div class="wtitle">Möchtest du jemanden einladen?</div>
+        <div class="whelp">Ihr teilt dann dieselben Listen. Zum Beispiel Rita.</div>
+        <div class="field focused">rita@example.de<span class="caret"></span></div>
+        <div class="reassure">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Nur du und Eingeladene sehen euren Haushalt.
+        </div>
+        <div class="spacer"></div>
+        <button class="btn primary">Einladung senden</button>
+        <button class="btn tertiary">Später einladen — fertig</button>
+      </div>
+    </div></div>
+    <div class="note">Einladen ist optional. „Später einladen" führt direkt in die App (Solo funktioniert vollwertig — Jonas).</div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Design decisions:</b> guided one-step-at-a-time wizard with a visible progress bar (Werner never feels lost) ·
+     plain-language German, encouraging microcopy, reassurance that changes aren't permanent (reduces "break it" fear) ·
+     every step skippable where the spec allows (stores &amp; invite optional) · client-side chain suggestion is advisory,
+     confirm/change/clear, never forced (CAP-3) · 52–54px controls, text-only buttons · privacy stated up front ·
+     "Auf Einladung warten" is the recipient path (Rita); "Später einladen" proves solo is first-class (Jonas).</p>
+</div>

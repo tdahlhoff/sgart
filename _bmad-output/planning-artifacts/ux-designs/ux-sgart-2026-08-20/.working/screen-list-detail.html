@@ -1,0 +1,258 @@
+<!--
+  SGART — KEY SCREEN: List detail (Anna) · planning surface
+  Foundations applied: Inter, System 3 (r14, hairline+faint lift, 48px rows), locked
+  palette, IA header (Zuhause ▾ switcher + sync). Emphasis INVERTS vs the trip screen:
+  FAST ITEM ENTRY is the hero (CAP-6, capture must beat a scribbled note). Analog/digital
+  respected equally: "Einkauf starten" (CAP-9) and "Drucken / Teilen" (CAP-11) are peer
+  actions. Items: name, quantity, optional note, optional store chip; off-trip actions via ⋯ =
+  edit / move-to-list / remove. NO off-trip check-off (CAP-5 revised 2026-08-22 — check/postpone are trip-only).
+  Two states: (A) resting list, (B) mid-autocomplete with attribute prefill.
+-->
+<title>SGART · Liste</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --carbon-black:#191716; --ghost-white:#f2f4ff;
+    --baltic:#456990; --baltic-lt:#7ba3cc; --verdigris:#1ea896; --pink:#f45b69; --amber:#e0912f;
+    --n700:#423d39; --n600:#5c554f; --n500:#7a726b; --n400:#9c938b;
+    --n300:#c2b9b1; --n200:#ded7d0; --n100:#eee9e4; --n50:#f7f4f1;
+    --studio:#e7e3dd; --studio-text:#5c554f; --studio-strong:#2b2825; --studio-line:#d3cdc4;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    --r-card:14px; --r-btn:12px; --r-ctrl:6px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+  }
+  :root[data-theme="dark"]{ --studio:#211f1d; --studio-text:#c2b9b1; --studio-strong:#f2f4ff; --studio-line:#3a3531; }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--studio); color:var(--studio-text); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.45; padding:44px 20px 72px; }
+  .tnum{ font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; }
+
+  .head{ max-width:900px; margin:0 auto 34px; }
+  .head .eyebrow{ font-size:.72rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; opacity:.75; }
+  .head h1{ font-size:1.5rem; font-weight:600; color:var(--studio-strong); margin-top:10px; letter-spacing:-.01em; }
+  .head p{ font-size:.9rem; max-width:66ch; margin-top:10px; }
+  .head p b{ color:var(--studio-strong); font-weight:600; }
+
+  .stage{ display:flex; flex-wrap:wrap; gap:36px; justify-content:center; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:340px; }
+  .col .label{ font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; font-weight:600; }
+  .col .note{ font-size:.78rem; text-align:center; max-width:30ch; }
+
+  .phone{ width:330px; border-radius:38px; padding:10px; background:var(--carbon-black); box-shadow:0 26px 54px -22px rgba(25,23,22,.5); }
+  .screen{ height:640px; border-radius:30px; overflow:hidden; display:flex; flex-direction:column; background:var(--ghost-white); color:var(--carbon-black); position:relative; }
+
+  .chrome{ background:#fff; border-bottom:1px solid var(--n200); }
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:10px 18px 2px; font-size:.7rem; font-weight:600; }
+  .apphdr{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 10px; }
+  .hh{ display:inline-flex; align-items:center; gap:6px; font-size:.86rem; font-weight:600; background:var(--n50); border:1px solid var(--n200); border-radius:var(--r-pill); padding:6px 11px; }
+  .hh .car{ font-size:.66rem; color:var(--n500); }
+  .sync{ display:inline-flex; align-items:center; gap:6px; font-size:.7rem; font-weight:600; color:var(--verdigris); }
+
+  .listctx{ padding:6px 14px 12px; }
+  .listctx .row{ display:flex; align-items:center; gap:10px; }
+  .listctx .chev,.listctx .more{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .listctx .more{ margin-left:auto; }
+  .listctx .titles{ flex:1; min-width:0; }
+  .listctx .kicker{ font-size:.64rem; letter-spacing:.12em; text-transform:uppercase; color:var(--n500); font-weight:600; }
+  .listctx h2{ font-size:1.22rem; font-weight:600; letter-spacing:-.01em; margin-top:1px; }
+  .actions{ display:flex; gap:9px; margin-top:12px; }
+  /* action buttons: TEXT-ONLY (design rule — no icons in action buttons).
+     Labels wrap gracefully to 2 lines at large text sizes instead of clipping. */
+  .btn{ flex:1; display:flex; align-items:center; justify-content:center; min-height:48px;
+    padding:8px 10px; border-radius:var(--r-btn); text-align:center; line-height:1.2;
+    font-family:inherit; font-size:.9rem; font-weight:600; cursor:pointer; }
+  .btn.primary{ background:var(--baltic); color:var(--ghost-white); border:none; }
+  .btn.secondary{ background:transparent; color:var(--baltic); border:1px solid rgba(69,105,144,.35); }
+
+  .content{ flex:1; overflow:hidden; padding:12px 12px 0; }
+  .card{ background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 10px 26px -20px rgba(25,23,22,.35); overflow:hidden; }
+  .item{ display:flex; align-items:center; gap:12px; padding:9px 13px; min-height:48px; }
+  .item + .item{ border-top:1px solid var(--n100); }
+  .box{ width:22px; height:22px; border-radius:var(--r-ctrl); flex:none; display:grid; place-items:center; }
+  .box.open{ border:2px solid var(--n300); }
+  .box.done{ background:var(--verdigris); }
+  .box.done svg{ color:var(--carbon-black); }
+  .it-main{ flex:1; min-width:0; }
+  .it-name{ font-size:.92rem; font-weight:500; }
+  .it-meta{ font-size:.76rem; color:var(--n500); margin-top:1px; }
+  .item.doneRow .it-name{ text-decoration:line-through; color:var(--n400); }
+  .chip{ font-size:.68rem; font-weight:600; padding:4px 9px; border-radius:var(--r-pill); flex:none;
+    background:var(--n50); border:1px solid var(--n200); color:var(--n600); }
+  .chip.ghost{ background:transparent; border:1px dashed var(--n300); color:var(--n500); font-weight:500; }
+  .iact{ color:var(--n400); flex:none; margin-left:2px; display:grid; place-items:center; width:20px; }
+
+  /* sticky fast-add bar */
+  .addbar{ position:absolute; left:0; right:0; bottom:64px; background:#fff; border-top:1px solid var(--n200); padding:10px 12px; }
+  .addfield{ display:flex; align-items:center; gap:10px; min-height:48px; border:1px solid var(--n300); border-radius:var(--r-btn); padding:0 12px; color:var(--n500); font-size:.9rem; }
+  .addfield.focused{ border-color:var(--baltic); box-shadow:0 0 0 3px rgba(69,105,144,.15); color:var(--carbon-black); }
+  .addfield .plus{ color:var(--baltic); font-weight:700; font-size:1.15rem; }
+  .caret{ display:inline-block; width:1.5px; height:18px; background:var(--baltic); margin-left:1px; animation:blink 1s steps(1) infinite; }
+  @keyframes blink{ 50%{ opacity:0; } }
+  @media (prefers-reduced-motion:reduce){ .caret{ animation:none; } }
+
+  /* autocomplete panel (rises above field) */
+  .suggest{ position:absolute; left:12px; right:12px; bottom:132px; background:#fff; border:1px solid var(--n200);
+    border-radius:var(--r-card); box-shadow:0 -8px 30px -14px rgba(25,23,22,.4); overflow:hidden; }
+  .sg{ display:flex; align-items:center; gap:11px; padding:11px 13px; min-height:48px; }
+  .sg + .sg{ border-top:1px solid var(--n100); }
+  .sg .ico{ color:var(--n400); flex:none; }
+  .sg .txt{ flex:1; min-width:0; }
+  .sg .nm{ font-size:.9rem; font-weight:500; }
+  .sg .at{ font-size:.74rem; color:var(--n500); margin-top:1px; }
+  .sg .chip{ margin-left:auto; }
+  .sg.newrow{ color:var(--baltic); font-weight:600; font-size:.88rem; }
+  .sg.newrow .ico{ color:var(--baltic); }
+
+  .nav{ position:absolute; left:0; right:0; bottom:0; display:flex; background:#fff; border-top:1px solid var(--n200); padding:7px 8px 16px; }
+  .nav a{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.66rem; color:var(--n500); text-decoration:none; }
+  .nav a.active{ color:var(--baltic); font-weight:600; }
+
+  /* overflow callout */
+  .callout{ display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .menu{ width:250px; background:#fff; border:1px solid var(--n200); border-radius:var(--r-card); box-shadow:0 18px 40px -20px rgba(25,23,22,.45); overflow:hidden; }
+  .menu .mh{ font-size:.64rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n500); padding:11px 14px 7px; }
+  .menu .mi{ display:flex; align-items:center; gap:11px; padding:11px 14px; font-size:.88rem; color:var(--carbon-black); border-top:1px solid var(--n100); }
+  .menu .mi svg{ color:var(--n600); }
+  .menu .mi.danger{ color:var(--pink); }
+  .menu .mi.danger svg{ color:var(--pink); }
+  .callout .cap{ font-size:.72rem; text-align:center; max-width:26ch; }
+
+  .legend{ max-width:900px; margin:36px auto 0; border-top:1px solid var(--studio-line); padding-top:16px; font-size:.78rem; }
+  .legend b{ color:var(--studio-strong); font-weight:600; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">SGART · UX · Key Screen</div>
+  <h1>Listendetail — Planen &amp; schnell erfassen</h1>
+  <p><b>Schnelle Erfassung ist die Hauptsache.</b> Ein Artikel hinzuzufügen muss schneller
+     gehen als ein Zettel — deshalb sitzt die Eingabe dauerhaft griffbereit, mit Autocomplete
+     und Attribut-Vorbelegung. Analog und digital sind gleichwertig: <b>„Einkauf starten"</b>
+     und <b>„Drucken / Teilen"</b> stehen nebeneinander (für Anna genauso wie für Ben).</p>
+</div>
+
+<div class="stage">
+
+  <!-- STATE A: resting -->
+  <div class="col">
+    <div class="label">A · Ruhezustand</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>8:12</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh">Zuhause <span class="car">▾</span></span>
+          <span class="sync">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Aktuell
+          </span>
+        </div>
+        <div class="listctx">
+          <div class="row">
+            <span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+            <div class="titles"><div class="kicker">Offene Liste</div><h2>Wocheneinkauf</h2></div>
+            <span class="more"><svg width="4" height="18" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span>
+          </div>
+          <div class="actions">
+            <button class="btn primary">Einkauf starten</button>
+            <button class="btn secondary">Drucken / Teilen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="card">
+          <div class="item"><div class="it-main"><div class="it-name">Vollkornbrot</div><div class="it-meta tnum">1 Laib</div></div><span class="chip">Edeka</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="item"><div class="it-main"><div class="it-name">Äpfel</div><div class="it-meta tnum">1,5 kg</div></div><span class="chip">Edeka</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="item"><div class="it-main"><div class="it-name">Kaffee</div><div class="it-meta">500 g · „der dunkle"</div></div><span class="chip">Netto</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="item"><div class="it-main"><div class="it-name">Batterien AA</div><div class="it-meta tnum">4 St.</div></div><span class="chip ghost">+ Geschäft</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="item"><div class="it-main"><div class="it-name">Butter</div><div class="it-meta tnum">250 g</div></div><span class="chip">Edeka</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        </div>
+      </div>
+
+      <div class="addbar">
+        <div class="addfield"><span class="plus">+</span> Artikel hinzufügen …</div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Eingabe dauerhaft griffbereit. „Einkauf starten" &amp; „Drucken / Teilen" gleichwertig.</div>
+  </div>
+
+  <!-- STATE B: autocomplete -->
+  <div class="col">
+    <div class="label">B · Schnell-Erfassung (Autocomplete)</div>
+    <div class="phone"><div class="screen">
+      <div class="chrome">
+        <div class="statusbar tnum"><span>8:13</span><span>▂▄▆ ⏦</span></div>
+        <div class="apphdr">
+          <span class="hh">Zuhause <span class="car">▾</span></span>
+          <span class="sync">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Aktuell
+          </span>
+        </div>
+        <div class="listctx">
+          <div class="row">
+            <span class="chev"><svg width="10" height="16" viewBox="0 0 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L2 9l7 8"/></svg></span>
+            <div class="titles"><div class="kicker">Offene Liste</div><h2>Wocheneinkauf</h2></div>
+            <span class="more"><svg width="4" height="18" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="card">
+          <div class="item"><div class="it-main"><div class="it-name">Vollkornbrot</div><div class="it-meta tnum">1 Laib</div></div><span class="chip">Edeka</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+          <div class="item"><div class="it-main"><div class="it-name">Äpfel</div><div class="it-meta tnum">1,5 kg</div></div><span class="chip">Edeka</span><span class="iact"><svg width="4" height="16" viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg></span></div>
+        </div>
+      </div>
+
+      <div class="suggest">
+        <div class="sg"><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span><div class="txt"><div class="nm">Milch</div><div class="at">2 L · zuletzt Edeka</div></div><span class="chip">Edeka</span></div>
+        <div class="sg"><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span><div class="txt"><div class="nm">Milchreis</div><div class="at">1 Pkg · zuletzt Netto</div></div><span class="chip">Netto</span></div>
+        <div class="sg newrow"><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>„Milch" als neuen Artikel hinzufügen</div>
+      </div>
+
+      <div class="addbar">
+        <div class="addfield focused"><span class="plus">+</span> Milch<span class="caret"></span></div>
+      </div>
+      <div class="nav">
+        <a class="active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Listen</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>Einkauf</a>
+        <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Profil</a>
+      </div>
+    </div></div>
+    <div class="note">Tippt „Milch" → Vorschläge aus der eigenen Historie mit vorbelegten Attributen; ein nie gesehener Name wird direkt angelegt.</div>
+  </div>
+
+  <!-- overflow -->
+  <div class="col">
+    <div class="label">⋯ · Listen-Menü</div>
+    <div class="callout">
+      <div class="menu">
+        <div class="mh">Liste</div>
+        <div class="mi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Liste umbenennen</div>
+        <div class="mi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>Drucken / Als PDF teilen</div>
+        <div class="mi danger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>Liste löschen</div>
+      </div>
+      <div class="cap">„Drucken / Teilen" ist auch hier — und als gleichwertiger Button oben (Annas Analog-Weg).</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Kern-Entscheidungen:</b> Eingabefeld dauerhaft griffbereit (Schnell-Erfassung = Kernfunktion, CAP-6) ·
+     Autocomplete aus der eigenen Haushalts-Historie mit Attribut-Vorbelegung, jederzeit überschreibbar ·
+     „Einkauf starten" (CAP-9) und „Drucken / Teilen" (CAP-11) gleichwertig (Analog = Digital) ·
+     Store-Chips zeigen Zuordnung, „+ Geschäft" für unzugeordnete Artikel · 48-px-Zeilen ·
+     Artikel-Aktionen über ⋯ (Bearbeiten / Verschieben auf andere Liste / Entfernen) —
+     <b>kein Abhaken außerhalb eines Einkaufs</b> (CAP-5 überarbeitet; Abhaken &amp; Verschieben-als-Postpone geschehen im Einkauf).</p>
+</div>

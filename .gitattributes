@@ -1,0 +1,14 @@
+# Normalize to LF everywhere; the repo standardized on LF line endings.
+* text=auto eol=lf
+
+# Windows batch scripts must keep CRLF.
+*.bat eol=crlf
+gradlew.bat eol=crlf
+
+# Binary assets must never be normalized.
+*.png binary
+*.jpg binary
+*.jar binary
+*.tar.xz binary
+*.ttf binary
+*.otf binary

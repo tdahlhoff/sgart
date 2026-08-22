@@ -1,3 +1,27 @@
 # Claude Code
 .claude/worktrees/
 .claude/settings.local.json
+
+# Local secrets / environment
+.env
+
+# Backend — Gradle / Java
+backend/.gradle/
+backend/build/
+backend/bin/
+
+# Flutter / Dart client
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/pubspec.lock
+
+# Docker local volumes
+.docker-data/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
