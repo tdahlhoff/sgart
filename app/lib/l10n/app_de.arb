@@ -59,5 +59,85 @@
   "errorGenericFallback": "Es ist ein Fehler aufgetreten. Bitte versuche es erneut.",
   "@errorGenericFallback": {
     "description": "Generic localized message shown when an error code is unknown or not yet mapped to specific copy."
+  },
+
+  "householdsLoadingLabel": "Haushalte werden geladen …",
+  "@householdsLoadingLabel": {
+    "description": "Shown while first-run routing is fetching the caller's households."
+  },
+
+  "householdsLoadFailedError": "Deine Haushalte konnten nicht geladen werden. Bitte versuche es erneut.",
+  "@householdsLoadFailedError": {
+    "description": "Shown when first-run routing fails to load the caller's households."
+  },
+
+  "householdsRetryButtonLabel": "Erneut versuchen",
+  "@householdsRetryButtonLabel": {
+    "description": "Label of the button that retries loading the caller's households after a failure."
+  },
+
+  "householdsChoiceHeading": "Wie möchtest du starten?",
+  "@householdsChoiceHeading": {
+    "description": "Heading of the first-run choice screen shown to a caller with zero households."
+  },
+
+  "householdsCreateChoiceButtonLabel": "Haushalt erstellen",
+  "@householdsCreateChoiceButtonLabel": {
+    "description": "Label of the button that starts creating a new household."
+  },
+
+  "householdsAwaitInviteChoiceButtonLabel": "Auf Einladung warten",
+  "@householdsAwaitInviteChoiceButtonLabel": {
+    "description": "Label of the button that leads to the informational await-invite dead-end (invite acceptance is Epic 4)."
+  },
+
+  "householdsAwaitInviteHeading": "Auf Einladung warten",
+  "@householdsAwaitInviteHeading": {
+    "description": "Heading of the informational await-invite screen."
+  },
+
+  "householdsAwaitInviteBody": "Sobald dich jemand zu seinem Haushalt einlädt, kannst du die Einladung annehmen. Diese Funktion folgt in einem späteren Update.",
+  "@householdsAwaitInviteBody": {
+    "description": "Body copy of the informational await-invite screen — no invite flow ships in this story (Epic 4)."
+  },
+
+  "householdsBackButtonLabel": "Zurück",
+  "@householdsBackButtonLabel": {
+    "description": "Label of the button that returns from the create/await-invite screens to the first-run choice."
+  },
+
+  "householdsCreateHeading": "Haushalt erstellen",
+  "@householdsCreateHeading": {
+    "description": "Heading of the create-household screen."
+  },
+
+  "householdsCreateNameFieldLabel": "Name des Haushalts",
+  "@householdsCreateNameFieldLabel": {
+    "description": "Label of the household-name text field on the create-household screen."
+  },
+
+  "householdsCreateSubmitButtonLabel": "Erstellen",
+  "@householdsCreateSubmitButtonLabel": {
+    "description": "Label of the button that submits the create-household form."
+  },
+
+  "householdsCreateNameRequiredError": "Bitte gib einen Namen für den Haushalt ein.",
+  "@householdsCreateNameRequiredError": {
+    "description": "Localized copy for the household.nameRequired error code — a blank or whitespace-only name."
+  },
+
+  "householdsCreateNameTooLongError": "Der Name des Haushalts ist zu lang. Bitte wähle einen kürzeren Namen.",
+  "@householdsCreateNameTooLongError": {
+    "description": "Localized copy for the household.nameTooLong error code — a name exceeding the maximum length."
+  },
+
+  "householdsSelectionHeading": "Haushalt auswählen",
+  "@householdsSelectionHeading": {
+    "description": "Heading of the household-selection screen shown to a caller who belongs to several households."
+  },
+
+  "householdsHomeCurrentHouseholdLabel": "Aktueller Haushalt",
+  "@householdsHomeCurrentHouseholdLabel": {
+    "description": "Small label above the current household's name on the minimal household home screen."
   }
 }

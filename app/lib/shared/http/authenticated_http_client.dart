@@ -35,6 +35,24 @@ class AuthenticatedHttpClient {
     }
   }
 
+  Future<List<dynamic>> getJsonList(String path) async {
+    try {
+      final response = await _dio.get<List<dynamic>>(path);
+      return response.data ?? const [];
+    } on DioException catch (exception) {
+      throw AppException(_mapToAppError(exception));
+    }
+  }
+
+  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(path, data: body);
+      return response.data ?? const {};
+    } on DioException catch (exception) {
+      throw AppException(_mapToAppError(exception));
+    }
+  }
+
   AppError _mapToAppError(DioException exception) {
     final response = exception.response;
     final body = response?.data;

@@ -4,18 +4,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
+import '../../households/presentation/first_run_router.dart';
 import '../data/app_auth_oidc_client.dart';
 import '../data/flutter_secure_token_storage.dart';
 import '../data/identity_api.dart';
 import '../data/secure_token_storage.dart';
 import 'auth_cubit.dart';
 import 'auth_state.dart';
-import 'authenticated_placeholder_page.dart';
 import 'sign_in_page.dart';
 
-/// The app's single entry path: an unauthenticated sign-in gate that switches to the
-/// authenticated placeholder once signed in. Replaces the Story 1.1/1.3 `HomePage` placeholder —
-/// one entry screen, not two competing ones.
+/// The app's single entry path: an unauthenticated sign-in gate that switches to first-run
+/// routing (Story 1.6) once signed in. Replaces the Story 1.1/1.3 `HomePage` placeholder — one
+/// entry screen, not two competing ones.
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -47,18 +47,26 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-/// Switches between [SignInPage] and [AuthenticatedPlaceholderPage] on [AuthCubit]'s state.
-/// Separated from [AuthGate] so tests can drive it with a fake [AuthCubit] instead of the real
+/// Switches between [SignInPage] and [FirstRunRouter] on [AuthCubit]'s state. Separated from
+/// [AuthGate] so tests can drive it with a fake [AuthCubit] instead of the real
 /// OIDC/secure-storage/HTTP dependencies (CLAUDE.md §6).
+///
+/// [authenticatedBuilder] defaults to the real [FirstRunRouter] — which itself builds a real
+/// HTTP client — so a test that only cares about the sign-in/authenticated *switch* can override
+/// it with a network-free placeholder instead (CLAUDE.md §6, "isolate external systems").
 class AuthGateBody extends StatelessWidget {
-  const AuthGateBody({super.key});
+  const AuthGateBody({super.key, this.authenticatedBuilder = _defaultAuthenticatedBuilder});
+
+  final WidgetBuilder authenticatedBuilder;
+
+  static Widget _defaultAuthenticatedBuilder(BuildContext context) => const FirstRunRouter();
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, state) {
         if (state.status == AuthStatus.authenticated) {
-          return AuthenticatedPlaceholderPage(displayName: state.displayName!);
+          return Builder(builder: authenticatedBuilder);
         }
         return const SignInPage();
       },

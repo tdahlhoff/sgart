@@ -1,3 +1,8 @@
+## Deferred from: code review of 1-6-create-a-household-first-run-routing (2026-08-23)
+
+- **KurrentDB idempotency check + append are not atomic** — `backend/src/main/java/de/sgart/collaboration/adapter/out/KurrentDbEventStore.java:47` reads the stream to check for an already-applied `commandId`, then appends under expected-version in a separate, non-atomic step (unlike `InMemoryEventStore`, whose `append` is `synchronized`). Two concurrent deliveries of the same `commandId` to the same existing stream can both pass the pre-check and both append; the loser gets `WrongExpectedVersionException` → `ConcurrencyConflictException` instead of the contract's silent no-op. Latent: not reachable via create-household (fresh stream per call); relevant only for future retry-against-existing-stream flows. The single-threaded shared contract test cannot catch it.
+- **`NoPersistedPersonalDataTest` strips only line comments** — `backend/src/test/java/de/sgart/identity/NoPersistedPersonalDataTest.java` `withoutSqlComments` uses `replaceFirst("--.*$", "")`, so a future migration using a `/* … */` block comment containing "email"/"display name" would trip a false-positive PII-column failure. Test-only robustness gap, no current trigger.
+
 ## Deferred from: code review of 1-2-design-system-theming-foundation (2026-08-22)
 
 - **No localization delegates while the UI already ships German copy** — `app/lib/main.dart:20-26` declares no `localizationsDelegates`, `supportedLocales`, or `locale`. On a `de-DE` device, Material's own strings (tooltips, dialog buttons, pickers, Scaffold a11y labels) resolve to English against German app copy. Belongs to Story 1.3 (localization layer, de-DE formatting).

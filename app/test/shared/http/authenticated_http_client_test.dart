@@ -35,6 +35,13 @@ ResponseBody _jsonResponse(Map<String, dynamic> json, int statusCode) {
   });
 }
 
+ResponseBody _jsonArrayResponse(List<dynamic> json, int statusCode) {
+  final bytes = utf8.encode(jsonEncode(json));
+  return ResponseBody.fromBytes(bytes, statusCode, headers: {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  });
+}
+
 void main() {
   group('AuthenticatedHttpClient', () {
     test('getJson_attachesTheBearerTokenFromTheAccessTokenProvider', () async {
@@ -123,6 +130,61 @@ void main() {
       await expectLater(
         client.getJson('/api/v1/identity/me'),
         throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'network.unreachable')),
+      );
+    });
+
+    test('getJsonList_returnsTheDecodedJsonArrayOnSuccess', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonArrayResponse([
+          {'householdId': 'id-1', 'name': 'Familie Muster'},
+        ], 200),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+
+      final json = await client.getJsonList('/api/v1/households');
+
+      expect(json, hasLength(1));
+      expect((json.first as Map<String, dynamic>)['name'], 'Familie Muster');
+    });
+
+    test('getJsonList_mapsABackendErrorBodyToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'auth.unauthorized', 'message': 'debug only'}, 401),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+
+      await expectLater(
+        client.getJsonList('/api/v1/households'),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'auth.unauthorized')),
+      );
+    });
+
+    test('postJson_attachesTheBearerTokenAndReturnsTheDecodedJsonBodyOnSuccess', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'householdId': 'id-1'}, 201),
+      );
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'the-access-token');
+
+      final json = await client.postJson('/api/v1/households', {'name': 'Familie Muster'});
+
+      expect(adapter.lastRequest!.headers['Authorization'], 'Bearer the-access-token');
+      expect(json['householdId'], 'id-1');
+    });
+
+    test('postJson_mapsABackendErrorBodyToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'household.nameRequired', 'message': 'debug only'}, 400),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+
+      await expectLater(
+        client.postJson('/api/v1/households', {'name': ''}),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'household.nameRequired')),
       );
     });
   });

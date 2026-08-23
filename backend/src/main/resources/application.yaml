@@ -14,6 +14,21 @@ spring:
       resourceserver:
         jwt:
           jwk-set-uri: ${SGART_KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/sgart/protocol/openid-connect/certs}
+  # PostgreSQL read side (Story 1.6): durable Identity ACL mapping + household read model.
+  # HikariCP builds its pool lazily (no-arg construction + property setters), so simply having
+  # this DataSource bean does not connect at context startup; only the first real query does.
+  datasource:
+    url: ${SGART_POSTGRES_JDBC_URL:jdbc:postgresql://localhost:5432/sgart}
+    username: ${SGART_POSTGRES_USER:sgart}
+    password: ${SGART_POSTGRES_PASSWORD:}
+  # Unlike the lazy DataSource pool above, Flyway validates and connects eagerly at startup — the
+  # #1 way this story's Postgres wiring would break contextLoads() with the database down (see
+  # SgartApplicationTest / the new ContextLoadsWithoutPostgresTest). Off by default (safe for
+  # tests/CI with no database); a real local run against `docker compose up`'s Postgres sets
+  # SGART_FLYWAY_ENABLED=true to actually apply migrations. Testcontainers integration tests run
+  # Flyway explicitly against their own container instead of relying on this flag.
+  flyway:
+    enabled: ${SGART_FLYWAY_ENABLED:false}
 
 # Custom (non-Boot-standard) keys: Boot's resource-server auto-configuration only validates
 # token expiry from jwk-set-uri alone, so the issuer and audience are checked explicitly by the
@@ -23,3 +38,13 @@ sgart:
     jwt:
       issuer: ${SGART_KEYCLOAK_ISSUER:http://localhost:8080/realms/sgart}
       audience: sgart-backend
+  # Real KurrentDB EventStore adapter (Story 1.6, deferred from 1.5). The client's gRPC channel
+  # connects lazily on first RPC, never at context startup (see ContextLoadsWithoutKurrentDbTest).
+  kurrentdb:
+    connection-string: ${SGART_KURRENTDB_CONNECTION_STRING:esdb://localhost:2113?tls=false}
+  # The household read-model projector's live KurrentDB subscription (first CQRS read side). Off by
+  # default so tests/CI never open a subscription with KurrentDB down (like SGART_FLYWAY_ENABLED); a
+  # real run against `docker compose up`'s KurrentDB sets SGART_PROJECTOR_AUTOSTART=true to populate
+  # the household read model that first-run routing reads (AC2).
+  projector:
+    auto-start: ${SGART_PROJECTOR_AUTOSTART:false}

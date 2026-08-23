@@ -25,8 +25,15 @@ void main() {
 
     tearDown(() => cubit.close());
 
+    // The real authenticated destination (FirstRunRouter) builds a real HTTP client — swapped
+    // for a network-free placeholder here so this test proves only AuthGateBody's own switching
+    // logic, never touching the network (CLAUDE.md §6). FirstRunRouter's own behavior is covered
+    // separately (no real dependencies) in first_run_router_test.dart.
     Widget buildSubject() => wrapForTesting(
-          BlocProvider<AuthCubit>.value(value: cubit, child: const AuthGateBody()),
+          BlocProvider<AuthCubit>.value(
+            value: cubit,
+            child: AuthGateBody(authenticatedBuilder: (_) => const Text('authenticated-placeholder')),
+          ),
         );
 
     testWidgets('showsTheSignInGateWhenUnauthenticated', (tester) async {
@@ -36,7 +43,7 @@ void main() {
       expect(find.text('Abmelden'), findsNothing);
     });
 
-    testWidgets('switchesToTheAuthenticatedPlaceholderOnceSignedIn', (tester) async {
+    testWidgets('switchesAwayFromTheSignInGateOnceSignedIn', (tester) async {
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
       identityApi.identityToReturn =
           const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
@@ -46,8 +53,8 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Angemeldet als Anna Testperson'), findsOneWidget);
       expect(find.text('Anmelden'), findsNothing);
+      expect(find.text('authenticated-placeholder'), findsOneWidget);
     });
   });
 }

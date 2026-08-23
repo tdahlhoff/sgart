@@ -13,11 +13,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * In-memory {@link MemberMappingRepository}, seedable with synthetic {@link MemberMapping}s for
- * tests. No household or membership exists yet in Story 1.4 — there is nothing to persist
- * durably. The PostgreSQL adapter and the mint (write) path replace this class in Story 1.6
- * (create-household), the first component that actually writes a mapping; this interface's
- * contract does not change when that happens.
+ * In-memory {@link MemberMappingRepository} — the fast unit-test double (CLAUDE.md §6). The
+ * durable production adapter is {@code JdbcMemberMappingRepository} (Story 1.6); this class
+ * implements the identical port contract for tests that need no container at all.
  */
 public final class InMemoryMemberMappingRepository implements MemberMappingRepository {
 
@@ -42,6 +40,19 @@ public final class InMemoryMemberMappingRepository implements MemberMappingRepos
     public Optional<MemberId> findMemberId(KeycloakUserId keycloakUserId, HouseholdId householdId) {
         return Optional.ofNullable(
                 mappingsByHouseholdAndKeycloakUser.get(new HouseholdKeycloakKey(householdId, keycloakUserId)));
+    }
+
+    @Override
+    public void save(MemberMapping mapping) {
+        seed(mapping);
+    }
+
+    @Override
+    public List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId) {
+        return mappingsByHouseholdAndKeycloakUser.keySet().stream()
+                .filter(key -> key.keycloakUserId().equals(keycloakUserId))
+                .map(HouseholdKeycloakKey::householdId)
+                .toList();
     }
 
     private record HouseholdKeycloakKey(HouseholdId householdId, KeycloakUserId keycloakUserId) {}

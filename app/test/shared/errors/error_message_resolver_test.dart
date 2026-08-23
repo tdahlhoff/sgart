@@ -19,5 +19,12 @@ void main() {
 
       expect(resolved, isNot(rawDebugMessage));
     });
+
+    test('householdNameRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'household.nameRequired');
+
+      expect(resolved, localizations.householdsCreateNameRequiredError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }
