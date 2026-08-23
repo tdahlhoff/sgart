@@ -51,11 +51,12 @@ void main() {
       expect(paragraph.text.style!.fontSize,
           SgartTheme.light().textTheme.labelLarge!.fontSize,
           reason: 'the font size must not shrink to fit');
-      expect(paragraph.computeLineMetrics().length, greaterThan(1),
-          reason: 'a long label at 2x in a 180px box must actually wrap');
+      // RenderParagraph exposes preferredLineHeight (one line, at the active text scale) but not
+      // the per-line metrics, so the wrap is proven by height: at least two full lines are laid
+      // out, meaning the label wrapped and nothing was cut off.
       expect(paragraph.size.height,
-          greaterThanOrEqualTo(paragraph.computeLineMetrics().first.height * 2),
-          reason: 'every wrapped line must be laid out, not cut off');
+          greaterThanOrEqualTo(paragraph.preferredLineHeight * 2),
+          reason: 'a long label at 2x in a 180px box must wrap to at least two laid-out lines');
     });
 
     testWidgets('the button grows taller as the text scale grows', (tester) async {
@@ -87,9 +88,13 @@ void main() {
       expect(label.overflow, isNot(TextOverflow.ellipsis));
       expect(label.maxLines, isNull);
 
-      final paragraph = tester.renderObject<RenderParagraph>(find.text('AUSSTEHEND'));
+      // StatusLabel's Text carries a semanticsLabel, so it wraps the glyphs in a Semantics
+      // node; find the RichText beneath it to reach the RenderParagraph.
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: find.byType(StatusLabel), matching: find.byType(RichText)),
+      );
       expect(paragraph.size.height,
-          greaterThanOrEqualTo(paragraph.computeLineMetrics().first.height),
+          greaterThanOrEqualTo(paragraph.preferredLineHeight),
           reason: 'the tag must lay out every line it wraps to');
 
     });

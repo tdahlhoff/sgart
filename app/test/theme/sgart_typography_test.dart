@@ -58,7 +58,8 @@ void main() {
     });
 
     test('every Material slot is populated and stays on the SGART scale', () {
-      const sgartSizes = {
+      // Not const: a set of doubles has no primitive equality, so it cannot be a const literal.
+      final sgartSizes = <double>{
         SgartTypography.sizeDisplay,
         SgartTypography.sizeTitle,
         SgartTypography.sizeHeading,

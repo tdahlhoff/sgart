@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/shared/widgets/sgart_button.dart';
 import 'package:sgart/theme/sgart_theme.dart';
 import 'package:sgart/theme/tokens/sgart_colors.dart';
 
+// A MaterialApp resolves its own brightness from the platform, so passing a dark ThemeData to
+// its `theme:` slot does not reliably render the tree dark. Wrapping the subtree in an explicit
+// [Theme] forces exactly the given ThemeData — the reliable way to exercise a mode's tokens.
 Widget _host(Widget child, {double width = 200, ThemeData? theme}) => MaterialApp(
-      theme: theme ?? SgartTheme.light(),
-      home: Scaffold(
-        body: Center(child: SizedBox(width: width, child: child)),
+      home: Theme(
+        data: theme ?? SgartTheme.light(),
+        child: Scaffold(
+          body: Center(child: SizedBox(width: width, child: child)),
+        ),
       ),
     );
 
@@ -131,9 +135,10 @@ void main() {
       ));
 
       final node = tester.getSemantics(find.byType(SgartButton));
-      expect(node.label, 'Einkauf starten');
-      expect(node.hasFlag(SemanticsFlag.isButton), isTrue);
-      expect(node.hasFlag(SemanticsFlag.isEnabled), isTrue);
+      expect(
+        node,
+        isSemantics(label: 'Einkauf starten', isButton: true, isEnabled: true),
+      );
       // The inner Text must not contribute a second node with the same label.
       expect(find.bySemanticsLabel('Einkauf starten'), findsOneWidget);
 

@@ -6,9 +6,15 @@ import 'package:sgart/theme/tokens/sgart_colors.dart';
 
 import '../../support/color_contrast.dart';
 
+// A MaterialApp resolves its own brightness from the platform, so passing a dark ThemeData
+// to its `theme:` slot does not by itself render the tree dark. Wrapping the subtree in an
+// explicit [Theme] forces exactly the given ThemeData — the reliable way to exercise a
+// specific mode's tokens in a widget test.
 Widget _host(Widget child, {ThemeData? theme}) => MaterialApp(
-      theme: theme ?? SgartTheme.light(),
-      home: Scaffold(body: Center(child: child)),
+      home: Theme(
+        data: theme ?? SgartTheme.light(),
+        child: Scaffold(body: Center(child: child)),
+      ),
     );
 
 Color _tintBackground(WidgetTester tester) {

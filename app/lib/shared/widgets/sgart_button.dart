@@ -62,9 +62,15 @@ class SgartButton extends StatelessWidget {
     };
 
     final resolvedBackground =
-        _isEnabled ? background : _fade(background, colors.background);
+        _isEnabled ? background : _fadeFill(background, colors.background);
+    // The label fades toward whatever sits directly behind it: the button's own fill when it
+    // has one, otherwise the page (a transparent/outlined button). Fading toward the page for
+    // every variant is wrong when the enabled label already matches the page color — a filled
+    // button whose foreground equals the page background would not dim at all.
+    final surfaceBehindLabel =
+        resolvedBackground.a == 0 ? colors.background : resolvedBackground;
     final resolvedForeground =
-        _isEnabled ? foreground : _fade(foreground, colors.background);
+        _isEnabled ? foreground : _fade(foreground, surfaceBehindLabel);
     final resolvedSide = _isEnabled || side == BorderSide.none
         ? side
         : BorderSide(color: resolvedForeground, width: side.width);
@@ -94,7 +100,12 @@ class SgartButton extends StatelessWidget {
                 vertical: SgartShapes.space2,
               ),
               child: Center(
+                // Hug the label in both axes: without a heightFactor the Center expands to fill
+                // a tall parent, so the button would balloon vertically instead of sizing to its
+                // content. `constrain` still enforces the 48px minimum tap target and centers the
+                // label within it.
                 widthFactor: 1,
+                heightFactor: 1,
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
@@ -112,8 +123,13 @@ class SgartButton extends StatelessWidget {
     );
   }
 
-  /// Blends a color toward the page background rather than lowering its alpha, so a disabled
+  /// Blends a color toward the surface behind it rather than lowering its alpha, so a disabled
   /// button still composites predictably over whatever sits behind it.
   static Color _fade(Color color, Color background) =>
       Color.alphaBlend(color.withValues(alpha: disabledOpacity), background);
+
+  /// A transparent fill (the outlined secondary variant) has no surface to dim toward, so it
+  /// stays transparent; any real fill fades toward the page background.
+  static Color _fadeFill(Color fill, Color pageBackground) =>
+      fill.a == 0 ? fill : _fade(fill, pageBackground);
 }
