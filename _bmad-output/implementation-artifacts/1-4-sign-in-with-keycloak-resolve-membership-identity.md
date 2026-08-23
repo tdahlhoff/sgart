@@ -4,7 +4,7 @@ baseline_commit: d9c6ba2cf1a78aff1fb7a049d97b31fa4ba36567
 
 # Story 1.4: Sign in with Keycloak & resolve membership identity
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
