@@ -41,4 +41,26 @@ void main() {
           SgartTheme.dark().scaffoldBackgroundColor);
     });
   });
+
+  group('SgartApp localization (Story 1.3, AC1)', () {
+    testWidgets('renders German copy sourced from AppLocalizations, defaulting to de-DE', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const SgartApp());
+
+      expect(find.text('Gerüst bereit'), findsOneWidget);
+
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.supportedLocales, contains(const Locale('de')));
+    });
+
+    testWidgets('falls back to German when the device locale is unsupported', (tester) async {
+      tester.platformDispatcher.localeTestValue = const Locale('fr');
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+
+      await tester.pumpWidget(const SgartApp());
+
+      expect(find.text('Gerüst bereit'), findsOneWidget);
+    });
+  });
 }

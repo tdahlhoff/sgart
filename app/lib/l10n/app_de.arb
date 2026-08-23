@@ -1,0 +1,64 @@
+{
+  "@@locale": "de",
+
+  "homeScaffoldReadyLabel": "Gerüst bereit",
+  "@homeScaffoldReadyLabel": {
+    "description": "Placeholder heading shown on the home screen while no real screens exist yet."
+  },
+
+  "homeAdminStatusLabel": "Admin",
+  "@homeAdminStatusLabel": {
+    "description": "Placeholder status label demonstrating the admin StatusLabel variant on the home screen."
+  },
+
+  "homeProbeCountLabel": "Proben: {count}",
+  "@homeProbeCountLabel": {
+    "description": "Live probe counter on the home screen, incremented by the probe button.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+
+  "homeProbeButtonLabel": "Probe",
+  "@homeProbeButtonLabel": {
+    "description": "Label of the button on the home screen that registers a probe."
+  },
+
+  "homeFormattingDemoLabel": "Beispielmenge",
+  "@homeFormattingDemoLabel": {
+    "description": "Label introducing a formatted-quantity demo value on the home screen, proving the formatting layer renders end-to-end."
+  },
+
+  "unitPiece": "Stück",
+  "@unitPiece": {
+    "description": "Unit label for a single countable item."
+  },
+  "unitGram": "g",
+  "@unitGram": {
+    "description": "Unit label for grams."
+  },
+  "unitKilogram": "kg",
+  "@unitKilogram": {
+    "description": "Unit label for kilograms."
+  },
+  "unitMillilitre": "ml",
+  "@unitMillilitre": {
+    "description": "Unit label for millilitres."
+  },
+  "unitLitre": "l",
+  "@unitLitre": {
+    "description": "Unit label for litres."
+  },
+  "unitPack": "Pack",
+  "@unitPack": {
+    "description": "Unit label for a pack."
+  },
+
+  "errorGenericFallback": "Es ist ein Fehler aufgetreten. Bitte versuche es erneut.",
+  "@errorGenericFallback": {
+    "description": "Generic localized message shown when an error code is unknown or not yet mapped to specific copy."
+  }
+}
