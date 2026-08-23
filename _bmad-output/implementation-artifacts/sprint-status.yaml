@@ -52,7 +52,7 @@ development_status:
   epic-1: in-progress
   1-1-project-scaffold-local-infrastructure: done
   1-2-design-system-theming-foundation: done
-  1-3-localization-layer-de-de-formatting: review
+  1-3-localization-layer-de-de-formatting: done
   1-4-sign-in-with-keycloak-resolve-membership-identity: backlog
   1-5-command-concurrency-envelope: backlog
   1-6-create-a-household-first-run-routing: backlog

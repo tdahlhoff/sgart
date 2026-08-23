@@ -4,7 +4,7 @@ baseline_commit: 8f1e072d9eece8f82cf898702e5641d1e24ee4f1
 
 # Story 1.3: Localization layer & de-DE formatting
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
