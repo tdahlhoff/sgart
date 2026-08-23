@@ -71,4 +71,29 @@ class HexagonalArchitectureTest {
             slices().matching("de.sgart.(*).domain..")
                     .should().notDependOnEachOther()
                     .as("a context's domain must not depend on another context's domain (AD-2)");
+
+    /**
+     * AD-1 — the shared kernel is pure. The cross-context write-side envelope ({@code Command},
+     * {@code DomainEvent}, the {@code EventStore} port, {@code EventSourcedAggregate}, the ids) must
+     * never absorb a framework, persistence, event-store, or adapter type — so the real KurrentDB
+     * client (Story 1.6) can implement the {@code EventStore} port in {@code adapter.out} while the
+     * port itself stays infrastructure-free.
+     */
+    @ArchTest
+    static final ArchRule sharedKernelIsFreeOfInfrastructure =
+            noClasses()
+                    .that().resideInAPackage("de.sgart.shared..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework..",
+                            "jakarta.persistence..",
+                            "javax.persistence..",
+                            "jakarta.servlet..",
+                            "java.sql..",
+                            "javax.sql..",
+                            "org.keycloak..",
+                            "io.kurrent..",
+                            "com.eventstore..",
+                            "..adapter..")
+                    .as("the shared kernel must not depend on any framework, persistence, "
+                            + "event-store, or adapter type (AD-1)");
 }
