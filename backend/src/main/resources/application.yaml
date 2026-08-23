@@ -1,3 +1,25 @@
+server:
+  # Keycloak already owns port 8080 in local dev (docker-compose.yml) — the backend needs a
+  # different port so `./gradlew bootRun` and `docker compose up` can run side by side.
+  port: ${SGART_SERVER_PORT:8081}
+
 spring:
   application:
     name: sgart
+  # The JWK set is fetched lazily on first token verification, never at context startup — unlike
+  # `issuer-uri`, `jwk-set-uri` triggers no eager OIDC-discovery call, so the context loads cleanly
+  # even when Keycloak is unreachable (see SgartApplicationTest and Story 1.4 Dev Notes).
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${SGART_KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/sgart/protocol/openid-connect/certs}
+
+# Custom (non-Boot-standard) keys: Boot's resource-server auto-configuration only validates
+# token expiry from jwk-set-uri alone, so the issuer and audience are checked explicitly by the
+# JwtDecoder bean in SecurityConfig (AC1 — issuer/audience checked).
+sgart:
+  security:
+    jwt:
+      issuer: ${SGART_KEYCLOAK_ISSUER:http://localhost:8080/realms/sgart}
+      audience: sgart-backend

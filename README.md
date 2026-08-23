@@ -45,8 +45,11 @@ The backend uses the Gradle **wrapper** (`./gradlew`) — no separate Gradle ins
 cd backend
 ./gradlew test    # compile + run unit and architecture/dependency tests
 ./gradlew build   # full build
-./gradlew bootRun # run the application (needs local infra, see below)
+./gradlew bootRun # run the application (needs local infra, see below) — listens on :8081
 ```
+
+The backend listens on **`:8081`**, not the Spring Boot default `:8080` — Keycloak already owns
+`:8080` in local dev, so both can run side by side.
 
 The test suite includes:
 - **Domain unit tests** — pure, no infrastructure (e.g. `MoneyTest`, `QuantityTest`).
@@ -82,6 +85,21 @@ docker compose down      # stop (volumes persist)
 
 Credentials are **dev-only**. Production topology (managed secrets, TLS, backups, resource limits)
 is deliberately deferred.
+
+### Keycloak dev realm
+
+Keycloak imports the **`sgart`** realm from [`keycloak/realm-sgart.json`](keycloak/realm-sgart.json)
+on every `docker compose up` (`--import-realm`), so every machine and CI run gets an identical,
+reproducible realm — nothing is configured by hand in the admin console.
+
+- **Issuer:** `http://localhost:8080/realms/sgart`
+- **JWKS:** `http://localhost:8080/realms/sgart/protocol/openid-connect/certs`
+- **App client:** `sgart-app` — public, native (no client secret), Authorization Code + PKCE
+  (S256) only, redirect URI `de.sgart.app://oauth/callback`
+- **Dev sign-in users** (synthetic, clearly fake — CLAUDE.md §6): `anna@example.test` /
+  `anna-dev-password`, `ben@example.test` / `ben-dev-password`
+
+This realm is **dev-only** and must never be reused for production.
 
 ## Continuous integration
 

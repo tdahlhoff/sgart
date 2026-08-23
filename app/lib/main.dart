@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'features/home/presentation/home_page.dart';
+import 'features/auth/presentation/auth_gate.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'theme/sgart_theme.dart';
 
@@ -14,11 +16,22 @@ import 'theme/sgart_theme.dart';
 /// and renders through the shared design system (`lib/theme`). It follows the OS light/dark
 /// setting by default; an explicit override remains possible via [ThemeMode].
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // `intl`'s DateFormat needs its locale data loaded before first use (see DateFormatter).
-  await initializeDateFormatting('de_DE');
-  registerBundledFontLicenses();
-  runApp(const SgartApp());
+  // A build/framework error before this handler is installed shows the raw red error screen and
+  // is captured nowhere — install it before anything else so the auth boot (Story 1.4) and every
+  // screen after it is covered.
+  FlutterError.onError = FlutterError.presentError;
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      // `intl`'s DateFormat needs its locale data loaded before first use (see DateFormatter).
+      await initializeDateFormatting('de_DE');
+      registerBundledFontLicenses();
+      runApp(const SgartApp());
+    },
+    (error, stackTrace) {
+      FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stackTrace));
+    },
+  );
 }
 
 /// Declares the licence of every bundled font asset so it appears in `showLicensePage()`.
@@ -51,7 +64,9 @@ class SgartApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const HomePage(),
+      // The sign-in gate is the app's single entry path (Story 1.4) — no app shell or routing
+      // yet (Story 1.6).
+      home: const AuthGate(),
     );
   }
 }

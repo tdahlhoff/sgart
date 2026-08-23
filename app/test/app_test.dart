@@ -43,12 +43,15 @@ void main() {
   });
 
   group('SgartApp localization (Story 1.3, AC1)', () {
+    // The sign-in gate (Story 1.4) is the app's entry point, replacing the Story 1.1/1.3
+    // placeholder home screen — these assertions moved from "Gerüst bereit" to the gate's copy.
     testWidgets('renders German copy sourced from AppLocalizations, defaulting to de-DE', (
       tester,
     ) async {
       await tester.pumpWidget(const SgartApp());
+      await tester.pump();
 
-      expect(find.text('Gerüst bereit'), findsOneWidget);
+      expect(find.text('Willkommen bei SGART'), findsOneWidget);
 
       final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
       expect(app.supportedLocales, contains(const Locale('de')));
@@ -59,8 +62,9 @@ void main() {
       addTearDown(tester.platformDispatcher.clearLocaleTestValue);
 
       await tester.pumpWidget(const SgartApp());
+      await tester.pump();
 
-      expect(find.text('Gerüst bereit'), findsOneWidget);
+      expect(find.text('Willkommen bei SGART'), findsOneWidget);
     });
   });
 }

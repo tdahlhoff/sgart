@@ -22,8 +22,12 @@ dependencies {
     // Web/transport lives only in adapter.in — the domain never sees these types (AD-1),
     // enforced by the ArchUnit architecture test.
     implementation("org.springframework.boot:spring-boot-starter-web")
+    // JWT resource-server validation for the identity context's adapter.in (Story 1.4, AD-5).
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-webmvc-test")
+    testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

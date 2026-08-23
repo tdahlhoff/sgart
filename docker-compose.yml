@@ -52,10 +52,15 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.0
-    command: ["start-dev", "--health-enabled=true"]
+    # --import-realm loads keycloak/realm-sgart.json on every start so the SGART realm, its
+    # public app client, and the synthetic dev sign-in users are identical on every machine and
+    # in CI — no hand-clicking through the admin console (Story 1.4).
+    command: ["start-dev", "--health-enabled=true", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - ./keycloak/realm-sgart.json:/opt/keycloak/data/import/realm-sgart.json:ro
     ports:
       - "8080:8080"   # Keycloak HTTP (dev)
       - "9000:9000"   # management port — health & metrics

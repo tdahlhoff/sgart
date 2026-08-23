@@ -1,0 +1,78 @@
+{
+  "realm": "sgart",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "sgart-app",
+      "name": "SGART Flutter app",
+      "description": "Public native client — Authorization Code + PKCE, no client secret on the device (NFR4).",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "de.sgart.app://oauth/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "de.sgart.app://oauth/callback"
+      },
+      "protocolMappers": [
+        {
+          "name": "sgart-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "sgart-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "anna@example.test",
+      "email": "anna@example.test",
+      "emailVerified": true,
+      "firstName": "Anna",
+      "lastName": "Testperson",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "anna-dev-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "ben@example.test",
+      "email": "ben@example.test",
+      "emailVerified": true,
+      "firstName": "Ben",
+      "lastName": "Testperson",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ben-dev-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

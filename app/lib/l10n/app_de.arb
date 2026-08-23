@@ -1,35 +1,34 @@
 {
   "@@locale": "de",
 
-  "homeScaffoldReadyLabel": "Gerüst bereit",
-  "@homeScaffoldReadyLabel": {
-    "description": "Placeholder heading shown on the home screen while no real screens exist yet."
+  "authSignInHeading": "Willkommen bei SGART",
+  "@authSignInHeading": {
+    "description": "Heading shown on the sign-in gate before a person has authenticated."
   },
 
-  "homeAdminStatusLabel": "Admin",
-  "@homeAdminStatusLabel": {
-    "description": "Placeholder status label demonstrating the admin StatusLabel variant on the home screen."
+  "authSignInButtonLabel": "Anmelden",
+  "@authSignInButtonLabel": {
+    "description": "Label of the button that starts the Keycloak Authorization Code + PKCE sign-in flow."
   },
 
-  "homeProbeCountLabel": "Proben: {count}",
-  "@homeProbeCountLabel": {
-    "description": "Live probe counter on the home screen, incremented by the probe button.",
+  "authSignOutButtonLabel": "Abmelden",
+  "@authSignOutButtonLabel": {
+    "description": "Label of the button that signs the person out and clears the local session."
+  },
+
+  "authSignedInAsLabel": "Angemeldet als {displayName}",
+  "@authSignedInAsLabel": {
+    "description": "Shown on the authenticated placeholder screen with the live display name from GET /identity/me.",
     "placeholders": {
-      "count": {
-        "type": "int",
-        "format": "decimalPattern"
+      "displayName": {
+        "type": "String"
       }
     }
   },
 
-  "homeProbeButtonLabel": "Probe",
-  "@homeProbeButtonLabel": {
-    "description": "Label of the button on the home screen that registers a probe."
-  },
-
-  "homeFormattingDemoLabel": "Beispielmenge",
-  "@homeFormattingDemoLabel": {
-    "description": "Label introducing a formatted-quantity demo value on the home screen, proving the formatting layer renders end-to-end."
+  "authSignedInLabel": "Angemeldet",
+  "@authSignedInLabel": {
+    "description": "Shown on the authenticated placeholder screen when the token carries no display name (neither name nor preferred_username claim), instead of a trailing blank."
   },
 
   "unitPiece": "Stück",
