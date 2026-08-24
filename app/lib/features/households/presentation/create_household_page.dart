@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/households_api.dart';
 import 'create_household_cubit.dart';
+import 'create_household_name_field.dart';
 import 'create_household_state.dart';
 import 'households_cubit.dart';
 
@@ -66,18 +66,11 @@ class _CreateHouseholdViewState extends State<_CreateHouseholdView> {
                   children: [
                     Text(localizations.householdsCreateHeading),
                     const SizedBox(height: SgartShapes.space4),
-                    TextField(
-                      key: const Key('household-name-field'),
+                    CreateHouseholdNameField(
                       controller: _nameController,
-                      decoration: InputDecoration(labelText: localizations.householdsCreateNameFieldLabel),
+                      fieldKey: const Key('household-name-field'),
+                      errorKey: const Key('create-household-error'),
                     ),
-                    if (state.status == CreateHouseholdStatus.failure && state.error != null) ...[
-                      const SizedBox(height: SgartShapes.space4),
-                      Text(
-                        localizedMessageForErrorCode(localizations, state.error!.code),
-                        key: const Key('create-household-error'),
-                      ),
-                    ],
                     const SizedBox(height: SgartShapes.space4),
                     SgartButton(
                       key: const Key('create-household-submit-button'),

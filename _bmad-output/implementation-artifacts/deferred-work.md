@@ -1,3 +1,7 @@
+## Deferred from: code review of 1-9-guided-onboarding-for-a-new-household (2026-08-24)
+
+- **No client-side blank/whitespace/length guard on the onboarding name step** — `app/lib/features/onboarding/presentation/onboarding_wizard_page.dart:234` submits `controller.text` guarded only by `isSubmitting`; a blank/whitespace name makes a pointless backend round-trip (rejected inline as `household.nameRequired`) and there is no `maxLength`. Pre-existing pattern: the 1.6 `CreateHouseholdPage` (create_household_page.dart:85-87) behaves identically and `CreateHouseholdCubit.submit` does not early-return on an empty trimmed name. Fail-fast would add a client guard to both create paths.
+
 ## Deferred from: code review of 1-7-switch-select-rename-households (2026-08-24)
 
 - **Concurrent-rename 409 (`concurrency.staleVersion`) is unmapped on the client** — `app/lib/shared/errors/error_message_resolver.dart` maps only `household.nameRequired` / `household.nameTooLong` / `household.renameNotPermitted`; a rename that loses the optimistic-concurrency race falls through to `errorGenericFallback` with no distinct "changed elsewhere, please retry" copy or retry affordance. Unreachable in Story 1.7 (every household has exactly one member — the creator — until Epic 4 introduces invites, so two concurrent renamers cannot exist), and offline/conflict UX is explicitly Epic 5. Note it; map or design the conflict copy when Epic 4/5 makes the path reachable.

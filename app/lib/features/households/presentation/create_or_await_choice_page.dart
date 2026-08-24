@@ -5,14 +5,17 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../onboarding/presentation/onboarding_wizard_page.dart';
+import '../../stores/data/store_chain_reference_cache.dart';
+import '../../stores/data/stores_api.dart';
 import '../data/households_api.dart';
 import 'await_invite_page.dart';
-import 'create_household_page.dart';
 import 'households_cubit.dart';
 
 /// The first-run choice for a caller with zero households (AC1): create one, or wait for an
-/// invite. „Auf Einladung warten" is an informational dead-end here — invite acceptance is
-/// Epic 4.
+/// invite. This is frame 1 of the onboarding mockup — privacy is stated up front (AC3, Story 1.9),
+/// no account/marketing pressure. „Haushalt erstellen" launches the guided onboarding wizard;
+/// „Auf Einladung warten" is an informational dead-end (invite acceptance is Epic 4).
 class CreateOrAwaitChoicePage extends StatelessWidget {
   const CreateOrAwaitChoicePage({super.key});
 
@@ -33,7 +36,7 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
               SgartButton(
                 key: const Key('create-household-choice-button'),
                 label: localizations.householdsCreateChoiceButtonLabel,
-                onPressed: () => _openCreateHousehold(context),
+                onPressed: () => _openOnboarding(context),
               ),
               const SizedBox(height: SgartShapes.space2),
               SgartButton(
@@ -44,6 +47,13 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const AwaitInvitePage()),
                 ),
               ),
+              const SizedBox(height: SgartShapes.space4),
+              Text(
+                localizations.onboardingChoicePrivacyNote,
+                key: const Key('onboarding-choice-privacy'),
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -51,20 +61,27 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
     );
   }
 
-  /// Pushes the create-household form. The push targets the root Navigator, which sits *above* the
-  /// `HouseholdsApi`/`HouseholdsCubit` providers created in `FirstRunRouter`, so the pushed route
-  /// would otherwise escape them (`ProviderNotFoundException`). Re-provide both by value — the same
-  /// instances this screen already reads — so the pushed subtree can reach them.
-  void _openCreateHousehold(BuildContext context) {
+  /// Pushes the guided onboarding wizard (Story 1.9). The push targets the root Navigator, which
+  /// sits *above* the providers created in `FirstRunRouter`, so the pushed route would otherwise
+  /// escape them (`ProviderNotFoundException`, the Story 1.6 lesson). Re-provide the four the wizard
+  /// reads — `HouseholdsApi`/`HouseholdsCubit` (name step + landing) and `StoresApi`/
+  /// `StoreChainReferenceCache` (stores step) — by value, the same instances this screen already reads.
+  void _openOnboarding(BuildContext context) {
     final householdsApi = context.read<HouseholdsApi>();
     final householdsCubit = context.read<HouseholdsCubit>();
+    final storesApi = context.read<StoresApi>();
+    final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RepositoryProvider<HouseholdsApi>.value(
-          value: householdsApi,
+        builder: (_) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
+            RepositoryProvider<StoresApi>.value(value: storesApi),
+            RepositoryProvider<StoreChainReferenceCache>.value(value: storeChainReferenceCache),
+          ],
           child: BlocProvider<HouseholdsCubit>.value(
             value: householdsCubit,
-            child: const CreateHouseholdPage(),
+            child: const OnboardingWizardPage(),
           ),
         ),
       ),
