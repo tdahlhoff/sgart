@@ -24,10 +24,17 @@ public class HouseholdReadModelConfig {
     }
 
     @Bean
+    JdbcStoreReadModel jdbcStoreReadModel(JdbcClient jdbcClient) {
+        return new JdbcStoreReadModel(jdbcClient);
+    }
+
+    @Bean
     HouseholdReadModelProjector householdReadModelProjector(
             KurrentDBClient kurrentDbClient,
             JdbcHouseholdReadModel jdbcHouseholdReadModel,
+            JdbcStoreReadModel jdbcStoreReadModel,
             @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
-        return new HouseholdReadModelProjector(kurrentDbClient, jdbcHouseholdReadModel, autoStart);
+        return new HouseholdReadModelProjector(
+                kurrentDbClient, jdbcHouseholdReadModel, jdbcStoreReadModel, autoStart);
     }
 }

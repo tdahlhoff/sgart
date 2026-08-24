@@ -11,6 +11,9 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'household.nameRequired' => localizations.householdsCreateNameRequiredError,
     'household.nameTooLong' => localizations.householdsCreateNameTooLongError,
     'household.renameNotPermitted' => localizations.householdsRenameNotPermittedError,
+    'store.nameRequired' => localizations.storesNameRequiredError,
+    'store.nameTooLong' => localizations.storesNameTooLongError,
+    'store.duplicateName' => localizations.storesDuplicateNameError,
     _ => localizations.errorGenericFallback,
   };
 }

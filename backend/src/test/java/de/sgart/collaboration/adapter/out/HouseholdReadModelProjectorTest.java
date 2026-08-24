@@ -7,6 +7,10 @@ import de.sgart.collaboration.application.ListMyHouseholds.HouseholdSummary;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRenamed;
+import de.sgart.collaboration.domain.StoreAdded;
+import de.sgart.collaboration.domain.StoreArchived;
+import de.sgart.collaboration.domain.StoreName;
+import de.sgart.collaboration.domain.StoreView;
 import de.sgart.identity.adapter.out.JdbcMemberMappingRepository;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.domain.KeycloakUserId;
@@ -15,6 +19,8 @@ import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.StoreChainId;
+import de.sgart.shared.StoreId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
 import java.util.List;
@@ -49,6 +55,7 @@ class HouseholdReadModelProjectorTest {
 
     private HouseholdReadModelProjector projector;
     private JdbcHouseholdReadModel readModel;
+    private JdbcStoreReadModel storeReadModel;
     private JdbcMemberMappingRepository mappingRepository;
 
     @BeforeAll
@@ -64,14 +71,15 @@ class HouseholdReadModelProjectorTest {
     @BeforeEach
     void setUp() {
         JdbcClient jdbcClient = JdbcClient.create(dataSource);
-        jdbcClient.sql("TRUNCATE TABLE household_read_model, household_membership_read_model").update();
+        jdbcClient.sql("TRUNCATE TABLE household_read_model, household_membership_read_model, store_read_model").update();
         jdbcClient.sql("TRUNCATE TABLE identity_member_mapping").update();
         readModel = new JdbcHouseholdReadModel(jdbcClient);
+        storeReadModel = new JdbcStoreReadModel(jdbcClient);
         mappingRepository = new JdbcMemberMappingRepository(jdbcClient);
         // Never connected: project(...) never touches the KurrentDB client (only start() does).
         KurrentDBClient neverConnectedClient =
                 KurrentDBClient.create(KurrentDBConnectionString.parseOrThrow("esdb://localhost:1?tls=false"));
-        projector = new HouseholdReadModelProjector(neverConnectedClient, readModel);
+        projector = new HouseholdReadModelProjector(neverConnectedClient, readModel, storeReadModel);
     }
 
     @Test
@@ -103,6 +111,42 @@ class HouseholdReadModelProjectorTest {
 
         assertThat(readModel.namesFor(List.of(householdId)))
                 .containsEntry(householdId, new HouseholdName("Familie Beispiel"));
+    }
+
+    @Test
+    void projectingStoreAddedYieldsAnActiveStoreRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        StoreId storeId = StoreId.generate();
+        StoreChainId chainId = StoreChainId.generate();
+
+        projector.project(new StoreAdded(EventId.generate(), householdId, storeId, new StoreName("Edeka"), chainId));
+
+        assertThat(storeReadModel.activeStoresOf(householdId))
+                .containsExactly(new StoreView(storeId, new StoreName("Edeka"), chainId));
+    }
+
+    @Test
+    void projectingStoreArchivedRemovesTheStoreFromTheActiveList() {
+        HouseholdId householdId = HouseholdId.generate();
+        StoreId storeId = StoreId.generate();
+        projector.project(new StoreAdded(EventId.generate(), householdId, storeId, new StoreName("Edeka"), null));
+
+        projector.project(new StoreArchived(EventId.generate(), householdId, storeId));
+
+        assertThat(storeReadModel.activeStoresOf(householdId)).isEmpty();
+    }
+
+    @Test
+    void reProjectingStoreAddedIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        StoreId storeId = StoreId.generate();
+        StoreAdded added = new StoreAdded(EventId.generate(), householdId, storeId, new StoreName("Edeka"), null);
+
+        projector.project(added);
+        projector.project(added);
+
+        assertThat(storeReadModel.activeStoresOf(householdId))
+                .containsExactly(new StoreView(storeId, new StoreName("Edeka"), null));
     }
 
     @Test

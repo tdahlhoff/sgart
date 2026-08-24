@@ -42,6 +42,7 @@
 
 generated: 2026-08-22
 last_updated: 2026-08-24
+# Story 1.8 review (dev-story) 2026-08-24
 # Story 1.5 done (code review) 2026-08-23
 # Story 1.6 done (code review) 2026-08-23
 # Story 1.7 done (code review) 2026-08-24
@@ -60,7 +61,7 @@ development_status:
   1-5-command-concurrency-envelope: done
   1-6-create-a-household-first-run-routing: done
   1-7-switch-select-rename-households: done
-  1-8-manage-stores-with-client-side-chain-matching: backlog
+  1-8-manage-stores-with-client-side-chain-matching: done
   1-9-guided-onboarding-for-a-new-household: backlog
   1-10-view-and-change-my-locale: backlog
   1-11-personal-profile-screen: backlog

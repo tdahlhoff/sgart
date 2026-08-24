@@ -9,6 +9,8 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../stores/data/store_chain_reference_cache.dart';
+import '../../stores/data/stores_api.dart';
 import '../data/active_household_store.dart';
 import '../data/households_api.dart';
 import 'create_or_await_choice_page.dart';
@@ -34,7 +36,10 @@ class FirstRunRouter extends StatefulWidget {
 class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final HouseholdsApi _householdsApi;
+  late final StoresApi _storesApi;
   static const ActiveHouseholdStore _activeHouseholdStore = SharedPreferencesActiveHouseholdStore();
+  static const StoreChainReferenceCache _storeChainReferenceCache =
+      SharedPreferencesStoreChainReferenceCache();
 
   @override
   void initState() {
@@ -46,6 +51,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
       accessTokenProvider: () async => authCubit.currentAccessToken,
     );
     _householdsApi = HttpHouseholdsApi(httpClient);
+    _storesApi = HttpStoresApi(httpClient);
   }
 
   @override
@@ -56,8 +62,14 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider<HouseholdsApi>.value(
-      value: _householdsApi,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<HouseholdsApi>.value(value: _householdsApi),
+        // Stores management + every future inline store picker reads these; provided here (where
+        // HouseholdsApi is) so the manage screen and pickers can `context.read` them (Story 1.8).
+        RepositoryProvider<StoresApi>.value(value: _storesApi),
+        RepositoryProvider<StoreChainReferenceCache>.value(value: _storeChainReferenceCache),
+      ],
       child: BlocProvider(
         create: (_) => HouseholdsCubit(
           householdsApi: _householdsApi,

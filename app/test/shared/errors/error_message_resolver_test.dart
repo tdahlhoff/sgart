@@ -33,5 +33,26 @@ void main() {
       expect(resolved, localizations.householdsRenameNotPermittedError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('storeNameRequiredResolvesToItsOwnLocalizedCopy', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'store.nameRequired');
+
+      expect(resolved, localizations.storesNameRequiredError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
+    test('storeNameTooLongResolvesToItsOwnLocalizedCopy', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'store.nameTooLong');
+
+      expect(resolved, localizations.storesNameTooLongError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
+    test('storeDuplicateNameResolvesToItsOwnLocalizedCopy', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'store.duplicateName');
+
+      expect(resolved, localizations.storesDuplicateNameError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }

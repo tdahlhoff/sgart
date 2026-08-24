@@ -3,16 +3,20 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../stores/data/store_chain_reference_cache.dart';
+import '../../stores/data/stores_api.dart';
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
 import 'create_household_page.dart';
 import 'households_cubit.dart';
+import 'manage_household_page.dart';
 import 'rename_household_page.dart';
 
 /// The household switcher bottom sheet (AC1/AC2): lists all the caller's households with the active
-/// one marked „Aktiv", switches to another on tap (with a brief confirmation), and hosts
-/// „Haushalt umbenennen" (active household) + „Neuen Haushalt erstellen". The full „Haushalt
-/// verwalten" hub (members/invites/roles/stores) is Epic 4 — not built here.
+/// one marked „Aktiv", switches to another on tap (with a brief confirmation), and hosts „Haushalt
+/// verwalten" (the hub, which owns store management as of Story 1.8), „Haushalt umbenennen" (active
+/// household) + „Neuen Haushalt erstellen". Stores are Story 1.8; only the hub's members/invites/roles
+/// remain Epic 4.
 class HouseholdSwitcherSheet extends StatelessWidget {
   const HouseholdSwitcherSheet({super.key, required this.activeHousehold, required this.households});
 
@@ -37,6 +41,12 @@ class HouseholdSwitcherSheet extends StatelessWidget {
             const SizedBox(height: SgartShapes.space2),
             for (final household in households) _householdTile(context, localizations, household),
             const Divider(),
+            ListTile(
+              key: const Key('switcher-manage-button'),
+              leading: const Icon(Icons.settings_outlined),
+              title: Text(localizations.householdsManageButtonLabel),
+              onTap: () => _openManage(context),
+            ),
             ListTile(
               key: const Key('switcher-rename-button'),
               leading: const Icon(Icons.edit_outlined),
@@ -77,6 +87,24 @@ class HouseholdSwitcherSheet extends StatelessWidget {
     messenger.showSnackBar(SnackBar(
       key: const Key('switch-confirmation'),
       content: Text(localizations.householdsSwitchConfirmation(household.name)),
+    ));
+  }
+
+  void _openManage(BuildContext context) {
+    // Re-provide the stores dependencies across the root-navigator route boundary so the hub (and
+    // the manage-stores screen it opens) can reach them.
+    final storesApi = context.read<StoresApi>();
+    final referenceCache = context.read<StoreChainReferenceCache>();
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(MaterialPageRoute(
+      builder: (_) => MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<StoresApi>.value(value: storesApi),
+          RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+        ],
+        child: ManageHouseholdPage(household: activeHousehold),
+      ),
     ));
   }
 

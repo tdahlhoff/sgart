@@ -7,10 +7,15 @@ import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.MemberJoined;
+import de.sgart.collaboration.domain.StoreAdded;
+import de.sgart.collaboration.domain.StoreArchived;
+import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.StoreChainId;
+import de.sgart.shared.StoreId;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -46,6 +51,33 @@ class DomainEventJsonCodecTest {
         MemberJoined event =
                 new MemberJoined(EventId.generate(), householdId, MemberId.generate(), HouseholdRole.ADMIN);
 
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void storeAddedWithAChainRoundTripsThroughJsonUnderItsStableTypeTag() {
+        StoreAdded event = new StoreAdded(
+                EventId.generate(), householdId, StoreId.generate(), new StoreName("Edeka"), StoreChainId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("StoreAdded");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void storeAddedWithNoChainRoundTripsThroughJsonPreservingTheNullChain() {
+        StoreAdded event =
+                new StoreAdded(EventId.generate(), householdId, StoreId.generate(), new StoreName("Wochenmarkt"), null);
+
+        StoreAdded decoded = (StoreAdded) roundTrip(event);
+        assertThat(decoded).isEqualTo(event);
+        assertThat(decoded.chainId()).isNull();
+    }
+
+    @Test
+    void storeArchivedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        StoreArchived event = new StoreArchived(EventId.generate(), householdId, StoreId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("StoreArchived");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

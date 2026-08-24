@@ -199,5 +199,91 @@
   "householdsRenameNotPermittedError": "Nur Administratoren können den Haushalt umbenennen.",
   "@householdsRenameNotPermittedError": {
     "description": "Localized copy for the household.renameNotPermitted error code — only an Admin may rename."
+  },
+
+  "householdsManageButtonLabel": "Haushalt verwalten",
+  "@householdsManageButtonLabel": {
+    "description": "Label of the switcher-sheet entry that opens the household-management hub (Story 1.8 adds Stores; members/invites/roles are Epic 4)."
+  },
+
+  "householdsManageHeading": "Haushalt verwalten",
+  "@householdsManageHeading": {
+    "description": "Heading of the thin household-management hub screen."
+  },
+
+  "storesManageRowLabel": "Geschäfte",
+  "@storesManageRowLabel": {
+    "description": "Label of the row in the household-management hub that opens the manage-stores screen."
+  },
+
+  "storesHeading": "Geschäfte",
+  "@storesHeading": {
+    "description": "Heading of the manage-stores screen (frame 3 Geschäfte)."
+  },
+
+  "storesEmptyStateLabel": "Noch keine Geschäfte. Füge das erste hinzu.",
+  "@storesEmptyStateLabel": {
+    "description": "Shown on the manage-stores screen when the household has no active stores yet."
+  },
+
+  "storesAddFieldLabel": "Name des Geschäfts",
+  "@storesAddFieldLabel": {
+    "description": "Label of the free-form store-name input on the manage-stores screen."
+  },
+
+  "storesAddSubmitButtonLabel": "Hinzufügen",
+  "@storesAddSubmitButtonLabel": {
+    "description": "Label of the button that adds a store."
+  },
+
+  "storesChainSuggestionLabel": "Vorgeschlagene Kette: {chain}",
+  "@storesChainSuggestionLabel": {
+    "description": "Inline advisory chain suggestion for the typed store name (AC2).",
+    "placeholders": {
+      "chain": {
+        "type": "String",
+        "example": "Edeka"
+      }
+    }
+  },
+
+  "storesChainClearButtonLabel": "Kette entfernen",
+  "@storesChainClearButtonLabel": {
+    "description": "Clears the advisory chain suggestion so the store is added unlinked (AC2 loeschen)."
+  },
+
+  "storesChainChangeButtonLabel": "Ändern",
+  "@storesChainChangeButtonLabel": {
+    "description": "Opens the chain-override picker to choose a different chain than the auto-matched suggestion (AC2 aendern)."
+  },
+
+  "storesChainPickerTitle": "Kette auswählen",
+  "@storesChainPickerTitle": {
+    "description": "Title of the chain-override picker sheet listing the cached reference chains (AC2 aendern)."
+  },
+
+  "storesRemoveButtonLabel": "Entfernen",
+  "@storesRemoveButtonLabel": {
+    "description": "Per-row action that archives (soft-removes) a store."
+  },
+
+  "storesArchiveHelperText": "Entfernen archiviert ein Geschäft — es verschwindet aus der Auswahl, vergangene Einkäufe bleiben erhalten.",
+  "@storesArchiveHelperText": {
+    "description": "Helper copy explaining that removal archives rather than deletes (AC3)."
+  },
+
+  "storesNameRequiredError": "Bitte gib einen Namen für das Geschäft ein.",
+  "@storesNameRequiredError": {
+    "description": "Localized copy for the store.nameRequired error code — a blank or whitespace-only name."
+  },
+
+  "storesNameTooLongError": "Der Name des Geschäfts ist zu lang. Bitte wähle einen kürzeren Namen.",
+  "@storesNameTooLongError": {
+    "description": "Localized copy for the store.nameTooLong error code — a name exceeding the maximum length."
+  },
+
+  "storesDuplicateNameError": "Ein Geschäft mit diesem Namen gibt es bereits.",
+  "@storesDuplicateNameError": {
+    "description": "Localized copy for the store.duplicateName error code — an active store already has this name."
   }
 }

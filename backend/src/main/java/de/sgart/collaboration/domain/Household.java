@@ -6,9 +6,12 @@ import de.sgart.shared.EventId;
 import de.sgart.shared.EventSourcedAggregate;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.StoreChainId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -23,6 +26,7 @@ public final class Household extends EventSourcedAggregate {
     private HouseholdId householdId;
     private HouseholdName name;
     private final Map<MemberId, HouseholdRole> rolesByMember = new HashMap<>();
+    private final Map<StoreId, StoreState> storesById = new HashMap<>();
 
     private Household(StreamId streamId) {
         super(streamId);
@@ -89,6 +93,70 @@ public final class Household extends EventSourcedAggregate {
         raise(new HouseholdRenamed(EventId.generate(), householdId, newName));
     }
 
+    /**
+     * Adds a store to the household as an entity of this aggregate (AC1, AD-10) — only the household
+     * root accepts the command. Unlike {@link #rename}, this is <strong>membership-gated, not
+     * role-gated</strong>: any member may add a store ("Any Member", AC1), so {@code requestedBy}
+     * need only be a known member, not an Admin.
+     *
+     * <p>The name must be unique among <em>active</em> (non-archived) stores, compared
+     * case-insensitively and trimmed ({@link StoreName} already trims) — so re-adding a name after
+     * its store was archived is allowed (AC3). A duplicate raises {@link
+     * DuplicateStoreNameException}. {@code chainId} is the optional client-decided chain suggestion
+     * (AC2); {@code null} leaves the store unlinked.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here;
+     *     idempotency is the {@code EventStore}'s concern, not the aggregate's
+     */
+    public void addStore(
+            MemberId requestedBy, StoreId storeId, StoreName name, StoreChainId chainId, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(storeId, "storeId must not be null");
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireMember(requestedBy);
+
+        if (hasActiveStoreNamed(name)) {
+            throw new DuplicateStoreNameException(
+                    "A store named '" + name.value() + "' already exists in this household");
+        }
+        raise(new StoreAdded(EventId.generate(), householdId, storeId, name, chainId));
+    }
+
+    /**
+     * Archives a store (AC3) — a soft state change that hides it from future selection without
+     * deleting it or any historical trip/assignment that referenced it (FR3). Membership-gated, not
+     * role-gated (AC1), like {@link #addStore}. Archiving an <em>already-archived or unknown</em>
+     * store raises nothing (convergent no-op, AD-8), mirroring {@link #rename}'s no-op branch.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void archiveStore(MemberId requestedBy, StoreId storeId, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(storeId, "storeId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireMember(requestedBy);
+
+        StoreState store = storesById.get(storeId);
+        if (store == null || store.archived()) {
+            return; // convergent no-op — nothing to archive (AD-8)
+        }
+        raise(new StoreArchived(EventId.generate(), householdId, storeId));
+    }
+
+    private void requireMember(MemberId requestedBy) {
+        if (!rolesByMember.containsKey(requestedBy)) {
+            throw new NotAHouseholdMemberException(
+                    "Only a member of the household may manage its stores");
+        }
+    }
+
+    private boolean hasActiveStoreNamed(StoreName name) {
+        String candidate = name.value().toLowerCase(Locale.ROOT);
+        return storesById.values().stream()
+                .anyMatch(store -> !store.archived() && store.name().value().toLowerCase(Locale.ROOT).equals(candidate));
+    }
+
     @Override
     protected void apply(DomainEvent event) {
         switch (event) {
@@ -104,8 +172,28 @@ public final class Household extends EventSourcedAggregate {
                 rolesByMember.put(joined.memberId(), joined.role());
             }
             case HouseholdRenamed renamed -> this.name = renamed.newName();
+            case StoreAdded added ->
+                storesById.put(added.storeId(), new StoreState(added.name(), added.chainId(), false));
+            case StoreArchived archived -> {
+                StoreState existing = storesById.get(archived.storeId());
+                if (existing != null) {
+                    storesById.put(archived.storeId(), existing.archived(true));
+                }
+            }
             default -> throw new IllegalArgumentException(
                     "Household cannot apply unknown event type: " + event.getClass());
+        }
+    }
+
+    /**
+     * A store as held inside the {@link Household} aggregate (AD-10) — the folded state the
+     * invariants read (active-name uniqueness, no-op archive). Not the read model; that is projected
+     * separately (AD-4).
+     */
+    private record StoreState(StoreName name, StoreChainId chainId, boolean archived) {
+
+        StoreState archived(boolean archived) {
+            return new StoreState(name, chainId, archived);
         }
     }
 }

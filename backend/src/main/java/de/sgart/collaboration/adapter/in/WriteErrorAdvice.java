@@ -1,8 +1,11 @@
 package de.sgart.collaboration.adapter.in;
 
+import de.sgart.collaboration.application.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.InvalidStoreNameException;
 import de.sgart.collaboration.application.RenameNotPermittedApplicationException;
+import de.sgart.collaboration.domain.NotAHouseholdMemberException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -24,9 +27,19 @@ class WriteErrorAdvice {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
     }
 
+    @ExceptionHandler(InvalidStoreNameException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidStoreName(InvalidStoreNameException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
     @ExceptionHandler(InvalidCommandEnvelopeException.class)
     ResponseEntity<ErrorDescriptor> handleInvalidCommandEnvelope(InvalidCommandEnvelopeException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(DuplicateStoreNameApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleDuplicateStoreName(DuplicateStoreNameApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(ConcurrencyConflictException.class)
@@ -37,6 +50,15 @@ class WriteErrorAdvice {
     @ExceptionHandler(NotAMemberException.class)
     ResponseEntity<ErrorDescriptor> handleNotAMember(NotAMemberException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(NotAHouseholdMemberException.class)
+    ResponseEntity<ErrorDescriptor> handleNotAHouseholdMember(NotAHouseholdMemberException exception) {
+        // Defense-in-depth: the aggregate's own membership guard (reachable only under an
+        // ACL/event-stream divergence) surfaces as a proper 403 with the same client code as the
+        // ACL's NotAMemberException — never a 500 for an unmapped domain exception.
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorDescriptor.of("identity.notAMember", exception.getMessage()));
     }
 
     @ExceptionHandler(RenameNotPermittedApplicationException.class)

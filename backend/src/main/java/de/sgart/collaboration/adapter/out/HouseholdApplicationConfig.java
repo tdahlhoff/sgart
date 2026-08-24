@@ -1,9 +1,13 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.AddStoreHandler;
+import de.sgart.collaboration.application.ArchiveStoreHandler;
 import de.sgart.collaboration.application.CreateHouseholdHandler;
 import de.sgart.collaboration.application.ListMyHouseholds;
+import de.sgart.collaboration.application.ListStores;
 import de.sgart.collaboration.application.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.StoreReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -35,5 +39,20 @@ public class HouseholdApplicationConfig {
     ListMyHouseholds listMyHouseholds(
             ListHouseholdsForCaller listHouseholdsForCaller, HouseholdNameReadModel householdNameReadModel) {
         return new ListMyHouseholds(listHouseholdsForCaller, householdNameReadModel);
+    }
+
+    @Bean
+    AddStoreHandler addStoreHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new AddStoreHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    ArchiveStoreHandler archiveStoreHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new ArchiveStoreHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    ListStores listStores(ResolveMemberIdentity resolveMemberIdentity, StoreReadModel storeReadModel) {
+        return new ListStores(resolveMemberIdentity, storeReadModel);
     }
 }

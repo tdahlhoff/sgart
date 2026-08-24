@@ -3,6 +3,8 @@ package de.sgart.collaboration.adapter.out;
 import de.sgart.collaboration.domain.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdRenamed;
 import de.sgart.collaboration.domain.MemberJoined;
+import de.sgart.collaboration.domain.StoreAdded;
+import de.sgart.collaboration.domain.StoreArchived;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.StreamId;
 import io.kurrent.dbclient.KurrentDBClient;
@@ -45,30 +47,45 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
 
     private final KurrentDBClient client;
     private final JdbcHouseholdReadModel readModel;
+    private final JdbcStoreReadModel storeReadModel;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
     private volatile boolean running;
     private ScheduledExecutorService resubscribeScheduler;
 
-    public HouseholdReadModelProjector(KurrentDBClient client, JdbcHouseholdReadModel readModel) {
-        this(client, readModel, false);
+    public HouseholdReadModelProjector(
+            KurrentDBClient client, JdbcHouseholdReadModel readModel, JdbcStoreReadModel storeReadModel) {
+        this(client, readModel, storeReadModel, false);
     }
 
-    public HouseholdReadModelProjector(KurrentDBClient client, JdbcHouseholdReadModel readModel, boolean autoStart) {
+    public HouseholdReadModelProjector(
+            KurrentDBClient client,
+            JdbcHouseholdReadModel readModel,
+            JdbcStoreReadModel storeReadModel,
+            boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.readModel = Objects.requireNonNull(readModel, "readModel must not be null");
+        this.storeReadModel = Objects.requireNonNull(storeReadModel, "storeReadModel must not be null");
         this.autoStart = autoStart;
     }
 
-    /** Folds one event into the read model. Idempotent — safe to call again for the same event. */
+    /**
+     * Folds one event into the read model. Idempotent — safe to call again for the same event.
+     * Store events ({@code StoreAdded}/{@code StoreArchived}) share the household stream (Story 1.8,
+     * AD-10), so this one subscription (see {@link #start()}) already carries them — a second
+     * subscription over the same prefix would be wrong.
+     */
     public void project(DomainEvent event) {
         switch (event) {
             case HouseholdCreated created -> readModel.upsertHousehold(created.householdId(), created.name());
             case HouseholdRenamed renamed -> readModel.upsertHousehold(renamed.householdId(), renamed.newName());
             case MemberJoined joined -> readModel.addMember(joined.householdId(), joined.memberId());
+            case StoreAdded added ->
+                storeReadModel.upsertStore(added.householdId(), added.storeId(), added.name(), added.chainId());
+            case StoreArchived archived -> storeReadModel.markArchived(archived.householdId(), archived.storeId());
             default -> {
-                // The subscription filter (see start()) only ever delivers Household events.
+                // The subscription filter (see start()) only ever delivers household-stream events.
             }
         }
     }
