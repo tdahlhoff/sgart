@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.MemberJoined;
 import de.sgart.shared.DomainEvent;
@@ -19,6 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 final class DomainEventJsonCodec {
 
     static final String HOUSEHOLD_CREATED_TYPE = "HouseholdCreated";
+    static final String HOUSEHOLD_RENAMED_TYPE = "HouseholdRenamed";
     static final String MEMBER_JOINED_TYPE = "MemberJoined";
 
     private final JsonMapper jsonMapper = new JsonMapper();
@@ -26,6 +28,7 @@ final class DomainEventJsonCodec {
     String typeTagFor(DomainEvent event) {
         return switch (event) {
             case HouseholdCreated ignored -> HOUSEHOLD_CREATED_TYPE;
+            case HouseholdRenamed ignored -> HOUSEHOLD_RENAMED_TYPE;
             case MemberJoined ignored -> MEMBER_JOINED_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
@@ -37,6 +40,10 @@ final class DomainEventJsonCodec {
                     created.eventId().value().toString(),
                     created.householdId().value().toString(),
                     created.name().value()));
+            case HouseholdRenamed renamed -> jsonMapper.writeValueAsBytes(new HouseholdRenamedPayload(
+                    renamed.eventId().value().toString(),
+                    renamed.householdId().value().toString(),
+                    renamed.newName().value()));
             case MemberJoined joined -> jsonMapper.writeValueAsBytes(new MemberJoinedPayload(
                     joined.eventId().value().toString(),
                     joined.householdId().value().toString(),
@@ -55,6 +62,13 @@ final class DomainEventJsonCodec {
                         HouseholdId.fromString(payload.householdId()),
                         new HouseholdName(payload.name()));
             }
+            case HOUSEHOLD_RENAMED_TYPE -> {
+                HouseholdRenamedPayload payload = jsonMapper.readValue(json, HouseholdRenamedPayload.class);
+                yield new HouseholdRenamed(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        new HouseholdName(payload.newName()));
+            }
             case MEMBER_JOINED_TYPE -> {
                 MemberJoinedPayload payload = jsonMapper.readValue(json, MemberJoinedPayload.class);
                 yield new MemberJoined(
@@ -68,6 +82,8 @@ final class DomainEventJsonCodec {
     }
 
     private record HouseholdCreatedPayload(String eventId, String householdId, String name) {}
+
+    private record HouseholdRenamedPayload(String eventId, String householdId, String newName) {}
 
     private record MemberJoinedPayload(String eventId, String householdId, String memberId, String role) {}
 }

@@ -73,6 +73,22 @@ class HexagonalArchitectureTest {
                     .as("a context's domain must not depend on another context's domain (AD-2)");
 
     /**
+     * AD-2 — a context reaches another context only through its published application ports, never
+     * that context's internal domain. The Collaboration rename handler resolves the caller's
+     * {@code MemberId} via Identity's {@code ResolveMemberIdentity} <em>application</em> port, and a
+     * {@code String}-taking overload keeps {@code KeycloakUserId} inside Identity precisely so this
+     * boundary holds. This rule turns that convention into a build-time guardrail: a regression that
+     * imported {@code identity.domain} into {@code collaboration.application} would fail here.
+     */
+    @ArchTest
+    static final ArchRule collaborationApplicationDoesNotReachIntoIdentityDomain =
+            noClasses()
+                    .that().resideInAPackage("de.sgart.collaboration.application..")
+                    .should().dependOnClassesThat().resideInAPackage("de.sgart.identity.domain..")
+                    .as("a context's application layer must reach another context only through its "
+                            + "published application ports, never its domain (AD-2)");
+
+    /**
      * AD-1 — the shared kernel is pure. The cross-context write-side envelope ({@code Command},
      * {@code DomainEvent}, the {@code EventStore} port, {@code EventSourcedAggregate}, the ids) must
      * never absorb a framework, persistence, event-store, or adapter type — so the real KurrentDB

@@ -2,9 +2,11 @@ package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.CreateHouseholdHandler;
 import de.sgart.collaboration.application.ListMyHouseholds;
+import de.sgart.collaboration.application.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.HouseholdNameReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
+import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.EventStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,12 @@ public class HouseholdApplicationConfig {
     @Bean
     CreateHouseholdHandler createHouseholdHandler(EventStore eventStore, MintMemberIdentity mintMemberIdentity) {
         return new CreateHouseholdHandler(eventStore, mintMemberIdentity);
+    }
+
+    @Bean
+    RenameHouseholdHandler renameHouseholdHandler(
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new RenameHouseholdHandler(eventStore, resolveMemberIdentity);
     }
 
     @Bean

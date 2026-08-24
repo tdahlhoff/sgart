@@ -17,7 +17,8 @@ void main() {
 
     setUp(() {
       householdsApi = FakeHouseholdsApi();
-      householdsCubit = HouseholdsCubit(householdsApi: householdsApi);
+      householdsCubit =
+          HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
     });
 
     tearDown(() => householdsCubit.close());
@@ -53,9 +54,9 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(householdsCubit.state.status.name, 'home');
-      expect(householdsCubit.state.currentHousehold!.householdId, 'id-1');
-      expect(householdsCubit.state.currentHousehold!.name, 'Familie Muster');
+      expect(householdsCubit.state.status.name, 'shell');
+      expect(householdsCubit.state.activeHousehold!.householdId, 'id-1');
+      expect(householdsCubit.state.activeHousehold!.name, 'Familie Muster');
     });
   });
 }

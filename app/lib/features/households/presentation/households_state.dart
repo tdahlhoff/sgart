@@ -3,29 +3,32 @@ import 'package:collection/collection.dart';
 import '../../../shared/errors/app_error.dart';
 import '../data/household_summary.dart';
 
-enum HouseholdsStatus { loading, needsChoice, home, selection, failure }
+enum HouseholdsStatus { loading, needsChoice, shell, selection, failure }
 
-/// State of [HouseholdsCubit] — the first-run routing decision (AC2): zero households → [needsChoice];
-/// exactly one → [home]; several → [selection]. `currentHousehold` is only set while [status] is
-/// [HouseholdsStatus.home]; `households` only while [HouseholdsStatus.selection]; `error` only
-/// while [HouseholdsStatus.failure].
+/// State of [HouseholdsCubit]. First-run routing (AC2) decides the initial status: zero households →
+/// [needsChoice]; several with no stored last-active → [selection]; otherwise → [shell]. The
+/// [shell] status carries both the retained `households` list (all the caller belongs to, for the
+/// switcher) and the `activeHousehold` currently in the header/body (Story 1.7, AC1/AC2).
+/// `households` is also set while [selection]; `error` only while [failure].
 class HouseholdsState {
   const HouseholdsState.loading() : this._(HouseholdsStatus.loading);
 
   const HouseholdsState.needsChoice() : this._(HouseholdsStatus.needsChoice);
 
-  const HouseholdsState.home(HouseholdSummary household)
-      : this._(HouseholdsStatus.home, currentHousehold: household);
+  const HouseholdsState.shell({
+    required HouseholdSummary activeHousehold,
+    required List<HouseholdSummary> households,
+  }) : this._(HouseholdsStatus.shell, activeHousehold: activeHousehold, households: households);
 
   const HouseholdsState.selection(List<HouseholdSummary> households)
       : this._(HouseholdsStatus.selection, households: households);
 
   const HouseholdsState.failure(AppError error) : this._(HouseholdsStatus.failure, error: error);
 
-  const HouseholdsState._(this.status, {this.currentHousehold, this.households, this.error});
+  const HouseholdsState._(this.status, {this.activeHousehold, this.households, this.error});
 
   final HouseholdsStatus status;
-  final HouseholdSummary? currentHousehold;
+  final HouseholdSummary? activeHousehold;
   final List<HouseholdSummary>? households;
   final AppError? error;
 
@@ -33,14 +36,14 @@ class HouseholdsState {
   bool operator ==(Object other) =>
       other is HouseholdsState &&
       other.status == status &&
-      other.currentHousehold == currentHousehold &&
+      other.activeHousehold == activeHousehold &&
       const ListEquality<HouseholdSummary>().equals(other.households, households) &&
       other.error == error;
 
   @override
   int get hashCode => Object.hash(
         status,
-        currentHousehold,
+        activeHousehold,
         households == null ? null : const ListEquality<HouseholdSummary>().hash(households),
         error,
       );

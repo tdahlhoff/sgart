@@ -10,6 +10,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
   return switch (code) {
     'household.nameRequired' => localizations.householdsCreateNameRequiredError,
     'household.nameTooLong' => localizations.householdsCreateNameTooLongError,
+    'household.renameNotPermitted' => localizations.householdsRenameNotPermittedError,
     _ => localizations.errorGenericFallback,
   };
 }

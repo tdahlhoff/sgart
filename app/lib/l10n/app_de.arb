@@ -139,5 +139,65 @@
   "householdsHomeCurrentHouseholdLabel": "Aktueller Haushalt",
   "@householdsHomeCurrentHouseholdLabel": {
     "description": "Small label above the current household's name on the minimal household home screen."
+  },
+
+  "householdsSwitcherHeading": "Haushalt wechseln",
+  "@householdsSwitcherHeading": {
+    "description": "Heading of the household switcher bottom sheet opened from the persistent header chip."
+  },
+
+  "householdsSwitcherActiveBadge": "Aktiv",
+  "@householdsSwitcherActiveBadge": {
+    "description": "Badge marking the currently active household in the switcher list."
+  },
+
+  "householdsSwitchConfirmation": "Zu {name} gewechselt",
+  "@householdsSwitchConfirmation": {
+    "description": "Brief confirmation shown after switching to another household (AC2).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
+  "householdsSwitcherCreateButtonLabel": "Neuen Haushalt erstellen",
+  "@householdsSwitcherCreateButtonLabel": {
+    "description": "Entry in the switcher sheet that starts creating a new household."
+  },
+
+  "householdsSwitcherRenameButtonLabel": "Haushalt umbenennen",
+  "@householdsSwitcherRenameButtonLabel": {
+    "description": "Entry in the switcher sheet that opens the rename form for the active household."
+  },
+
+  "householdsSwitcherChipTooltip": "Haushalt wechseln",
+  "@householdsSwitcherChipTooltip": {
+    "description": "Tooltip/semantics label for the tappable household-name chip in the persistent header."
+  },
+
+  "householdsSyncStatusPlaceholderLabel": "Synchronisierung",
+  "@householdsSyncStatusPlaceholderLabel": {
+    "description": "Semantics/tooltip label for the sync/offline status placeholder in the header (the real status is Epic 4/5)."
+  },
+
+  "householdsRenameHeading": "Haushalt umbenennen",
+  "@householdsRenameHeading": {
+    "description": "Heading of the rename-household screen."
+  },
+
+  "householdsRenameSubmitButtonLabel": "Umbenennen",
+  "@householdsRenameSubmitButtonLabel": {
+    "description": "Label of the button that submits the rename-household form."
+  },
+
+  "householdsRenameSuccessConfirmation": "Haushalt umbenannt",
+  "@householdsRenameSuccessConfirmation": {
+    "description": "Brief confirmation shown after a household is successfully renamed (AC3)."
+  },
+
+  "householdsRenameNotPermittedError": "Nur Administratoren können den Haushalt umbenennen.",
+  "@householdsRenameNotPermittedError": {
+    "description": "Localized copy for the household.renameNotPermitted error code — only an Admin may rename."
   }
 }

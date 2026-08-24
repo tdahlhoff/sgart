@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
+import '../../households/data/active_household_store.dart';
 import '../../households/presentation/first_run_router.dart';
 import '../data/app_auth_oidc_client.dart';
 import '../data/flutter_secure_token_storage.dart';
@@ -42,6 +43,7 @@ class AuthGate extends StatelessWidget {
       oidcClient: const AppAuthOidcClient(),
       tokenStorage: tokenStorage,
       identityApi: HttpIdentityApi(httpClient),
+      activeHouseholdStore: const SharedPreferencesActiveHouseholdStore(),
     );
     return cubit;
   }

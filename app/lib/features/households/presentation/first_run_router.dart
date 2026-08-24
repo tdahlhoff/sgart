@@ -9,10 +9,11 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../data/active_household_store.dart';
 import '../data/households_api.dart';
 import 'create_or_await_choice_page.dart';
-import 'household_home_page.dart';
 import 'household_selection_page.dart';
+import 'household_shell.dart';
 import 'households_cubit.dart';
 import 'households_state.dart';
 
@@ -33,6 +34,7 @@ class FirstRunRouter extends StatefulWidget {
 class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final HouseholdsApi _householdsApi;
+  static const ActiveHouseholdStore _activeHouseholdStore = SharedPreferencesActiveHouseholdStore();
 
   @override
   void initState() {
@@ -57,7 +59,10 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     return RepositoryProvider<HouseholdsApi>.value(
       value: _householdsApi,
       child: BlocProvider(
-        create: (_) => HouseholdsCubit(householdsApi: _householdsApi)..bootstrap(),
+        create: (_) => HouseholdsCubit(
+          householdsApi: _householdsApi,
+          activeHouseholdStore: _activeHouseholdStore,
+        )..bootstrap(),
         child: const FirstRunRouterBody(),
       ),
     );
@@ -76,7 +81,10 @@ class FirstRunRouterBody extends StatelessWidget {
         return switch (state.status) {
           HouseholdsStatus.loading => const _LoadingPage(),
           HouseholdsStatus.needsChoice => const CreateOrAwaitChoicePage(),
-          HouseholdsStatus.home => HouseholdHomePage(household: state.currentHousehold!),
+          HouseholdsStatus.shell => HouseholdShell(
+              activeHousehold: state.activeHousehold!,
+              households: state.households!,
+            ),
           HouseholdsStatus.selection => HouseholdSelectionPage(households: state.households!),
           HouseholdsStatus.failure => const _FailurePage(),
         };

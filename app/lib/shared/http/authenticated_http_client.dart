@@ -53,6 +53,16 @@ class AuthenticatedHttpClient {
     }
   }
 
+  /// Sends a `PATCH` whose success is a `204 No Content` (a command — no domain body to read).
+  /// Maps a `{code,message,details}` error body to [AppError] exactly as the other verbs do.
+  Future<void> patchJson(String path, Map<String, dynamic> body) async {
+    try {
+      await _dio.patch<void>(path, data: body);
+    } on DioException catch (exception) {
+      throw AppException(_mapToAppError(exception));
+    }
+  }
+
   AppError _mapToAppError(DioException exception) {
     final response = exception.response;
     final body = response?.data;

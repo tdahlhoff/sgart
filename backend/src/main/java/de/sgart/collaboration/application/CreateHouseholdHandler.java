@@ -43,8 +43,8 @@ public final class CreateHouseholdHandler {
     public HouseholdId handle(String keycloakUserId, String rawName, String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
 
-        CommandId commandId = toCommandId(rawCommandId);
-        HouseholdName name = toHouseholdName(rawName);
+        CommandId commandId = CommandFieldTranslations.toCommandId(rawCommandId);
+        HouseholdName name = CommandFieldTranslations.toHouseholdName(rawName);
         // Deterministic per (keycloakUserId, commandId): a retried create derives the same stream,
         // so the idempotent mint replays the existing MemberId and the append is a no-op — the
         // whole create converges on one household instead of duplicating it (Clarification 5).
@@ -58,29 +58,5 @@ public final class CreateHouseholdHandler {
         eventStore.append(command.basedOnVersion(), household.uncommittedEvents(), command.commandId());
 
         return householdId;
-    }
-
-    private static CommandId toCommandId(String rawCommandId) {
-        if (rawCommandId == null || rawCommandId.isBlank()) {
-            throw new InvalidCommandEnvelopeException("command.commandIdRequired", "commandId must be provided");
-        }
-        try {
-            return CommandId.fromString(rawCommandId);
-        } catch (IllegalArgumentException notAUuid) {
-            throw new InvalidCommandEnvelopeException("command.commandIdInvalid", "commandId must be a valid UUID");
-        }
-    }
-
-    private static HouseholdName toHouseholdName(String rawName) {
-        if (rawName == null || rawName.isBlank()) {
-            throw new InvalidHouseholdNameException("household.nameRequired", "Household name must not be blank");
-        }
-        try {
-            return new HouseholdName(rawName);
-        } catch (IllegalArgumentException tooLong) {
-            // Blank is already excluded above, so the only remaining domain invariant is the length
-            // bound — report it with its own code so the client shows "name too long", not "required".
-            throw new InvalidHouseholdNameException("household.nameTooLong", tooLong.getMessage());
-        }
     }
 }

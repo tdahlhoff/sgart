@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
+import '../../households/data/active_household_store.dart';
 import '../data/identity_api.dart';
 import '../data/oidc_client.dart';
 import '../data/oidc_tokens.dart';
@@ -9,15 +10,21 @@ import '../data/secure_token_storage.dart';
 import 'auth_state.dart';
 
 /// Drives sign-in (Authorization Code + PKCE), token storage, the post-login identity call, and
-/// sign-out (AC1, AC2, AC3). Depends only on the [OidcClient]/[SecureTokenStorage]/[IdentityApi]
-/// interfaces so tests never touch a real OIDC library, device storage, or network.
+/// sign-out (AC1, AC2, AC3). Depends only on the
+/// [OidcClient]/[SecureTokenStorage]/[IdentityApi]/[ActiveHouseholdStore] interfaces so tests never
+/// touch a real OIDC library, device storage, or network.
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit({required this._oidcClient, required this._tokenStorage, required this._identityApi})
-      : super(const AuthState.unauthenticated());
+  AuthCubit({
+    required this._oidcClient,
+    required this._tokenStorage,
+    required this._identityApi,
+    required this._activeHouseholdStore,
+  }) : super(const AuthState.unauthenticated());
 
   final OidcClient _oidcClient;
   final SecureTokenStorage _tokenStorage;
   final IdentityApi _identityApi;
+  final ActiveHouseholdStore _activeHouseholdStore;
 
   OidcTokens? _tokens;
 
@@ -49,14 +56,23 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   /// Wipes local tokens and returns to the unauthenticated gate even when ending the Keycloak SSO
-  /// session fails (AC3) — a subsequent protected call then has no bearer and is rejected.
+  /// session fails (AC3) — a subsequent protected call then has no bearer and is rejected. Also
+  /// clears the on-device last-active household so a later sign-in on the same device never
+  /// inherits the previous person's active household (DSGVO / AD-7, Story 1.7 Clarification B).
   Future<void> signOut() async {
     try {
       await _oidcClient.endSession(idToken: _tokens?.idToken);
     } on Object {
       // Local sign-out must still succeed.
     }
-    await _tokenStorage.clear();
+    try {
+      await _tokenStorage.clear();
+      await _activeHouseholdStore.clear();
+    } on Object {
+      // A device-storage failure must not strand the session on the authenticated shell: the
+      // in-memory token is still dropped and we return to the gate below, and a stale on-device
+      // value is re-checked (still-in-list) and re-cleared on the next launch/sign-out.
+    }
     _tokens = null;
     _safeEmit(const AuthState.unauthenticated());
   }

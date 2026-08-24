@@ -6,11 +6,13 @@ import de.sgart.collaboration.application.ListMyHouseholds;
 import de.sgart.collaboration.application.ListMyHouseholds.HouseholdSummary;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRenamed;
 import de.sgart.identity.adapter.out.JdbcMemberMappingRepository;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import io.kurrent.dbclient.KurrentDBClient;
@@ -88,6 +90,19 @@ class HouseholdReadModelProjectorTest {
                 .query(Long.class)
                 .single();
         assertThat(membershipRowCount).isEqualTo(1L);
+    }
+
+    @Test
+    void projectingHouseholdRenamedUpdatesTheReadModelToTheNewName() {
+        HouseholdId householdId = HouseholdId.generate();
+        Household household = Household.create(
+                householdId, new HouseholdName("Familie Muster"), MemberId.generate(), CommandId.generate());
+        household.uncommittedEvents().forEach(projector::project);
+
+        projector.project(new HouseholdRenamed(EventId.generate(), householdId, new HouseholdName("Familie Beispiel")));
+
+        assertThat(readModel.namesFor(List.of(householdId)))
+                .containsEntry(householdId, new HouseholdName("Familie Beispiel"));
     }
 
     @Test

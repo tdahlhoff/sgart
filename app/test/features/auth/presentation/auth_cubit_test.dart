@@ -8,21 +8,28 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_households_dependencies.dart';
 
 void main() {
   group('AuthCubit', () {
     late FakeOidcClient oidcClient;
     late FakeSecureTokenStorage tokenStorage;
     late FakeIdentityApi identityApi;
+    late FakeActiveHouseholdStore activeHouseholdStore;
 
     setUp(() {
       oidcClient = FakeOidcClient();
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi();
+      activeHouseholdStore = FakeActiveHouseholdStore();
     });
 
-    AuthCubit buildCubit() =>
-        AuthCubit(oidcClient: oidcClient, tokenStorage: tokenStorage, identityApi: identityApi);
+    AuthCubit buildCubit() => AuthCubit(
+          oidcClient: oidcClient,
+          tokenStorage: tokenStorage,
+          identityApi: identityApi,
+          activeHouseholdStore: activeHouseholdStore,
+        );
 
     test('startsUnauthenticated', () {
       expect(buildCubit().state, const AuthState.unauthenticated());
@@ -78,6 +85,26 @@ void main() {
         expect(tokenStorage.cleared, isTrue);
         expect(oidcClient.endSessionCalled, isTrue);
         expect(oidcClient.lastEndSessionIdToken, 'id-token');
+      },
+    );
+
+    blocTest<AuthCubit, AuthState>(
+      'signOutClearsTheStoredActiveHousehold',
+      build: () {
+        activeHouseholdStore.activeId = 'household-1';
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        return buildCubit();
+      },
+      act: (cubit) async {
+        await cubit.bootstrap();
+        await cubit.signOut();
+      },
+      expect: () => [const AuthState.authenticated('Anna'), const AuthState.unauthenticated()],
+      verify: (_) {
+        expect(activeHouseholdStore.cleared, isTrue);
+        expect(activeHouseholdStore.activeId, isNull);
       },
     );
 

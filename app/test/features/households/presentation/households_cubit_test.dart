@@ -11,12 +11,18 @@ import '../../../support/fake_households_dependencies.dart';
 void main() {
   group('HouseholdsCubit', () {
     late FakeHouseholdsApi householdsApi;
+    late FakeActiveHouseholdStore activeHouseholdStore;
 
     setUp(() {
       householdsApi = FakeHouseholdsApi();
+      activeHouseholdStore = FakeActiveHouseholdStore();
     });
 
-    HouseholdsCubit buildCubit() => HouseholdsCubit(householdsApi: householdsApi);
+    HouseholdsCubit buildCubit() =>
+        HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
+
+    const familie = HouseholdSummary(householdId: 'id-1', name: 'Familie Muster');
+    const wg = HouseholdSummary(householdId: 'id-2', name: 'WG Sonnenallee');
 
     test('startsLoading', () {
       expect(buildCubit().state.status, HouseholdsStatus.loading);
@@ -34,35 +40,46 @@ void main() {
     );
 
     blocTest<HouseholdsCubit, HouseholdsState>(
-      'bootstrap_routesStraightInForACallerWithExactlyOneHousehold',
+      'bootstrap_routesStraightIntoTheShellForACallerWithExactlyOneHousehold',
       build: () {
-        householdsApi.householdsToReturn = const [
-          HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),
-        ];
+        householdsApi.householdsToReturn = const [familie];
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [
-        const HouseholdsState.home(HouseholdSummary(householdId: 'id-1', name: 'Familie Muster')),
-      ],
+      expect: () => [const HouseholdsState.shell(activeHousehold: familie, households: [familie])],
+      verify: (_) => expect(activeHouseholdStore.writes, ['id-1']),
     );
 
     blocTest<HouseholdsCubit, HouseholdsState>(
-      'bootstrap_routesToSelectionForACallerWithSeveralHouseholds',
+      'bootstrap_routesToSelectionForACallerWithSeveralHouseholdsAndNoStoredActive',
       build: () {
-        householdsApi.householdsToReturn = const [
-          HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),
-          HouseholdSummary(householdId: 'id-2', name: 'WG Sonnenallee'),
-        ];
+        householdsApi.householdsToReturn = const [familie, wg];
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [
-        const HouseholdsState.selection([
-          HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),
-          HouseholdSummary(householdId: 'id-2', name: 'WG Sonnenallee'),
-        ]),
-      ],
+      expect: () => [const HouseholdsState.selection([familie, wg])],
+    );
+
+    blocTest<HouseholdsCubit, HouseholdsState>(
+      'aStoredLastActiveHouseholdIsRestoredOnLaunchSkippingSelection',
+      build: () {
+        householdsApi.householdsToReturn = const [familie, wg];
+        activeHouseholdStore.activeId = 'id-2';
+        return buildCubit();
+      },
+      act: (cubit) => cubit.bootstrap(),
+      expect: () => [const HouseholdsState.shell(activeHousehold: wg, households: [familie, wg])],
+    );
+
+    blocTest<HouseholdsCubit, HouseholdsState>(
+      'aStoredHouseholdNoLongerInTheListFallsBackToRouting',
+      build: () {
+        householdsApi.householdsToReturn = const [familie, wg];
+        activeHouseholdStore.activeId = 'id-gone';
+        return buildCubit();
+      },
+      act: (cubit) => cubit.bootstrap(),
+      expect: () => [const HouseholdsState.selection([familie, wg])],
     );
 
     blocTest<HouseholdsCubit, HouseholdsState>(
@@ -73,18 +90,51 @@ void main() {
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [
-        const HouseholdsState.failure(AppError(code: 'network.unreachable', message: 'debug')),
-      ],
+      expect: () => [const HouseholdsState.failure(AppError(code: 'network.unreachable', message: 'debug'))],
     );
 
     blocTest<HouseholdsCubit, HouseholdsState>(
-      'selectHousehold_routesStraightIntoTheGivenHousehold',
+      'selectHousehold_entersTheShellWithTheGivenHousehold',
       build: buildCubit,
-      act: (cubit) =>
-          cubit.selectHousehold(const HouseholdSummary(householdId: 'id-9', name: 'Neuer Haushalt')),
+      act: (cubit) => cubit.selectHousehold(wg),
+      expect: () => [const HouseholdsState.shell(activeHousehold: wg, households: [wg])],
+    );
+
+    blocTest<HouseholdsCubit, HouseholdsState>(
+      'switchingWritesTheNewActiveHouseholdToTheStoreAndUpdatesTheActiveOne',
+      build: () {
+        householdsApi.householdsToReturn = const [familie, wg];
+        activeHouseholdStore.activeId = 'id-1';
+        return buildCubit();
+      },
+      act: (cubit) async {
+        await cubit.bootstrap();
+        await cubit.switchActive(wg);
+      },
       expect: () => [
-        const HouseholdsState.home(HouseholdSummary(householdId: 'id-9', name: 'Neuer Haushalt')),
+        const HouseholdsState.shell(activeHousehold: familie, households: [familie, wg]),
+        const HouseholdsState.shell(activeHousehold: wg, households: [familie, wg]),
+      ],
+      verify: (_) => expect(activeHouseholdStore.writes.last, 'id-2'),
+    );
+
+    blocTest<HouseholdsCubit, HouseholdsState>(
+      'applyHouseholdRename_updatesTheNameInTheHeaderAndTheSwitcherList',
+      build: () {
+        householdsApi.householdsToReturn = const [familie, wg];
+        activeHouseholdStore.activeId = 'id-1';
+        return buildCubit();
+      },
+      act: (cubit) async {
+        await cubit.bootstrap();
+        cubit.applyHouseholdRename('id-1', 'Familie Beispiel');
+      },
+      expect: () => [
+        const HouseholdsState.shell(activeHousehold: familie, households: [familie, wg]),
+        const HouseholdsState.shell(
+          activeHousehold: HouseholdSummary(householdId: 'id-1', name: 'Familie Beispiel'),
+          households: [HouseholdSummary(householdId: 'id-1', name: 'Familie Beispiel'), wg],
+        ),
       ],
     );
 

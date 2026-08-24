@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.RenameNotPermittedApplicationException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -35,6 +36,11 @@ class WriteErrorAdvice {
 
     @ExceptionHandler(NotAMemberException.class)
     ResponseEntity<ErrorDescriptor> handleNotAMember(NotAMemberException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(RenameNotPermittedApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleRenameNotPermitted(RenameNotPermittedApplicationException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
     }
 }

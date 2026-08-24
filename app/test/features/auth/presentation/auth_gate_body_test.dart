@@ -7,6 +7,7 @@ import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_gate.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_households_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
@@ -20,7 +21,12 @@ void main() {
       oidcClient = FakeOidcClient();
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi();
-      cubit = AuthCubit(oidcClient: oidcClient, tokenStorage: tokenStorage, identityApi: identityApi);
+      cubit = AuthCubit(
+        oidcClient: oidcClient,
+        tokenStorage: tokenStorage,
+        identityApi: identityApi,
+        activeHouseholdStore: FakeActiveHouseholdStore(),
+      );
     });
 
     tearDown(() => cubit.close());

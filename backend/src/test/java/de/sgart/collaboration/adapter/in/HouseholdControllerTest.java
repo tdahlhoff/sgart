@@ -3,14 +3,28 @@ package de.sgart.collaboration.adapter.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRole;
+import de.sgart.collaboration.domain.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.domain.KeycloakUserId;
+import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.shared.AggregateVersion;
+import de.sgart.shared.CommandId;
+import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
+import de.sgart.shared.HouseholdId;
+import de.sgart.shared.MemberId;
+import de.sgart.shared.StreamId;
 import de.sgart.shared.support.InMemoryEventStore;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +50,12 @@ class HouseholdControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private EventStore eventStore;
+
+    @Autowired
+    private MemberMappingRepository mappingRepository;
 
     @TestConfiguration
     static class InMemoryAdaptersConfig {
@@ -149,7 +169,91 @@ class HouseholdControllerTest {
         assertThat(firstResponse).isNotEqualTo(secondResponse);
     }
 
+    @Test
+    void patchRenamesAndReturns204() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+
+        mockMvc.perform(patch("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(renameRequestBody("Familie Beispiel")))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void patchWithABlankNameReturns400WithNameRequired() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+
+        mockMvc.perform(patch("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(renameRequestBody("   ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("household.nameRequired"));
+    }
+
+    @Test
+    void patchFromANonAdminReturns403WithRenameNotPermitted() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+        // A synthetic Participant member (invites are Epic 4; today only the domain test path can
+        // produce a non-Admin) seeded into the stream and the ACL so the resolved member is a
+        // Participant the aggregate rejects.
+        MemberId participantMemberId = MemberId.generate();
+        eventStore.append(
+                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                List.of(new MemberJoined(
+                        EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
+                CommandId.generate());
+        mappingRepository.save(
+                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
+
+        mockMvc.perform(patch("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(renameRequestBody("Familie Beispiel")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("household.renameNotPermitted"));
+    }
+
+    @Test
+    void patchWithAMalformedCommandIdReturns400() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+
+        mockMvc.perform(patch("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Familie Beispiel\",\"commandId\":\"not-a-uuid\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("command.commandIdInvalid"));
+    }
+
+    /** Seeds a household stream (creator = {@code adminMemberId}) and the caller's ACL mapping. */
+    private void seedHousehold(
+            HouseholdId householdId, MemberId adminMemberId, String name, String keycloakUserId) {
+        Household household =
+                Household.create(householdId, new HouseholdName(name), adminMemberId, CommandId.generate());
+        eventStore.append(
+                AggregateVersion.initial(StreamId.forHousehold(householdId)),
+                household.uncommittedEvents(),
+                CommandId.generate());
+        mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(keycloakUserId)));
+    }
+
     private static String createRequestBody(String name) {
+        return """
+                {"name":"%s","commandId":"%s"}
+                """.formatted(name, UUID.randomUUID());
+    }
+
+    private static String renameRequestBody(String name) {
         return """
                 {"name":"%s","commandId":"%s"}
                 """.formatted(name, UUID.randomUUID());

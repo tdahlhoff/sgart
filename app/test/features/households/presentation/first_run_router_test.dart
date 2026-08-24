@@ -15,9 +15,12 @@ void main() {
     late FakeHouseholdsApi householdsApi;
     late HouseholdsCubit cubit;
 
+    late FakeActiveHouseholdStore activeHouseholdStore;
+
     setUp(() {
       householdsApi = FakeHouseholdsApi();
-      cubit = HouseholdsCubit(householdsApi: householdsApi);
+      activeHouseholdStore = FakeActiveHouseholdStore();
+      cubit = HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
     });
 
     tearDown(() => cubit.close());
@@ -36,7 +39,7 @@ void main() {
       expect(find.byKey(const Key('await-invite-choice-button')), findsOneWidget);
     });
 
-    testWidgets('showsTheHouseholdHomeForACallerWithExactlyOneHousehold', (tester) async {
+    testWidgets('showsTheShellForACallerWithExactlyOneHousehold', (tester) async {
       householdsApi.householdsToReturn = const [
         HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),
       ];
@@ -44,7 +47,10 @@ void main() {
       await cubit.bootstrap();
       await tester.pump();
 
-      expect(find.text('Familie Muster'), findsOneWidget);
+      // The name shows both in the switcher chip (header) and the home body.
+      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
+      expect(find.byKey(const Key('current-household-name')), findsOneWidget);
+      expect(find.text('Familie Muster'), findsWidgets);
       expect(find.byKey(const Key('create-household-choice-button')), findsNothing);
     });
 
@@ -74,7 +80,8 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(const Key('current-household-name')), findsOneWidget);
-      expect(find.text('WG Sonnenallee'), findsOneWidget);
+      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
+      expect(find.text('WG Sonnenallee'), findsWidgets);
     });
 
     testWidgets('showsAFailureWithRetryWhenLoadingTheHouseholdsFails', (tester) async {

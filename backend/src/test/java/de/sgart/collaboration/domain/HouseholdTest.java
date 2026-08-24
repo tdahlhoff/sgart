@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
+import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
@@ -82,9 +83,73 @@ class HouseholdTest {
     }
 
     @Test
+    void anAdminRenamesTheHouseholdRaisingHouseholdRenamedWithTheNewName() {
+        Household household =
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        household.markEventsCommitted();
+
+        household.rename(adminMemberId, new HouseholdName("Familie Beispiel"), CommandId.generate());
+
+        List<DomainEvent> events = household.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(HouseholdRenamed.class);
+        HouseholdRenamed renamed = (HouseholdRenamed) events.get(0);
+        assertThat(renamed.householdId()).isEqualTo(householdId);
+        assertThat(renamed.newName()).isEqualTo(new HouseholdName("Familie Beispiel"));
+    }
+
+    @Test
+    void aParticipantCannotRenameTheHousehold() {
+        MemberId participantId = MemberId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId),
+                List.of(
+                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
+                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
+                        new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
+
+        assertThatThrownBy(() ->
+                        household.rename(participantId, new HouseholdName("Familie Beispiel"), CommandId.generate()))
+                .isInstanceOf(RenameNotPermittedException.class);
+    }
+
+    @Test
+    void aNonMemberCannotRenameTheHousehold() {
+        MemberId strangerId = MemberId.generate();
+        Household household =
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+
+        assertThatThrownBy(() ->
+                        household.rename(strangerId, new HouseholdName("Familie Beispiel"), CommandId.generate()))
+                .isInstanceOf(RenameNotPermittedException.class);
+    }
+
+    @Test
+    void renamingToTheSameNameRaisesNoEvent() {
+        Household household =
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        household.markEventsCommitted();
+
+        household.rename(adminMemberId, new HouseholdName("Familie Muster"), CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void renameFoldsSoThatSubsequentStateReflectsTheNewName() {
+        Household household =
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+
+        household.rename(adminMemberId, new HouseholdName("Familie Beispiel"), CommandId.generate());
+
+        assertThat(household.name()).isEqualTo(new HouseholdName("Familie Beispiel"));
+    }
+
+    @Test
     void noEventCarriesADisplayNameEmailOrKeycloakUserId() {
         assertNoPersonalDataComponent(HouseholdCreated.class);
         assertNoPersonalDataComponent(MemberJoined.class);
+        assertNoPersonalDataComponent(HouseholdRenamed.class);
     }
 
     private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {

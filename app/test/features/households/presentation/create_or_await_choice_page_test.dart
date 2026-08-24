@@ -15,7 +15,8 @@ void main() {
 
     setUp(() {
       householdsApi = FakeHouseholdsApi();
-      householdsCubit = HouseholdsCubit(householdsApi: householdsApi);
+      householdsCubit =
+          HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
     });
 
     tearDown(() => householdsCubit.close());

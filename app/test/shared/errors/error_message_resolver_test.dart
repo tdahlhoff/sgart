@@ -26,5 +26,12 @@ void main() {
       expect(resolved, localizations.householdsCreateNameRequiredError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('householdRenameNotPermittedResolvesToTheAdminOnlyCopy', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'household.renameNotPermitted');
+
+      expect(resolved, localizations.householdsRenameNotPermittedError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }
