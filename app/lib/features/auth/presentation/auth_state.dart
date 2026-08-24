@@ -2,22 +2,26 @@ import '../../../shared/errors/app_error.dart';
 
 enum AuthStatus { unauthenticated, inProgress, authenticated, failure }
 
-/// State of [AuthCubit]. `displayName` is only set while [status] is [AuthStatus.authenticated];
-/// `error` only while [status] is [AuthStatus.failure].
+/// State of [AuthCubit]. `displayName` and `keycloakUserId` are only set while [status] is
+/// [AuthStatus.authenticated]; `error` only while [status] is [AuthStatus.failure].
 class AuthState {
   const AuthState.unauthenticated() : this._(AuthStatus.unauthenticated);
 
   const AuthState.inProgress() : this._(AuthStatus.inProgress);
 
-  const AuthState.authenticated(String displayName)
-      : this._(AuthStatus.authenticated, displayName: displayName);
+  const AuthState.authenticated(String displayName, String keycloakUserId)
+      : this._(AuthStatus.authenticated, displayName: displayName, keycloakUserId: keycloakUserId);
 
   const AuthState.failure(AppError error) : this._(AuthStatus.failure, error: error);
 
-  const AuthState._(this.status, {this.displayName, this.error});
+  const AuthState._(this.status, {this.displayName, this.keycloakUserId, this.error});
 
   final AuthStatus status;
   final String? displayName;
+
+  /// The caller's Keycloak `sub`, carried so per-user on-device state (e.g. the locale preference,
+  /// Story 1.10) can be keyed and cleared per person without a second identity call.
+  final String? keycloakUserId;
   final AppError? error;
 
   @override
@@ -25,8 +29,9 @@ class AuthState {
       other is AuthState &&
       other.status == status &&
       other.displayName == displayName &&
+      other.keycloakUserId == keycloakUserId &&
       other.error == error;
 
   @override
-  int get hashCode => Object.hash(status, displayName, error);
+  int get hashCode => Object.hash(status, displayName, keycloakUserId, error);
 }

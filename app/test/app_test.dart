@@ -54,7 +54,12 @@ void main() {
       expect(find.text('Willkommen bei SGART'), findsOneWidget);
 
       final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-      expect(app.supportedLocales, contains(const Locale('de')));
+      // The supported set is the three German region variants (Story 1.10); all resolve the one
+      // German catalog by language-code match.
+      expect(
+        app.supportedLocales,
+        containsAll(const [Locale('de', 'DE'), Locale('de', 'AT'), Locale('de', 'CH')]),
+      );
     });
 
     testWidgets('falls back to German when the device locale is unsupported', (tester) async {

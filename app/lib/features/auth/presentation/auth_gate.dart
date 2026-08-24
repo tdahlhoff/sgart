@@ -6,6 +6,7 @@ import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
 import '../../households/data/active_household_store.dart';
 import '../../households/presentation/first_run_router.dart';
+import '../../settings/presentation/locale_auth_bridge.dart';
 import '../data/app_auth_oidc_client.dart';
 import '../data/flutter_secure_token_storage.dart';
 import '../data/identity_api.dart';
@@ -24,7 +25,9 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => _buildAuthCubit()..bootstrap(),
-      child: const AuthGateBody(),
+      // Bridges sign-in/sign-out to the ancestor LocaleCubit (above MaterialApp) — see
+      // [LocaleAuthBridge] for why the coupling runs upward from inside this subtree.
+      child: const LocaleAuthBridge(child: AuthGateBody()),
     );
   }
 

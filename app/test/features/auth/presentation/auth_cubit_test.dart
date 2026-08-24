@@ -48,7 +48,7 @@ void main() {
       act: (cubit) => cubit.signIn(),
       expect: () => [
         const AuthState.inProgress(),
-        const AuthState.authenticated('Anna Testperson'),
+        const AuthState.authenticated('Anna Testperson', 'sub-1'),
       ],
       verify: (_) => expect(tokenStorage.storedTokens!.accessToken, 'access'),
     );
@@ -80,7 +80,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
       verify: (_) {
         expect(tokenStorage.cleared, isTrue);
         expect(oidcClient.endSessionCalled, isTrue);
@@ -101,7 +101,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
       verify: (_) {
         expect(activeHouseholdStore.cleared, isTrue);
         expect(activeHouseholdStore.activeId, isNull);
@@ -121,7 +121,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
       verify: (_) => expect(tokenStorage.cleared, isTrue),
     );
 
@@ -134,7 +134,7 @@ void main() {
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna')],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1')],
     );
 
     blocTest<AuthCubit, AuthState>(
@@ -172,7 +172,7 @@ void main() {
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna')],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1')],
       verify: (_) {
         expect(oidcClient.lastRefreshToken, 'refresh');
         expect(tokenStorage.storedTokens!.accessToken, 'fresh');

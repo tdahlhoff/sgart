@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'features/auth/presentation/auth_gate.dart';
+import 'features/settings/data/locale_preference_store.dart';
+import 'features/settings/presentation/locale_cubit.dart';
+import 'features/settings/presentation/locale_state.dart';
+import 'features/settings/supported_locales.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'theme/sgart_theme.dart';
 
@@ -14,7 +19,8 @@ import 'theme/sgart_theme.dart';
 ///
 /// The app is organised feature-first (`lib/features/<feature>/…`) with a BLoC/Cubit per screen,
 /// and renders through the shared design system (`lib/theme`). It follows the OS light/dark
-/// setting by default; an explicit override remains possible via [ThemeMode].
+/// setting by default; an explicit override remains possible via [ThemeMode]. Language & region
+/// follow the device by default, overridable per user on the „Sprache & Region" screen (Story 1.10).
 void main() async {
   // A build/framework error before this handler is installed shows the raw red error screen and
   // is captured nowhere — install it before anything else so the auth boot (Story 1.4) and every
@@ -23,8 +29,11 @@ void main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      // `intl`'s DateFormat needs its locale data loaded before first use (see DateFormatter).
-      await initializeDateFormatting('de_DE');
+      // `intl`'s DateFormat needs each locale's symbols loaded before first use (see DateFormatter).
+      // Cover every region a member can pick, or `DateFormat('…','de_CH')` throws LocaleDataException.
+      for (final localeName in const ['de_DE', 'de_AT', 'de_CH']) {
+        await initializeDateFormatting(localeName);
+      }
       registerBundledFontLicenses();
       runApp(const SgartApp());
     },
@@ -49,24 +58,33 @@ class SgartApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SGART',
-      theme: SgartTheme.light(),
-      darkTheme: SgartTheme.dark(),
-      themeMode: ThemeMode.system,
-      // Device-default locale, falling back to de-DE when the device locale is unsupported
-      // (Flutter's default resolution falls back to the first entry of `supportedLocales`).
-      // In-app locale selection is out of scope here — Story 1.10.
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      // The sign-in gate is the app's single entry path (Story 1.4) — no app shell or routing
-      // yet (Story 1.6).
-      home: const AuthGate(),
+    // Held above MaterialApp so it can drive `MaterialApp.locale`; the auth-lifecycle bridge inside
+    // AuthGate loads/clears the per-user preference (Story 1.10, provider-tree note).
+    return BlocProvider(
+      create: (_) => LocaleCubit(const SharedPreferencesLocalePreferenceStore()),
+      child: BlocBuilder<LocaleCubit, LocaleState>(
+        builder: (context, localeState) {
+          return MaterialApp(
+            title: 'SGART',
+            theme: SgartTheme.light(),
+            darkTheme: SgartTheme.dark(),
+            themeMode: ThemeMode.system,
+            // `null` follows the device locale (resolved below); an explicit choice pins a region.
+            locale: localeState.effectiveLocale,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: supportedLocales,
+            localeResolutionCallback: resolveSupportedLocale,
+            // The sign-in gate is the app's single entry path (Story 1.4) — no app shell or routing
+            // yet (Story 1.6). Kept `const` so a locale rebuild does not recreate AuthGate/AuthCubit.
+            home: const AuthGate(),
+          );
+        },
+      ),
     );
   }
 }

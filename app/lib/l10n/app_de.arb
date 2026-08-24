@@ -373,5 +373,45 @@
   "onboardingInviteFinishButtonLabel": "Später einladen — fertig",
   "@onboardingInviteFinishButtonLabel": {
     "description": "Finishes onboarding without inviting and lands in the created household — solo is first-class (AC2)."
+  },
+
+  "localeSettingsHeading": "Sprache & Region",
+  "@localeSettingsHeading": {
+    "description": "Heading of the „Sprache & Region\" screen where a person views and changes their locale (Story 1.10, AC1)."
+  },
+
+  "localeSettingsIntro": "Wähle, wie die App Sprache und Zahlen anzeigt.",
+  "@localeSettingsIntro": {
+    "description": "One-line plain-language explainer under the locale-settings heading (UX-DR5 plain language)."
+  },
+
+  "localeOptionSystemLabel": "Systemstandard (Gerät)",
+  "@localeOptionSystemLabel": {
+    "description": "Locale option that follows the device locale rather than an explicit choice (Story 1.10, AC1)."
+  },
+
+  "localeOptionGermanyLabel": "Deutsch (Deutschland)",
+  "@localeOptionGermanyLabel": {
+    "description": "Locale option for the German (Germany) region variant, de-DE (Story 1.10, AC1)."
+  },
+
+  "localeOptionAustriaLabel": "Deutsch (Österreich)",
+  "@localeOptionAustriaLabel": {
+    "description": "Locale option for the German (Austria) region variant, de-AT (Story 1.10, AC1)."
+  },
+
+  "localeOptionSwitzerlandLabel": "Deutsch (Schweiz)",
+  "@localeOptionSwitzerlandLabel": {
+    "description": "Locale option for the German (Switzerland) region variant, de-CH — the visibly divergent number grouping (Story 1.10, AC1/AC2)."
+  },
+
+  "localePreviewSectionLabel": "Vorschau",
+  "@localePreviewSectionLabel": {
+    "description": "Label above the live formatting sample that re-renders as the locale selection changes (Story 1.10, AC2)."
+  },
+
+  "localeChangeConfirmation": "Sprache & Region aktualisiert",
+  "@localeChangeConfirmation": {
+    "description": "Brief confirmation shown in a SnackBar after applying a locale change (Story 1.10, AC2)."
   }
 }
