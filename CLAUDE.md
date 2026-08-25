@@ -111,6 +111,10 @@ Tests are first-class code and follow the same Clean Code and naming rules as pr
   and retention behavior have their own tests.
 - Every **bug fix starts with a failing regression test** that reproduces the defect.
 - Tests run in **continuous integration**; a red build blocks merging.
+- **A green build means the full suite ran.** At story completion, run the complete suite for
+  **every module the change touches** — backend `./gradlew test` (which includes the ArchUnit
+  architecture tests) *and* the app's `flutter test` / `flutter analyze`. A partial or single-module
+  run is not a green build; never report "tests green" without saying which suite actually ran.
 
 ### 7. Dependency Currency
 
@@ -127,6 +131,30 @@ Dependencies are kept **current**, not left to rot.
   wrapper, Spring Boot, `kurrentdb-client`, Flutter/pub packages, Testcontainers, JUnit, …), even
   when it is not the task at hand.
 - Prefer rolling major tags for GitHub Actions unless strict commit-SHA pinning is called for.
+
+### 8. Package Structure
+
+Code is organized so the **domain screams through the packages**, not the frameworks.
+
+- Each bounded context is a top-level package (`de.sgart.<context>`) split into the hexagonal
+  layers: **`domain`**, **`application`**, **`adapter.in`**, **`adapter.out`**. Dependencies point
+  inward only (`adapter.in → application → domain`; `adapter.out` implements domain ports). This is
+  enforced by `HexagonalArchitectureTest` (AD-1/AD-2) — see the architecture spine for the layer
+  rules.
+- **Within a layer, group by intent once the layer grows**, keeping related things that change
+  together side by side:
+  - `domain` — the aggregate root and its value objects sit at the layer root; group the numerous,
+    homogeneous families into `domain.event`, `domain.exception`, `domain.readmodel`.
+  - `application` — `application.command` (keep each command DTO **beside its handler**),
+    `application.query`, `application.exception`.
+- **Subfolder only when it earns its keep.** A context with a handful of classes stays flat —
+  don't create near-empty stereotype packages (KISS/YAGNI). Split a layer when a grouping is both
+  numerous and uniform enough that the flat package reads as "mixed up".
+- The ArchUnit rules match `..domain..` / `..application..`, so these subpackages need no test
+  changes. Each layer package carries a `package-info.java` stating its purpose and constraints.
+- Cross-layer/-context leaks are a defect: a domain failure is translated to an **application**
+  exception at the handler seam so `adapter.in` never imports `..domain..` (the pattern the
+  `*ApplicationException` types follow).
 
 ---
 
