@@ -123,7 +123,7 @@ action_items:
   - epic: 1
     action: "Extract a client command-id abstraction (one commandId per intent; regenerate on payload change and after a successful append) with tests proving edited-retry and post-success both regenerate"
     owner: "Dev"
-    status: in-progress
+    status: done
   - epic: 1
     action: "Add a base error-advice contract test asserting every command endpoint maps missing/malformed input and every reachable domain exception to a 4xx (never 500)"
     owner: "Dev"
