@@ -4,9 +4,11 @@ import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
+import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -48,7 +50,9 @@ public final class AddStoreHandler {
      * @param rawChainId the optional accepted chain id; {@code null}/blank leaves the store unlinked
      * @throws InvalidCommandEnvelopeException if the command envelope is malformed (400)
      * @throws InvalidStoreNameException if {@code rawName} fails the domain invariant (400)
-     * @throws NotAMemberException if the caller is not a member of the household (403)
+     * @throws NotAMemberException if the caller has no member mapping for the household (403)
+     * @throws NotAHouseholdMemberApplicationException if the caller resolves to a member the
+     *     household's stream never recorded (403, ACL/event-stream divergence)
      * @throws DuplicateStoreNameApplicationException if the active name is already taken (409)
      */
     public void handle(
@@ -79,6 +83,8 @@ public final class AddStoreHandler {
                     memberId, command.storeId(), command.name(), command.chainId(), command.commandId());
         } catch (DuplicateStoreNameException duplicate) {
             throw new DuplicateStoreNameApplicationException(duplicate.getMessage());
+        } catch (NotAHouseholdMemberException notAMember) {
+            throw new NotAHouseholdMemberApplicationException(notAMember.getMessage());
         }
 
         eventStore.append(command.basedOnVersion(), household.uncommittedEvents(), command.commandId());

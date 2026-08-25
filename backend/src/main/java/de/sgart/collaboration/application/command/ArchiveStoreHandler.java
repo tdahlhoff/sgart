@@ -2,7 +2,9 @@ package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -36,7 +38,9 @@ public final class ArchiveStoreHandler {
      * @param keycloakUserId the caller's identity, resolved server-side from the JWT {@code sub}
      *     (AR10, AD-5).
      * @throws InvalidCommandEnvelopeException if the command envelope is malformed (400)
-     * @throws NotAMemberException if the caller is not a member of the household (403)
+     * @throws NotAMemberException if the caller has no member mapping for the household (403)
+     * @throws NotAHouseholdMemberApplicationException if the caller resolves to a member the
+     *     household's stream never recorded (403, ACL/event-stream divergence)
      */
     public void handle(String keycloakUserId, String rawHouseholdId, String rawStoreId, String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
@@ -52,7 +56,11 @@ public final class ArchiveStoreHandler {
         AggregateVersion loadedVersion = household.version();
         ArchiveStore command = new ArchiveStore(householdId, storeId, commandId, loadedVersion);
 
-        household.archiveStore(memberId, command.storeId(), command.commandId());
+        try {
+            household.archiveStore(memberId, command.storeId(), command.commandId());
+        } catch (NotAHouseholdMemberException notAMember) {
+            throw new NotAHouseholdMemberApplicationException(notAMember.getMessage());
+        }
 
         if (!household.uncommittedEvents().isEmpty()) {
             eventStore.append(command.basedOnVersion(), household.uncommittedEvents(), command.commandId());

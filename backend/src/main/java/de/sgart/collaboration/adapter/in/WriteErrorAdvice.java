@@ -4,8 +4,8 @@ import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicatio
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
-import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -52,13 +52,14 @@ class WriteErrorAdvice {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
     }
 
-    @ExceptionHandler(NotAHouseholdMemberException.class)
-    ResponseEntity<ErrorDescriptor> handleNotAHouseholdMember(NotAHouseholdMemberException exception) {
+    @ExceptionHandler(NotAHouseholdMemberApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleNotAHouseholdMember(NotAHouseholdMemberApplicationException exception) {
         // Defense-in-depth: the aggregate's own membership guard (reachable only under an
         // ACL/event-stream divergence) surfaces as a proper 403 with the same client code as the
-        // ACL's NotAMemberException — never a 500 for an unmapped domain exception.
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorDescriptor.of("identity.notAMember", exception.getMessage()));
+        // ACL's NotAMemberException — never a 500 for an unmapped failure. The store handlers
+        // translate the domain guard into this application exception so adapter.in never reaches
+        // into the domain layer (AD-1).
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(RenameNotPermittedApplicationException.class)

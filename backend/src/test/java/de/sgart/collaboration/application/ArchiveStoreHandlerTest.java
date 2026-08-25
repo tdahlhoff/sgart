@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
+import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.StoreName;
@@ -106,6 +107,21 @@ class ArchiveStoreHandlerTest {
         assertThatThrownBy(() -> handler.handle(
                         "stranger-sub", householdId.toString(), storeId.toString(), CommandId.generate().toString()))
                 .isInstanceOf(NotAMemberException.class);
+    }
+
+    @Test
+    void translatesTheAggregateMembershipGuardIntoAnApplicationException() {
+        seedHouseholdWithAdmin();
+        StoreId storeId = seedActiveStore();
+        // ACL/event-stream divergence: the ACL maps this caller to a member id the household's
+        // stream never recorded joining, so resolve() succeeds but the aggregate's requireMember
+        // guard rejects the archive. The handler must surface it as an application exception so the
+        // write-side error advice in adapter.in never has to reach into the domain layer (AD-1).
+        mappingRepository.save(new MemberMapping(householdId, MemberId.generate(), new KeycloakUserId("ghost-sub")));
+
+        assertThatThrownBy(() -> handler.handle(
+                        "ghost-sub", householdId.toString(), storeId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(NotAHouseholdMemberApplicationException.class);
     }
 
     @Test

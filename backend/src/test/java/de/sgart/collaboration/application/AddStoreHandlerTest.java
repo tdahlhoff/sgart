@@ -7,6 +7,7 @@ import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.StoreName;
@@ -108,6 +109,26 @@ class AddStoreHandlerTest {
                         null,
                         CommandId.generate().toString()))
                 .isInstanceOf(NotAMemberException.class);
+        assertThat(eventStore.readStream(streamId)).hasSize(2); // no StoreAdded appended
+    }
+
+    @Test
+    void translatesTheAggregateMembershipGuardIntoAnApplicationException() {
+        seedHouseholdWithAdmin();
+        // ACL/event-stream divergence: the ACL maps this caller to a member id the household's
+        // stream never recorded joining, so resolve() succeeds but the aggregate's requireMember
+        // guard rejects the add. The handler must surface it as an application exception so the
+        // write-side error advice in adapter.in never has to reach into the domain layer (AD-1).
+        mappingRepository.save(new MemberMapping(householdId, MemberId.generate(), new KeycloakUserId("ghost-sub")));
+
+        assertThatThrownBy(() -> handler.handle(
+                        "ghost-sub",
+                        householdId.toString(),
+                        StoreId.generate().toString(),
+                        "Edeka",
+                        null,
+                        CommandId.generate().toString()))
+                .isInstanceOf(NotAHouseholdMemberApplicationException.class);
         assertThat(eventStore.readStream(streamId)).hasSize(2); // no StoreAdded appended
     }
 
