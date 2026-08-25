@@ -1,5 +1,6 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.event;
 
+import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;

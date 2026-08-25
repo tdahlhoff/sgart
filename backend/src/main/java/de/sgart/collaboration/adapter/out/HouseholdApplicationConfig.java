@@ -1,13 +1,13 @@
 package de.sgart.collaboration.adapter.out;
 
-import de.sgart.collaboration.application.AddStoreHandler;
-import de.sgart.collaboration.application.ArchiveStoreHandler;
-import de.sgart.collaboration.application.CreateHouseholdHandler;
-import de.sgart.collaboration.application.ListMyHouseholds;
-import de.sgart.collaboration.application.ListStores;
-import de.sgart.collaboration.application.RenameHouseholdHandler;
-import de.sgart.collaboration.domain.HouseholdNameReadModel;
-import de.sgart.collaboration.domain.StoreReadModel;
+import de.sgart.collaboration.application.command.AddStoreHandler;
+import de.sgart.collaboration.application.command.ArchiveStoreHandler;
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.query.ListMyHouseholds;
+import de.sgart.collaboration.application.query.ListStores;
+import de.sgart.collaboration.application.command.RenameHouseholdHandler;
+import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;

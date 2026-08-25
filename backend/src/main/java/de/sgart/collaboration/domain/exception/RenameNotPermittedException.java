@@ -1,4 +1,8 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.exception;
+
+import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRole;
 
 /**
  * Raised by {@link Household#rename} when the requesting member is not an {@link HouseholdRole#ADMIN}

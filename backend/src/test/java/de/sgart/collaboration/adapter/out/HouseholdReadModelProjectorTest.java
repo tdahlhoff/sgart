@@ -2,15 +2,17 @@ package de.sgart.collaboration.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.sgart.collaboration.application.ListMyHouseholds;
-import de.sgart.collaboration.application.ListMyHouseholds.HouseholdSummary;
+import de.sgart.collaboration.application.query.ListMyHouseholds.HouseholdSummary;
+import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.HouseholdRenamed;
-import de.sgart.collaboration.domain.StoreAdded;
-import de.sgart.collaboration.domain.StoreArchived;
 import de.sgart.collaboration.domain.StoreName;
-import de.sgart.collaboration.domain.StoreView;
+import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.readmodel.StoreView;
 import de.sgart.identity.adapter.out.JdbcMemberMappingRepository;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.domain.KeycloakUserId;
@@ -31,9 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Testcontainers integration test against real PostgreSQL (Clarification 2) — the first CQRS read

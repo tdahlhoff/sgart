@@ -8,10 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
-import de.sgart.collaboration.domain.MemberJoined;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;

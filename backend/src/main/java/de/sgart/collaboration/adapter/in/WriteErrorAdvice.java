@@ -1,11 +1,11 @@
 package de.sgart.collaboration.adapter.in;
 
-import de.sgart.collaboration.application.DuplicateStoreNameApplicationException;
-import de.sgart.collaboration.application.InvalidCommandEnvelopeException;
-import de.sgart.collaboration.application.InvalidHouseholdNameException;
-import de.sgart.collaboration.application.InvalidStoreNameException;
-import de.sgart.collaboration.application.RenameNotPermittedApplicationException;
-import de.sgart.collaboration.domain.NotAHouseholdMemberException;
+import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
+import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;

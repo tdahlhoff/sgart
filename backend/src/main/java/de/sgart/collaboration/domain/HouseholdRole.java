@@ -1,5 +1,7 @@
 package de.sgart.collaboration.domain;
 
+import de.sgart.collaboration.domain.event.MemberJoined;
+
 /**
  * A member's participation level within one household (glossary term — never bare "Member" for
  * the role, AD-11). {@code ADMIN} is the household creator (AC1); {@code PARTICIPANT} is the

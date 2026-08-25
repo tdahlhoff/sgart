@@ -1,4 +1,4 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.shared.AggregateVersion;

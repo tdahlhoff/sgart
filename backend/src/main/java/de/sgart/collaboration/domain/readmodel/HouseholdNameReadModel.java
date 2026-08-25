@@ -1,5 +1,9 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.readmodel;
 
+import de.sgart.collaboration.adapter.out.HouseholdReadModelProjector;
+import de.sgart.collaboration.application.query.ListMyHouseholds;
+import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.shared.HouseholdId;
 import java.util.List;
 import java.util.Map;

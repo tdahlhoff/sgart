@@ -1,8 +1,11 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.domain.StoreName;
-import de.sgart.collaboration.domain.StoreReadModel;
-import de.sgart.collaboration.domain.StoreView;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.readmodel.StoreReadModel;
+import de.sgart.collaboration.domain.readmodel.StoreView;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;

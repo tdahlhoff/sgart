@@ -1,4 +1,7 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.exception;
+
+import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.StoreName;
 
 /**
  * Raised by {@link Household#addStore} when the requested name duplicates an <em>active</em>

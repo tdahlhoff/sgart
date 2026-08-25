@@ -1,5 +1,6 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.exception;
 
+import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.shared.ErrorDescriptor;
 
 /**
@@ -13,7 +14,7 @@ public final class RenameNotPermittedApplicationException extends RuntimeExcepti
 
     private final ErrorDescriptor errorDescriptor;
 
-    RenameNotPermittedApplicationException(String message) {
+    public RenameNotPermittedApplicationException(String message) {
         super(message);
         this.errorDescriptor = ErrorDescriptor.of("household.renameNotPermitted", message);
     }

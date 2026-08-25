@@ -1,7 +1,9 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.query;
 
-import de.sgart.collaboration.domain.StoreReadModel;
-import de.sgart.collaboration.domain.StoreView;
+import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.domain.readmodel.StoreReadModel;
+import de.sgart.collaboration.domain.readmodel.StoreView;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.HouseholdId;

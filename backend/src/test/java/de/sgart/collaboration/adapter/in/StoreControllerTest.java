@@ -7,11 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.StoreName;
-import de.sgart.collaboration.domain.StoreReadModel;
-import de.sgart.collaboration.domain.StoreView;
+import de.sgart.collaboration.domain.readmodel.StoreReadModel;
+import de.sgart.collaboration.domain.readmodel.StoreView;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;

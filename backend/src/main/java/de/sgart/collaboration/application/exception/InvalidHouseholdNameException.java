@@ -1,5 +1,7 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.exception;
 
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.shared.ErrorDescriptor;
 
 /**
@@ -16,7 +18,7 @@ public final class InvalidHouseholdNameException extends RuntimeException {
 
     private final ErrorDescriptor errorDescriptor;
 
-    InvalidHouseholdNameException(String code, String message) {
+    public InvalidHouseholdNameException(String code, String message) {
         super(message);
         this.errorDescriptor = ErrorDescriptor.of(code, message);
     }

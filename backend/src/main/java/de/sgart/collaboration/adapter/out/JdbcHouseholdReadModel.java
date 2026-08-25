@@ -1,7 +1,10 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import java.util.List;

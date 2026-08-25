@@ -3,6 +3,14 @@ package de.sgart.collaboration.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
+import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
+import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;

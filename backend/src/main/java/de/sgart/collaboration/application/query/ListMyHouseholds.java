@@ -1,7 +1,7 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.query;
 
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.shared.HouseholdId;
 import java.util.List;

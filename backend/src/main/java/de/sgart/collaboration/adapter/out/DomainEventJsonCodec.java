@@ -1,13 +1,14 @@
 package de.sgart.collaboration.adapter.out;
 
-import de.sgart.collaboration.domain.HouseholdCreated;
+import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
-import de.sgart.collaboration.domain.MemberJoined;
-import de.sgart.collaboration.domain.StoreAdded;
-import de.sgart.collaboration.domain.StoreArchived;
 import de.sgart.collaboration.domain.StoreName;
+import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;

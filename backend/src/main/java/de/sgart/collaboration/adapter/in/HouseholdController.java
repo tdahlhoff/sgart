@@ -1,8 +1,8 @@
 package de.sgart.collaboration.adapter.in;
 
-import de.sgart.collaboration.application.CreateHouseholdHandler;
-import de.sgart.collaboration.application.ListMyHouseholds;
-import de.sgart.collaboration.application.RenameHouseholdHandler;
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.query.ListMyHouseholds;
+import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
 import de.sgart.shared.HouseholdId;
 import java.util.List;

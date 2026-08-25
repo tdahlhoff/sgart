@@ -1,7 +1,11 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.command;
 
+import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;

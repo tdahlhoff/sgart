@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.ConcurrencyConflictException;

@@ -1,8 +1,12 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.command;
 
+import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.RenameNotPermittedException;
+import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;

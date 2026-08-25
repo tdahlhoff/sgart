@@ -1,8 +1,12 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.command;
 
-import de.sgart.collaboration.domain.DuplicateStoreNameException;
+import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.StoreName;
+import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;

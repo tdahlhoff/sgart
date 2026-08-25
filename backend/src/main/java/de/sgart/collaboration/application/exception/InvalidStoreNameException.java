@@ -1,5 +1,7 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.exception;
 
+import de.sgart.collaboration.application.command.AddStoreHandler;
+import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.ErrorDescriptor;
 
 /**
@@ -15,7 +17,7 @@ public final class InvalidStoreNameException extends RuntimeException {
 
     private final ErrorDescriptor errorDescriptor;
 
-    InvalidStoreNameException(String code, String message) {
+    public InvalidStoreNameException(String code, String message) {
         super(message);
         this.errorDescriptor = ErrorDescriptor.of(code, message);
     }

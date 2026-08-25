@@ -1,8 +1,8 @@
 package de.sgart.collaboration.adapter.in;
 
-import de.sgart.collaboration.application.AddStoreHandler;
-import de.sgart.collaboration.application.ArchiveStoreHandler;
-import de.sgart.collaboration.application.ListStores;
+import de.sgart.collaboration.application.command.AddStoreHandler;
+import de.sgart.collaboration.application.command.ArchiveStoreHandler;
+import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
 import java.util.List;
 import org.springframework.http.HttpStatus;

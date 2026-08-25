@@ -3,9 +3,12 @@ package de.sgart.collaboration.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
-import de.sgart.collaboration.domain.MemberJoined;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.domain.KeycloakUserId;

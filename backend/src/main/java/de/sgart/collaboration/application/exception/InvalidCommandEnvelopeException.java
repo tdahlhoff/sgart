@@ -1,4 +1,4 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.exception;
 
 import de.sgart.shared.ErrorDescriptor;
 
@@ -16,7 +16,7 @@ public final class InvalidCommandEnvelopeException extends RuntimeException {
 
     private final ErrorDescriptor errorDescriptor;
 
-    InvalidCommandEnvelopeException(String code, String message) {
+    public InvalidCommandEnvelopeException(String code, String message) {
         super(message);
         this.errorDescriptor = ErrorDescriptor.of(code, message);
     }

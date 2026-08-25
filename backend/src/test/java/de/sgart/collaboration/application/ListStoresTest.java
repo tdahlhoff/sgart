@@ -3,10 +3,12 @@ package de.sgart.collaboration.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.sgart.collaboration.application.ListStores.StoreSummary;
+import de.sgart.collaboration.application.query.ListStores.StoreSummary;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.domain.StoreName;
-import de.sgart.collaboration.domain.StoreReadModel;
-import de.sgart.collaboration.domain.StoreView;
+import de.sgart.collaboration.domain.readmodel.StoreReadModel;
+import de.sgart.collaboration.domain.readmodel.StoreView;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;

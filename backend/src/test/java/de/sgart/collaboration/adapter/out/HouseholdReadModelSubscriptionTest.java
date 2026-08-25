@@ -2,8 +2,8 @@ package de.sgart.collaboration.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.sgart.collaboration.application.ListMyHouseholds;
-import de.sgart.collaboration.application.ListMyHouseholds.HouseholdSummary;
+import de.sgart.collaboration.application.query.ListMyHouseholds;
+import de.sgart.collaboration.application.query.ListMyHouseholds.HouseholdSummary;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.identity.adapter.out.JdbcMemberMappingRepository;

@@ -1,5 +1,11 @@
 package de.sgart.collaboration.application;
 
+import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.command.RenameHouseholdHandler;
+import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
+import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.CommandId;
@@ -15,11 +21,11 @@ import de.sgart.shared.StoreId;
  * parses a raw {@link CommandId} itself (layering, AR10), and a bad value never surfaces as an
  * opaque {@code 500}.
  */
-final class CommandFieldTranslations {
+public final class CommandFieldTranslations {
 
     private CommandFieldTranslations() {}
 
-    static HouseholdId toHouseholdId(String rawHouseholdId) {
+    public static HouseholdId toHouseholdId(String rawHouseholdId) {
         if (rawHouseholdId == null || rawHouseholdId.isBlank()) {
             throw new InvalidCommandEnvelopeException("command.householdIdRequired", "householdId must be provided");
         }
@@ -32,7 +38,7 @@ final class CommandFieldTranslations {
         }
     }
 
-    static CommandId toCommandId(String rawCommandId) {
+    public static CommandId toCommandId(String rawCommandId) {
         if (rawCommandId == null || rawCommandId.isBlank()) {
             throw new InvalidCommandEnvelopeException("command.commandIdRequired", "commandId must be provided");
         }
@@ -43,7 +49,7 @@ final class CommandFieldTranslations {
         }
     }
 
-    static HouseholdName toHouseholdName(String rawName) {
+    public static HouseholdName toHouseholdName(String rawName) {
         if (rawName == null || rawName.isBlank()) {
             throw new InvalidHouseholdNameException("household.nameRequired", "Household name must not be blank");
         }
@@ -56,7 +62,7 @@ final class CommandFieldTranslations {
         }
     }
 
-    static StoreName toStoreName(String rawName) {
+    public static StoreName toStoreName(String rawName) {
         if (rawName == null || rawName.isBlank()) {
             throw new InvalidStoreNameException("store.nameRequired", "Store name must not be blank");
         }
@@ -67,7 +73,7 @@ final class CommandFieldTranslations {
         }
     }
 
-    static StoreId toStoreId(String rawStoreId) {
+    public static StoreId toStoreId(String rawStoreId) {
         if (rawStoreId == null || rawStoreId.isBlank()) {
             throw new InvalidCommandEnvelopeException("command.storeIdRequired", "storeId must be provided");
         }
@@ -84,7 +90,7 @@ final class CommandFieldTranslations {
      * is a fail-fast {@code 400}. The value is never validated against the reference table
      * (advisory / client-decided, AD-2).
      */
-    static StoreChainId toStoreChainIdOrNull(String rawChainId) {
+    public static StoreChainId toStoreChainIdOrNull(String rawChainId) {
         if (rawChainId == null || rawChainId.isBlank()) {
             return null;
         }

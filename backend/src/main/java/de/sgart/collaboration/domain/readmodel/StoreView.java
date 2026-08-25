@@ -1,5 +1,6 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.readmodel;
 
+import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 

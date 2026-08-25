@@ -3,11 +3,13 @@ package de.sgart.collaboration.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.sgart.collaboration.application.command.AddStoreHandler;
+import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
-import de.sgart.collaboration.domain.StoreAdded;
-import de.sgart.collaboration.domain.StoreArchived;
 import de.sgart.collaboration.domain.StoreName;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;

@@ -1,5 +1,6 @@
-package de.sgart.collaboration.application;
+package de.sgart.collaboration.application.exception;
 
+import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.shared.ErrorDescriptor;
 
 /**
@@ -14,7 +15,7 @@ public final class DuplicateStoreNameApplicationException extends RuntimeExcepti
 
     private final ErrorDescriptor errorDescriptor;
 
-    DuplicateStoreNameApplicationException(String message) {
+    public DuplicateStoreNameApplicationException(String message) {
         super(message);
         this.errorDescriptor = ErrorDescriptor.of("store.duplicateName", message);
     }

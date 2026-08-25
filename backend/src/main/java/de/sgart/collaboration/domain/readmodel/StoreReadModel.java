@@ -1,5 +1,9 @@
-package de.sgart.collaboration.domain;
+package de.sgart.collaboration.domain.readmodel;
 
+import de.sgart.collaboration.adapter.out.HouseholdReadModelProjector;
+import de.sgart.collaboration.application.query.ListStores;
+import de.sgart.collaboration.domain.event.StoreAdded;
+import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.shared.HouseholdId;
 import java.util.List;
 
