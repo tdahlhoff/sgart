@@ -112,6 +112,22 @@ Tests are first-class code and follow the same Clean Code and naming rules as pr
 - Every **bug fix starts with a failing regression test** that reproduces the defect.
 - Tests run in **continuous integration**; a red build blocks merging.
 
+### 7. Dependency Currency
+
+Dependencies are kept **current**, not left to rot.
+
+- Use the **most recent versions** of every tool, library, package, and CI action that our
+  frameworks support. "Most recent *supported*" — never a bleeding-edge release that breaks the
+  stack, but never a knowingly outdated one either.
+- A dependency pinned to a **deprecated** version is treated as a **defect to fix**, not a warning
+  to tolerate. Sitting on a deprecated major means we are already too far behind.
+- When touching any dependency or workflow, check whether a newer supported major exists and bump
+  to it — verifying framework support first. Small, continuous upgrades over painful big-bang ones.
+- **Proactively flag** outdated or deprecated versions you notice (CI action majors, the Gradle
+  wrapper, Spring Boot, `kurrentdb-client`, Flutter/pub packages, Testcontainers, JUnit, …), even
+  when it is not the task at hand.
+- Prefer rolling major tags for GitHub Actions unless strict commit-SHA pinning is called for.
+
 ---
 
 *These rules take precedence over convenience. When in doubt, choose the option that is
