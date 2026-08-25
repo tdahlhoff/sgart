@@ -127,6 +127,55 @@ void main() {
       await cubit.close();
     });
 
+    test('archiveStore_reusesOneCommandIdAcrossRetriesOfTheSameStore', () async {
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+      storesApi.archiveError =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      await cubit.archiveStore('s1');
+      storesApi.archiveError = null;
+      await cubit.archiveStore('s1');
+
+      expect(storesApi.archiveCommandIds, hasLength(2));
+      expect(storesApi.archiveCommandIds.first, storesApi.archiveCommandIds.last);
+      await cubit.close();
+    });
+
+    test('archiveStore_usesAFreshCommandIdForADifferentStore', () async {
+      storesApi.storesToReturn = const [
+        StoreSummary(storeId: 's1', name: 'Edeka'),
+        StoreSummary(storeId: 's2', name: 'Rewe'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+      storesApi.archiveError =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      await cubit.archiveStore('s1');
+      await cubit.archiveStore('s2');
+
+      expect(storesApi.archiveCommandIds, hasLength(2));
+      expect(storesApi.archiveCommandIds.first, isNot(storesApi.archiveCommandIds.last));
+      await cubit.close();
+    });
+
+    test('archiveStore_regeneratesTheCommandIdAfterASuccessfulArchiveSoTheNextArchiveIsNotDeduped',
+        () async {
+      storesApi.storesToReturn = const [
+        StoreSummary(storeId: 's1', name: 'Edeka'),
+        StoreSummary(storeId: 's2', name: 'Rewe'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.archiveStore('s1');
+      await cubit.archiveStore('s1'); // e.g. a duplicate tap arriving after the first succeeded
+
+      expect(storesApi.archiveCommandIds, hasLength(2));
+      expect(storesApi.archiveCommandIds.first, isNot(storesApi.archiveCommandIds.last));
+      await cubit.close();
+    });
+
     test('addStore_reusesOneCommandIdAcrossRetriesOfTheSameName', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();

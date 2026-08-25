@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
 
+import '../../../shared/commands/command_intent.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../data/store_chain.dart';
@@ -28,15 +28,18 @@ class StoresCubit extends Cubit<StoresState> {
   final String householdId;
   final StoreChainMatcher matcher;
 
-  /// The ids for the current add intent — a *specific target name*. Both the command id and the
-  /// store id are reused across retries of the same name so a resubmit after a transient failure is
-  /// idempotent (AD-8) and the optimistically-rendered store id matches the one the server persisted;
-  /// both are regenerated when the name changes (a new intent) and after a successful add (the next
-  /// add is a fresh intent — a spent command id would be deduped server-side as a silent no-op,
-  /// silently dropping the store). Pattern from `RenameHouseholdCubit`, extended to carry the id too.
-  String _commandId = const Uuid().v4();
-  String _storeId = const Uuid().v4();
-  String? _intentName;
+  /// The add-store intent's ids: the command id plus one paired client-minted store id. Both are
+  /// reused across retries of the same name (idempotent retry, AD-8 — and the optimistically-rendered
+  /// store id matches the one the server persisted), freshened when the name changes (a new intent),
+  /// and freshened again after a successful add (a spent command id would be deduped server-side as a
+  /// silent no-op, silently dropping the store — Story 1.8).
+  final CommandIntent _addIntent = CommandIntent(hasResourceId: true);
+
+  /// The archive intent's command id, keyed on the target store id: reused across retries of
+  /// archiving the same store (idempotent retry, AD-8), freshened when a different store is archived,
+  /// and freshened again after a successful archive (a spent command id would be deduped server-side
+  /// as a silent no-op, leaving the store un-archived).
+  final CommandIntent _archiveIntent = CommandIntent();
 
   /// Loads the active store list (required) plus the cached chain reference list (best-effort — an
   /// offline first load with no cache simply leaves matching unavailable rather than failing the
@@ -110,9 +113,9 @@ class StoresCubit extends Cubit<StoresState> {
       return;
     }
     final chainId = state.effectiveChainId;
-    _beginIntent(trimmedName);
-    final commandId = _commandId;
-    final storeId = _storeId;
+    _addIntent.beginAttempt(trimmedName);
+    final commandId = _addIntent.commandId;
+    final storeId = _addIntent.resourceId();
     _safeEmit(state.copyWith(isSubmitting: true, clearActionError: true));
     try {
       await storesApi.addStore(
@@ -129,11 +132,9 @@ class StoresCubit extends Cubit<StoresState> {
         chainCleared: false,
         clearSuggestion: true,
       ));
-      // A successful add completes this intent — mint fresh ids so the next add is a new intent and
-      // never reuses a command id the server has already applied (which it would silently drop).
-      _commandId = const Uuid().v4();
-      _storeId = const Uuid().v4();
-      _intentName = null;
+      // A successful add completes this intent — the next add is a new intent and never reuses a
+      // command id the server has already applied (which it would silently drop).
+      _addIntent.complete();
     } on Object catch (error) {
       _safeEmit(state.copyWith(isSubmitting: false, actionError: _toAppError(error)));
     }
@@ -145,29 +146,17 @@ class StoresCubit extends Cubit<StoresState> {
     if (state.status != StoresStatus.ready) {
       return;
     }
+    _archiveIntent.beginAttempt(storeId);
     try {
-      await storesApi.archiveStore(householdId, storeId, commandId: const Uuid().v4());
+      await storesApi.archiveStore(householdId, storeId, commandId: _archiveIntent.commandId);
       _safeEmit(state.copyWith(
         stores: state.stores.where((store) => store.storeId != storeId).toList(),
         clearActionError: true,
       ));
+      _archiveIntent.complete();
     } on Object catch (error) {
       _safeEmit(state.copyWith(actionError: _toAppError(error)));
     }
-  }
-
-  /// Aligns the per-intent ids (`_commandId` + `_storeId`) with [trimmedName]: keeps them for the
-  /// first attempt or a retry of the *same* name (an idempotent retry — the server dedupes on the
-  /// reused command id and the reused store id matches what it persisted), and regenerates both when
-  /// the name has changed, since an edited retry is a new intent.
-  void _beginIntent(String trimmedName) {
-    if (_intentName == null || _intentName == trimmedName) {
-      _intentName = trimmedName;
-      return;
-    }
-    _commandId = const Uuid().v4();
-    _storeId = const Uuid().v4();
-    _intentName = trimmedName;
   }
 
   AppError _toAppError(Object error) {
