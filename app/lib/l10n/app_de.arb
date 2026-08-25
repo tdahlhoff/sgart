@@ -136,11 +136,6 @@
     "description": "Heading of the household-selection screen shown to a caller who belongs to several households."
   },
 
-  "householdsHomeCurrentHouseholdLabel": "Aktueller Haushalt",
-  "@householdsHomeCurrentHouseholdLabel": {
-    "description": "Small label above the current household's name on the minimal household home screen."
-  },
-
   "householdsSwitcherHeading": "Haushalt wechseln",
   "@householdsSwitcherHeading": {
     "description": "Heading of the household switcher bottom sheet opened from the persistent header chip."
@@ -413,5 +408,55 @@
   "localeChangeConfirmation": "Sprache & Region aktualisiert",
   "@localeChangeConfirmation": {
     "description": "Brief confirmation shown in a SnackBar after applying a locale change (Story 1.10, AC2)."
+  },
+
+  "shellTabListsLabel": "Listen",
+  "@shellTabListsLabel": {
+    "description": "Label of the Listen (lists) bottom-navigation tab in the authenticated app shell (Story 1.11, AC1)."
+  },
+
+  "shellTabShoppingLabel": "Einkauf",
+  "@shellTabShoppingLabel": {
+    "description": "Label of the Einkauf (shopping) bottom-navigation tab in the authenticated app shell (Story 1.11, AC1)."
+  },
+
+  "shellTabProfileLabel": "Profil",
+  "@shellTabProfileLabel": {
+    "description": "Label of the Profil bottom-navigation tab in the authenticated app shell (Story 1.11, AC1)."
+  },
+
+  "shellTabListsPlaceholder": "Deine Listen kommen in einer späteren Version.",
+  "@shellTabListsPlaceholder": {
+    "description": "Calm placeholder copy shown on the Listen tab until Epic 2 delivers it (Story 1.11, AC1)."
+  },
+
+  "shellTabShoppingPlaceholder": "Der Einkauf kommt in einer späteren Version.",
+  "@shellTabShoppingPlaceholder": {
+    "description": "Calm placeholder copy shown on the Einkauf tab until Epic 3 delivers it (Story 1.11, AC1)."
+  },
+
+  "profileDisplaySectionLabel": "Darstellung",
+  "@profileDisplaySectionLabel": {
+    "description": "Section heading on the Profil screen grouping display/appearance settings (Story 1.11, AC2)."
+  },
+
+  "profileLocaleRowLabel": "Sprache & Region",
+  "@profileLocaleRowLabel": {
+    "description": "Row on the Profil screen that opens the Sprache & Region screen (Story 1.10, Story 1.11 AC2)."
+  },
+
+  "profileNotificationsSectionLabel": "Benachrichtigungen",
+  "@profileNotificationsSectionLabel": {
+    "description": "Section heading on the Profil screen for the notifications-info block (Story 1.11, AC2)."
+  },
+
+  "profileNotificationsInfo": "Du bekommst Hinweise zu Einladungen, Listenänderungen und Einkäufen. Inhalte werden nie mitgeschickt. In dieser Version fest eingestellt.",
+  "@profileNotificationsInfo": {
+    "description": "Info-only body text explaining the fixed MVP notification defaults — no toggle, no backend (Story 1.11, AC2; NotificationSettingsUpdated reserved-not-built)."
+  },
+
+  "profileAccountSectionLabel": "Konto",
+  "@profileAccountSectionLabel": {
+    "description": "Section heading on the Profil screen above the Abmelden action (Story 1.11, AC2)."
   }
 }

@@ -41,7 +41,11 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-08-24
+last_updated: 2026-08-25
+# Story 1.11 done (code review) 2026-08-25
+# Story 1.11 review (dev-story) 2026-08-25
+# Story 1.11 in-progress (dev-story) 2026-08-25
+# Story 1.11 ready-for-dev (create-story) 2026-08-25
 # Story 1.10 ready-for-dev (create-story) 2026-08-24
 # Story 1.9 done (code review) 2026-08-24
 # Story 1.9 review (dev-story) 2026-08-24
@@ -68,7 +72,7 @@ development_status:
   1-8-manage-stores-with-client-side-chain-matching: done
   1-9-guided-onboarding-for-a-new-household: done
   1-10-view-and-change-my-locale: done
-  1-11-personal-profile-screen: backlog
+  1-11-personal-profile-screen: done
   epic-1-retrospective: optional
 
   # Epic 2: Shared Lists & Fast Capture

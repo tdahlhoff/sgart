@@ -11,6 +11,26 @@ import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 
 void main() {
+  group('AuthState', () {
+    test('authenticatedCarriesTheEmailAlongsideDisplayNameAndKeycloakUserId', () {
+      const state = AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test');
+
+      expect(state.displayName, 'Anna Testperson');
+      expect(state.keycloakUserId, 'sub-1');
+      expect(state.email, 'anna@example.test');
+    });
+
+    test('equalityAndHashCodeIncludeTheEmail', () {
+      const first = AuthState.authenticated('Anna', 'sub-1', 'anna@example.test');
+      const sameEmail = AuthState.authenticated('Anna', 'sub-1', 'anna@example.test');
+      const differentEmail = AuthState.authenticated('Anna', 'sub-1', 'other@example.test');
+
+      expect(first, sameEmail);
+      expect(first.hashCode, sameEmail.hashCode);
+      expect(first, isNot(differentEmail));
+    });
+  });
+
   group('AuthCubit', () {
     late FakeOidcClient oidcClient;
     late FakeSecureTokenStorage tokenStorage;
@@ -48,7 +68,7 @@ void main() {
       act: (cubit) => cubit.signIn(),
       expect: () => [
         const AuthState.inProgress(),
-        const AuthState.authenticated('Anna Testperson', 'sub-1'),
+        const AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test'),
       ],
       verify: (_) => expect(tokenStorage.storedTokens!.accessToken, 'access'),
     );
@@ -80,7 +100,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
       verify: (_) {
         expect(tokenStorage.cleared, isTrue);
         expect(oidcClient.endSessionCalled, isTrue);
@@ -101,7 +121,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
       verify: (_) {
         expect(activeHouseholdStore.cleared, isTrue);
         expect(activeHouseholdStore.activeId, isNull);
@@ -121,7 +141,7 @@ void main() {
         await cubit.bootstrap();
         await cubit.signOut();
       },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1'), const AuthState.unauthenticated()],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
       verify: (_) => expect(tokenStorage.cleared, isTrue),
     );
 
@@ -134,7 +154,7 @@ void main() {
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1')],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test')],
     );
 
     blocTest<AuthCubit, AuthState>(
@@ -172,7 +192,7 @@ void main() {
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1')],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test')],
       verify: (_) {
         expect(oidcClient.lastRefreshToken, 'refresh');
         expect(tokenStorage.storedTokens!.accessToken, 'fresh');

@@ -3,6 +3,30 @@ import 'package:sgart/features/auth/data/identity_api.dart';
 import 'package:sgart/features/auth/data/oidc_client.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/data/secure_token_storage.dart';
+import 'package:sgart/features/auth/presentation/auth_cubit.dart';
+
+import 'fake_households_dependencies.dart';
+
+/// Builds a real [AuthCubit] over fakes and drives it to an authenticated state carrying
+/// [displayName]/[email] — for widget tests that need an ancestor `AuthCubit` (e.g. the Profil
+/// identity header, Story 1.11) without touching real OIDC/storage/network (CLAUDE.md §6). Data is
+/// synthetic (DSGVO).
+Future<AuthCubit> buildAuthenticatedAuthCubit({
+  String displayName = 'Anna Testperson',
+  String keycloakUserId = 'sub-1',
+  String email = 'anna@example.test',
+}) async {
+  final cubit = AuthCubit(
+    oidcClient: FakeOidcClient()..tokensToReturn = const OidcTokens(accessToken: 'access'),
+    tokenStorage: FakeSecureTokenStorage(),
+    identityApi: FakeIdentityApi()
+      ..identityToReturn =
+          CallerIdentity(keycloakUserId: keycloakUserId, displayName: displayName, email: email),
+    activeHouseholdStore: FakeActiveHouseholdStore(),
+  );
+  await cubit.signIn();
+  return cubit;
+}
 
 /// Test doubles for [AuthCubit]'s three external boundaries — no real OIDC library, device
 /// storage, or network in tests (CLAUDE.md §6).

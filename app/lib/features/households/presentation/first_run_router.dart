@@ -21,7 +21,7 @@ import 'households_state.dart';
 
 /// The post-sign-in entry point (replaces `AuthenticatedPlaceholderPage`, Story 1.4's explicit
 /// placeholder — one entry path). Fetches the caller's households and branches: 0 → create/await
-/// choice · 1 → household home · ≥2 → selection (AC1, AC2, AC3).
+/// choice · 1 → the household shell · ≥2 → selection (AC1, AC2, AC3).
 ///
 /// Stateful so the `Dio` transport (and the `HouseholdsApi` over it) is built exactly once and
 /// disposed with the widget — a `StatelessWidget` would allocate a fresh, undisposed HTTP client

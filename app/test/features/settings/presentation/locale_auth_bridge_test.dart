@@ -77,13 +77,13 @@ void main() {
       addTearDown(authCubit.close);
       await tester.pumpWidget(build(authCubit));
 
-      authCubit.emitState(const AuthState.authenticated('Anna', 'sub-1'));
+      authCubit.emitState(const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'));
       await tester.pumpAndSettle();
       expect(localeCubit.state, const ExplicitLocale(Locale('de', 'CH')));
 
       // A second member becomes authenticated with no unauthenticated step in between — same status,
       // different sub. Their locale must be applied, never inherited from the previous person.
-      authCubit.emitState(const AuthState.authenticated('Bob', 'sub-2'));
+      authCubit.emitState(const AuthState.authenticated('Bob', 'sub-2', 'bob@example.test'));
       await tester.pumpAndSettle();
       expect(localeCubit.state, const ExplicitLocale(Locale('de', 'AT')));
     });

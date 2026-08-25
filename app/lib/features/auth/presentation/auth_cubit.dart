@@ -86,7 +86,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> _loadCallerIdentity({bool allowRefresh = true}) async {
     try {
       final identity = await _identityApi.fetchMe();
-      _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId));
+      _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId, identity.email));
     } on Object catch (error) {
       final appError = _toAppError(error);
       if (allowRefresh && appError.code == 'auth.unauthorized' && await _tryRefreshTokens()) {

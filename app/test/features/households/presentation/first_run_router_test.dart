@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/first_run_router.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
+import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -14,19 +16,29 @@ void main() {
   group('FirstRunRouterBody', () {
     late FakeHouseholdsApi householdsApi;
     late HouseholdsCubit cubit;
+    late AuthCubit authCubit;
 
     late FakeActiveHouseholdStore activeHouseholdStore;
 
-    setUp(() {
+    setUp(() async {
       householdsApi = FakeHouseholdsApi();
       activeHouseholdStore = FakeActiveHouseholdStore();
       cubit = HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
+      // The shell's Profil tab reads AuthCubit at build time (Story 1.11) — provide an
+      // authenticated ancestor even for tests that only exercise the household-count routing.
+      authCubit = await buildAuthenticatedAuthCubit();
     });
 
-    tearDown(() => cubit.close());
+    tearDown(() async {
+      await cubit.close();
+      await authCubit.close();
+    });
 
     Widget buildSubject() => wrapForTesting(
-          BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+          BlocProvider<AuthCubit>.value(
+            value: authCubit,
+            child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+          ),
         );
 
     testWidgets('showsTheCreateOrAwaitChoiceForACallerWithZeroHouseholds', (tester) async {
@@ -47,10 +59,9 @@ void main() {
       await cubit.bootstrap();
       await tester.pump();
 
-      // The name shows both in the switcher chip (header) and the home body.
-      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
-      expect(find.byKey(const Key('current-household-name')), findsOneWidget);
-      expect(find.text('Familie Muster'), findsWidgets);
+      final chip = find.byKey(const Key('switcher-chip'));
+      expect(chip, findsOneWidget);
+      expect(find.descendant(of: chip, matching: find.text('Familie Muster')), findsOneWidget);
       expect(find.byKey(const Key('create-household-choice-button')), findsNothing);
     });
 
@@ -79,9 +90,9 @@ void main() {
       await tester.tap(find.byKey(const Key('household-selection-item-id-2')));
       await tester.pump();
 
-      expect(find.byKey(const Key('current-household-name')), findsOneWidget);
-      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
-      expect(find.text('WG Sonnenallee'), findsWidgets);
+      final chip = find.byKey(const Key('switcher-chip'));
+      expect(chip, findsOneWidget);
+      expect(find.descendant(of: chip, matching: find.text('WG Sonnenallee')), findsOneWidget);
     });
 
     testWidgets('showsAFailureWithRetryWhenLoadingTheHouseholdsFails', (tester) async {
