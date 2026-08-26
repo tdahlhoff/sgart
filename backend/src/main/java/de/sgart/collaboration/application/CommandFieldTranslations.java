@@ -142,4 +142,18 @@ public final class CommandFieldTranslations {
             throw new InvalidShoppingListNameException("list.nameTooLong", tooLong.getMessage());
         }
     }
+
+    /**
+     * Validates the list-overview {@code ?filter} query parameter (Story 2.2, AC1/AC2). Only {@code
+     * open} and {@code done} are recognized; anything else is a fail-fast {@code 400} — a
+     * request-envelope error like {@link #toShoppingListId}, not a domain error (the caller sent a
+     * malformed request, not an invalid list). The caller dispatches on the validated value itself
+     * ({@code ListOpenLists} vs. {@code ListDoneLists}); this only guards the input.
+     */
+    public static String toValidatedListFilter(String rawFilter) {
+        if (!"open".equals(rawFilter) && !"done".equals(rawFilter)) {
+            throw new InvalidCommandEnvelopeException("command.listFilterInvalid", "filter must be 'open' or 'done'");
+        }
+        return rawFilter;
+    }
 }

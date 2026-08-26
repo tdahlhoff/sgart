@@ -189,5 +189,121 @@ void main() {
       // Must not throw despite the cubit being closed (every emit is isClosed-guarded).
       await cubit.bootstrap();
     });
+
+    test('selectFilter_defaultsToOpenAndDoesNotLoadTheArchiveUpFront', () async {
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      expect(cubit.state.filter, ListFilter.open);
+      expect(shoppingListsApi.listDoneListsCallCount, 0);
+      await cubit.close();
+    });
+
+    test('selectFilter_doneLazilyLoadsTheArchiveOnFirstSelection', () async {
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.done);
+
+      expect(cubit.state.filter, ListFilter.done);
+      expect(cubit.state.archiveStatus, ArchiveStatus.ready);
+      expect(cubit.state.doneLists.map((list) => list.listId), ['d1']);
+      expect(shoppingListsApi.listDoneListsCallCount, 1);
+      await cubit.close();
+    });
+
+    test('selectFilter_doneThenOpenThenDoneDoesNotRefetchTheCachedArchive', () async {
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.done);
+      await cubit.selectFilter(ListFilter.open);
+      await cubit.selectFilter(ListFilter.done);
+
+      expect(cubit.state.filter, ListFilter.done);
+      expect(shoppingListsApi.listDoneListsCallCount, 1);
+      await cubit.close();
+    });
+
+    test('selectFilter_openNeverRefetchesTheOpenLists', () async {
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.open);
+
+      expect(cubit.state.filter, ListFilter.open);
+      await cubit.close();
+    });
+
+    test('selectFilter_anArchiveLoadFailureDoesNotTearDownTheOpenView', () async {
+      shoppingListsApi.doneListError =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.done);
+
+      expect(cubit.state.status, ShoppingListsStatus.ready);
+      expect(cubit.state.archiveStatus, ArchiveStatus.failure);
+      expect(cubit.state.archiveError?.code, 'network.unreachable');
+      await cubit.close();
+    });
+
+    test('selectFilter_reselectingDoneAfterAFailedArchiveLoadRetriesInsteadOfStayingStuck', () async {
+      shoppingListsApi.doneListError =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.done);
+      expect(cubit.state.archiveStatus, ArchiveStatus.failure);
+
+      // The transient error clears; switching away and back must retry, not serve the stale failure.
+      shoppingListsApi.doneListError = null;
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      await cubit.selectFilter(ListFilter.open);
+      await cubit.selectFilter(ListFilter.done);
+
+      expect(cubit.state.archiveStatus, ArchiveStatus.ready);
+      expect(cubit.state.doneLists.map((list) => list.listId), ['d1']);
+      expect(shoppingListsApi.listDoneListsCallCount, 2);
+      await cubit.close();
+    });
+
+    test('retryArchive_reloadsTheArchiveAfterAFailedLoad', () async {
+      shoppingListsApi.doneListError =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.selectFilter(ListFilter.done);
+      expect(cubit.state.archiveStatus, ArchiveStatus.failure);
+
+      shoppingListsApi.doneListError = null;
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      await cubit.retryArchive();
+
+      expect(cubit.state.archiveStatus, ArchiveStatus.ready);
+      expect(cubit.state.doneLists.map((list) => list.listId), ['d1']);
+      expect(shoppingListsApi.listDoneListsCallCount, 2);
+      await cubit.close();
+    });
+
+    test('retryArchive_isANoOpWhenTheArchiveHasNotFailed', () async {
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.retryArchive();
+
+      expect(shoppingListsApi.listDoneListsCallCount, 0);
+      await cubit.close();
+    });
   });
 }

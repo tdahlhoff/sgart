@@ -42,9 +42,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * MockMvc slice over the real {@code ShoppingListController}/handlers/{@code ListOpenLists} wiring,
  * with the durable adapters swapped for in-memory doubles ({@link InMemoryEventStore}, {@link
  * InMemoryMemberMappingRepository}, and an in-memory {@link ShoppingListReadModel}) — no live
- * KurrentDB/PostgreSQL. Proves AC1/AC2/AC3 end-to-end through REST: create ({@code 201}), rename
- * ({@code 204}), list ({@code 200}), the 400/401/403/404 error surface, and that the caller identity
- * comes only from the JWT {@code sub}.
+ * KurrentDB/PostgreSQL. Proves Story 2.1 AC1/AC2/AC3 and Story 2.2 AC1/AC2 end-to-end through REST:
+ * create ({@code 201}), rename ({@code 204}), list ({@code 200}, {@code ?filter=open|done}), the
+ * 400/401/403/404 error surface, and that the caller identity comes only from the JWT {@code sub}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -213,6 +213,90 @@ class ShoppingListControllerTest {
         HouseholdId householdId = seedMembership();
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void getWithoutFilterStillReturnsOpenLists() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = ShoppingListId.generate();
+        shoppingListReadModel.put(
+                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].status").value("OPEN"));
+    }
+
+    @Test
+    void getWithOpenFilterReturnsOpenLists() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = ShoppingListId.generate();
+        shoppingListReadModel.put(
+                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .param("filter", "open")
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].status").value("OPEN"));
+    }
+
+    @Test
+    void getWithDoneFilterReturnsTheCallersDoneLists() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId doneId = ShoppingListId.generate();
+        shoppingListReadModel.put(
+                householdId,
+                List.of(new ShoppingListView(doneId, new ShoppingListName("Alte Liste"), ListStatus.DONE)));
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .param("filter", "done")
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].listId").value(doneId.toString()))
+                .andExpect(jsonPath("$[0].name").value("Alte Liste"))
+                .andExpect(jsonPath("$[0].status").value("DONE"));
+    }
+
+    @Test
+    void anotherHouseholdsDoneListsAreExcludedFromTheArchive() throws Exception {
+        HouseholdId householdId = seedMembership();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        shoppingListReadModel.put(
+                otherHousehold,
+                List.of(new ShoppingListView(ShoppingListId.generate(), new ShoppingListName("Fremd"), ListStatus.DONE)));
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .param("filter", "done")
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void anUnknownFilterIsRejectedWithFourHundred() throws Exception {
+        HouseholdId householdId = seedMembership();
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .param("filter", "bogus")
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("command.listFilterInvalid"));
+    }
+
+    @Test
+    void list_withDoneFilterRejectsANonMemberWith403() throws Exception {
+        HouseholdId householdId = seedMembership();
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
+                        .param("filter", "done")
                         .with(jwt().jwt(jwt -> jwt.subject("stranger-sub"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_button.dart';
+import '../../../shared/widgets/status_label.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/shopping_list_summary.dart';
 import 'create_list_dialog.dart';
@@ -11,11 +12,12 @@ import 'rename_list_dialog.dart';
 import 'shopping_lists_cubit.dart';
 import 'shopping_lists_state.dart';
 
-/// The minimal lists surface (Story 2.1, AC1–AC3, Clarification 2): the household's Open lists,
-/// each showing its name or the derived „Liste N" (AC2), a per-row rename affordance, a „+ Neue
-/// Liste" create action, and an empty state (UX-DR13). Reads its [ShoppingListsCubit] from the
-/// enclosing provider (scoped to the active household by the shell). The full Listen overview —
-/// the Offen/Erledigt filter, item counts/progress, and the Done archive — is Story 2.2.
+/// The Listen overview (Story 2.1 AC1–AC3, Clarification 2; Story 2.2 AC1/AC2): a segmented
+/// Offen/Erledigt filter at the top switches the body between the household's Open lists (each
+/// showing its name or the derived „Liste N", AC2, a status label, a per-row rename affordance, and
+/// a „+ Neue Liste" create action) and the read-only Done archive (no create, no rename, no item
+/// actions). Reads its [ShoppingListsCubit] from the enclosing provider (scoped to the active
+/// household by the shell). Item counts/progress are out of scope (2.3/Epic 3).
 class ListsView extends StatelessWidget {
   const ListsView({super.key});
 
@@ -49,37 +51,75 @@ class _ReadyBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (state.lists.isEmpty)
-            Text(localizations.listsEmptyState, key: const Key('lists-empty-state'))
-          else
-            for (final (index, list) in state.lists.indexed)
-              _ListRow(
-                list: list,
-                // The AC2 ordinal is the 1-based position in the creation-ordered array the query
-                // already returns — counting named lists too (derivation lives on the client).
-                orderIndex: index + 1,
-                onRename: () => showRenameListSheet(
-                  context,
-                  cubit,
-                  listId: list.listId,
-                  currentName: list.name ?? localizations.listsDefaultName(index + 1),
-                ),
+          SegmentedButton<ListFilter>(
+            key: const Key('lists-filter-segmented-button'),
+            segments: [
+              ButtonSegment(
+                value: ListFilter.open,
+                label: Text(localizations.listsFilterOpen),
               ),
-          if (state.actionError != null) ...[
-            const SizedBox(height: SgartShapes.space4),
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('lists-action-error'),
-            ),
-          ],
-          const SizedBox(height: SgartShapes.space4),
-          SgartButton(
-            key: const Key('lists-create-button'),
-            label: localizations.listsCreateAction,
-            onPressed: state.isSubmitting ? null : () => showCreateListSheet(context, cubit),
+              ButtonSegment(
+                value: ListFilter.done,
+                label: Text(localizations.listsFilterDone),
+              ),
+            ],
+            selected: {state.filter},
+            onSelectionChanged: (selection) => cubit.selectFilter(selection.first),
           ),
+          const SizedBox(height: SgartShapes.space4),
+          switch (state.filter) {
+            ListFilter.open => _OpenListsBody(state: state, cubit: cubit),
+            ListFilter.done => _DoneArchiveBody(state: state),
+          },
         ],
       ),
+    );
+  }
+}
+
+class _OpenListsBody extends StatelessWidget {
+  const _OpenListsBody({required this.state, required this.cubit});
+
+  final ShoppingListsState state;
+  final ShoppingListsCubit cubit;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.lists.isEmpty)
+          Text(localizations.listsEmptyState, key: const Key('lists-empty-state'))
+        else
+          for (final (index, list) in state.lists.indexed)
+            _ListRow(
+              list: list,
+              // The AC2 ordinal is the 1-based position in the creation-ordered array the query
+              // already returns — counting named lists too (derivation lives on the client).
+              orderIndex: index + 1,
+              onRename: () => showRenameListSheet(
+                context,
+                cubit,
+                listId: list.listId,
+                currentName: list.name ?? localizations.listsDefaultName(index + 1),
+              ),
+            ),
+        if (state.actionError != null) ...[
+          const SizedBox(height: SgartShapes.space4),
+          Text(
+            localizedMessageForErrorCode(localizations, state.actionError!.code),
+            key: const Key('lists-action-error'),
+          ),
+        ],
+        const SizedBox(height: SgartShapes.space4),
+        SgartButton(
+          key: const Key('lists-create-button'),
+          label: localizations.listsCreateAction,
+          onPressed: state.isSubmitting ? null : () => showCreateListSheet(context, cubit),
+        ),
+      ],
     );
   }
 }
@@ -99,12 +139,92 @@ class _ListRow extends StatelessWidget {
     return ListTile(
       key: Key('list-row-${list.listId}'),
       contentPadding: EdgeInsets.zero,
-      title: Text(displayName),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(displayName),
+          const SizedBox(height: SgartShapes.spaceHalfUnit),
+          StatusLabel(
+            key: Key('list-status-${list.listId}'),
+            text: localizations.listStatusOpen,
+          ),
+        ],
+      ),
       trailing: IconButton(
         key: Key('list-rename-button-${list.listId}'),
         icon: const Icon(Icons.edit_outlined),
         tooltip: localizations.listsRenameAction,
         onPressed: onRename,
+      ),
+    );
+  }
+}
+
+class _DoneArchiveBody extends StatelessWidget {
+  const _DoneArchiveBody({required this.state});
+
+  final ShoppingListsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
+    return switch (state.archiveStatus) {
+      ArchiveStatus.idle || ArchiveStatus.loading =>
+        const Center(child: CircularProgressIndicator(key: Key('lists-archive-loading'))),
+      ArchiveStatus.failure => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              localizedMessageForErrorCode(localizations, state.archiveError!.code),
+              key: const Key('lists-archive-error'),
+            ),
+            const SizedBox(height: SgartShapes.space4),
+            SgartButton(
+              key: const Key('lists-archive-retry-button'),
+              label: localizations.householdsRetryButtonLabel,
+              onPressed: () => context.read<ShoppingListsCubit>().retryArchive(),
+            ),
+          ],
+        ),
+      ArchiveStatus.ready => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (state.doneLists.isEmpty)
+              Text(localizations.listsArchiveEmptyState, key: const Key('lists-archive-empty-state'))
+            else
+              for (final list in state.doneLists) _ArchiveRow(list: list),
+          ],
+        ),
+    };
+  }
+}
+
+class _ArchiveRow extends StatelessWidget {
+  const _ArchiveRow({required this.list});
+
+  final ShoppingListSummary list;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    // A Done list has no ordinal in the "Liste N" sequence (2.1's ordinal counts Open lists only) —
+    // the simplest correct fallback for an unnamed archived row (Epic 3 finalizes this labeling).
+    final displayName = list.name ?? localizations.listsArchiveUnnamedFallback;
+
+    return ListTile(
+      key: Key('list-archive-row-${list.listId}'),
+      contentPadding: EdgeInsets.zero,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(displayName),
+          const SizedBox(height: SgartShapes.spaceHalfUnit),
+          StatusLabel(
+            key: Key('list-status-${list.listId}'),
+            text: localizations.listStatusDone,
+          ),
+        ],
       ),
     );
   }

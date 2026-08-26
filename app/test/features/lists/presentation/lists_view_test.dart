@@ -140,5 +140,117 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('defaultsToOffenAndShowsTheCreateAction', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-create-button')), findsOneWidget);
+      expect(find.byKey(const Key('lists-archive-empty-state')), findsNothing);
+    });
+
+    testWidgets('switchingToErledigtRendersTheArchiveReadOnly', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
+      ];
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alte Liste'), findsOneWidget);
+      expect(find.byKey(const Key('lists-create-button')), findsNothing);
+      expect(find.byKey(const Key('list-rename-button-d1')), findsNothing);
+    });
+
+    testWidgets('anEmptyArchiveShowsTheArchiveEmptyState', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-archive-empty-state')), findsOneWidget);
+    });
+
+    testWidgets('switchingBackToOffenRestoresCreateAndRename', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Offen'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-create-button')), findsOneWidget);
+      expect(find.byKey(const Key('list-rename-button-l1')), findsOneWidget);
+    });
+
+    testWidgets('anArchiveLoadFailureMapsToLocalizedCopyWithoutTearingDownTheOpenView', (tester) async {
+      shoppingListsApi.doneListError =
+          const AppException(AppError(code: 'list.nameTooLong', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Der Name der Liste ist zu lang. Bitte wähle einen kürzeren Namen.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Offen'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-create-button')), findsOneWidget);
+    });
+
+    testWidgets('theArchiveFailureOffersARetryThatReloadsTheArchive', (tester) async {
+      shoppingListsApi.doneListError =
+          const AppException(AppError(code: 'list.nameTooLong', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('lists-archive-error')), findsOneWidget);
+
+      // The transient error clears; the retry affordance reloads the archive in place.
+      shoppingListsApi.doneListError = null;
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      await tester.tap(find.byKey(const Key('lists-archive-retry-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-archive-error')), findsNothing);
+      expect(find.text('Alte Liste'), findsOneWidget);
+    });
+
+    testWidgets('anOpenListRowShowsTheOffenStatusLabel', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('list-status-l1')), findsOneWidget);
+    });
+
+    testWidgets('theSegmentedControlExposesLocalizedLabels', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Offen'), findsOneWidget);
+      expect(find.text('Erledigt'), findsOneWidget);
+    });
   });
 }

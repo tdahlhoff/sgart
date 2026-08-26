@@ -7,10 +7,11 @@ import '../data/shopping_list_summary.dart';
 import '../data/shopping_lists_api.dart';
 import 'shopping_lists_state.dart';
 
-/// Drives the minimal lists surface (Story 2.1, AC1–AC3): loads the household's Open lists in
-/// creation order, creates a list (named or unnamed), and renames a list. Depends only on the
-/// [ShoppingListsApi] so tests never touch the network (CLAUDE.md §6); guards every `emit` with
-/// `isClosed`.
+/// Drives the Listen overview (Story 2.1 AC1–AC3; Story 2.2 AC1/AC2): loads the household's Open
+/// lists in creation order, creates a list (named or unnamed), renames a list, and switches the
+/// Offen/Erledigt filter — lazily loading and caching the read-only Done archive on first
+/// selection. Depends only on the [ShoppingListsApi] so tests never touch the network (CLAUDE.md
+/// §6); guards every `emit` with `isClosed`.
 class ShoppingListsCubit extends Cubit<ShoppingListsState> {
   ShoppingListsCubit({required this.shoppingListsApi, required this.householdId})
       : super(const ShoppingListsState.loading());
@@ -36,6 +37,50 @@ class ShoppingListsCubit extends Cubit<ShoppingListsState> {
 
   /// Reloads the household's Open lists — the empty-state/failure retry affordance.
   Future<void> refresh() => _load();
+
+  /// Switches the Listen overview between the Open lists and the Done archive (Story 2.2,
+  /// AC1/AC2). Selecting [ListFilter.done] lazily loads the archive on first selection and
+  /// caches it — switching back and forth afterward needs no refetch. Selecting [ListFilter.open]
+  /// never refetches. A no-op while the initial load hasn't completed. A previously *failed*
+  /// archive load is retried on the next Done selection so a transient error is not a dead-end.
+  Future<void> selectFilter(ListFilter filter) async {
+    if (state.status != ShoppingListsStatus.ready) {
+      return;
+    }
+    _safeEmit(state.copyWith(filter: filter));
+    final archiveNeedsLoad =
+        state.archiveStatus == ArchiveStatus.idle || state.archiveStatus == ArchiveStatus.failure;
+    if (filter == ListFilter.done && archiveNeedsLoad) {
+      await _loadArchive();
+    }
+  }
+
+  /// Retries a failed archive load from the archive's failure affordance — the archive is cached
+  /// once loaded, so this is its only in-place reload path (Story 2.2, AC2).
+  Future<void> retryArchive() async {
+    if (state.status != ShoppingListsStatus.ready || state.archiveStatus != ArchiveStatus.failure) {
+      return;
+    }
+    await _loadArchive();
+  }
+
+  Future<void> _loadArchive() async {
+    _safeEmit(state.copyWith(archiveStatus: ArchiveStatus.loading, clearArchiveError: true));
+    try {
+      final doneLists = await shoppingListsApi.listDoneLists(householdId);
+      // A concurrent full reload (bootstrap/refresh) may have taken the state out of `ready` during
+      // the await; don't let this archive result resurrect a torn-down screen (copyWith forces ready).
+      if (state.status != ShoppingListsStatus.ready) {
+        return;
+      }
+      _safeEmit(state.copyWith(doneLists: doneLists, archiveStatus: ArchiveStatus.ready));
+    } on Object catch (error) {
+      if (state.status != ShoppingListsStatus.ready) {
+        return;
+      }
+      _safeEmit(state.copyWith(archiveStatus: ArchiveStatus.failure, archiveError: _toAppError(error)));
+    }
+  }
 
   Future<void> _load() async {
     _safeEmit(const ShoppingListsState.loading());

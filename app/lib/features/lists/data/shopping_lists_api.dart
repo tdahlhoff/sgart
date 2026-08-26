@@ -2,11 +2,15 @@ import '../../../shared/http/authenticated_http_client.dart';
 import 'shopping_list_summary.dart';
 
 /// The client's shopping-list source — calls the backend's list slice under a household
-/// (`/api/v1/households/{householdId}/lists`) (Story 2.1).
+/// (`/api/v1/households/{householdId}/lists`) (Story 2.1; the `?filter` split, Story 2.2).
 abstract interface class ShoppingListsApi {
   /// Lists the household's Open lists in creation order (AC1/AC2 — the client derives „Liste N"
-  /// from the array position).
+  /// from the array position). Calls the default/`?filter=open` endpoint.
   Future<List<ShoppingListSummary>> listOpenLists(String householdId);
+
+  /// Lists the household's Done lists — the read-only „Erledigt" archive (Story 2.2, AC2). Always
+  /// empty in Epic 2 (no capability produces a Done list yet); calls `?filter=done`.
+  Future<List<ShoppingListSummary>> listDoneLists(String householdId);
 
   /// Creates a list, named or unnamed (AC1). [commandId] and [listId] are the caller-minted
   /// idempotency keys reused across retries of the *same* intent (AD-8), exactly like `addStore`.
@@ -28,6 +32,12 @@ class HttpShoppingListsApi implements ShoppingListsApi {
   @override
   Future<List<ShoppingListSummary>> listOpenLists(String householdId) async {
     final json = await _client.getJsonList('/api/v1/households/$householdId/lists');
+    return json.map((entry) => ShoppingListSummary.fromJson(entry as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<ShoppingListSummary>> listDoneLists(String householdId) async {
+    final json = await _client.getJsonList('/api/v1/households/$householdId/lists?filter=done');
     return json.map((entry) => ShoppingListSummary.fromJson(entry as Map<String, dynamic>)).toList();
   }
 

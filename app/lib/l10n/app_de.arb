@@ -358,6 +358,36 @@
     "description": "Localized copy for the shoppingList.notFound error code."
   },
 
+  "listsFilterOpen": "Offen",
+  "@listsFilterOpen": {
+    "description": "Segmented-control label for the Open lists view on the Listen overview (Story 2.2, AC1)."
+  },
+
+  "listsFilterDone": "Erledigt",
+  "@listsFilterDone": {
+    "description": "Segmented-control label for the read-only Done archive on the Listen overview (Story 2.2, AC2)."
+  },
+
+  "listsArchiveEmptyState": "Noch keine erledigten Listen.",
+  "@listsArchiveEmptyState": {
+    "description": "Shown in the Erledigt archive while it has no Done lists — always in Epic 2 (Story 2.2, AC2)."
+  },
+
+  "listsArchiveUnnamedFallback": "Liste",
+  "@listsArchiveUnnamedFallback": {
+    "description": "Fallback display name for an unnamed Done list in the archive — a Done list has no ordinal in the 'Liste N' sequence (Story 2.2, AC2, Dev Notes). Epic 3 finalizes archived-unnamed labeling."
+  },
+
+  "listStatusOpen": "Offen",
+  "@listStatusOpen": {
+    "description": "Row status label text for an Open list on the Listen overview (Story 2.2, AC1, DESIGN §4b)."
+  },
+
+  "listStatusDone": "Erledigt",
+  "@listStatusDone": {
+    "description": "Row status label text for a Done list in the archive (Story 2.2, AC2, DESIGN §4b)."
+  },
+
   "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
   "@onboardingChoicePrivacyNote": {
     "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."

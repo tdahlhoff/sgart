@@ -1,7 +1,9 @@
 package de.sgart.collaboration.adapter.in;
 
+import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.query.ListDoneLists;
 import de.sgart.collaboration.application.query.ListOpenLists;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
 import java.util.List;
@@ -14,18 +16,20 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Shopping list management (Story 2.1, AC1/AC2/AC3): lists are nested under the household they
- * belong to (mirroring {@code StoreController}), even though {@code ShoppingList} is a distinct
- * aggregate that references the household by id only (AD-3). {@code POST} creates a list (the
- * client minted the {@code listId} and carries it, so the response needs no body — {@code 201});
- * {@code GET} lists the household's Open lists in creation order (the AC2 ordinal source);
- * {@code PATCH} renames a list ({@code 204}, mirroring the household rename shape). Caller identity
- * comes only from the JWT {@code sub} via {@link AuthenticatedCaller} — never from the body/path
- * (AR10, AD-5).
+ * Shopping list management (Story 2.1 AC1/AC2/AC3; Story 2.2 AC1/AC2): lists are nested under the
+ * household they belong to (mirroring {@code StoreController}), even though {@code ShoppingList} is
+ * a distinct aggregate that references the household by id only (AD-3). {@code POST} creates a list
+ * (the client minted the {@code listId} and carries it, so the response needs no body — {@code
+ * 201}); {@code GET} lists the household's lists, {@code open} (default, the AC2 ordinal source) or
+ * {@code done} (the read-only archive) per the {@code ?filter} parameter — an unrecognized value is a
+ * fail-fast {@code 400}; {@code PATCH} renames a list ({@code 204}, mirroring the household rename
+ * shape). Caller identity comes only from the JWT {@code sub} via {@link AuthenticatedCaller} — never
+ * from the body/path (AR10, AD-5).
  */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/lists")
@@ -34,14 +38,17 @@ class ShoppingListController {
     private final CreateShoppingListHandler createShoppingListHandler;
     private final RenameShoppingListHandler renameShoppingListHandler;
     private final ListOpenLists listOpenLists;
+    private final ListDoneLists listDoneLists;
 
     ShoppingListController(
             CreateShoppingListHandler createShoppingListHandler,
             RenameShoppingListHandler renameShoppingListHandler,
-            ListOpenLists listOpenLists) {
+            ListOpenLists listOpenLists,
+            ListDoneLists listDoneLists) {
         this.createShoppingListHandler = createShoppingListHandler;
         this.renameShoppingListHandler = renameShoppingListHandler;
         this.listOpenLists = listOpenLists;
+        this.listDoneLists = listDoneLists;
     }
 
     @PostMapping
@@ -57,10 +64,18 @@ class ShoppingListController {
     }
 
     @GetMapping
-    List<ShoppingListSummaryResponse> list(@AuthenticationPrincipal Jwt jwt, @PathVariable String householdId) {
+    List<ShoppingListSummaryResponse> list(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @RequestParam(defaultValue = "open") String filter) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+        String validatedFilter = CommandFieldTranslations.toValidatedListFilter(filter);
 
-        return listOpenLists.forHousehold(caller.keycloakUserId(), householdId).stream()
+        List<ListOpenLists.ShoppingListSummary> summaries = "done".equals(validatedFilter)
+                ? listDoneLists.forHousehold(caller.keycloakUserId(), householdId)
+                : listOpenLists.forHousehold(caller.keycloakUserId(), householdId);
+
+        return summaries.stream()
                 .map(summary -> new ShoppingListSummaryResponse(summary.listId(), summary.name(), summary.status()))
                 .toList();
     }

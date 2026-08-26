@@ -5,9 +5,12 @@ import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 /// `FakeStoresApi`.
 class FakeShoppingListsApi implements ShoppingListsApi {
   List<ShoppingListSummary> listsToReturn = const [];
+  List<ShoppingListSummary> doneListsToReturn = const [];
   Object? listError;
+  Object? doneListError;
   Object? createError;
   Object? renameError;
+  int listDoneListsCallCount = 0;
 
   String? lastCreatedName;
   String? lastCreatedListId;
@@ -24,6 +27,13 @@ class FakeShoppingListsApi implements ShoppingListsApi {
   Future<List<ShoppingListSummary>> listOpenLists(String householdId) async {
     if (listError != null) throw listError!;
     return listsToReturn;
+  }
+
+  @override
+  Future<List<ShoppingListSummary>> listDoneLists(String householdId) async {
+    listDoneListsCallCount++;
+    if (doneListError != null) throw doneListError!;
+    return doneListsToReturn;
   }
 
   @override

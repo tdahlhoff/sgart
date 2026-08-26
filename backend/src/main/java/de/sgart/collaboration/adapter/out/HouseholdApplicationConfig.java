@@ -5,6 +5,7 @@ import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.query.ListDoneLists;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.query.ListOpenLists;
 import de.sgart.collaboration.application.query.ListStores;
@@ -75,5 +76,10 @@ public class HouseholdApplicationConfig {
     @Bean
     ListOpenLists listOpenLists(ResolveMemberIdentity resolveMemberIdentity, ShoppingListReadModel shoppingListReadModel) {
         return new ListOpenLists(resolveMemberIdentity, shoppingListReadModel);
+    }
+
+    @Bean
+    ListDoneLists listDoneLists(ResolveMemberIdentity resolveMemberIdentity, ShoppingListReadModel shoppingListReadModel) {
+        return new ListDoneLists(resolveMemberIdentity, shoppingListReadModel);
     }
 }

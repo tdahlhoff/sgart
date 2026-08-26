@@ -42,6 +42,9 @@
 
 generated: 2026-08-22
 last_updated: 2026-08-26
+# Story 2.2 done (code review, Opus 4.8) 2026-08-26 — 2 patches applied (filter enum renamed offen/erledigt→open/done for cross-boundary language consistency; archive-load-failure retry + retryArchive() + failure-body retry button), 1 defer logged (Epic-3 archive cache invalidation), 4 dismissed; backend 271, Flutter 278→282 green
+# Story 2.2 review (dev-story, Sonnet 5) 2026-08-26 — ListDoneLists + ?filter=open|done + Flutter segmented filter/read-only archive
+# Story 2.2 ready-for-dev (create-story) 2026-08-26; 2 LOCKED clarifications — counts/progress deferred to 2.3/Epic 3, Done archive built read-only (empty until Epic 3)
 # Story 2.1 done (code review) 2026-08-26 — 4 patches applied, 3 defers logged; backend 260, Flutter 266 green
 # Story 2.1 review (dev-story) 2026-08-26
 # Story 2.1 in-progress (dev-story) 2026-08-26
@@ -83,7 +86,7 @@ development_status:
   # Epic 2: Shared Lists & Fast Capture
   epic-2: in-progress
   2-1-create-and-name-multiple-open-lists: done
-  2-2-listen-overview-with-offen-erledigt-filter: backlog
+  2-2-listen-overview-with-offen-erledigt-filter: done
   2-3-add-edit-and-remove-items: backlog
   2-4-move-an-item-to-another-list: backlog
   2-5-fast-item-entry-with-autocomplete-attribute-prefill: backlog

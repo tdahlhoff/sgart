@@ -18,6 +18,9 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'list.nameTooLong' => localizations.listsNameTooLongError,
     'list.nameChangeNotPermitted' => localizations.listsNameChangeNotPermittedError,
     'list.notFound' => localizations.listsNotFoundError,
+    // The client never sends a bad filter — this only guards against an unmapped 4xx surfacing
+    // as the generic fallback, since the resolver must cover every server code (retro DoD).
+    'command.listFilterInvalid' => localizations.errorGenericFallback,
     _ => localizations.errorGenericFallback,
   };
 }
