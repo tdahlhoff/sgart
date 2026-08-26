@@ -6,9 +6,12 @@ import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/first_run_router.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
+import 'package:sgart/features/lists/data/shopping_list_summary.dart';
+import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
@@ -43,7 +46,10 @@ void main() {
             value: authCubit,
             child: RepositoryProvider<HouseholdsApi>.value(
               value: householdsApi,
-              child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              child: RepositoryProvider<ShoppingListsApi>.value(
+                value: FakeShoppingListsApi(),
+                child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              ),
             ),
           ),
         );
@@ -109,6 +115,7 @@ void main() {
 
   group('HouseholdShell tabs', () {
     late FakeHouseholdsApi householdsApi;
+    late FakeShoppingListsApi shoppingListsApi;
     late HouseholdsCubit cubit;
     late AuthCubit authCubit;
 
@@ -116,6 +123,7 @@ void main() {
 
     setUp(() async {
       householdsApi = FakeHouseholdsApi()..householdsToReturn = const [familie];
+      shoppingListsApi = FakeShoppingListsApi();
       cubit = HouseholdsCubit(
         householdsApi: householdsApi,
         activeHouseholdStore: FakeActiveHouseholdStore(activeId: 'id-1'),
@@ -133,7 +141,10 @@ void main() {
             value: authCubit,
             child: RepositoryProvider<HouseholdsApi>.value(
               value: householdsApi,
-              child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              child: RepositoryProvider<ShoppingListsApi>.value(
+                value: shoppingListsApi,
+                child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              ),
             ),
           ),
         );
@@ -167,11 +178,14 @@ void main() {
       expect(find.byKey(const Key('sign-out-button')), findsOneWidget);
     });
 
-    testWidgets('tappingTheListenAndEinkaufTabsSelectsTheirPlaceholders', (tester) async {
+    testWidgets('theListenTabShowsTheRealListsViewAndEinkaufStaysAPlaceholder', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'list-1', name: 'Wocheneinkauf', status: 'OPEN'),
+      ];
       await pumpShell(tester);
 
       expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 0);
-      expect(find.text('Deine Listen kommen in einer späteren Version.'), findsOneWidget);
+      expect(find.text('Wocheneinkauf'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('shell-tab-shopping')));
       await tester.pumpAndSettle();

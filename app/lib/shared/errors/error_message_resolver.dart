@@ -14,6 +14,10 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'store.nameRequired' => localizations.storesNameRequiredError,
     'store.nameTooLong' => localizations.storesNameTooLongError,
     'store.duplicateName' => localizations.storesDuplicateNameError,
+    'list.nameRequired' => localizations.listsNameRequiredError,
+    'list.nameTooLong' => localizations.listsNameTooLongError,
+    'list.nameChangeNotPermitted' => localizations.listsNameChangeNotPermittedError,
+    'list.notFound' => localizations.listsNotFoundError,
     _ => localizations.errorGenericFallback,
   };
 }

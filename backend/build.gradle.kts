@@ -27,6 +27,11 @@ dependencies {
     // PostgreSQL read side (Story 1.6): durable Identity ACL mapping + household read model.
     // Plain SQL + JdbcClient, not JPA — read models are simple projections (Clarification 3).
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    // Boot 4 split Flyway's Spring integration (FlywayAutoConfiguration, the `spring.flyway.*`
+    // properties) out of spring-boot-jdbc into its own module — without it, `flyway-core` sits on
+    // the classpath but no migration ever runs (discovered via the Epic-1-retro-mandated real
+    // end-to-end stack run, Story 2.1: SGART_FLYWAY_ENABLED=true silently did nothing).
+    implementation("org.springframework.boot:spring-boot-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
     // Real KurrentDB EventStore adapter (Story 1.6, deferred from 1.5).

@@ -7,6 +7,9 @@ import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.ShoppingListName;
+import de.sgart.collaboration.domain.event.ShoppingListCreated;
+import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.StoreName;
@@ -14,6 +17,7 @@ import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 import org.junit.jupiter.api.Test;
@@ -78,6 +82,34 @@ class DomainEventJsonCodecTest {
         StoreArchived event = new StoreArchived(EventId.generate(), householdId, StoreId.generate());
 
         assertThat(codec.typeTagFor(event)).isEqualTo("StoreArchived");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void shoppingListCreatedWithANameRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ShoppingListCreated event = new ShoppingListCreated(
+                EventId.generate(), householdId, ShoppingListId.generate(), new ShoppingListName("Wocheneinkauf"));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ShoppingListCreated");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void shoppingListCreatedWithNoNameRoundTripsThroughJsonPreservingTheNullName() {
+        ShoppingListCreated event =
+                new ShoppingListCreated(EventId.generate(), householdId, ShoppingListId.generate(), null);
+
+        ShoppingListCreated decoded = (ShoppingListCreated) roundTrip(event);
+        assertThat(decoded).isEqualTo(event);
+        assertThat(decoded.name()).isNull();
+    }
+
+    @Test
+    void shoppingListRenamedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ShoppingListRenamed event =
+                new ShoppingListRenamed(EventId.generate(), ShoppingListId.generate(), new ShoppingListName("Getränke"));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ShoppingListRenamed");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

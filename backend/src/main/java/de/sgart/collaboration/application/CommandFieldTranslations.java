@@ -4,12 +4,15 @@ import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 
@@ -98,6 +101,45 @@ public final class CommandFieldTranslations {
             return StoreChainId.fromString(rawChainId);
         } catch (IllegalArgumentException notAUuid) {
             throw new InvalidCommandEnvelopeException("command.chainIdInvalid", "chainId must be a valid UUID");
+        }
+    }
+
+    public static ShoppingListId toShoppingListId(String rawListId) {
+        if (rawListId == null || rawListId.isBlank()) {
+            throw new InvalidCommandEnvelopeException("command.listIdRequired", "listId must be provided");
+        }
+        try {
+            return ShoppingListId.fromString(rawListId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new InvalidCommandEnvelopeException("command.listIdInvalid", "listId must be a valid UUID");
+        }
+    }
+
+    /**
+     * Translates the <em>optional</em> create-time list name (AC1). A missing/blank value means the
+     * list is unnamed and yields {@code null} — not an error (the "Liste N" case, AC2); only an
+     * over-long value is a fail-fast {@code 400}.
+     */
+    public static ShoppingListName toShoppingListNameOrNull(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return null;
+        }
+        try {
+            return new ShoppingListName(rawName);
+        } catch (IllegalArgumentException tooLong) {
+            throw new InvalidShoppingListNameException("list.nameTooLong", tooLong.getMessage());
+        }
+    }
+
+    /** Translates the <em>required</em> rename-time list name (AC3) — blank is a fail-fast {@code 400}. */
+    public static ShoppingListName toShoppingListName(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            throw new InvalidShoppingListNameException("list.nameRequired", "Shopping list name must not be blank");
+        }
+        try {
+            return new ShoppingListName(rawName);
+        } catch (IllegalArgumentException tooLong) {
+            throw new InvalidShoppingListNameException("list.nameTooLong", tooLong.getMessage());
         }
     }
 }

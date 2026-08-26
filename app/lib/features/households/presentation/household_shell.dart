@@ -4,6 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../lists/data/shopping_lists_api.dart';
+import '../../lists/presentation/lists_view.dart';
+import '../../lists/presentation/shopping_lists_cubit.dart';
 import '../../settings/presentation/profile_screen.dart';
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
@@ -49,10 +52,24 @@ class _HouseholdShellState extends State<HouseholdShell> {
         ],
       ),
       // Built eagerly for all three tabs so state is preserved when switching (and the Profil
-      // identity header can read the ancestor AuthCubit at build time, not just on tap).
+      // identity header can read the ancestor AuthCubit at build time, not just on tap). The Listen
+      // tab's cubit is keyed on the active household's id so the provider is torn down and rebuilt
+      // on a household switch — the shell itself keeps this state across tab switches via the
+      // IndexedStack, so a stale cubit would otherwise linger.
       body: IndexedStack(
         index: _selectedTabIndex,
-        children: const [_ListsPlaceholder(), _ShoppingPlaceholder(), ProfileScreen()],
+        children: [
+          BlocProvider<ShoppingListsCubit>(
+            key: ValueKey(widget.activeHousehold.householdId),
+            create: (context) => ShoppingListsCubit(
+              shoppingListsApi: context.read<ShoppingListsApi>(),
+              householdId: widget.activeHousehold.householdId,
+            )..bootstrap(),
+            child: const ListsView(),
+          ),
+          const _ShoppingPlaceholder(),
+          const ProfileScreen(),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTabIndex,
@@ -93,23 +110,6 @@ class _HouseholdShellState extends State<HouseholdShell> {
           value: householdsCubit,
           child: HouseholdSwitcherSheet(activeHousehold: widget.activeHousehold, households: widget.households),
         ),
-      ),
-    );
-  }
-}
-
-/// Calm, plain-German placeholder for the Listen tab (Epic 2 delivers the real screen).
-class _ListsPlaceholder extends StatelessWidget {
-  const _ListsPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(SgartShapes.cardPadding),
-        child: Text(localizations.shellTabListsPlaceholder, textAlign: TextAlign.center),
       ),
     );
   }

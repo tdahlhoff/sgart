@@ -29,6 +29,11 @@ public class HouseholdReadModelConfig {
     }
 
     @Bean
+    JdbcShoppingListReadModel jdbcShoppingListReadModel(JdbcClient jdbcClient) {
+        return new JdbcShoppingListReadModel(jdbcClient);
+    }
+
+    @Bean
     HouseholdReadModelProjector householdReadModelProjector(
             KurrentDBClient kurrentDbClient,
             JdbcHouseholdReadModel jdbcHouseholdReadModel,
@@ -36,5 +41,13 @@ public class HouseholdReadModelConfig {
             @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
         return new HouseholdReadModelProjector(
                 kurrentDbClient, jdbcHouseholdReadModel, jdbcStoreReadModel, autoStart);
+    }
+
+    @Bean
+    ShoppingListReadModelProjector shoppingListReadModelProjector(
+            KurrentDBClient kurrentDbClient,
+            JdbcShoppingListReadModel jdbcShoppingListReadModel,
+            @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
+        return new ShoppingListReadModelProjector(kurrentDbClient, jdbcShoppingListReadModel, autoStart);
     }
 }

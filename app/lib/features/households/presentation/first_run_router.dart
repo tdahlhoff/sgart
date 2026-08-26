@@ -9,6 +9,7 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../lists/data/shopping_lists_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
 import '../data/active_household_store.dart';
@@ -37,6 +38,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final HouseholdsApi _householdsApi;
   late final StoresApi _storesApi;
+  late final ShoppingListsApi _shoppingListsApi;
   static const ActiveHouseholdStore _activeHouseholdStore = SharedPreferencesActiveHouseholdStore();
   static const StoreChainReferenceCache _storeChainReferenceCache =
       SharedPreferencesStoreChainReferenceCache();
@@ -52,6 +54,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     );
     _householdsApi = HttpHouseholdsApi(httpClient);
     _storesApi = HttpStoresApi(httpClient);
+    _shoppingListsApi = HttpShoppingListsApi(httpClient);
   }
 
   @override
@@ -69,6 +72,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         // HouseholdsApi is) so the manage screen and pickers can `context.read` them (Story 1.8).
         RepositoryProvider<StoresApi>.value(value: _storesApi),
         RepositoryProvider<StoreChainReferenceCache>.value(value: _storeChainReferenceCache),
+        // The Listen tab reads this to build its household-scoped ShoppingListsCubit (Story 2.1).
+        RepositoryProvider<ShoppingListsApi>.value(value: _shoppingListsApi),
       ],
       child: BlocProvider(
         create: (_) => HouseholdsCubit(

@@ -3,9 +3,12 @@ package de.sgart.collaboration.adapter.in;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
+import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -65,5 +68,21 @@ class WriteErrorAdvice {
     @ExceptionHandler(RenameNotPermittedApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleRenameNotPermitted(RenameNotPermittedApplicationException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidShoppingListNameException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidShoppingListName(InvalidShoppingListNameException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ListNameChangeNotPermittedApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleListNameChangeNotPermitted(
+            ListNameChangeNotPermittedApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ShoppingListNotFoundException.class)
+    ResponseEntity<ErrorDescriptor> handleShoppingListNotFound(ShoppingListNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.errorDescriptor());
     }
 }

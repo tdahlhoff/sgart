@@ -5,11 +5,13 @@ import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/first_run_router.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
+import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
@@ -37,7 +39,10 @@ void main() {
     Widget buildSubject() => wrapForTesting(
           BlocProvider<AuthCubit>.value(
             value: authCubit,
-            child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+            child: RepositoryProvider<ShoppingListsApi>.value(
+              value: FakeShoppingListsApi(),
+              child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+            ),
           ),
         );
 

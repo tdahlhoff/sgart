@@ -29,6 +29,23 @@ class StreamIdTest {
     }
 
     @Test
+    void forList_encodesTheListStreamKeyConvention() {
+        ShoppingListId listId = ShoppingListId.generate();
+
+        StreamId streamId = StreamId.forList(listId);
+
+        assertThat(streamId.type()).isEqualTo(StreamType.LIST);
+        assertThat(streamId.key()).isEqualTo("list-" + listId);
+        assertThat(streamId).hasToString("list-" + listId);
+    }
+
+    @Test
+    void forList_rejectsANullListId() {
+        assertThatThrownBy(() -> StreamId.forList(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void streamTypePrefixes_followTheSpineConvention() {
         assertThat(StreamType.HOUSEHOLD.prefix()).isEqualTo("household");
         assertThat(StreamType.LIST.prefix()).isEqualTo("list");

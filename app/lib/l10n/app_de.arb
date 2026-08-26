@@ -282,6 +282,82 @@
     "description": "Localized copy for the store.duplicateName error code — an active store already has this name."
   },
 
+  "listsCreateAction": "+ Neue Liste",
+  "@listsCreateAction": {
+    "description": "Button label that opens the create-list sheet on the Listen tab (Story 2.1, AC1)."
+  },
+
+  "listsCreateHeading": "Neue Liste",
+  "@listsCreateHeading": {
+    "description": "Heading of the create-list sheet (Story 2.1, AC1)."
+  },
+
+  "listsCreateNameHint": "Name (optional)",
+  "@listsCreateNameHint": {
+    "description": "Hint text of the optional name field on the create-list sheet (Story 2.1, AC1)."
+  },
+
+  "listsCreateSubmitButtonLabel": "Erstellen",
+  "@listsCreateSubmitButtonLabel": {
+    "description": "Submit button label on the create-list sheet (Story 2.1, AC1)."
+  },
+
+  "listsDefaultName": "Liste {number}",
+  "@listsDefaultName": {
+    "description": "Derived display name for an unnamed Open list, by its 1-based creation-order position among Open lists (Story 2.1, AC2). Only the number is derived server-side data; this template is client-side localization.",
+    "placeholders": {
+      "number": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+
+  "listsRenameAction": "Umbenennen",
+  "@listsRenameAction": {
+    "description": "Per-row action that opens the rename-list sheet (Story 2.1, AC3)."
+  },
+
+  "listsRenameHeading": "Liste umbenennen",
+  "@listsRenameHeading": {
+    "description": "Heading of the rename-list sheet (Story 2.1, AC3)."
+  },
+
+  "listsRenameNameFieldLabel": "Name",
+  "@listsRenameNameFieldLabel": {
+    "description": "Label of the required name field on the rename-list sheet (Story 2.1, AC3)."
+  },
+
+  "listsRenameSubmitButtonLabel": "Umbenennen",
+  "@listsRenameSubmitButtonLabel": {
+    "description": "Submit button label on the rename-list sheet (Story 2.1, AC3)."
+  },
+
+  "listsEmptyState": "Noch keine Listen. Erstelle deine erste Liste, um loszulegen.",
+  "@listsEmptyState": {
+    "description": "Shown on the Listen tab when the household has no Open lists yet (Story 2.1, UX-DR13)."
+  },
+
+  "listsNameRequiredError": "Bitte gib einen Namen für die Liste ein.",
+  "@listsNameRequiredError": {
+    "description": "Localized copy for the list.nameRequired error code — a blank or whitespace-only name."
+  },
+
+  "listsNameTooLongError": "Der Name der Liste ist zu lang. Bitte wähle einen kürzeren Namen.",
+  "@listsNameTooLongError": {
+    "description": "Localized copy for the list.nameTooLong error code."
+  },
+
+  "listsNameChangeNotPermittedError": "Der Name dieser Liste kann nicht mehr geändert werden.",
+  "@listsNameChangeNotPermittedError": {
+    "description": "Localized copy for the list.nameChangeNotPermitted error code — the list is no longer Open."
+  },
+
+  "listsNotFoundError": "Diese Liste wurde nicht gefunden.",
+  "@listsNotFoundError": {
+    "description": "Localized copy for the shoppingList.notFound error code."
+  },
+
   "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
   "@onboardingChoicePrivacyNote": {
     "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."
@@ -423,11 +499,6 @@
   "shellTabProfileLabel": "Profil",
   "@shellTabProfileLabel": {
     "description": "Label of the Profil bottom-navigation tab in the authenticated app shell (Story 1.11, AC1)."
-  },
-
-  "shellTabListsPlaceholder": "Deine Listen kommen in einer späteren Version.",
-  "@shellTabListsPlaceholder": {
-    "description": "Calm placeholder copy shown on the Listen tab until Epic 2 delivers it (Story 1.11, AC1)."
   },
 
   "shellTabShoppingPlaceholder": "Der Einkauf kommt in einer späteren Version.",
