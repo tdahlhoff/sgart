@@ -48,7 +48,12 @@ import org.springframework.test.web.servlet.MockMvc;
  * durable adapters swapped for in-memory doubles ({@link InMemoryEventStore}, {@link
  * InMemoryMemberMappingRepository}, and an in-memory {@link ItemReadModel}) — no live
  * KurrentDB/PostgreSQL. Proves Story 2.3 AC1–AC8 end-to-end through REST: add ({@code 201}), list
- * ({@code 200}), update ({@code 204}), remove ({@code 204}), and the 400/403/404/409 error surface.
+ * ({@code 200}), update ({@code 204}), remove ({@code 204}), and the 400/403/404/409 error surface;
+ * Story 2.4 adds move ({@code 204}) and its 400/403/404 surface. The move's {@code 409
+ * list.moveTargetNotOpen} branch is coded ({@code MoveItemHandler}) but, like the sibling DONE
+ * branches elsewhere in this suite (see {@code ShoppingListItemsTest}), only reachable end-to-end
+ * once Epic 3 introduces a status-changing transition — no synthetic Epic-3 event exists to drive a
+ * list into a non-Open status, so it is not exercised here; see {@code deferred-work.md}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -339,6 +344,115 @@ class ItemControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"commandId\":\"%s\"}".formatted(UUID.randomUUID())))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void move_returns204ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(targetListId, UUID.randomUUID())))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void move_returns400WhenTargetEqualsSource() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), listId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(listId, UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("list.moveTargetSameAsSource"));
+    }
+
+    @Test
+    void move_returns404ForAnUnknownSource() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId targetListId = seedListIn(householdId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        ShoppingListId.generate().toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(targetListId, UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    @Test
+    void move_returns404ForAnUnknownTarget() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(ShoppingListId.generate(), UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    @Test
+    void move_rejectsANonMemberWith403() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(targetListId, UUID.randomUUID())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
     }
 
     @Test

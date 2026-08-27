@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
+import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/lists/presentation/lists_view.dart';
 import 'package:sgart/features/lists/presentation/shopping_lists_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
@@ -26,12 +27,15 @@ void main() {
     Widget buildSubject() => wrapForTesting(
           RepositoryProvider<ItemsApi>.value(
             value: itemsApi,
-            child: BlocProvider(
-              create: (_) => ShoppingListsCubit(
-                shoppingListsApi: shoppingListsApi,
-                householdId: 'household-1',
-              )..bootstrap(),
-              child: const Scaffold(body: ListsView()),
+            child: RepositoryProvider<ShoppingListsApi>.value(
+              value: shoppingListsApi,
+              child: BlocProvider(
+                create: (_) => ShoppingListsCubit(
+                  shoppingListsApi: shoppingListsApi,
+                  householdId: 'household-1',
+                )..bootstrap(),
+                child: const Scaffold(body: ListsView()),
+              ),
             ),
           ),
         );

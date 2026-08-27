@@ -90,7 +90,7 @@ development_status:
   2-1-create-and-name-multiple-open-lists: done
   2-2-listen-overview-with-offen-erledigt-filter: done
   2-3-add-edit-and-remove-items: done
-  2-4-move-an-item-to-another-list: backlog
+  2-4-move-an-item-to-another-list: done
   2-5-fast-item-entry-with-autocomplete-attribute-prefill: backlog
   2-6-assign-an-item-to-a-store-with-inline-store-creation: backlog
   epic-2-retrospective: optional

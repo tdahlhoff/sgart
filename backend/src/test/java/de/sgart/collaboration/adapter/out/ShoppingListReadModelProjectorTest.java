@@ -8,6 +8,7 @@ import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -241,6 +242,55 @@ class ShoppingListReadModelProjectorTest {
         projector.project(new ItemRemoved(EventId.generate(), listId, itemId));
 
         assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void projectingItemMovedToListDeletesTheSourceRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId sourceListId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(sourceListId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemMovedToList(
+                EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemReadModel.itemsOf(householdId, sourceListId)).isEmpty();
+    }
+
+    @Test
+    void aFullMoveLeavesExactlyOneRowUnderTheTargetListWithTheSameItemId() {
+        // The end-to-end move outcome (AC2): the source ItemMovedToList removal followed by the
+        // process manager's target ItemAdded — the item's identity survives the move.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId sourceListId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(sourceListId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(ShoppingList.create(targetListId, householdId, new ShoppingListName("Getränke"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemMovedToList(
+                EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"),
+                new ItemNote("Bio"), Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, targetListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemReadModel.itemsOf(householdId, sourceListId)).isEmpty();
+        assertThat(itemReadModel.itemsOf(householdId, targetListId))
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE)));
     }
 
     @Test

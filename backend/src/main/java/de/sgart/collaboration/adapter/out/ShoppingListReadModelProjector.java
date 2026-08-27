@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
@@ -82,6 +83,7 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             case ItemUpdated updated ->
                 itemReadModel.updateItem(updated.itemId(), updated.name(), updated.note(), updated.quantity());
             case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId());
+            case ItemMovedToList moved -> itemReadModel.removeItem(moved.itemId());
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events.
             }

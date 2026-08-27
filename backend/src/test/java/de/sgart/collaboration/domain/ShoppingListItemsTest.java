@@ -1,9 +1,11 @@
 package de.sgart.collaboration.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
@@ -34,7 +36,9 @@ import org.junit.jupiter.api.Test;
  * command with the same {@code requireOpen()} the aggregate uses internally) but only reachable
  * end-to-end once Epic 3 introduces a status-changing transition beyond {@code ShoppingListCreated}
  * — see Story 2.1 Clarification 1 and {@code deferred-work.md}; no synthetic Epic-3 event exists to
- * drive the aggregate into {@code DONE}, so it is not exercised here.
+ * drive the aggregate into {@code DONE}, so it is not exercised here. {@link ShoppingList#moveItem}
+ * (Story 2.4, AD-10 — the source side of the move) reuses the identical guard, so its {@code DONE}
+ * branch is deferred for the same reason.
  */
 class ShoppingListItemsTest {
 
@@ -223,6 +227,68 @@ class ShoppingListItemsTest {
     }
 
     @Test
+    void movingAnItemRaisesItemMovedToListCarryingTheItemsCurrentFields() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.moveItem(itemId, targetListId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemMovedToList.class);
+        ItemMovedToList moved = (ItemMovedToList) events.get(0);
+        assertThat(moved.householdId()).isEqualTo(householdId);
+        assertThat(moved.sourceListId()).isEqualTo(listId);
+        assertThat(moved.itemId()).isEqualTo(itemId);
+        assertThat(moved.targetListId()).isEqualTo(targetListId);
+        assertThat(moved.name()).isEqualTo(new ItemName("Milch"));
+        assertThat(moved.note()).isEqualTo(new ItemNote("Bio"));
+        assertThat(moved.quantity()).isEqualTo(Quantity.of(2, Unit.PIECE));
+    }
+
+    @Test
+    void movingAnItemRemovesItFromTheSourcesFoldedState() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        // The item is gone from the source's own folded state — re-adding its key must succeed.
+        assertThatCode(() -> list.addItem(
+                        ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void movingAnUnknownItemIsNotFound() {
+        ShoppingList list = openList();
+
+        assertThatThrownBy(() -> list.moveItem(ItemId.generate(), ShoppingListId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void replayingAMoveRebuildsStateWithTheItemGoneFromTheSource() {
+        ItemId itemId = ItemId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ShoppingList original = ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        original.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        original.moveItem(itemId, targetListId, CommandId.generate());
+        List<DomainEvent> history = original.uncommittedEvents();
+
+        ShoppingList rehydrated = ShoppingList.rehydrate(StreamId.forList(listId), history);
+
+        assertThat(rehydrated.version()).isEqualTo(original.version());
+        rehydrated.addItem(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        assertThat(rehydrated.uncommittedEvents()).hasSize(1);
+    }
+
+    @Test
     void replayingAddUpdateAndRemoveRebuildsIdenticalStateAndVersion() {
         ItemId keptItemId = ItemId.generate();
         ItemId removedItemId = ItemId.generate();
@@ -250,6 +316,7 @@ class ShoppingListItemsTest {
         assertNoPersonalDataComponent(ItemAdded.class);
         assertNoPersonalDataComponent(ItemUpdated.class);
         assertNoPersonalDataComponent(ItemRemoved.class);
+        assertNoPersonalDataComponent(ItemMovedToList.class);
     }
 
     private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {

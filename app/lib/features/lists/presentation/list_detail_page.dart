@@ -8,9 +8,11 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/item.dart';
+import '../data/shopping_lists_api.dart';
 import 'item_form_sheet.dart';
 import 'list_detail_cubit.dart';
 import 'list_detail_state.dart';
+import 'move_target_sheet.dart';
 
 /// The list detail screen (Story 2.3, AC6): the tapped list's items in creation order, each row
 /// showing name · quantity · optional note, with an empty state, an add affordance, and per-row
@@ -66,6 +68,14 @@ class _ReadyBody extends StatelessWidget {
                 isReadOnly: state.isReadOnly,
                 onEdit: () => showItemFormSheet(context, cubit, existingItem: item),
                 onRemove: () => cubit.removeItem(item.itemId),
+                onMove: () => showMoveTargetSheet(
+                  context,
+                  cubit: cubit,
+                  shoppingListsApi: context.read<ShoppingListsApi>(),
+                  item: item,
+                  householdId: cubit.householdId,
+                  sourceListId: cubit.listId,
+                ),
               ),
           if (state.actionError != null) ...[
             const SizedBox(height: SgartShapes.space4),
@@ -89,12 +99,19 @@ class _ReadyBody extends StatelessWidget {
 }
 
 class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item, required this.isReadOnly, required this.onEdit, required this.onRemove});
+  const _ItemRow({
+    required this.item,
+    required this.isReadOnly,
+    required this.onEdit,
+    required this.onRemove,
+    required this.onMove,
+  });
 
   final Item item;
   final bool isReadOnly;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
+  final VoidCallback onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +140,12 @@ class _ItemRow extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline),
                   tooltip: localizations.itemRemoveAction,
                   onPressed: onRemove,
+                ),
+                IconButton(
+                  key: Key('item-move-button-${item.itemId}'),
+                  icon: const Icon(Icons.drive_file_move_outline),
+                  tooltip: localizations.itemMoveAction,
+                  onPressed: onMove,
                 ),
               ],
             ),

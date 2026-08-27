@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.command.AddItemHandler;
+import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListItems;
@@ -35,16 +36,19 @@ class ItemController {
     private final AddItemHandler addItemHandler;
     private final UpdateItemHandler updateItemHandler;
     private final RemoveItemHandler removeItemHandler;
+    private final MoveItemHandler moveItemHandler;
     private final ListItems listItems;
 
     ItemController(
             AddItemHandler addItemHandler,
             UpdateItemHandler updateItemHandler,
             RemoveItemHandler removeItemHandler,
+            MoveItemHandler moveItemHandler,
             ListItems listItems) {
         this.addItemHandler = addItemHandler;
         this.updateItemHandler = updateItemHandler;
         this.removeItemHandler = removeItemHandler;
+        this.moveItemHandler = moveItemHandler;
         this.listItems = listItems;
     }
 
@@ -115,6 +119,20 @@ class ItemController {
         removeItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
     }
 
+    @PostMapping("/{itemId}/move")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void move(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody MoveItemRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        moveItemHandler.handle(
+                caller.keycloakUserId(), householdId, listId, itemId, request.targetListId(), request.commandId());
+    }
+
     /**
      * Transport DTO for {@code POST} — the add-item command envelope (AR10). {@code itemId} is the
      * client-minted id; {@code note} is optional; {@code amount} is a decimal string, {@code unit}
@@ -127,6 +145,13 @@ class ItemController {
 
     /** Transport DTO for {@code DELETE} — the remove-item command envelope (AR10). */
     record RemoveItemRequest(String commandId) {}
+
+    /**
+     * Transport DTO for {@code POST .../move} — the move-item command envelope (AR10, Story 2.4).
+     * The path {@code listId} is the <em>source</em>; {@code targetListId} rides the body since it
+     * names a different aggregate than the path's list.
+     */
+    record MoveItemRequest(String targetListId, String commandId) {}
 
     /** {@code note} is {@code null} when absent; {@code amount} a decimal string, {@code unit} the enum name. */
     record ItemResponse(String itemId, String name, String note, String amount, String unit) {}

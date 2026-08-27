@@ -5,10 +5,17 @@ import 'package:sgart/features/lists/data/items_api.dart';
 /// `FakeShoppingListsApi`.
 class FakeItemsApi implements ItemsApi {
   List<Item> itemsToReturn = const [];
+
+  /// Per-list override for [listItems] — keyed by `listId`, falling back to [itemsToReturn] when a
+  /// list has no entry. Lets a test give a *different* list (e.g. a move's target) its own items
+  /// without disturbing [itemsToReturn], which the cubit's own list keeps using.
+  final Map<String, List<Item>> itemsByListId = {};
+
   Object? listError;
   Object? addError;
   Object? updateError;
   Object? removeError;
+  Object? moveError;
 
   String? lastAddedItemId;
   String? lastAddedName;
@@ -30,10 +37,15 @@ class FakeItemsApi implements ItemsApi {
   final List<String> removeCommandIds = [];
   int removeCallCount = 0;
 
+  String? lastMovedItemId;
+  String? lastMovedTargetListId;
+  final List<String> moveCommandIds = [];
+  int moveCallCount = 0;
+
   @override
   Future<List<Item>> listItems(String householdId, String listId) async {
     if (listError != null) throw listError!;
-    return itemsToReturn;
+    return itemsByListId[listId] ?? itemsToReturn;
   }
 
   @override
@@ -84,5 +96,20 @@ class FakeItemsApi implements ItemsApi {
     removeCommandIds.add(commandId);
     removeCallCount++;
     if (removeError != null) throw removeError!;
+  }
+
+  @override
+  Future<void> moveItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  }) async {
+    lastMovedItemId = itemId;
+    lastMovedTargetListId = targetListId;
+    moveCommandIds.add(commandId);
+    moveCallCount++;
+    if (moveError != null) throw moveError!;
   }
 }

@@ -10,6 +10,7 @@ import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -48,6 +49,7 @@ final class DomainEventJsonCodec {
     static final String ITEM_ADDED_TYPE = "ItemAdded";
     static final String ITEM_UPDATED_TYPE = "ItemUpdated";
     static final String ITEM_REMOVED_TYPE = "ItemRemoved";
+    static final String ITEM_MOVED_TO_LIST_TYPE = "ItemMovedToList";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -63,6 +65,7 @@ final class DomainEventJsonCodec {
             case ItemAdded ignored -> ITEM_ADDED_TYPE;
             case ItemUpdated ignored -> ITEM_UPDATED_TYPE;
             case ItemRemoved ignored -> ITEM_REMOVED_TYPE;
+            case ItemMovedToList ignored -> ITEM_MOVED_TO_LIST_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -122,6 +125,16 @@ final class DomainEventJsonCodec {
                     removed.eventId().value().toString(),
                     removed.listId().value().toString(),
                     removed.itemId().value().toString()));
+            case ItemMovedToList moved -> jsonMapper.writeValueAsBytes(new ItemMovedToListPayload(
+                    moved.eventId().value().toString(),
+                    moved.householdId().value().toString(),
+                    moved.sourceListId().value().toString(),
+                    moved.itemId().value().toString(),
+                    moved.targetListId().value().toString(),
+                    moved.name().value(),
+                    moved.note() == null ? null : moved.note().value(),
+                    moved.quantity().amount().toPlainString(),
+                    moved.quantity().unit().name()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -209,6 +222,18 @@ final class DomainEventJsonCodec {
                         ShoppingListId.fromString(payload.listId()),
                         ItemId.fromString(payload.itemId()));
             }
+            case ITEM_MOVED_TO_LIST_TYPE -> {
+                ItemMovedToListPayload payload = jsonMapper.readValue(json, ItemMovedToListPayload.class);
+                yield new ItemMovedToList(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.sourceListId()),
+                        ItemId.fromString(payload.itemId()),
+                        ShoppingListId.fromString(payload.targetListId()),
+                        new ItemName(payload.name()),
+                        payload.note() == null ? null : new ItemNote(payload.note()),
+                        new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())));
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -245,4 +270,16 @@ final class DomainEventJsonCodec {
             String eventId, String listId, String itemId, String name, String note, String amount, String unit) {}
 
     private record ItemRemovedPayload(String eventId, String listId, String itemId) {}
+
+    /** {@code note} is nullable — a moved item with no note round-trips a JSON {@code null} (AC9). */
+    private record ItemMovedToListPayload(
+            String eventId,
+            String householdId,
+            String sourceListId,
+            String itemId,
+            String targetListId,
+            String name,
+            String note,
+            String amount,
+            String unit) {}
 }

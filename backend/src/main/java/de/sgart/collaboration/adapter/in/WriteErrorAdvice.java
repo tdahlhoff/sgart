@@ -7,11 +7,13 @@ import de.sgart.collaboration.application.exception.InvalidHouseholdNameExceptio
 import de.sgart.collaboration.application.exception.InvalidItemNameException;
 import de.sgart.collaboration.application.exception.InvalidItemNoteException;
 import de.sgart.collaboration.application.exception.InvalidItemQuantityException;
+import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
+import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
@@ -120,5 +122,15 @@ class WriteErrorAdvice {
     @ExceptionHandler(ItemChangeNotPermittedApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleItemChangeNotPermitted(ItemChangeNotPermittedApplicationException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(MoveTargetNotOpenException.class)
+    ResponseEntity<ErrorDescriptor> handleMoveTargetNotOpen(MoveTargetNotOpenException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidMoveTargetException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidMoveTarget(InvalidMoveTargetException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
     }
 }

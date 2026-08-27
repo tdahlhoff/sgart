@@ -215,6 +215,17 @@ void main() {
       expect(find.byKey(const Key('item-add-button')), findsNothing);
       expect(find.byKey(const Key('item-edit-button-i1')), findsNothing);
       expect(find.byKey(const Key('item-remove-button-i1')), findsNothing);
+      expect(find.byKey(const Key('item-move-button-i1')), findsNothing);
+    });
+
+    testWidgets('anOpenListShowsTheMoveAffordance', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-move-button-i1')), findsOneWidget);
     });
   });
 }

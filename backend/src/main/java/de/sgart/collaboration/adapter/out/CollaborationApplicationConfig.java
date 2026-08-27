@@ -1,10 +1,12 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.ItemMoveProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
+import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
@@ -107,5 +109,15 @@ public class CollaborationApplicationConfig {
     @Bean
     ListItems listItems(ResolveMemberIdentity resolveMemberIdentity, ItemReadModel itemReadModel) {
         return new ListItems(resolveMemberIdentity, itemReadModel);
+    }
+
+    @Bean
+    MoveItemHandler moveItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new MoveItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    ItemMoveProcessManager itemMoveProcessManager(EventStore eventStore) {
+        return new ItemMoveProcessManager(eventStore);
     }
 }

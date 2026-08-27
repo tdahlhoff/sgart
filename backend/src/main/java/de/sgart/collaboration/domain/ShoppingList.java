@@ -1,6 +1,7 @@
 package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
@@ -185,6 +186,39 @@ public final class ShoppingList extends EventSourcedAggregate {
         raise(new ItemRemoved(EventId.generate(), listId, itemId));
     }
 
+    /**
+     * Moves an item to another list while planning (Story 2.4, AC1, AC5, AC9) — the source side of
+     * SGART's first cross-aggregate effect (AD-10). Permitted only while this (source) list is
+     * {@link ListStatus#OPEN} (AC5); an unknown item raises {@link ItemNotFoundException}. Raises
+     * {@link ItemMovedToList} carrying the item's current name/note/quantity so the {@code
+     * ItemMoveProcessManager} can add it to the target without reloading this aggregate. Does
+     * <strong>not</strong> validate {@code targetListId} — this aggregate does not own the target
+     * list; that is the handler's job (Cl. 4), since the target is a separate aggregate this root
+     * never loads or mutates (AD-10).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void moveItem(ItemId itemId, ShoppingListId targetListId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(targetListId, "targetListId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireOpen();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        raise(new ItemMovedToList(
+                EventId.generate(),
+                householdId,
+                listId,
+                itemId,
+                targetListId,
+                existing.name(),
+                existing.note(),
+                existing.quantity()));
+    }
+
     private void requireOpen() {
         if (status != ListStatus.OPEN) {
             throw new ItemChangeNotPermittedException(
@@ -230,6 +264,7 @@ public final class ShoppingList extends EventSourcedAggregate {
             case ItemUpdated updated ->
                 itemsById.put(updated.itemId(), new ItemState(updated.name(), updated.note(), updated.quantity()));
             case ItemRemoved removed -> itemsById.remove(removed.itemId());
+            case ItemMovedToList moved -> itemsById.remove(moved.itemId());
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }

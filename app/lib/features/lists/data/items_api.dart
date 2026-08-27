@@ -39,6 +39,17 @@ abstract interface class ItemsApi {
   /// Removes [itemId] (AC4, idempotent — a retry/unknown id is a silent success). [commandId] is
   /// the reused idempotency key for the remove intent.
   Future<void> removeItem(String householdId, String listId, String itemId, {required String commandId});
+
+  /// Moves [itemId] from [listId] (the source) to [targetListId] (Story 2.4, AC1). [commandId] is
+  /// the reused idempotency key for the move intent — a client retry is deduped server-side; the
+  /// target-side add is the backend's process manager's job, not this call's.
+  Future<void> moveItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  });
 }
 
 class HttpItemsApi implements ItemsApi {
@@ -101,5 +112,19 @@ class HttpItemsApi implements ItemsApi {
       '/api/v1/households/$householdId/lists/$listId/items/$itemId',
       {'commandId': commandId},
     );
+  }
+
+  @override
+  Future<void> moveItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  }) {
+    return _client.postJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/move', {
+      'targetListId': targetListId,
+      'commandId': commandId,
+    });
   }
 }

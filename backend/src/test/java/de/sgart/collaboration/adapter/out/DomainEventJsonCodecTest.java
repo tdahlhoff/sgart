@@ -9,6 +9,7 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -187,6 +188,39 @@ class DomainEventJsonCodecTest {
 
         assertThat(codec.typeTagFor(event)).isEqualTo("ItemRemoved");
         assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemMovedToListWithANoteRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemMovedToList event = new ItemMovedToList(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                ShoppingListId.generate(),
+                new ItemName("Milch"),
+                new ItemNote("Bio"),
+                Quantity.of(2, Unit.PIECE));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemMovedToList");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemMovedToListWithNoNoteRoundTripsThroughJsonPreservingTheNullNote() {
+        ItemMovedToList event = new ItemMovedToList(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                ShoppingListId.generate(),
+                new ItemName("Milch"),
+                null,
+                Quantity.of(1, Unit.PIECE));
+
+        ItemMovedToList decoded = (ItemMovedToList) roundTrip(event);
+        assertThat(decoded).isEqualTo(event);
+        assertThat(decoded.note()).isNull();
     }
 
     private DomainEvent roundTrip(DomainEvent event) {

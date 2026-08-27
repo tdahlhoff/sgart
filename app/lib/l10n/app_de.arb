@@ -499,6 +499,70 @@
     "description": "Localized copy for the item.changeNotPermitted error code — the list is no longer Open (Story 2.3, AC5)."
   },
 
+  "itemMoveAction": "Verschieben",
+  "@itemMoveAction": {
+    "description": "Per-row action/tooltip that opens the move target picker (Story 2.4, AC7)."
+  },
+
+  "itemMoveTargetHeading": "In welche Liste verschieben?",
+  "@itemMoveTargetHeading": {
+    "description": "Heading of the move target picker sheet (Story 2.4, AC7)."
+  },
+
+  "itemMoveTargetEmptyState": "Keine andere offene Liste.",
+  "@itemMoveTargetEmptyState": {
+    "description": "Shown in the move target picker when the household has no other Open list (Story 2.4, AC7)."
+  },
+
+  "itemMoveMergeHeading": "Menge anpassen?",
+  "@itemMoveMergeHeading": {
+    "description": "Heading of the quantity-merge sheet, shown when the move target already holds the item's (name, note) key (Story 2.4, AC4, Clarification 3)."
+  },
+
+  "itemMoveMergeMessage": "„{name}“ ist schon auf „{targetList}“ ({targetQuantity}).",
+  "@itemMoveMergeMessage": {
+    "description": "Body copy of the quantity-merge sheet, naming the colliding item, the target list, and the target's current quantity (Story 2.4, AC4, Clarification 3).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Milch"
+      },
+      "targetList": {
+        "type": "String",
+        "example": "Getränke"
+      },
+      "targetQuantity": {
+        "type": "String",
+        "example": "1 Stück"
+      }
+    }
+  },
+
+  "itemMoveMergeUpdateAction": "Menge aktualisieren & verschieben",
+  "@itemMoveMergeUpdateAction": {
+    "description": "Confirms the quantity-merge sheet with the edited amount/unit applied to the target (Story 2.4, AC4, Clarification 3)."
+  },
+
+  "itemMoveMergeKeepUnchangedAction": "Unverändert übernehmen",
+  "@itemMoveMergeKeepUnchangedAction": {
+    "description": "Confirms the quantity-merge sheet leaving the target's quantity unchanged — only the source is removed (Story 2.4, AC4, Clarification 3)."
+  },
+
+  "listsMoveTargetNotOpenError": "Diese Liste ist kein gültiges Ziel zum Verschieben.",
+  "@listsMoveTargetNotOpenError": {
+    "description": "Localized copy for the list.moveTargetNotOpen error code — the target list is no longer Open (Story 2.4, AC5)."
+  },
+
+  "listsMoveTargetSameAsSourceError": "Ein Artikel kann nicht auf dieselbe Liste verschoben werden.",
+  "@listsMoveTargetSameAsSourceError": {
+    "description": "Localized copy for the list.moveTargetSameAsSource error code (Story 2.4, AC5)."
+  },
+
+  "listsMoveMergeRemoveFailedError": "Die Menge auf der Zielliste wurde aktualisiert, aber der Artikel konnte nicht von der Quellliste entfernt werden. Bitte entferne ihn dort erneut – die Menge nicht noch einmal zusammenführen.",
+  "@listsMoveMergeRemoveFailedError": {
+    "description": "Shown when a quantity-merge move updated the target but the source removal failed — tells the member to re-remove the source rather than re-merge (would double-count) (Story 2.4, Clarification 3)."
+  },
+
   "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
   "@onboardingChoicePrivacyNote": {
     "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."
