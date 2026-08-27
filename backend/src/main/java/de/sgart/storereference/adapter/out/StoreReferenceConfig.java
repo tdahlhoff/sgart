@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * Wires the Store Reference context's read-only reference read model and its {@code ListStoreChains}
  * query (Story 1.8, AC2). Lives in {@code adapter.out} because it references the domain-owned {@link
  * StoreChainReferenceReadModel} port. Building these beans performs no I/O, so {@code contextLoads()}
- * survives Postgres being down (mirrors {@code HouseholdReadModelConfig}).
+ * survives Postgres being down (mirrors {@code CollaborationReadModelConfig}).
  */
 @Configuration
 public class StoreReferenceConfig {

@@ -21,13 +21,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires the create-household command handler and the first-run-routing query (Story 1.6). Lives
- * in {@code adapter.out}, not {@code adapter.in}, because it references the domain-owned {@link
- * HouseholdNameReadModel} port — {@code adapter.in} may not reach into {@code
- * collaboration.domain} directly (the hexagonal layer-direction ArchUnit rule).
+ * Wires the Collaboration context's application layer — the command handlers and queries for
+ * households, stores, and shopping lists (Stories 1.6–2.2 onward). Lives in {@code adapter.out},
+ * not {@code adapter.in}, because it references domain-owned read-model ports (e.g. {@link
+ * HouseholdNameReadModel}) — {@code adapter.in} may not reach into {@code collaboration.domain}
+ * directly (the hexagonal layer-direction ArchUnit rule).
  */
 @Configuration
-public class HouseholdApplicationConfig {
+public class CollaborationApplicationConfig {
 
     @Bean
     CreateHouseholdHandler createHouseholdHandler(EventStore eventStore, MintMemberIdentity mintMemberIdentity) {
