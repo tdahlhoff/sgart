@@ -388,6 +388,117 @@
     "description": "Row status label text for a Done list in the archive (Story 2.2, AC2, DESIGN §4b)."
   },
 
+  "listsItemCount": "{count, plural, =0{0 Artikel} =1{1 Artikel} other{{count} Artikel}}",
+  "@listsItemCount": {
+    "description": "Item-count text shown on each Open row of the Listen overview (Story 2.3, AC7).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+
+  "itemAddAction": "+ Artikel hinzufügen",
+  "@itemAddAction": {
+    "description": "Button label that opens the add-item sheet on the list detail screen (Story 2.3, AC1)."
+  },
+
+  "itemAddHeading": "Artikel hinzufügen",
+  "@itemAddHeading": {
+    "description": "Heading of the item form sheet in add mode (Story 2.3, AC1)."
+  },
+
+  "itemAddSubmitButtonLabel": "Hinzufügen",
+  "@itemAddSubmitButtonLabel": {
+    "description": "Submit button label on the item form sheet in add mode (Story 2.3, AC1)."
+  },
+
+  "itemEditAction": "Bearbeiten",
+  "@itemEditAction": {
+    "description": "Per-row action that opens the item form sheet in edit mode (Story 2.3, AC3)."
+  },
+
+  "itemEditHeading": "Artikel bearbeiten",
+  "@itemEditHeading": {
+    "description": "Heading of the item form sheet in edit mode (Story 2.3, AC3)."
+  },
+
+  "itemEditSubmitButtonLabel": "Speichern",
+  "@itemEditSubmitButtonLabel": {
+    "description": "Submit button label on the item form sheet in edit mode (Story 2.3, AC3)."
+  },
+
+  "itemRemoveAction": "Entfernen",
+  "@itemRemoveAction": {
+    "description": "Per-row action that removes an item (Story 2.3, AC4)."
+  },
+
+  "itemNameFieldLabel": "Name",
+  "@itemNameFieldLabel": {
+    "description": "Label of the required name field on the item form sheet (Story 2.3, AC1)."
+  },
+
+  "itemAmountFieldLabel": "Menge",
+  "@itemAmountFieldLabel": {
+    "description": "Label of the required amount field on the item form sheet (Story 2.3, AC1, Clarification 1)."
+  },
+
+  "itemUnitFieldLabel": "Einheit",
+  "@itemUnitFieldLabel": {
+    "description": "Label of the unit dropdown on the item form sheet (Story 2.3, AC1, Clarification 1)."
+  },
+
+  "itemNoteFieldLabel": "Notiz (optional)",
+  "@itemNoteFieldLabel": {
+    "description": "Label of the optional note field on the item form sheet (Story 2.3, AC1)."
+  },
+
+  "itemsEmptyState": "Noch keine Artikel. Füge deinen ersten Artikel hinzu.",
+  "@itemsEmptyState": {
+    "description": "Shown on the list detail screen when the list has no items yet (Story 2.3, AC6)."
+  },
+
+  "itemNameRequiredError": "Bitte gib einen Namen für den Artikel ein.",
+  "@itemNameRequiredError": {
+    "description": "Localized copy for the item.nameRequired error code — a blank or whitespace-only name."
+  },
+
+  "itemNameTooLongError": "Der Name des Artikels ist zu lang. Bitte wähle einen kürzeren Namen.",
+  "@itemNameTooLongError": {
+    "description": "Localized copy for the item.nameTooLong error code."
+  },
+
+  "itemNoteTooLongError": "Die Notiz ist zu lang. Bitte kürze sie.",
+  "@itemNoteTooLongError": {
+    "description": "Localized copy for the item.noteTooLong error code."
+  },
+
+  "itemQuantityRequiredError": "Bitte gib eine Menge und eine Einheit an.",
+  "@itemQuantityRequiredError": {
+    "description": "Localized copy for the item.quantityRequired error code."
+  },
+
+  "itemQuantityInvalidError": "Bitte gib eine gültige Menge an.",
+  "@itemQuantityInvalidError": {
+    "description": "Localized copy for the item.quantityInvalid error code."
+  },
+
+  "itemDuplicateError": "Diesen Artikel mit derselben Notiz gibt es bereits auf der Liste.",
+  "@itemDuplicateError": {
+    "description": "Localized copy for the item.duplicate error code (Story 2.3, AC2)."
+  },
+
+  "itemNotFoundError": "Dieser Artikel wurde nicht gefunden.",
+  "@itemNotFoundError": {
+    "description": "Localized copy for the item.notFound error code."
+  },
+
+  "itemChangeNotPermittedError": "Dieser Artikel kann auf dieser Liste nicht mehr geändert werden.",
+  "@itemChangeNotPermittedError": {
+    "description": "Localized copy for the item.changeNotPermitted error code — the list is no longer Open (Story 2.3, AC5)."
+  },
+
   "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
   "@onboardingChoicePrivacyNote": {
     "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."

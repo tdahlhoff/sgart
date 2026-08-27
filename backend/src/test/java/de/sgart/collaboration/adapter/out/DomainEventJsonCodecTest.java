@@ -6,6 +6,11 @@ import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
+import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemNote;
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
@@ -16,10 +21,14 @@ import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.Unit;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -110,6 +119,73 @@ class DomainEventJsonCodecTest {
                 new ShoppingListRenamed(EventId.generate(), ShoppingListId.generate(), new ShoppingListName("Getränke"));
 
         assertThat(codec.typeTagFor(event)).isEqualTo("ShoppingListRenamed");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemAddedWithANoteRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemAdded event = new ItemAdded(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                new ItemName("Milch"),
+                new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemAdded");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemAddedWithNoNoteRoundTripsThroughJsonPreservingTheNullNote() {
+        ItemAdded event = new ItemAdded(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                new ItemName("Milch"),
+                null,
+                Quantity.of(1, Unit.PIECE));
+
+        ItemAdded decoded = (ItemAdded) roundTrip(event);
+        assertThat(decoded).isEqualTo(event);
+        assertThat(decoded.note()).isNull();
+    }
+
+    @Test
+    void itemAddedPreservesAFractionalAmount() {
+        ItemAdded event = new ItemAdded(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                new ItemName("Hackfleisch"),
+                null,
+                new Quantity(new BigDecimal("0.5"), Unit.KILOGRAM));
+
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemUpdatedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemUpdated event = new ItemUpdated(
+                EventId.generate(),
+                ShoppingListId.generate(),
+                ItemId.generate(),
+                new ItemName("Milch"),
+                new ItemNote("Bio 1,5%"),
+                Quantity.of(2, Unit.PIECE));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemUpdated");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemRemovedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemRemoved event = new ItemRemoved(EventId.generate(), ShoppingListId.generate(), ItemId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemRemoved");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

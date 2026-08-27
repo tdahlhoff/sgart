@@ -1,30 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/lists/data/item.dart';
+import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/presentation/lists_view.dart';
 import 'package:sgart/features/lists/presentation/shopping_lists_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
+import '../../../support/fake_items_dependencies.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
   group('ListsView', () {
     late FakeShoppingListsApi shoppingListsApi;
+    late FakeItemsApi itemsApi;
 
     setUp(() {
       shoppingListsApi = FakeShoppingListsApi();
+      itemsApi = FakeItemsApi();
     });
 
     Widget buildSubject() => wrapForTesting(
-          BlocProvider(
-            create: (_) => ShoppingListsCubit(
-              shoppingListsApi: shoppingListsApi,
-              householdId: 'household-1',
-            )..bootstrap(),
-            child: const Scaffold(body: ListsView()),
+          RepositoryProvider<ItemsApi>.value(
+            value: itemsApi,
+            child: BlocProvider(
+              create: (_) => ShoppingListsCubit(
+                shoppingListsApi: shoppingListsApi,
+                householdId: 'household-1',
+              )..bootstrap(),
+              child: const Scaffold(body: ListsView()),
+            ),
           ),
         );
 
@@ -251,6 +259,64 @@ void main() {
 
       expect(find.text('Offen'), findsOneWidget);
       expect(find.text('Erledigt'), findsOneWidget);
+    });
+
+    testWidgets('anOpenRowShowsItsItemCount', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN', itemCount: 3),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('list-item-count-l1')), findsOneWidget);
+      expect(find.text('3 Artikel'), findsOneWidget);
+    });
+
+    testWidgets('anEmptyOpenRowShowsZeroItems', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.text('0 Artikel'), findsOneWidget);
+    });
+
+    testWidgets('tappingAnOpenRowNavigatesToTheListDetailScreen', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
+      ];
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('list-row-l1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-row-i1')), findsOneWidget);
+      expect(find.byKey(const Key('item-add-button')), findsOneWidget);
+    });
+
+    testWidgets('tappingADoneRowNavigatesToAReadOnlyListDetailScreen', (tester) async {
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),
+      ];
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('list-archive-row-d1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-row-i1')), findsOneWidget);
+      expect(find.byKey(const Key('item-add-button')), findsNothing);
+      expect(find.byKey(const Key('item-edit-button-i1')), findsNothing);
     });
   });
 }

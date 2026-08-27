@@ -6,8 +6,11 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../shared/widgets/status_label.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../data/items_api.dart';
 import '../data/shopping_list_summary.dart';
 import 'create_list_dialog.dart';
+import 'list_detail_cubit.dart';
+import 'list_detail_page.dart';
 import 'rename_list_dialog.dart';
 import 'shopping_lists_cubit.dart';
 import 'shopping_lists_state.dart';
@@ -105,6 +108,13 @@ class _OpenListsBody extends StatelessWidget {
                 listId: list.listId,
                 currentName: list.name ?? localizations.listsDefaultName(index + 1),
               ),
+              onOpen: () => _openListDetail(
+                context,
+                householdId: cubit.householdId,
+                listId: list.listId,
+                title: list.name ?? localizations.listsDefaultName(index + 1),
+                isReadOnly: false,
+              ),
             ),
         if (state.actionError != null) ...[
           const SizedBox(height: SgartShapes.space4),
@@ -125,11 +135,12 @@ class _OpenListsBody extends StatelessWidget {
 }
 
 class _ListRow extends StatelessWidget {
-  const _ListRow({required this.list, required this.orderIndex, required this.onRename});
+  const _ListRow({required this.list, required this.orderIndex, required this.onRename, required this.onOpen});
 
   final ShoppingListSummary list;
   final int orderIndex;
   final VoidCallback onRename;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -139,14 +150,26 @@ class _ListRow extends StatelessWidget {
     return ListTile(
       key: Key('list-row-${list.listId}'),
       contentPadding: EdgeInsets.zero,
+      onTap: onOpen,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(displayName),
           const SizedBox(height: SgartShapes.spaceHalfUnit),
-          StatusLabel(
-            key: Key('list-status-${list.listId}'),
-            text: localizations.listStatusOpen,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StatusLabel(
+                key: Key('list-status-${list.listId}'),
+                text: localizations.listStatusOpen,
+              ),
+              const SizedBox(width: SgartShapes.space2),
+              Text(
+                localizations.listsItemCount(list.itemCount),
+                key: Key('list-item-count-${list.listId}'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ),
         ],
       ),
@@ -158,6 +181,46 @@ class _ListRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pushes the list detail screen, re-providing [ItemsApi] + a household/list-scoped
+/// [ListDetailCubit] (the overview already re-provides dependencies this way for its sheets/switcher
+/// sheet pattern — mirrors `HouseholdShell._openSwitcher`).
+void _openListDetail(
+  BuildContext context, {
+  required String householdId,
+  required String listId,
+  required String title,
+  required bool isReadOnly,
+}) {
+  final itemsApi = context.read<ItemsApi>();
+  // Captured before the push so it survives the awaited navigation.
+  final overviewCubit = context.read<ShoppingListsCubit>();
+  Navigator.of(context)
+      .push(MaterialPageRoute<void>(
+        builder: (_) => RepositoryProvider<ItemsApi>.value(
+          value: itemsApi,
+          child: BlocProvider<ListDetailCubit>(
+            create: (context) => ListDetailCubit(
+              itemsApi: context.read<ItemsApi>(),
+              householdId: householdId,
+              listId: listId,
+              isReadOnly: isReadOnly,
+            )..bootstrap(),
+            child: ListDetailPage(title: title),
+          ),
+        ),
+      ))
+      .then((_) {
+        // On return from an editable (Open) list, refresh the overview so each row's itemCount
+        // reflects any add/remove the user just made (the count is a server-side COUNT, not mutated
+        // by the detail cubit — otherwise it reads stale). A Done list opens read-only: nothing
+        // changed, and a refresh would reset the overview to the Open filter, snapping the user off
+        // the Done archive they were browsing — so only refresh when edits were possible.
+        if (!isReadOnly) {
+          overviewCubit.refresh();
+        }
+      });
 }
 
 class _DoneArchiveBody extends StatelessWidget {
@@ -193,7 +256,17 @@ class _DoneArchiveBody extends StatelessWidget {
             if (state.doneLists.isEmpty)
               Text(localizations.listsArchiveEmptyState, key: const Key('lists-archive-empty-state'))
             else
-              for (final list in state.doneLists) _ArchiveRow(list: list),
+              for (final list in state.doneLists)
+                _ArchiveRow(
+                  list: list,
+                  onOpen: () => _openListDetail(
+                    context,
+                    householdId: context.read<ShoppingListsCubit>().householdId,
+                    listId: list.listId,
+                    title: list.name ?? localizations.listsArchiveUnnamedFallback,
+                    isReadOnly: true,
+                  ),
+                ),
           ],
         ),
     };
@@ -201,9 +274,10 @@ class _DoneArchiveBody extends StatelessWidget {
 }
 
 class _ArchiveRow extends StatelessWidget {
-  const _ArchiveRow({required this.list});
+  const _ArchiveRow({required this.list, required this.onOpen});
 
   final ShoppingListSummary list;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +289,7 @@ class _ArchiveRow extends StatelessWidget {
     return ListTile(
       key: Key('list-archive-row-${list.listId}'),
       contentPadding: EdgeInsets.zero,
+      onTap: onOpen,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

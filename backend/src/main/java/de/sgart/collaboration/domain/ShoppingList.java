@@ -1,16 +1,27 @@
 package de.sgart.collaboration.domain;
 
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.exception.DuplicateItemException;
+import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.EventSourcedAggregate;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StreamId;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -21,6 +32,10 @@ import java.util.Objects;
  * here. State changes only through {@link #apply(DomainEvent)}, folding {@link ShoppingListCreated}
  * and {@link ShoppingListRenamed} (the {@link EventSourcedAggregate} contract). Simpler than {@code
  * Household}: no member-role map, since membership is a separate aggregate's concern.
+ *
+ * <p>{@code Item} is an entity <em>inside</em> this aggregate (Story 2.3, AD-10) — realised the
+ * same way {@code Store} is realised inside {@code Household}: folded {@link ItemState} keyed by
+ * {@link ItemId}, with dedup + no-op guards enforced here, on the root.
  */
 public final class ShoppingList extends EventSourcedAggregate {
 
@@ -28,6 +43,7 @@ public final class ShoppingList extends EventSourcedAggregate {
     private ShoppingListId listId;
     private ShoppingListName name;
     private ListStatus status;
+    private final Map<ItemId, ItemState> itemsById = new LinkedHashMap<>();
 
     private ShoppingList(StreamId streamId) {
         super(streamId);
@@ -99,6 +115,106 @@ public final class ShoppingList extends EventSourcedAggregate {
         raise(new ShoppingListRenamed(EventId.generate(), listId, newName));
     }
 
+    /**
+     * Adds an item to the list (Story 2.3, AC1) — only the list root accepts the command (AD-10).
+     * Permitted only while {@link ListStatus#OPEN} (AC5). Items are keyed by (name, note), trimmed
+     * and compared case-insensitively (mirrors {@code Household.hasActiveStoreNamed}); an exact
+     * duplicate is rejected with {@link DuplicateItemException} (AC2).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void addItem(ItemId itemId, ItemName name, ItemNote note, Quantity quantity, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(quantity, "quantity must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        // note is intentionally nullable — an item may carry no note (AC1/AC2).
+        requireOpen();
+
+        if (hasItemKeyed(name, note, null)) {
+            throw new DuplicateItemException(
+                    "An item named '" + name.value() + "' with the same note already exists on this list");
+        }
+        raise(new ItemAdded(EventId.generate(), householdId, listId, itemId, name, note, quantity));
+    }
+
+    /**
+     * Updates an existing item's name, note, and/or quantity (Story 2.3, AC3). Permitted only while
+     * {@link ListStatus#OPEN} (AC5). An unknown item raises {@link ItemNotFoundException}; a
+     * (name, note) collision with a <em>different</em> item raises {@link DuplicateItemException}; a
+     * fully unchanged update is a convergent no-op (raises nothing, AD-8, mirrors {@link #rename}).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void updateItem(ItemId itemId, ItemName name, ItemNote note, Quantity quantity, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(quantity, "quantity must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireOpen();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (existing.name().equals(name) && Objects.equals(existing.note(), note) && quantitiesEqual(existing.quantity(), quantity)) {
+            return; // convergent no-op — the item already matches what the caller asked for (AD-8)
+        }
+        if (hasItemKeyed(name, note, itemId)) {
+            throw new DuplicateItemException(
+                    "An item named '" + name.value() + "' with the same note already exists on this list");
+        }
+        raise(new ItemUpdated(EventId.generate(), listId, itemId, name, note, quantity));
+    }
+
+    /**
+     * Removes an item from the list (Story 2.3, AC4). Permitted only while {@link
+     * ListStatus#OPEN} (AC5). Removing an unknown/already-removed item is a convergent no-op — it
+     * raises nothing (idempotent delete, AD-8, mirrors {@code Household.archiveStore}).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void removeItem(ItemId itemId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireOpen();
+
+        if (!itemsById.containsKey(itemId)) {
+            return; // convergent no-op — nothing to remove (AD-8)
+        }
+        raise(new ItemRemoved(EventId.generate(), listId, itemId));
+    }
+
+    private void requireOpen() {
+        if (status != ListStatus.OPEN) {
+            throw new ItemChangeNotPermittedException(
+                    "Items may only be changed on an Open list, list is " + status);
+        }
+    }
+
+    /**
+     * Compares two quantities by <em>value</em>, not scale. {@link Quantity} wraps a {@link
+     * java.math.BigDecimal}, whose {@code equals} is scale-sensitive ({@code 1} ≠ {@code 1.0}) — so
+     * the convergent-no-op check must use {@code compareTo} on the amount, or an unchanged update
+     * that merely re-sends {@code 1.0} for a stored {@code 1} would raise a spurious {@code ItemUpdated}.
+     */
+    private static boolean quantitiesEqual(Quantity left, Quantity right) {
+        return left.unit() == right.unit() && left.amount().compareTo(right.amount()) == 0;
+    }
+
+    /** @param excludedItemId an item id to ignore when checking (the item being updated), or {@code null} */
+    private boolean hasItemKeyed(ItemName name, ItemNote note, ItemId excludedItemId) {
+        String candidateName = name.value().toLowerCase(Locale.ROOT);
+        String candidateNote = note == null ? null : note.value().toLowerCase(Locale.ROOT);
+        return itemsById.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals(excludedItemId))
+                .map(Map.Entry::getValue)
+                .anyMatch(item -> item.name().value().toLowerCase(Locale.ROOT).equals(candidateName)
+                        && Objects.equals(
+                                item.note() == null ? null : item.note().value().toLowerCase(Locale.ROOT),
+                                candidateNote));
+    }
+
     @Override
     protected void apply(DomainEvent event) {
         switch (event) {
@@ -109,8 +225,20 @@ public final class ShoppingList extends EventSourcedAggregate {
                 this.status = ListStatus.OPEN;
             }
             case ShoppingListRenamed renamed -> this.name = renamed.newName();
+            case ItemAdded added ->
+                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity()));
+            case ItemUpdated updated ->
+                itemsById.put(updated.itemId(), new ItemState(updated.name(), updated.note(), updated.quantity()));
+            case ItemRemoved removed -> itemsById.remove(removed.itemId());
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }
     }
+
+    /**
+     * An item as held inside the {@link ShoppingList} aggregate (AD-10) — the folded state the
+     * invariants read (dedup by (name, note), no-op update/remove). Not the read model; that is
+     * projected separately (AD-4).
+     */
+    private record ItemState(ItemName name, ItemNote note, Quantity quantity) {}
 }

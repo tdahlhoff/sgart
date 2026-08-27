@@ -52,6 +52,9 @@ public final class ListDoneLists {
 
     private static ShoppingListSummary toSummary(ShoppingListView list) {
         return new ShoppingListSummary(
-                list.listId().toString(), list.name() == null ? null : list.name().value(), list.status().name());
+                list.listId().toString(),
+                list.name() == null ? null : list.name().value(),
+                list.status().name(),
+                list.itemCount());
     }
 }

@@ -1,0 +1,266 @@
+package de.sgart.collaboration.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUpdated;
+import de.sgart.collaboration.domain.exception.DuplicateItemException;
+import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.shared.CommandId;
+import de.sgart.shared.DomainEvent;
+import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
+import de.sgart.shared.Quantity;
+import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StreamId;
+import de.sgart.shared.Unit;
+import java.lang.reflect.RecordComponent;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Pure domain-layer unit test — no framework, persistence, or transport (CLAUDE.md §6). Proves the
+ * {@code Item} entity inside {@link ShoppingList} (Story 2.3, AD-10): add/update/remove raise the
+ * right events, the (name, note) dedup key rejects exact duplicates and colliding updates,
+ * unchanged updates and unknown removals are convergent no-ops, and replay rebuilds identical
+ * state.
+ *
+ * <p>The {@code DONE}-rejects-item branch (AC5) is coded ({@link ShoppingList} guards every item
+ * command with the same {@code requireOpen()} the aggregate uses internally) but only reachable
+ * end-to-end once Epic 3 introduces a status-changing transition beyond {@code ShoppingListCreated}
+ * — see Story 2.1 Clarification 1 and {@code deferred-work.md}; no synthetic Epic-3 event exists to
+ * drive the aggregate into {@code DONE}, so it is not exercised here.
+ */
+class ShoppingListItemsTest {
+
+    private final HouseholdId householdId = HouseholdId.generate();
+    private final ShoppingListId listId = ShoppingListId.generate();
+    private final CommandId commandId = CommandId.generate();
+
+    private ShoppingList openList() {
+        ShoppingList list = ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        list.markEventsCommitted();
+        return list;
+    }
+
+    @Test
+    void addingAnItemRaisesItemAdded() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemAdded.class);
+        ItemAdded added = (ItemAdded) events.get(0);
+        assertThat(added.householdId()).isEqualTo(householdId);
+        assertThat(added.listId()).isEqualTo(listId);
+        assertThat(added.itemId()).isEqualTo(itemId);
+        assertThat(added.name()).isEqualTo(new ItemName("Milch"));
+        assertThat(added.note()).isEqualTo(new ItemNote("Bio"));
+        assertThat(added.quantity()).isEqualTo(Quantity.of(1, Unit.PIECE));
+    }
+
+    @Test
+    void addingAnItemWithNoNoteRaisesItemAddedWithANullNote() {
+        ShoppingList list = openList();
+
+        list.addItem(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+
+        ItemAdded added = (ItemAdded) list.uncommittedEvents().get(0);
+        assertThat(added.note()).isNull();
+    }
+
+    @Test
+    void addingAnExactDuplicateNameAndNoteIsRejected() {
+        ShoppingList list = openList();
+        list.addItem(ItemId.generate(), new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        assertThatThrownBy(() -> list.addItem(
+                        ItemId.generate(), new ItemName("milch"), new ItemNote(" bio "), Quantity.of(2, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(DuplicateItemException.class);
+    }
+
+    @Test
+    void sameNameWithDifferentNoteCoexists() {
+        ShoppingList list = openList();
+        list.addItem(ItemId.generate(), new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.addItem(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).hasSize(1);
+    }
+
+    @Test
+    void updatingAnItemRaisesItemUpdated() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.updateItem(itemId, new ItemName("Milch"), new ItemNote("Bio 1,5%"), Quantity.of(2, Unit.PIECE), CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemUpdated.class);
+        ItemUpdated updated = (ItemUpdated) events.get(0);
+        assertThat(updated.itemId()).isEqualTo(itemId);
+        assertThat(updated.note()).isEqualTo(new ItemNote("Bio 1,5%"));
+        assertThat(updated.quantity()).isEqualTo(Quantity.of(2, Unit.PIECE));
+    }
+
+    @Test
+    void updatingAnItemToItsCurrentValuesRaisesNothing() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.updateItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void updatingAnItemWithTheSameQuantityValueButADifferentScaleRaisesNothing() {
+        // Regression: the convergent-no-op check compares the amount by value (compareTo), not
+        // BigDecimal.equals (scale-sensitive: 1 != 1.0) — re-sending "1.0" for a stored "1" with an
+        // otherwise unchanged item must stay a no-op, not emit a spurious ItemUpdated (AD-8).
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.updateItem(
+                itemId,
+                new ItemName("Milch"),
+                new ItemNote("Bio"),
+                new Quantity(new BigDecimal("1.0"), Unit.PIECE),
+                CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void updatingAMissingItemIsNotFound() {
+        ShoppingList list = openList();
+
+        assertThatThrownBy(() -> list.updateItem(
+                        ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void updatingAnItemToCollideWithADifferentItemIsRejected() {
+        ShoppingList list = openList();
+        ItemId milchId = ItemId.generate();
+        ItemId brotId = ItemId.generate();
+        list.addItem(milchId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.addItem(brotId, new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        assertThatThrownBy(() -> list.updateItem(
+                        brotId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(DuplicateItemException.class);
+    }
+
+    @Test
+    void updatingAnItemToItsOwnUnchangedKeyIsAllowed() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.updateItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(3, Unit.PIECE), CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).hasSize(1);
+    }
+
+    @Test
+    void removingAnItemRaisesItemRemoved() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.removeItem(itemId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemRemoved.class);
+        assertThat(((ItemRemoved) events.get(0)).itemId()).isEqualTo(itemId);
+    }
+
+    @Test
+    void removingAnUnknownItemRaisesNothing() {
+        ShoppingList list = openList();
+
+        list.removeItem(ItemId.generate(), CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void removingAnAlreadyRemovedItemRaisesNothing() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+        list.removeItem(itemId, CommandId.generate());
+        list.markEventsCommitted();
+
+        list.removeItem(itemId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void replayingAddUpdateAndRemoveRebuildsIdenticalStateAndVersion() {
+        ItemId keptItemId = ItemId.generate();
+        ItemId removedItemId = ItemId.generate();
+        ShoppingList original = ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        original.addItem(keptItemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate());
+        original.addItem(removedItemId, new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        original.updateItem(keptItemId, new ItemName("Milch"), new ItemNote("Bio 1,5%"), Quantity.of(2, Unit.PIECE), CommandId.generate());
+        original.removeItem(removedItemId, CommandId.generate());
+        List<DomainEvent> history = original.uncommittedEvents();
+
+        ShoppingList rehydrated = ShoppingList.rehydrate(StreamId.forList(listId), history);
+
+        assertThat(rehydrated.version()).isEqualTo(original.version());
+        // Re-adding the removed item's key must succeed only if it is really gone from rehydrated state.
+        rehydrated.addItem(ItemId.generate(), new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        assertThat(rehydrated.uncommittedEvents()).hasSize(1);
+        // Re-adding the kept item's *updated* key must be rejected as a duplicate.
+        assertThatThrownBy(() -> rehydrated.addItem(
+                        ItemId.generate(), new ItemName("Milch"), new ItemNote("Bio 1,5%"), Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(DuplicateItemException.class);
+    }
+
+    @Test
+    void noItemEventCarriesADisplayNameEmailOrKeycloakUserId() {
+        assertNoPersonalDataComponent(ItemAdded.class);
+        assertNoPersonalDataComponent(ItemUpdated.class);
+        assertNoPersonalDataComponent(ItemRemoved.class);
+    }
+
+    private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {
+        List<String> componentNames = Arrays.stream(eventType.getRecordComponents())
+                .map(RecordComponent::getName)
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .toList();
+
+        assertThat(componentNames)
+                .noneMatch(name -> name.contains("displayname")
+                        || name.contains("email")
+                        || name.contains("keycloak"));
+    }
+}

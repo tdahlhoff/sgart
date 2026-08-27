@@ -1,16 +1,21 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
+import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
+import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.query.ListOpenLists;
 import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
@@ -82,5 +87,25 @@ public class CollaborationApplicationConfig {
     @Bean
     ListDoneLists listDoneLists(ResolveMemberIdentity resolveMemberIdentity, ShoppingListReadModel shoppingListReadModel) {
         return new ListDoneLists(resolveMemberIdentity, shoppingListReadModel);
+    }
+
+    @Bean
+    AddItemHandler addItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new AddItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    UpdateItemHandler updateItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new UpdateItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    RemoveItemHandler removeItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new RemoveItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    ListItems listItems(ResolveMemberIdentity resolveMemberIdentity, ItemReadModel itemReadModel) {
+        return new ListItems(resolveMemberIdentity, itemReadModel);
     }
 }

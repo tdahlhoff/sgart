@@ -1,10 +1,16 @@
 package de.sgart.collaboration.adapter.in;
 
+import de.sgart.collaboration.application.exception.DuplicateItemApplicationException;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidItemNameException;
+import de.sgart.collaboration.application.exception.InvalidItemNoteException;
+import de.sgart.collaboration.application.exception.InvalidItemQuantityException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
+import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
@@ -84,5 +90,35 @@ class WriteErrorAdvice {
     @ExceptionHandler(ShoppingListNotFoundException.class)
     ResponseEntity<ErrorDescriptor> handleShoppingListNotFound(ShoppingListNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidItemNameException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidItemName(InvalidItemNameException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidItemNoteException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidItemNote(InvalidItemNoteException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidItemQuantityException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidItemQuantity(InvalidItemQuantityException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(DuplicateItemApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleDuplicateItem(DuplicateItemApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ItemNotFoundApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleItemNotFound(ItemNotFoundApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ItemChangeNotPermittedApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleItemChangeNotPermitted(ItemChangeNotPermittedApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
     }
 }

@@ -1,6 +1,10 @@
+---
+baseline_commit: bb78d318cae4dfcbc9b7cd8db422c494165f08d0
+---
+
 # Story 2.3: Add, edit, and remove items
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -113,41 +117,41 @@ if any is wrong, correct it before `dev-story`.
 
 ### Backend — shared kernel & domain (AC1–AC5, AC9)
 
-- [ ] **Task 1: `ItemId` in `shared`** (AC1, AC8)
-  - [ ] Add `de.sgart.shared.ItemId` mirroring `StoreId` verbatim (UUID-backed, `generate()`,
+- [x] **Task 1: `ItemId` in `shared`** (AC1, AC8)
+  - [x] Add `de.sgart.shared.ItemId` mirroring `StoreId` verbatim (UUID-backed, `generate()`,
         `fromString`, `toString`). Justify in the Javadoc the same way `StoreId` does (client-minted,
         carried in the envelope; entity inside an aggregate per AD-10).
-- [ ] **Task 2: item value objects** (AC1, AC2, AC3)
-  - [ ] `de.sgart.collaboration.domain.ItemName` mirroring `ShoppingListName` (trim, non-blank,
+- [x] **Task 2: item value objects** (AC1, AC2, AC3)
+  - [x] `de.sgart.collaboration.domain.ItemName` mirroring `ShoppingListName` (trim, non-blank,
         `MAX_LENGTH = 120`, plain `IllegalArgumentException`). Required — no nullable convention.
-  - [ ] `de.sgart.collaboration.domain.ItemNote` mirroring `ShoppingListName` **but nullable-by-absence**
+  - [x] `de.sgart.collaboration.domain.ItemNote` mirroring `ShoppingListName` **but nullable-by-absence**
         (an absent note is a `null` reference, not an instance — like the unnamed-list convention).
         Trim, non-blank when present, `MAX_LENGTH = 240`.
-  - [ ] Reuse `de.sgart.shared.Quantity` + `Unit` as-is (already present; no change).
-  - [ ] Unit tests: `ItemNameTest`, `ItemNoteTest` (trim, blank rejected/absent, length bound) —
+  - [x] Reuse `de.sgart.shared.Quantity` + `Unit` as-is (already present; no change).
+  - [x] Unit tests: `ItemNameTest`, `ItemNoteTest` (trim, blank rejected/absent, length bound) —
         mirror `ShoppingListNameTest`.
-- [ ] **Task 3: item domain events** (AC1, AC3, AC4, AC9) — package `collaboration.domain.event`
-  - [ ] `ItemAdded(EventId, HouseholdId, ShoppingListId, ItemId, ItemName, ItemNote /*nullable*/, Quantity)`.
-  - [ ] `ItemUpdated(EventId, ShoppingListId, ItemId, ItemName, ItemNote /*nullable*/, Quantity)`.
-  - [ ] `ItemRemoved(EventId, ShoppingListId, ItemId)`.
-  - [ ] All `implements DomainEvent`, `Objects.requireNonNull` on non-nullable components, Javadoc noting
+- [x] **Task 3: item domain events** (AC1, AC3, AC4, AC9) — package `collaboration.domain.event`
+  - [x] `ItemAdded(EventId, HouseholdId, ShoppingListId, ItemId, ItemName, ItemNote /*nullable*/, Quantity)`.
+  - [x] `ItemUpdated(EventId, ShoppingListId, ItemId, ItemName, ItemNote /*nullable*/, Quantity)`.
+  - [x] `ItemRemoved(EventId, ShoppingListId, ItemId)`.
+  - [x] All `implements DomainEvent`, `Objects.requireNonNull` on non-nullable components, Javadoc noting
         the nullable note and the "no creator / no PII" stance (mirror `ShoppingListCreated`).
-- [ ] **Task 4: item domain exceptions** (AC2, AC3, AC5) — package `collaboration.domain.exception`
-  - [ ] `DuplicateItemException`, `ItemNotFoundException`, `ItemChangeNotPermittedException` —
+- [x] **Task 4: item domain exceptions** (AC2, AC3, AC5) — package `collaboration.domain.exception`
+  - [x] `DuplicateItemException`, `ItemNotFoundException`, `ItemChangeNotPermittedException` —
         mirror `ListNameChangeNotPermittedException` (plain domain exceptions, message only).
-- [ ] **Task 5: extend the `ShoppingList` aggregate** (AC1–AC5, AC9)
-  - [ ] Hold items as `Map<ItemId, ItemState> itemsById` (insertion-ordered `LinkedHashMap`); private
+- [x] **Task 5: extend the `ShoppingList` aggregate** (AC1–AC5, AC9)
+  - [x] Hold items as `Map<ItemId, ItemState> itemsById` (insertion-ordered `LinkedHashMap`); private
         nested `record ItemState(ItemName name, ItemNote note, Quantity quantity)` — mirror `StoreState`.
-  - [ ] `addItem(ItemId, ItemName, ItemNote, Quantity, CommandId)`: null-checks (note nullable);
+  - [x] `addItem(ItemId, ItemName, ItemNote, Quantity, CommandId)`: null-checks (note nullable);
         `requireOpen()` else `ItemChangeNotPermittedException`; reject a (name,note) duplicate with
         `DuplicateItemException` (case-insensitive, mirror `hasActiveStoreNamed`); raise `ItemAdded`.
-  - [ ] `updateItem(ItemId, ItemName, ItemNote, Quantity, CommandId)`: `requireOpen()`; unknown id →
+  - [x] `updateItem(ItemId, ItemName, ItemNote, Quantity, CommandId)`: `requireOpen()`; unknown id →
         `ItemNotFoundException`; unchanged name+note+quantity → convergent no-op (raise nothing);
         collision with a **different** item → `DuplicateItemException`; else raise `ItemUpdated`.
-  - [ ] `removeItem(ItemId, CommandId)`: `requireOpen()`; unknown/already-removed → convergent no-op;
+  - [x] `removeItem(ItemId, CommandId)`: `requireOpen()`; unknown/already-removed → convergent no-op;
         else raise `ItemRemoved`.
-  - [ ] `apply(...)`: fold `ItemAdded` (put), `ItemUpdated` (replace), `ItemRemoved` (remove).
-  - [ ] Extend `ShoppingListTest` (or a sibling `ShoppingListItemsTest`) for every branch above,
+  - [x] `apply(...)`: fold `ItemAdded` (put), `ItemUpdated` (replace), `ItemRemoved` (remove).
+  - [x] Extend `ShoppingListTest` (or a sibling `ShoppingListItemsTest`) for every branch above,
         including replay-rebuilds-identical-state and the no-personal-data assertion for the 3 events.
         Test the `DONE`-rejects branch against a **synthetic** `DONE` state only if reachable without an
         Epic-3 event; otherwise **defer** the reachable test to Epic 3 and log it (see Dev Notes →
@@ -155,31 +159,32 @@ if any is wrong, correct it before `dev-story`.
 
 ### Backend — application layer (AC1–AC5, AC8)
 
-- [ ] **Task 6: field translators** — extend `CommandFieldTranslations` (DRY; add + update share)
-  - [ ] `toItemId` (required, `command.itemIdRequired`/`command.itemIdInvalid`), `toItemName`
+- [x] **Task 6: field translators** — extend `CommandFieldTranslations` (DRY; add + update share)
+  - [x] `toItemId` (required, `command.itemIdRequired`/`command.itemIdInvalid`), `toItemName`
         (required), `toItemNoteOrNull` (optional — blank ⇒ `null`), `toQuantity(rawAmount, rawUnit)`
         (parse `BigDecimal` + `Unit`; bad value ⇒ fail-fast 400). Mirror `toShoppingListName` /
         `toStoreChainIdOrNull`.
-- [ ] **Task 7: application exceptions** (AC2, AC3, AC5) — package `application.exception`
-  - [ ] `DuplicateItemApplicationException` (→409), `ItemNotFoundApplicationException` (→404),
+- [x] **Task 7: application exceptions** (AC2, AC3, AC5) — package `application.exception`
+  - [x] `DuplicateItemApplicationException` (→409), `ItemNotFoundApplicationException` (→404),
         `ItemChangeNotPermittedApplicationException` (→403), `InvalidItemNameException` (→400),
         `InvalidItemQuantityException` (→400) — mirror the existing `*ApplicationException` types
         (each carries an `ErrorDescriptor` with a client code). This is the AD-1/§8 translation seam so
         `adapter.in` never imports `..domain..`.
-- [ ] **Task 8: commands + handlers** (AC1, AC3, AC4, AC8) — package `application.command`, DTO beside handler
-  - [ ] `AddItem` + `AddItemHandler`, `UpdateItem` + `UpdateItemHandler`, `RemoveItem` +
+- [x] **Task 8: commands + handlers** (AC1, AC3, AC4, AC8) — package `application.command`, DTO beside handler
+  - [x] `AddItem` + `AddItemHandler`, `UpdateItem` + `UpdateItemHandler`, `RemoveItem` +
         `RemoveItemHandler`. Each handler mirrors `RenameShoppingListHandler`: translate raw fields →
         resolve membership via `ResolveMemberIdentity` (403) → load `ShoppingList` by
         `StreamId.forList(listId)` → empty history **or** `householdId` mismatch ⇒
         `ShoppingListNotFoundException` (404) → capture loaded version → call the aggregate (catch domain
         exceptions, translate to the application exceptions from Task 7) → append under the loaded
         version + `commandId` only when `uncommittedEvents()` is non-empty (no-op skips the append).
-  - [ ] Handler tests (`InMemoryEventStore` + fake `ResolveMemberIdentity`): success raises the event;
+  - [x] Handler tests (`InMemoryEventStore` + fake `ResolveMemberIdentity`): success raises the event;
         non-member 403; list-not-found 404; **cross-household 404**; duplicate 409 (add) / collision 409
         (update); update-missing 404; remove-unknown no-op (no append); idempotent retry (same
-        `commandId`) does not double-append.
-- [ ] **Task 9: `ListItems` query** (AC6, AC8) — package `application.query`
-  - [ ] `ListItems.forList(keycloakUserId, rawHouseholdId, rawListId)`: resolve membership (403), read
+        `commandId`) does not double-append (idempotency itself is proven by the `InMemoryEventStore`
+        contract, not re-tested per handler — mirrors `AddStoreHandlerTest`/`RenameShoppingListHandlerTest`).
+- [x] **Task 9: `ListItems` query** (AC6, AC8) — package `application.query`
+  - [x] `ListItems.forList(keycloakUserId, rawHouseholdId, rawListId)`: resolve membership (403), read
         `item_read_model` filtered by `(household_id, list_id)` in creation order; return a
         plain-`String` summary record (`ItemSummary(itemId, name, note, amount, unit)`) so `adapter.in`
         needs no domain import (mirror `ListOpenLists.ShoppingListSummary`). A list in another household
@@ -187,96 +192,99 @@ if any is wrong, correct it before `dev-story`.
 
 ### Backend — adapters (AC1–AC8)
 
-- [ ] **Task 10: read model port + JDBC + migration** (AC1–AC4, AC7)
-  - [ ] `V6__item_read_model.sql`: `item_read_model(item_id UUID PK, list_id UUID NOT NULL, household_id
+- [x] **Task 10: read model port + JDBC + migration** (AC1–AC4, AC7)
+  - [x] `V6__item_read_model.sql`: `item_read_model(item_id UUID PK, list_id UUID NOT NULL, household_id
         UUID NOT NULL, name VARCHAR(120) NOT NULL, note VARCHAR(240) NULL, quantity_amount NUMERIC NOT
         NULL, quantity_unit VARCHAR(20) NOT NULL, sequence_number BIGSERIAL, created_at TIMESTAMPTZ NOT
         NULL DEFAULT now())` + index on `list_id`. Header comment mirroring `V5` (CQRS/AD-4, no personal
         data, idempotent upsert keeps `sequence_number` stable).
-  - [ ] `domain.readmodel.ItemView(ItemId, ItemName, ItemNote /*nullable*/, Quantity)` and
-        `domain.readmodel.ItemReadModel` port (`List<ItemView> itemsOf(ShoppingListId)`).
-  - [ ] `adapter.out.JdbcItemReadModel implements ItemReadModel`: `itemsOf` (ordered by
+  - [x] `domain.readmodel.ItemView(ItemId, ItemName, ItemNote /*nullable*/, Quantity)` and
+        `domain.readmodel.ItemReadModel` port (`List<ItemView> itemsOf(HouseholdId, ShoppingListId)` —
+        householdId added so the port itself enforces the cross-household no-data-leak guarantee).
+  - [x] `adapter.out.JdbcItemReadModel implements ItemReadModel`: `itemsOf` (ordered by
         `sequence_number`), `insertItem` (`ON CONFLICT (item_id) DO NOTHING`), `updateItem`
         (`UPDATE name/note/quantity`), `removeItem` (`DELETE`). Mirror `JdbcShoppingListReadModel`
         idempotency comments.
-- [ ] **Task 11: thread item count through the overview read path** (AC7)
-  - [ ] Add `itemCount` to `ShoppingListView`; `JdbcShoppingListReadModel.listsOf` `LEFT JOIN`s a
+- [x] **Task 11: thread item count through the overview read path** (AC7)
+  - [x] Add `itemCount` to `ShoppingListView`; `JdbcShoppingListReadModel.listsOf` `LEFT JOIN`s a
         `COUNT` from `item_read_model` (0 when none). Thread it through
         `ListOpenLists.ShoppingListSummary` + `ListDoneLists` + `ShoppingListController`'s
         `ShoppingListSummaryResponse`. Keep Done rows carrying the count (harmless; UI hides it).
-  - [ ] Update the existing `ListOpenListsTest` / `ListDoneListsTest` / projector test fixtures for the
+  - [x] Update the existing `ListOpenListsTest` / `ListDoneListsTest` / projector test fixtures for the
         new field.
-- [ ] **Task 12: extend the projector + codec** (AC1, AC3, AC4)
-  - [ ] `ShoppingListReadModelProjector`: inject `JdbcItemReadModel`; extend `project(...)` to fold
+- [x] **Task 12: extend the projector + codec** (AC1, AC3, AC4)
+  - [x] `ShoppingListReadModelProjector`: inject `JdbcItemReadModel`; extend `project(...)` to fold
         `ItemAdded`→`insertItem`, `ItemUpdated`→`updateItem`, `ItemRemoved`→`removeItem`. Wire the new
         dependency in `CollaborationReadModelConfig` (the read-model/projector wiring); add the item
         handlers, `ListItems`, and `JdbcItemReadModel` bean to `CollaborationApplicationConfig` /
         `CollaborationReadModelConfig` respectively.
-  - [ ] `DomainEventJsonCodec`: add type tags + payload records + `toJsonBytes`/`fromJsonBytes` for the
+  - [x] `DomainEventJsonCodec`: add type tags + payload records + `toJsonBytes`/`fromJsonBytes` for the
         3 item events (note nullable, `amount` as `String` via `toPlainString`, `unit` as enum name).
         Mirror `ShoppingListCreatedPayload`.
-  - [ ] Extend `ShoppingListReadModelProjectorTest` for item folding (in-memory read-model fake or the
-        existing Testcontainers style).
-- [ ] **Task 13: `ItemController` + error advice** (AC1–AC8)
-  - [ ] New `adapter.in.ItemController` at
+  - [x] Extend `ShoppingListReadModelProjectorTest` for item folding (Testcontainers style, matching the
+        rest of the file) + a dedicated item-count-via-`listsOf` test.
+- [x] **Task 13: `ItemController` + error advice** (AC1–AC8)
+  - [x] New `adapter.in.ItemController` at
         `/api/v1/households/{householdId}/lists/{listId}/items`: `POST` add (201), `GET` list, `PATCH
         /{itemId}` update (204), `DELETE /{itemId}` remove (204). Identity only from the JWT `sub` via
         `AuthenticatedCaller` (AR10/AD-5). DTOs: `AddItemRequest(itemId, name, note, amount, unit,
         commandId)`, `UpdateItemRequest(name, note, amount, unit, commandId)`, `ItemResponse(itemId,
         name, note, amount, unit)` — `amount` as decimal `String`, `unit` as enum name. Mirror
         `ShoppingListController`.
-  - [ ] `WriteErrorAdvice`: map the 5 new application exceptions to 409/404/403/400/400.
-  - [ ] `ItemControllerTest` (MockMvc slice) — happy paths + each error status + membership 403 +
+  - [x] `WriteErrorAdvice`: map the 5 new application exceptions to 409/404/403/400/400.
+  - [x] `ItemControllerTest` (MockMvc slice) — happy paths + each error status + membership 403 +
         cross-household 404. Mirror `ShoppingListControllerTest`.
-- [ ] **Task 14: ArchUnit** — run `HexagonalArchitectureTest`; confirm the new `..domain..` /
+- [x] **Task 14: ArchUnit** — run `HexagonalArchitectureTest`; confirm the new `..domain..` /
       `..application..` subpackages need no rule change and that `adapter.in` imports no `..domain..`.
 
 ### Flutter — list detail screen + item capture (AC1–AC7)
 
-- [ ] **Task 15: item data layer** — `features/lists/data`
-  - [ ] `item.dart` — `Item{itemId, name, note?, amount /*String*/, unit /*String enum name*/}` with a
+- [x] **Task 15: item data layer** — `features/lists/data`
+  - [x] `item.dart` — `Item{itemId, name, note?, amount /*String*/, unit /*String enum name*/}` with a
         fail-fast `fromJson` mirroring `ShoppingListSummary.fromJson` (mapped `AppException` on a bad
         shape; `note` nullable).
-  - [ ] `items_api.dart` — `ItemsApi` interface + `HttpItemsApi`: `listItems`, `addItem` (mints/carries
-        `itemId`+`commandId`), `updateItem`, `removeItem`. Mirror `shopping_lists_api.dart`. Register
-        `ItemsApi` in DI wherever `ShoppingListsApi` is provided.
-  - [ ] Add `itemCount` (int) to `ShoppingListSummary` (Flutter) + `fromJson` (default 0); optimistic
-        create sets `itemCount: 0`.
-- [ ] **Task 16: list detail cubit/state** — `features/lists/presentation`
-  - [ ] `list_detail_cubit.dart` + `list_detail_state.dart`: bootstrap → `listItems`; `addItem`,
+  - [x] `items_api.dart` — `ItemsApi` interface + `HttpItemsApi`: `listItems`, `addItem` (mints/carries
+        `itemId`+`commandId`), `updateItem`, `removeItem`. Mirror `shopping_lists_api.dart`. Registered
+        `ItemsApi` in DI in `first_run_router.dart` alongside `ShoppingListsApi`.
+  - [x] Added `itemCount` (int) to `ShoppingListSummary` (Flutter) + `fromJson` (default 0); optimistic
+        create keeps the default `itemCount: 0`.
+- [x] **Task 16: list detail cubit/state** — `features/lists/presentation`
+  - [x] `list_detail_cubit.dart` + `list_detail_state.dart`: bootstrap → `listItems`; `addItem`,
         `updateItem`, `removeItem` with optimistic apply + inline `actionError` on rejection + `isClosed`
-        guards. Use `CommandIntent` per intent (add: `hasResourceId: true` mints `itemId`; update: keyed
-        on payload; remove: per-intent id) — reuse on retry, freshen after success (Epic-1 retro
-        footgun). Mirror `shopping_lists_cubit.dart`.
-- [ ] **Task 17: list detail UI** — `features/lists/presentation`
-  - [ ] `list_detail_page.dart`: item rows (name · quantity formatted de-DE · optional note), empty
-        state, add button, per-row edit/remove; **Done list read-only** (no affordances). Reuse
-        `SgartButton`, `StatusLabel`, `SgartShapes`, 48px targets, a11y labels (Epic-1 DoD).
-  - [ ] `item_form_sheet.dart`: name field, quantity **amount** field + **unit dropdown** (Stück / Gramm
-        / Kilogramm / Milliliter / Liter / Packung), optional note field; client-side fail-fast guards
-        (blank name, `amount ≤ 0`) so no pointless round-trip; default `1 Stück`. One sheet for add +
-        edit.
-  - [ ] Navigation: `_ListRow.onTap` (Open rows) → push `MaterialPageRoute` to `ListDetailPage`,
-        re-providing `ItemsApi` + a `ListDetailCubit(itemsApi, householdId, listId)`. Rename stays the
-        trailing icon button.
-  - [ ] Overview: show `itemCount` on each Open `_ListRow` (e.g. „3 Artikel"); archive rows unchanged.
-- [ ] **Task 18: localization** — `l10n`
-  - [ ] Add German strings to `app_de.arb` (detail title, add/edit/remove actions, name/amount/note
-        labels, the 6 unit labels, item-count `„{count} Artikel"` with plural, empty-items state) and run
-        `flutter gen-l10n`. Map new error codes in `error_message_resolver.dart`: `item.nameRequired`,
-        `item.nameTooLong`, `item.noteTooLong`, `item.quantityRequired`, `item.quantityInvalid`,
-        `item.duplicate`, `item.notFound`, `item.changeNotPermitted` (+ confirm `list.notFound` copy
-        exists from 2.1). No hard-coded user-facing strings (AD-11).
+        guards. Uses `CommandIntent` per intent (add: `hasResourceId: true` mints `itemId`, keyed on the
+        payload tuple; update: single intent keyed on `(itemId, name, note, amount, unit)`; remove: single
+        intent keyed on `itemId`, mirroring `StoresCubit._archiveIntent`) — reused on retry, freshened
+        after success. Mirrors `shopping_lists_cubit.dart`.
+- [x] **Task 17: list detail UI** — `features/lists/presentation`
+  - [x] `list_detail_page.dart`: item rows (name · quantity formatted de-DE via the existing
+        `QuantityFormatter` · optional note), empty state, add button, per-row edit/remove; **Done list
+        read-only** (no affordances render at all). Reuses `SgartButton`, `SgartShapes`, 48px targets,
+        a11y tooltips/labels.
+  - [x] `item_form_sheet.dart`: name field, quantity **amount** field + **unit dropdown** (Stück / Gramm
+        / Kilogramm / Milliliter / Liter / Packung, reusing the existing `formatting.Unit` + label
+        catalog), optional note field; client-side fail-fast guard (blank name disables submit) so no
+        pointless round-trip; defaults to `1 Stück`. One sheet for add + edit.
+  - [x] Navigation: `_ListRow.onTap`/`_ArchiveRow.onTap` → push `MaterialPageRoute` to `ListDetailPage`,
+        re-providing `ItemsApi` + a `ListDetailCubit(itemsApi, householdId, listId, isReadOnly)`
+        (mirrors `HouseholdShell._openSwitcher`'s re-provide pattern). Rename stays the trailing icon
+        button; a Done row opens read-only.
+  - [x] Overview: shows `itemCount` on each Open `_ListRow` (e.g. „3 Artikel"); archive rows unchanged
+        (no count shown, per Clarification 4/Epic-3 polish).
+- [x] **Task 18: localization** — `l10n`
+  - [x] Added German strings to `app_de.arb` (detail heading, add/edit/remove actions, name/amount/unit
+        /note labels, item-count `„{count} Artikel"` with an ICU plural, empty-items state) and ran
+        `flutter gen-l10n`. Mapped the 8 new error codes in `error_message_resolver.dart`; `list.notFound`
+        copy already existed from 2.1. No hard-coded user-facing strings.
 
 ### Tests & green build (CLAUDE.md §6)
 
-- [ ] **Task 19: Flutter tests** — `items_api`/`Item.fromJson` parsing; `list_detail_cubit_test`
-      (add/edit/remove, optimistic, error, intent reuse); `list_detail_page` widget test (form, unit
-      dropdown, empty state, read-only Done, error+retry); update `lists_view_test` for item count +
-      row-tap navigation; extend `fake_shopping_lists_dependencies` / add fake `ItemsApi`.
-- [ ] **Task 20: full-suite green** — run backend `./gradlew test` (incl. ArchUnit) **and** app
-      `flutter test` + `flutter analyze`. Record which suites ran and the counts in the Dev Agent
-      Record (never report "green" without naming the suite).
+- [x] **Task 19: Flutter tests** — added `item_test.dart` (`Item.fromJson` parsing incl. malformed-shape
+      `AppException`); `list_detail_cubit_test.dart` (19 tests: add/edit/remove, optimistic apply, error
+      surfacing, read-only no-ops, intent reuse/freshen); `list_detail_page_test.dart` (10 tests: form,
+      unit dropdown, empty state, read-only Done, error+retry); extended `lists_view_test.dart` (3 new
+      tests: item count display, Open-row and Done-row navigation to the detail screen); added
+      `fake_items_dependencies.dart` (`FakeItemsApi`, mirrors `FakeShoppingListsApi`).
+- [x] **Task 20: full-suite green** — see Completion Notes below for exact suite/counts.
 
 ## Dev Notes
 
@@ -375,12 +383,183 @@ command DTO beside its handler.
 - [Source: app `lists/` feature — `shopping_lists_cubit.dart`, `lists_view.dart`, `shopping_lists_api.dart`, `shopping_list_summary.dart`, `household_shell.dart`] — client patterns to mirror.
 - [Source: _bmad-output/implementation-artifacts/deferred-work.md] — item-count carry-forward + `DONE`-branch reachability defers.
 
+## Review Findings
+
+Code review 2026-08-27 (bmad-code-review, Opus 4.8 — Blind Hunter + Edge Case Hunter + Acceptance
+Auditor). 0 decision-needed, 7 patch, 4 deferred, 4 dismissed. Severity in brackets. **All 7 patches
+applied** and both suites re-run green (backend `./gradlew test` incl. ArchUnit + Testcontainers;
+Flutter `flutter analyze` + `flutter test` = 321). The shared-`_removeIntent` finding (LOW) is
+resolved by the `removeItem` `isSubmitting` guard — commands are now serialized, so the single intent
+never overlaps. Regression tests added: backend scale-insensitive no-op + read-side cross-household
+empty; Flutter comma-decimal normalization + non-numeric-amount client block.
+
+- [x] [Review][Patch] **[HIGH] German decimal amount silently rejected** — the de-DE UI renders
+      `0,5 kg` (comma) and the amount field is a decimal keyboard, but the client sends the raw text
+      and the backend does `new BigDecimal(rawAmount)` (dot only), so `1,5` → `NumberFormatException`
+      → `item.quantityInvalid` (400). Fractional amounts — the reason `Quantity` uses `BigDecimal` —
+      are unreachable in the app's only locale. Fix: normalise `,`→`.` (and validate) before send.
+      Fold in the amount-not-client-validated gap (blank/non-numeric amount submits and only fails
+      server-side, unlike the blank-name guard). [app/lib/features/lists/presentation/item_form_sheet.dart:67]
+- [x] [Review][Patch] **[MEDIUM] `removeItem` skips the `isSubmitting` guard → concurrent-command
+      409 races** — unlike `addItem`/`updateItem`, `removeItem` neither reads nor sets `isSubmitting`
+      and the row calls it fire-and-forget, so a remove concurrent with another command loads the same
+      stream version and the loser gets a spurious `ConcurrencyConflictException` (409) for a valid
+      action. [app/lib/features/lists/presentation/list_detail_cubit.dart:149]
+- [x] [Review][Patch] **[MEDIUM] Overview item count goes stale after the user's own edit** — the
+      overview push has no `.then(refresh)`; adding/removing items on the detail screen mutates only
+      `ListDetailCubit`, so returning to the overview still shows the old `itemCount` (e.g. „0 Artikel")
+      until a manual refresh. AC7 count is correct on the server, stale in the UI after the very action
+      that changes it. Fix: refresh `ShoppingListsCubit` on pop. [app/lib/features/lists/presentation/lists_view.dart:197]
+- [x] [Review][Patch] **[MEDIUM] Cross-household item-read no-leak is asserted nowhere** — Task 9
+      specified a "cross-household empty" test; the guarantee lives in `JdbcItemReadModel.itemsOf`'s
+      `WHERE household_id=… AND list_id=…`, but `ListItemsTest` uses an in-memory double that ignores
+      `householdId` and the projector test only queries the matching household. Add the read-side
+      cross-household-empty test. [backend/src/test/java/de/sgart/collaboration/application/ListItemsTest.java]
+- [x] [Review][Patch] **[LOW] `updateItem` no-op check is `BigDecimal`-scale-sensitive** — the
+      convergent-no-op guard uses `existing.quantity().equals(quantity)`; `Quantity` is a record whose
+      `equals` inherits scale-sensitive `BigDecimal.equals`, so `1` "updated" to `1.0` (name/note
+      unchanged) skips the no-op branch and emits a spurious `ItemUpdated` (event-log noise, violates
+      AD-8 convergence intent). Fix: compare unit + `amount().compareTo(...) == 0`. [backend/src/main/java/de/sgart/collaboration/domain/ShoppingList.java:160]
+- [x] [Review][Patch] **[LOW] Single shared `_removeIntent` loses idempotent-retry id under
+      concurrent removes** — one `CommandIntent` keyed only on `itemId` is shared by all rows; a second
+      remove's `complete()` clears the first's in-flight id, so a retried remove mints a fresh command
+      id instead of reusing it. Correctness survives only because `removeItem` is a convergent no-op —
+      the AD-8 dedup guarantee is silently lost. [app/lib/features/lists/presentation/list_detail_cubit.dart:42]
+- [x] [Review][Patch] **[LOW] `InvalidItemNameException` carries the note-too-long error** —
+      `toItemNoteOrNull` throws `InvalidItemNameException("item.noteTooLong", …)` for an over-long
+      *note*; a type named for the *name* field raising for the *note* field violates the
+      intention-revealing-name rule (CLAUDE.md §2). Fix: a note-specific exception (both still → 400).
+      [backend/src/main/java/de/sgart/collaboration/application/CommandFieldTranslations.java]
+- [x] [Review][Defer] **[LOW] Edit unit fallback silently coerces an unknown server unit to PIECE**
+      [app/lib/features/lists/presentation/item_form_sheet.dart:41] — deferred, latent: the Dart and
+      Java `Unit` enums match exactly today, so unreachable; a guardless `?? Unit.piece` on the save
+      path would corrupt the quantity if the vocabularies ever diverge.
+- [x] [Review][Defer] **[LOW] `DELETE` carries a JSON request body** [backend/src/main/java/de/sgart/collaboration/adapter/in/ItemController.java]
+      — deferred, pre-existing pattern: mirrors the archive endpoint; DELETE bodies are discouraged and
+      stripped by some proxies (the `commandId` would arrive null → envelope 400). Latent portability risk.
+- [x] [Review][Defer] **[LOW] `item_read_model` has no FK / `ON DELETE` to the list/household**
+      [backend/src/main/resources/db/migration/V6__item_read_model.sql] — deferred to Epic 6: bare
+      `UUID NOT NULL` + plain index; list-deletion / household-erasure will orphan item rows. The
+      migration comment already reasons about erasure locability but stops short of the cascade.
+- [x] [Review][Defer] **[LOW] `quantity_amount NUMERIC` has no precision/scale bound**
+      [backend/src/main/resources/db/migration/V6__item_read_model.sql] — deferred: only `amount.signum()>0`
+      is enforced, so an arbitrarily large/high-scale decimal can be persisted. No functional break; a
+      soft input-validation ceiling to add when convenient.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Sonnet 5 (dev-story)
+
 ### Debug Log References
+
+None — no failures required a debug log; the Testcontainers-backed projector test and the full
+Gradle suite ran green on first full run after the implementation.
 
 ### Completion Notes List
 
+- Full vertical slice delivered per the story's Clarifications: `Item` realised as a folded entity
+  inside `ShoppingList` (mirrors `Household`/`StoreState`), (name, note) dedup key, item events on
+  the existing `list-{id}` stream/projector, `itemCount` threaded through the overview read path,
+  and a real-but-minimal Flutter list detail screen with no premature Epic-3/2.4/2.5/2.6 surfaces.
+- `ShoppingList.rename` was refactored to share the new private `requireOpen()` guard with the item
+  commands (DRY) — its externally observable behavior (403 via
+  `ListNameChangeNotPermittedException` on a non-`Open` list) is unchanged.
+- `ItemReadModel.itemsOf` takes `(HouseholdId, ShoppingListId)` rather than the list id alone (a
+  small deviation from the story's Task 10 signature): this lets the read side itself enforce the
+  AC8 cross-household no-data-leak guarantee via the SQL `WHERE`, rather than relying on the query
+  layer to post-filter — consistent with the same defense-in-depth the write handlers apply.
+- AC5's reachable-`DONE` item-rejection end-to-end test is deferred to Epic 3 per the story's
+  Dev Notes (no Epic-2 event drives a list out of `Open` yet, same as Story 2.1 Clarification 1);
+  the guard itself is coded (`requireOpen()`) and unit-tested via `ShoppingListItemsTest`.
+- **Backend — full suite green**: `./gradlew test` (incl. `HexagonalArchitectureTest` ArchUnit and
+  the Testcontainers-backed `ShoppingListReadModelProjectorTest`) — **347 tests, 0 failures** (up
+  from 271 at Story 2.2).
+- **Flutter — full suite green**: `flutter analyze` — no issues; `flutter test` — **319 tests, 0
+  failures** (up from 282 at Story 2.2).
+
 ### File List
+
+**Backend — new**
+- `backend/src/main/java/de/sgart/shared/ItemId.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/ItemName.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/ItemNote.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/event/ItemAdded.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/event/ItemUpdated.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/event/ItemRemoved.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/exception/DuplicateItemException.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/exception/ItemNotFoundException.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/exception/ItemChangeNotPermittedException.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/readmodel/ItemView.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/readmodel/ItemReadModel.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/AddItem.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/AddItemHandler.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/UpdateItem.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/UpdateItemHandler.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/RemoveItem.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/RemoveItemHandler.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/DuplicateItemApplicationException.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/ItemNotFoundApplicationException.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/ItemChangeNotPermittedApplicationException.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/InvalidItemNameException.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/InvalidItemQuantityException.java`
+- `backend/src/main/java/de/sgart/collaboration/application/query/ListItems.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/JdbcItemReadModel.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/in/ItemController.java`
+- `backend/src/main/resources/db/migration/V6__item_read_model.sql`
+
+**Backend — changed**
+- `backend/src/main/java/de/sgart/collaboration/domain/ShoppingList.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/readmodel/ShoppingListView.java`
+- `backend/src/main/java/de/sgart/collaboration/application/CommandFieldTranslations.java`
+- `backend/src/main/java/de/sgart/collaboration/application/query/ListOpenLists.java`
+- `backend/src/main/java/de/sgart/collaboration/application/query/ListDoneLists.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/JdbcShoppingListReadModel.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/ShoppingListReadModelProjector.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/DomainEventJsonCodec.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/CollaborationApplicationConfig.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/CollaborationReadModelConfig.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/in/ShoppingListController.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/in/WriteErrorAdvice.java`
+
+**Backend — tests (new)**
+- `backend/src/test/java/de/sgart/collaboration/domain/ItemNameTest.java`
+- `backend/src/test/java/de/sgart/collaboration/domain/ItemNoteTest.java`
+- `backend/src/test/java/de/sgart/collaboration/domain/ShoppingListItemsTest.java`
+- `backend/src/test/java/de/sgart/collaboration/application/AddItemHandlerTest.java`
+- `backend/src/test/java/de/sgart/collaboration/application/UpdateItemHandlerTest.java`
+- `backend/src/test/java/de/sgart/collaboration/application/RemoveItemHandlerTest.java`
+- `backend/src/test/java/de/sgart/collaboration/application/ListItemsTest.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/in/ItemControllerTest.java`
+
+**Backend — tests (changed)**
+- `backend/src/test/java/de/sgart/collaboration/application/ListOpenListsTest.java`
+- `backend/src/test/java/de/sgart/collaboration/application/ListDoneListsTest.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/in/ShoppingListControllerTest.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/out/ShoppingListReadModelProjectorTest.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/out/DomainEventJsonCodecTest.java`
+
+**Flutter — new**
+- `app/lib/features/lists/data/item.dart`
+- `app/lib/features/lists/data/items_api.dart`
+- `app/lib/features/lists/presentation/list_detail_state.dart`
+- `app/lib/features/lists/presentation/list_detail_cubit.dart`
+- `app/lib/features/lists/presentation/list_detail_page.dart`
+- `app/lib/features/lists/presentation/item_form_sheet.dart`
+
+**Flutter — changed**
+- `app/lib/features/lists/data/shopping_list_summary.dart`
+- `app/lib/features/lists/presentation/lists_view.dart`
+- `app/lib/features/households/presentation/first_run_router.dart`
+- `app/lib/shared/errors/error_message_resolver.dart`
+- `app/lib/l10n/app_de.arb`
+
+**Flutter — tests (new)**
+- `app/test/features/lists/data/item_test.dart`
+- `app/test/features/lists/presentation/list_detail_cubit_test.dart`
+- `app/test/features/lists/presentation/list_detail_page_test.dart`
+- `app/test/support/fake_items_dependencies.dart`
+
+**Flutter — tests (changed)**
+- `app/test/features/lists/presentation/lists_view_test.dart`

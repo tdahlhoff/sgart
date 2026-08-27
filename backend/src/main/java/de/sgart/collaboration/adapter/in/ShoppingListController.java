@@ -76,7 +76,8 @@ class ShoppingListController {
                 : listOpenLists.forHousehold(caller.keycloakUserId(), householdId);
 
         return summaries.stream()
-                .map(summary -> new ShoppingListSummaryResponse(summary.listId(), summary.name(), summary.status()))
+                .map(summary -> new ShoppingListSummaryResponse(
+                        summary.listId(), summary.name(), summary.status(), summary.itemCount()))
                 .toList();
     }
 
@@ -100,6 +101,9 @@ class ShoppingListController {
     /** Transport DTO for {@code PATCH} — the rename-list command envelope (AR10). */
     record RenameShoppingListRequest(String name, String commandId) {}
 
-    /** {@code name} is {@code null} for an unnamed list; the client derives „Liste N" from position. */
-    record ShoppingListSummaryResponse(String listId, String name, String status) {}
+    /**
+     * {@code name} is {@code null} for an unnamed list; the client derives „Liste N" from position.
+     * {@code itemCount} is 0 for an empty list (Story 2.3, AC7).
+     */
+    record ShoppingListSummaryResponse(String listId, String name, String status, int itemCount) {}
 }

@@ -21,6 +21,14 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     // The client never sends a bad filter — this only guards against an unmapped 4xx surfacing
     // as the generic fallback, since the resolver must cover every server code (retro DoD).
     'command.listFilterInvalid' => localizations.errorGenericFallback,
+    'item.nameRequired' => localizations.itemNameRequiredError,
+    'item.nameTooLong' => localizations.itemNameTooLongError,
+    'item.noteTooLong' => localizations.itemNoteTooLongError,
+    'item.quantityRequired' => localizations.itemQuantityRequiredError,
+    'item.quantityInvalid' => localizations.itemQuantityInvalidError,
+    'item.duplicate' => localizations.itemDuplicateError,
+    'item.notFound' => localizations.itemNotFoundError,
+    'item.changeNotPermitted' => localizations.itemChangeNotPermittedError,
     _ => localizations.errorGenericFallback,
   };
 }

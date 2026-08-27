@@ -52,14 +52,18 @@ public final class ListOpenLists {
 
     private static ShoppingListSummary toSummary(ShoppingListView list) {
         return new ShoppingListSummary(
-                list.listId().toString(), list.name() == null ? null : list.name().value(), list.status().name());
+                list.listId().toString(),
+                list.name() == null ? null : list.name().value(),
+                list.status().name(),
+                list.itemCount());
     }
 
     /**
-     * A list as seen by the caller: id + optional name + status, in creation order — the shape the
-     * minimal lists surface needs. Plain {@code String}s, not domain types, so {@code adapter.in}
-     * can consume this record without reaching into {@code collaboration.domain}. {@code name} is
-     * {@code null} for an unnamed list.
+     * A list as seen by the caller: id + optional name + status + item count, in creation order —
+     * the shape the minimal lists surface needs. Plain {@code String}s/{@code int}, not domain
+     * types, so {@code adapter.in} can consume this record without reaching into {@code
+     * collaboration.domain}. {@code name} is {@code null} for an unnamed list. {@code itemCount} is
+     * 0 for an empty list (Story 2.3, AC7); the checked/total progress bar is Epic 3.
      */
-    public record ShoppingListSummary(String listId, String name, String status) {}
+    public record ShoppingListSummary(String listId, String name, String status, int itemCount) {}
 }

@@ -4,17 +4,27 @@ import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
+import de.sgart.collaboration.application.exception.InvalidItemNameException;
+import de.sgart.collaboration.application.exception.InvalidItemNoteException;
+import de.sgart.collaboration.application.exception.InvalidItemQuantityException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.Unit;
+import java.math.BigDecimal;
+import java.util.Arrays;
 
 /**
  * Shared fail-fast translators from raw request strings to validated command-envelope/domain
@@ -155,5 +165,72 @@ public final class CommandFieldTranslations {
             throw new InvalidCommandEnvelopeException("command.listFilterInvalid", "filter must be 'open' or 'done'");
         }
         return rawFilter;
+    }
+
+    public static ItemId toItemId(String rawItemId) {
+        if (rawItemId == null || rawItemId.isBlank()) {
+            throw new InvalidCommandEnvelopeException("command.itemIdRequired", "itemId must be provided");
+        }
+        try {
+            return ItemId.fromString(rawItemId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new InvalidCommandEnvelopeException("command.itemIdInvalid", "itemId must be a valid UUID");
+        }
+    }
+
+    /** Translates the <em>required</em> item name (AC1) — blank is a fail-fast {@code 400}. */
+    public static ItemName toItemName(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            throw new InvalidItemNameException("item.nameRequired", "Item name must not be blank");
+        }
+        try {
+            return new ItemName(rawName);
+        } catch (IllegalArgumentException tooLong) {
+            throw new InvalidItemNameException("item.nameTooLong", tooLong.getMessage());
+        }
+    }
+
+    /**
+     * Translates the <em>optional</em> item note (AC1). A missing/blank value means the item
+     * carries no note and yields {@code null} — not an error; only an over-long value is a
+     * fail-fast {@code 400}.
+     */
+    public static ItemNote toItemNoteOrNull(String rawNote) {
+        if (rawNote == null || rawNote.isBlank()) {
+            return null;
+        }
+        try {
+            return new ItemNote(rawNote);
+        } catch (IllegalArgumentException tooLong) {
+            throw new InvalidItemNoteException("item.noteTooLong", tooLong.getMessage());
+        }
+    }
+
+    /**
+     * Translates the <em>required</em> item quantity (AC1, AD-9): a positive {@link BigDecimal}
+     * amount paired with a {@link Unit} from the controlled vocabulary. A missing/malformed amount,
+     * a non-positive amount, or an unrecognized unit is a fail-fast {@code 400} — never persisted.
+     */
+    public static Quantity toQuantity(String rawAmount, String rawUnit) {
+        if (rawAmount == null || rawAmount.isBlank() || rawUnit == null || rawUnit.isBlank()) {
+            throw new InvalidItemQuantityException("item.quantityRequired", "quantity amount and unit must be provided");
+        }
+        BigDecimal amount;
+        try {
+            amount = new BigDecimal(rawAmount);
+        } catch (NumberFormatException notANumber) {
+            throw new InvalidItemQuantityException("item.quantityInvalid", "amount must be a valid decimal number");
+        }
+        Unit unit;
+        try {
+            unit = Unit.valueOf(rawUnit);
+        } catch (IllegalArgumentException notAUnit) {
+            throw new InvalidItemQuantityException("item.quantityInvalid", "unit must be one of " + Arrays.toString(Unit.values()));
+        }
+        try {
+            return new Quantity(amount, unit);
+        } catch (IllegalArgumentException notPositive) {
+            throw new InvalidItemQuantityException("item.quantityInvalid", notPositive.getMessage());
+        }
     }
 }

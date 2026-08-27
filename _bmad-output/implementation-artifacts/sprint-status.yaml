@@ -42,6 +42,7 @@
 
 generated: 2026-08-22
 last_updated: 2026-08-27
+# Story 2.3 review (dev-story, Sonnet 5) 2026-08-27 — full vertical slice: Item entity inside ShoppingList (mirrors StoreState), 3 events/commands+handlers, item_read_model V6 + projector/codec extension + ListItems query + ItemController, overview item count threaded through, new Flutter list-detail screen + item form sheet. Backend 271→347 green (incl. ArchUnit + Testcontainers projector test), Flutter 282→319 green (incl. analyze). DONE-rejects-item e2e deferred to Epic 3 per Story 2.1 Cl.1 precedent.
 # Story 2.3 ready-for-dev (create-story, Opus 4.8) 2026-08-27 — first domain-heavy Epic-2 slice: Item entity inside ShoppingList aggregate (mirrors StoreState), 3 events/commands, item_read_model V6 + projector/codec extension + ListItems query + ItemController, plus a new Flutter list-detail screen and overview item count. Full vertical slice + required-quantity-with-default confirmed with product. 5 LOCKED clarifications; DONE-rejects-item e2e deferred to Epic 3 (same reachability caveat as rename)
 # Story 2.2 done (code review, Opus 4.8) 2026-08-26 — 2 patches applied (filter enum renamed offen/erledigt→open/done for cross-boundary language consistency; archive-load-failure retry + retryArchive() + failure-body retry button), 1 defer logged (Epic-3 archive cache invalidation), 4 dismissed; backend 271, Flutter 278→282 green
 # Story 2.2 review (dev-story, Sonnet 5) 2026-08-26 — ListDoneLists + ?filter=open|done + Flutter segmented filter/read-only archive
@@ -88,7 +89,7 @@ development_status:
   epic-2: in-progress
   2-1-create-and-name-multiple-open-lists: done
   2-2-listen-overview-with-offen-erledigt-filter: done
-  2-3-add-edit-and-remove-items: ready-for-dev
+  2-3-add-edit-and-remove-items: done
   2-4-move-an-item-to-another-list: backlog
   2-5-fast-item-entry-with-autocomplete-attribute-prefill: backlog
   2-6-assign-an-item-to-a-store-with-inline-store-creation: backlog

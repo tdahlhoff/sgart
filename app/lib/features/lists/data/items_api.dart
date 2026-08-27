@@ -1,0 +1,105 @@
+import '../../../shared/http/authenticated_http_client.dart';
+import 'item.dart';
+
+/// The client's item source — calls the backend's item slice under a list
+/// (`/api/v1/households/{householdId}/lists/{listId}/items`) (Story 2.3).
+abstract interface class ItemsApi {
+  /// Lists the list's items in creation order (AC6).
+  Future<List<Item>> listItems(String householdId, String listId);
+
+  /// Adds an item by [name], required [amount] + [unit], and an optional [note] (AC1). [commandId]
+  /// and [itemId] are the caller-minted idempotency keys reused across retries of the *same* intent
+  /// (AD-8), exactly like `addStore`/`createList`. The caller mints [itemId] (not this method) so a
+  /// retry reuses the same id, and so the caller can optimistically render it without waiting on the
+  /// read model (read-your-writes).
+  Future<void> addItem(
+    String householdId,
+    String listId, {
+    required String itemId,
+    required String name,
+    String? note,
+    required String amount,
+    required String unit,
+    required String commandId,
+  });
+
+  /// Updates [itemId]'s name, optional note, and quantity (AC3). [commandId] is the reused
+  /// idempotency key for the update intent.
+  Future<void> updateItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String name,
+    String? note,
+    required String amount,
+    required String unit,
+    required String commandId,
+  });
+
+  /// Removes [itemId] (AC4, idempotent — a retry/unknown id is a silent success). [commandId] is
+  /// the reused idempotency key for the remove intent.
+  Future<void> removeItem(String householdId, String listId, String itemId, {required String commandId});
+}
+
+class HttpItemsApi implements ItemsApi {
+  const HttpItemsApi(this._client);
+
+  final AuthenticatedHttpClient _client;
+
+  @override
+  Future<List<Item>> listItems(String householdId, String listId) async {
+    final json = await _client.getJsonList('/api/v1/households/$householdId/lists/$listId/items');
+    return json.map((entry) => Item.fromJson(entry as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> addItem(
+    String householdId,
+    String listId, {
+    required String itemId,
+    required String name,
+    String? note,
+    required String amount,
+    required String unit,
+    required String commandId,
+  }) async {
+    // The caller-minted item id is sent in the envelope, so the response needs no body
+    // (read-your-writes without a projection wait) — the same rationale as the store id in addStore.
+    await _client.postJson('/api/v1/households/$householdId/lists/$listId/items', {
+      'itemId': itemId,
+      'name': name,
+      'note': note,
+      'amount': amount,
+      'unit': unit,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> updateItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String name,
+    String? note,
+    required String amount,
+    required String unit,
+    required String commandId,
+  }) {
+    return _client.patchJson('/api/v1/households/$householdId/lists/$listId/items/$itemId', {
+      'name': name,
+      'note': note,
+      'amount': amount,
+      'unit': unit,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> removeItem(String householdId, String listId, String itemId, {required String commandId}) {
+    return _client.deleteJson(
+      '/api/v1/households/$householdId/lists/$listId/items/$itemId',
+      {'commandId': commandId},
+    );
+  }
+}

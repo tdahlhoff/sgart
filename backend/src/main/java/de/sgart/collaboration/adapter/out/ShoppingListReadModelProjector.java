@@ -1,5 +1,8 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.shared.DomainEvent;
@@ -45,20 +48,26 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
 
     private final KurrentDBClient client;
     private final JdbcShoppingListReadModel readModel;
+    private final JdbcItemReadModel itemReadModel;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
     private volatile boolean running;
     private ScheduledExecutorService resubscribeScheduler;
 
-    public ShoppingListReadModelProjector(KurrentDBClient client, JdbcShoppingListReadModel readModel) {
-        this(client, readModel, false);
+    public ShoppingListReadModelProjector(
+            KurrentDBClient client, JdbcShoppingListReadModel readModel, JdbcItemReadModel itemReadModel) {
+        this(client, readModel, itemReadModel, false);
     }
 
     public ShoppingListReadModelProjector(
-            KurrentDBClient client, JdbcShoppingListReadModel readModel, boolean autoStart) {
+            KurrentDBClient client,
+            JdbcShoppingListReadModel readModel,
+            JdbcItemReadModel itemReadModel,
+            boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.readModel = Objects.requireNonNull(readModel, "readModel must not be null");
+        this.itemReadModel = Objects.requireNonNull(itemReadModel, "itemReadModel must not be null");
         this.autoStart = autoStart;
     }
 
@@ -68,6 +77,11 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             case ShoppingListCreated created ->
                 readModel.insertList(created.householdId(), created.listId(), created.name());
             case ShoppingListRenamed renamed -> readModel.renameList(renamed.listId(), renamed.newName());
+            case ItemAdded added -> itemReadModel.insertItem(
+                    added.householdId(), added.listId(), added.itemId(), added.name(), added.note(), added.quantity());
+            case ItemUpdated updated ->
+                itemReadModel.updateItem(updated.itemId(), updated.name(), updated.note(), updated.quantity());
+            case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId());
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events.
             }

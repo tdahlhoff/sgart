@@ -2,15 +2,24 @@ package de.sgart.collaboration.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.collaboration.domain.readmodel.ShoppingListView;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.Unit;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
 import javax.sql.DataSource;
@@ -42,6 +51,7 @@ class ShoppingListReadModelProjectorTest {
 
     private ShoppingListReadModelProjector projector;
     private JdbcShoppingListReadModel readModel;
+    private JdbcItemReadModel itemReadModel;
 
     @BeforeAll
     static void migrateDatabase() {
@@ -57,11 +67,13 @@ class ShoppingListReadModelProjectorTest {
     void setUp() {
         JdbcClient jdbcClient = JdbcClient.create(dataSource);
         jdbcClient.sql("TRUNCATE TABLE shopping_list_read_model").update();
+        jdbcClient.sql("TRUNCATE TABLE item_read_model").update();
         readModel = new JdbcShoppingListReadModel(jdbcClient);
+        itemReadModel = new JdbcItemReadModel(jdbcClient);
         // Never connected: project(...) never touches the KurrentDB client (only start() does).
         KurrentDBClient neverConnectedClient =
                 KurrentDBClient.create(KurrentDBConnectionString.parseOrThrow("esdb://localhost:1?tls=false"));
-        projector = new ShoppingListReadModelProjector(neverConnectedClient, readModel);
+        projector = new ShoppingListReadModelProjector(neverConnectedClient, readModel, itemReadModel);
     }
 
     @Test
@@ -74,7 +86,7 @@ class ShoppingListReadModelProjectorTest {
         list.uncommittedEvents().forEach(projector::project);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Wocheneinkauf"), ListStatus.OPEN));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Wocheneinkauf"), ListStatus.OPEN, 0));
     }
 
     @Test
@@ -86,7 +98,7 @@ class ShoppingListReadModelProjectorTest {
         list.uncommittedEvents().forEach(projector::project);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, null, ListStatus.OPEN));
+                .containsExactly(new ShoppingListView(listId, null, ListStatus.OPEN, 0));
     }
 
     @Test
@@ -105,8 +117,8 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(readModel.listsOf(householdId))
                 .containsExactly(
-                        new ShoppingListView(firstListId, new ShoppingListName("Getränke"), ListStatus.OPEN),
-                        new ShoppingListView(secondListId, new ShoppingListName("Getränke 2"), ListStatus.OPEN));
+                        new ShoppingListView(firstListId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
+                        new ShoppingListView(secondListId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0));
     }
 
     @Test
@@ -139,7 +151,7 @@ class ShoppingListReadModelProjectorTest {
         projector.project(created);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0));
     }
 
     @Test
@@ -157,7 +169,7 @@ class ShoppingListReadModelProjectorTest {
         projector.project(created);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke 2"), ListStatus.OPEN));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0));
     }
 
     @Test
@@ -178,5 +190,74 @@ class ShoppingListReadModelProjectorTest {
         assertThat(readModel.listsOf(firstHousehold))
                 .extracting(ShoppingListView::listId)
                 .containsExactly(firstHouseholdListId);
+    }
+
+    @Test
+    void projectingItemAddedYieldsAnItemRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId))
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE)));
+    }
+
+    @Test
+    void projectingItemUpdatedChangesTheRowInPlace() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemUpdated(
+                EventId.generate(), listId, itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE)));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId))
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE)));
+    }
+
+    @Test
+    void projectingItemRemovedDeletesTheRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemRemoved(EventId.generate(), listId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void aListsItemCountReflectsItsCurrentItemRows() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("Brot"), null,
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(readModel.listsOf(householdId)).extracting(ShoppingListView::itemCount).containsExactly(2);
     }
 }

@@ -28,9 +28,12 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
     public List<ShoppingListView> listsOf(HouseholdId householdId) {
         return jdbcClient
                 .sql("""
-                        SELECT list_id, name, status FROM shopping_list_read_model
-                        WHERE household_id = :householdId
-                        ORDER BY sequence_number ASC
+                        SELECT l.list_id, l.name, l.status, COUNT(i.item_id) AS item_count
+                        FROM shopping_list_read_model l
+                        LEFT JOIN item_read_model i ON i.list_id = l.list_id
+                        WHERE l.household_id = :householdId
+                        GROUP BY l.list_id, l.name, l.status, l.sequence_number
+                        ORDER BY l.sequence_number ASC
                         """)
                 .param("householdId", householdId.value())
                 .query((resultSet, rowNumber) -> {
@@ -38,7 +41,8 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
                     return new ShoppingListView(
                             ShoppingListId.fromString(resultSet.getString("list_id")),
                             name == null ? null : new ShoppingListName(name),
-                            ListStatus.valueOf(resultSet.getString("status")));
+                            ListStatus.valueOf(resultSet.getString("status")),
+                            resultSet.getInt("item_count"));
                 })
                 .list();
     }

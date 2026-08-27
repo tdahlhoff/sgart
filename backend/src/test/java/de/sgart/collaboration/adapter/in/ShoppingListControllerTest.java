@@ -182,7 +182,7 @@ class ShoppingListControllerTest {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = ShoppingListId.generate();
         shoppingListReadModel.put(
-                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
@@ -199,7 +199,7 @@ class ShoppingListControllerTest {
         HouseholdId otherHousehold = HouseholdId.generate();
         shoppingListReadModel.put(
                 otherHousehold,
-                List.of(new ShoppingListView(ShoppingListId.generate(), new ShoppingListName("Fremd"), ListStatus.OPEN)));
+                List.of(new ShoppingListView(ShoppingListId.generate(), new ShoppingListName("Fremd"), ListStatus.OPEN, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
@@ -223,7 +223,7 @@ class ShoppingListControllerTest {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = ShoppingListId.generate();
         shoppingListReadModel.put(
-                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
@@ -237,7 +237,7 @@ class ShoppingListControllerTest {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = ShoppingListId.generate();
         shoppingListReadModel.put(
-                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+                householdId, List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .param("filter", "open")
@@ -253,7 +253,7 @@ class ShoppingListControllerTest {
         ShoppingListId doneId = ShoppingListId.generate();
         shoppingListReadModel.put(
                 householdId,
-                List.of(new ShoppingListView(doneId, new ShoppingListName("Alte Liste"), ListStatus.DONE)));
+                List.of(new ShoppingListView(doneId, new ShoppingListName("Alte Liste"), ListStatus.DONE, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .param("filter", "done")
@@ -271,7 +271,7 @@ class ShoppingListControllerTest {
         HouseholdId otherHousehold = HouseholdId.generate();
         shoppingListReadModel.put(
                 otherHousehold,
-                List.of(new ShoppingListView(ShoppingListId.generate(), new ShoppingListName("Fremd"), ListStatus.DONE)));
+                List.of(new ShoppingListView(ShoppingListId.generate(), new ShoppingListName("Fremd"), ListStatus.DONE, 0)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/lists", householdId.toString())
                         .param("filter", "done")

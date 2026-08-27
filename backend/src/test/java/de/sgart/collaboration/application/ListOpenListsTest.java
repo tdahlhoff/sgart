@@ -47,15 +47,15 @@ class ListOpenListsTest {
         ShoppingListId drinksId = ShoppingListId.generate();
         ShoppingListId unnamedId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(drinksId, new ShoppingListName("Getränke"), ListStatus.OPEN),
-                new ShoppingListView(unnamedId, null, ListStatus.OPEN)));
+                new ShoppingListView(drinksId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
+                new ShoppingListView(unnamedId, null, ListStatus.OPEN, 0)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ShoppingListSummary(drinksId.toString(), "Getränke", "OPEN"),
-                        new ShoppingListSummary(unnamedId.toString(), null, "OPEN"));
+                        new ShoppingListSummary(drinksId.toString(), "Getränke", "OPEN", 0),
+                        new ShoppingListSummary(unnamedId.toString(), null, "OPEN", 0));
     }
 
     @Test
@@ -64,12 +64,12 @@ class ListOpenListsTest {
         ShoppingListId openId = ShoppingListId.generate();
         ShoppingListId doneId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN),
-                new ShoppingListView(doneId, new ShoppingListName("Erledigt"), ListStatus.DONE)));
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
+                new ShoppingListView(doneId, new ShoppingListName("Erledigt"), ListStatus.DONE, 0)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
-        assertThat(summaries).containsExactly(new ShoppingListSummary(openId.toString(), "Getränke", "OPEN"));
+        assertThat(summaries).containsExactly(new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0));
     }
 
     @Test
@@ -104,7 +104,7 @@ class ListOpenListsTest {
         seedMembership();
         ShoppingListId listId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(
-                id -> List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN)));
+                id -> List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0)));
 
         List<ShoppingListSummary> first = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
         List<ShoppingListSummary> second = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
