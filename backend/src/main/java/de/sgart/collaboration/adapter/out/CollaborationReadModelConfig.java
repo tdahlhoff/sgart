@@ -39,6 +39,11 @@ public class CollaborationReadModelConfig {
     }
 
     @Bean
+    JdbcItemSuggestionReadModel jdbcItemSuggestionReadModel(JdbcClient jdbcClient) {
+        return new JdbcItemSuggestionReadModel(jdbcClient);
+    }
+
+    @Bean
     HouseholdReadModelProjector householdReadModelProjector(
             KurrentDBClient kurrentDbClient,
             JdbcHouseholdReadModel jdbcHouseholdReadModel,
@@ -53,8 +58,13 @@ public class CollaborationReadModelConfig {
             KurrentDBClient kurrentDbClient,
             JdbcShoppingListReadModel jdbcShoppingListReadModel,
             JdbcItemReadModel jdbcItemReadModel,
+            JdbcItemSuggestionReadModel jdbcItemSuggestionReadModel,
             @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
         return new ShoppingListReadModelProjector(
-                kurrentDbClient, jdbcShoppingListReadModel, jdbcItemReadModel, autoStart);
+                kurrentDbClient,
+                jdbcShoppingListReadModel,
+                jdbcItemReadModel,
+                jdbcItemSuggestionReadModel,
+                autoStart);
     }
 }

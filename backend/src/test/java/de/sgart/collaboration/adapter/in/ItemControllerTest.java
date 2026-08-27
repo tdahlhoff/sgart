@@ -32,6 +32,7 @@ import de.sgart.shared.support.InMemoryEventStore;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -106,6 +107,12 @@ class ItemControllerTest {
         @Override
         public List<ItemView> itemsOf(HouseholdId householdId, ShoppingListId listId) {
             return itemsByList.getOrDefault(listId, List.of());
+        }
+
+        /** The projector's lookup (Story 2.5, Cl. 5) — never reached through a controller GET. */
+        @Override
+        public Optional<HouseholdId> householdIdOf(ItemId itemId) {
+            return Optional.empty();
         }
     }
 

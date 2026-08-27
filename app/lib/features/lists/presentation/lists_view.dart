@@ -6,6 +6,7 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../shared/widgets/status_label.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../data/item_suggestions_api.dart';
 import '../data/items_api.dart';
 import '../data/shopping_list_summary.dart';
 import '../data/shopping_lists_api.dart';
@@ -184,10 +185,10 @@ class _ListRow extends StatelessWidget {
   }
 }
 
-/// Pushes the list detail screen, re-providing [ItemsApi] + [ShoppingListsApi] (the latter needed by
-/// the move target picker, Story 2.4, AC7) + a household/list-scoped [ListDetailCubit] (the overview
-/// already re-provides dependencies this way for its sheets/switcher sheet pattern — mirrors
-/// `HouseholdShell._openSwitcher`).
+/// Pushes the list detail screen, re-providing [ItemsApi] + [ItemSuggestionsApi] (Story 2.5, AC1) +
+/// [ShoppingListsApi] (the latter needed by the move target picker, Story 2.4, AC7) + a
+/// household/list-scoped [ListDetailCubit] (the overview already re-provides dependencies this way
+/// for its sheets/switcher sheet pattern — mirrors `HouseholdShell._openSwitcher`).
 void _openListDetail(
   BuildContext context, {
   required String householdId,
@@ -196,6 +197,7 @@ void _openListDetail(
   required bool isReadOnly,
 }) {
   final itemsApi = context.read<ItemsApi>();
+  final itemSuggestionsApi = context.read<ItemSuggestionsApi>();
   final shoppingListsApi = context.read<ShoppingListsApi>();
   // Captured before the push so it survives the awaited navigation.
   final overviewCubit = context.read<ShoppingListsCubit>();
@@ -203,16 +205,20 @@ void _openListDetail(
       .push(MaterialPageRoute<void>(
         builder: (_) => RepositoryProvider<ItemsApi>.value(
           value: itemsApi,
-          child: RepositoryProvider<ShoppingListsApi>.value(
-            value: shoppingListsApi,
-            child: BlocProvider<ListDetailCubit>(
-              create: (context) => ListDetailCubit(
-                itemsApi: context.read<ItemsApi>(),
-                householdId: householdId,
-                listId: listId,
-                isReadOnly: isReadOnly,
-              )..bootstrap(),
-              child: ListDetailPage(title: title),
+          child: RepositoryProvider<ItemSuggestionsApi>.value(
+            value: itemSuggestionsApi,
+            child: RepositoryProvider<ShoppingListsApi>.value(
+              value: shoppingListsApi,
+              child: BlocProvider<ListDetailCubit>(
+                create: (context) => ListDetailCubit(
+                  itemsApi: context.read<ItemsApi>(),
+                  itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
+                  householdId: householdId,
+                  listId: listId,
+                  isReadOnly: isReadOnly,
+                )..bootstrap(),
+                child: ListDetailPage(title: title),
+              ),
             ),
           ),
         ),

@@ -5,6 +5,21 @@ import 'number_formatter.dart';
 /// (AD-9). Free-text units are never accepted; a quantity can only carry a value from here.
 enum Unit { piece, gram, kilogram, millilitre, litre, pack }
 
+/// Maps the backend's `Unit` enum name (`PIECE`, `LITRE`, …) onto its client [Unit], or `null` when
+/// the two vocabularies disagree — the single representation of that mapping (every surface that
+/// renders or edits a server quantity needs it; callers decide their own fallback).
+Unit? unitFromServerName(String? serverName) {
+  if (serverName == null) {
+    return null;
+  }
+  for (final unit in Unit.values) {
+    if (unit.name.toUpperCase() == serverName) {
+      return unit;
+    }
+  }
+  return null;
+}
+
 /// Formats an amount + [Unit] as `de-DE` display text, e.g. `(0.5, Unit.kilogram)` → "0,5 kg".
 ///
 /// The unit label comes from the localization catalog ([AppLocalizations]), not a hard-coded

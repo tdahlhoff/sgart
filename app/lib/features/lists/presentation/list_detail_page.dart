@@ -9,15 +9,18 @@ import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/item.dart';
 import '../data/shopping_lists_api.dart';
+import 'fast_add_field.dart';
 import 'item_form_sheet.dart';
 import 'list_detail_cubit.dart';
 import 'list_detail_state.dart';
 import 'move_target_sheet.dart';
 
-/// The list detail screen (Story 2.3, AC6): the tapped list's items in creation order, each row
-/// showing name · quantity · optional note, with an empty state, an add affordance, and per-row
-/// edit/remove affordances. A Done list opens read-only — no add/edit/remove affordances render at
-/// all. Off-trip there is no check/uncheck/postpone (Epic 3) and no store assignment (Story 2.6).
+/// The list detail screen (Story 2.3, AC6; Story 2.5, AC2/AC3/AC4/AC5): the tapped list's items in
+/// creation order, each row showing name · quantity · optional note, with an empty state and
+/// per-row edit/remove affordances. An Open list's only add surface is the persistent fast-add
+/// field at the bottom (AC4) — the Story 2.3 add button/sheet-add path is retired. A Done list opens
+/// read-only — no fast-add field, no suggestion panel, no edit/remove affordances render at all
+/// (AC5). Off-trip there is no check/uncheck/postpone (Epic 3) and no store assignment (Story 2.6).
 /// Reads its [ListDetailCubit] from the enclosing provider (scoped to the list by the caller).
 class ListDetailPage extends StatelessWidget {
   const ListDetailPage({super.key, required this.title});
@@ -30,15 +33,31 @@ class ListDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: SgartAppBar(title: title),
-      body: BlocBuilder<ListDetailCubit, ListDetailState>(
-        builder: (context, state) {
-          return switch (state.status) {
-            ListDetailStatus.loading =>
-              const Center(child: CircularProgressIndicator(key: Key('item-list-loading'))),
-            ListDetailStatus.failure => const _FailureBody(),
-            ListDetailStatus.ready => _ReadyBody(state: state),
-          };
-        },
+      body: Column(
+        children: [
+          Expanded(
+            child: BlocBuilder<ListDetailCubit, ListDetailState>(
+              builder: (context, state) {
+                return switch (state.status) {
+                  ListDetailStatus.loading =>
+                    const Center(child: CircularProgressIndicator(key: Key('item-list-loading'))),
+                  ListDetailStatus.failure => const _FailureBody(),
+                  ListDetailStatus.ready => _ReadyBody(state: state),
+                };
+              },
+            ),
+          ),
+          BlocBuilder<ListDetailCubit, ListDetailState>(
+            builder: (context, state) {
+              // The fast-add field is the only add surface on an Open list (AC4); a Done list shows
+              // neither the field nor its suggestion panel (AC5).
+              if (state.status != ListDetailStatus.ready || state.isReadOnly) {
+                return const SizedBox.shrink();
+              }
+              return FastAddField(cubit: context.read<ListDetailCubit>());
+            },
+          ),
+        ],
       ),
     );
   }
@@ -82,14 +101,6 @@ class _ReadyBody extends StatelessWidget {
             Text(
               localizedMessageForErrorCode(localizations, state.actionError!.code),
               key: const Key('item-list-action-error'),
-            ),
-          ],
-          if (!state.isReadOnly) ...[
-            const SizedBox(height: SgartShapes.space4),
-            SgartButton(
-              key: const Key('item-add-button'),
-              label: localizations.itemAddAction,
-              onPressed: state.isSubmitting ? null : () => showItemFormSheet(context, cubit),
             ),
           ],
         ],
@@ -154,17 +165,8 @@ class _ItemRow extends StatelessWidget {
 
   String _formatQuantity(Item item, AppLocalizations localizations) {
     final amount = double.tryParse(item.amount) ?? 0;
-    final unit = _unitFromServerName(item.unit) ?? formatting.Unit.piece;
+    final unit = formatting.unitFromServerName(item.unit) ?? formatting.Unit.piece;
     return const formatting.QuantityFormatter().format(amount, unit, localizations);
-  }
-
-  static formatting.Unit? _unitFromServerName(String serverName) {
-    for (final unit in formatting.Unit.values) {
-      if (unit.name.toUpperCase() == serverName) {
-        return unit;
-      }
-    }
-    return null;
   }
 }
 

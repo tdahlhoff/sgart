@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
+import 'package:sgart/features/lists/data/item_suggestions_api.dart';
 import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
@@ -10,6 +11,7 @@ import 'package:sgart/features/lists/presentation/shopping_lists_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
+import '../../../support/fake_item_suggestions_api.dart';
 import '../../../support/fake_items_dependencies.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -18,23 +20,28 @@ void main() {
   group('ListsView', () {
     late FakeShoppingListsApi shoppingListsApi;
     late FakeItemsApi itemsApi;
+    late FakeItemSuggestionsApi itemSuggestionsApi;
 
     setUp(() {
       shoppingListsApi = FakeShoppingListsApi();
       itemsApi = FakeItemsApi();
+      itemSuggestionsApi = FakeItemSuggestionsApi();
     });
 
     Widget buildSubject() => wrapForTesting(
           RepositoryProvider<ItemsApi>.value(
             value: itemsApi,
-            child: RepositoryProvider<ShoppingListsApi>.value(
-              value: shoppingListsApi,
-              child: BlocProvider(
-                create: (_) => ShoppingListsCubit(
-                  shoppingListsApi: shoppingListsApi,
-                  householdId: 'household-1',
-                )..bootstrap(),
-                child: const Scaffold(body: ListsView()),
+            child: RepositoryProvider<ItemSuggestionsApi>.value(
+              value: itemSuggestionsApi,
+              child: RepositoryProvider<ShoppingListsApi>.value(
+                value: shoppingListsApi,
+                child: BlocProvider(
+                  create: (_) => ShoppingListsCubit(
+                    shoppingListsApi: shoppingListsApi,
+                    householdId: 'household-1',
+                  )..bootstrap(),
+                  child: const Scaffold(body: ListsView()),
+                ),
               ),
             ),
           ),
@@ -300,7 +307,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('item-row-i1')), findsOneWidget);
-      expect(find.byKey(const Key('item-add-button')), findsOneWidget);
+      expect(find.byKey(const Key('fast-add-field')), findsOneWidget);
     });
 
     testWidgets('tappingADoneRowNavigatesToAReadOnlyListDetailScreen', (tester) async {

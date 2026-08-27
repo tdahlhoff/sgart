@@ -12,6 +12,7 @@ import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.readmodel.ItemSuggestionView;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.collaboration.domain.readmodel.ShoppingListView;
 import de.sgart.shared.CommandId;
@@ -28,6 +29,7 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
@@ -53,6 +55,7 @@ class ShoppingListReadModelProjectorTest {
     private ShoppingListReadModelProjector projector;
     private JdbcShoppingListReadModel readModel;
     private JdbcItemReadModel itemReadModel;
+    private JdbcItemSuggestionReadModel itemSuggestionReadModel;
 
     @BeforeAll
     static void migrateDatabase() {
@@ -69,12 +72,15 @@ class ShoppingListReadModelProjectorTest {
         JdbcClient jdbcClient = JdbcClient.create(dataSource);
         jdbcClient.sql("TRUNCATE TABLE shopping_list_read_model").update();
         jdbcClient.sql("TRUNCATE TABLE item_read_model").update();
+        jdbcClient.sql("TRUNCATE TABLE item_suggestion_read_model").update();
         readModel = new JdbcShoppingListReadModel(jdbcClient);
         itemReadModel = new JdbcItemReadModel(jdbcClient);
+        itemSuggestionReadModel = new JdbcItemSuggestionReadModel(jdbcClient);
         // Never connected: project(...) never touches the KurrentDB client (only start() does).
         KurrentDBClient neverConnectedClient =
                 KurrentDBClient.create(KurrentDBConnectionString.parseOrThrow("esdb://localhost:1?tls=false"));
-        projector = new ShoppingListReadModelProjector(neverConnectedClient, readModel, itemReadModel);
+        projector = new ShoppingListReadModelProjector(
+                neverConnectedClient, readModel, itemReadModel, itemSuggestionReadModel);
     }
 
     @Test
@@ -309,5 +315,149 @@ class ShoppingListReadModelProjectorTest {
                 Quantity.of(1, Unit.PIECE)));
 
         assertThat(readModel.listsOf(householdId)).extracting(ShoppingListView::itemCount).containsExactly(2);
+    }
+
+    @Test
+    void projectingItemAddedRecordsASuggestionRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(2, Unit.LITRE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
+                .containsExactly(new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)));
+    }
+
+    @Test
+    void aSecondItemAddedOfTheSameNameWithDifferentCasingUpsertsToOneRowWithTheNewCasing() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("milch"), null,
+                Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(2, Unit.LITRE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
+                .containsExactly(new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)));
+    }
+
+    @Test
+    void projectingItemUpdatedRefreshesTheSuggestionsLastUsedAttributes() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.LITRE)));
+
+        projector.project(new ItemUpdated(
+                EventId.generate(), listId, itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
+                .containsExactly(new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)));
+    }
+
+    @Test
+    void itemRemovedLeavesTheSuggestionRowIntact() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemRemoved(EventId.generate(), listId, itemId));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
+                .containsExactly(new ItemSuggestionView(new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+    }
+
+    @Test
+    void itemMovedToListLeavesTheSuggestionRowIntact() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId sourceListId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(sourceListId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemMovedToList(
+                EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
+                .containsExactly(new ItemSuggestionView(new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+    }
+
+    @Test
+    void aCrossHouseholdNameNeverLeaksIntoAnotherHouseholdsSuggestions() {
+        HouseholdId householdId = HouseholdId.generate();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, ItemId.generate(), new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(otherHousehold)).isEmpty();
+    }
+
+    @Test
+    void anItemUpdatedWhoseItemRowIsNotProjectedYetStillUpdatesTheItemButRecordsNoSuggestion() {
+        // The out-of-order/replay edge behind Cl. 5: ItemUpdated carries no householdId, so the
+        // projector resolves it through item_read_model. With no row there yet the household is
+        // unresolvable — the suggestion is skipped rather than guessed, and a later full replay
+        // (which sees ItemAdded first) records it.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new ItemUpdated(
+                EventId.generate(), listId, itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)));
+
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdId)).isEmpty();
+        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void theSuggestionReadModelCarriesHouseholdContentOnly_neverAMemberOrCreatorColumn() {
+        // AD-5/AD-6 + CLAUDE.md §5: an item's name/note/quantity is household content, not a
+        // person. household_id is the only identifier on the row, so Epic-6 erasure can locate it
+        // and nothing attributes a suggestion to whoever typed it.
+        List<String> columnNames = JdbcClient.create(dataSource)
+                .sql("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'item_suggestion_read_model'
+                        """)
+                .query(String.class)
+                .list();
+
+        assertThat(columnNames)
+                .containsExactlyInAnyOrder(
+                        "household_id", "normalized_name", "name", "note", "quantity_amount", "quantity_unit");
     }
 }

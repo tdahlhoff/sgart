@@ -1,26 +1,34 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/commands/command_intent.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../data/item.dart';
+import '../data/item_suggestion.dart';
+import '../data/item_suggestions_api.dart';
 import '../data/items_api.dart';
 import 'list_detail_state.dart';
 
-/// Drives the list detail screen (Story 2.3, AC1, AC3, AC4, AC6): loads the list's items, adds an
-/// item with a required quantity and optional note, edits an item's name/note/quantity, and removes
-/// an item. Depends only on the [ItemsApi] so tests never touch the network (CLAUDE.md §6); guards
-/// every `emit` with `isClosed`. A Done list (`isReadOnly`) never issues add/edit/remove — the page
-/// simply never wires the affordances, but the cubit also refuses defensively.
+/// Drives the list detail screen (Story 2.3, AC1, AC3, AC4, AC6; Story 2.5, AC1/AC2/AC3/AC6): loads
+/// the list's items, adds an item with a required quantity and optional note, edits an item's
+/// name/note/quantity, removes an item, and loads + caches + filters the household's item
+/// suggestions for the fast-add field's autocomplete. Depends only on [ItemsApi]/
+/// [ItemSuggestionsApi] so tests never touch the network (CLAUDE.md §6); guards every `emit` with
+/// `isClosed`. A Done list (`isReadOnly`) never issues add/edit/remove nor loads suggestions (AC5) —
+/// the page simply never wires the affordances, but the cubit also refuses defensively.
 class ListDetailCubit extends Cubit<ListDetailState> {
   ListDetailCubit({
     required this.itemsApi,
+    required this.itemSuggestionsApi,
     required this.householdId,
     required this.listId,
     required bool isReadOnly,
   }) : super(ListDetailState.loading(isReadOnly: isReadOnly));
 
   final ItemsApi itemsApi;
+  final ItemSuggestionsApi itemSuggestionsApi;
   final String householdId;
   final String listId;
 
@@ -54,14 +62,60 @@ class ListDetailCubit extends Cubit<ListDetailState> {
   /// [mergeIntoTarget] (Story 2.4, Clarification 3).
   final CommandIntent _mergeRemoveIntent = CommandIntent();
 
-  /// Loads the list's items. Called once, right after construction.
+  /// Loads the list's items, then — on an Open list only (AC5) — the household's suggestion cache.
+  /// Called once, right after construction. A suggestions-load failure never fails the whole
+  /// screen: the items still render, degrading to an empty suggestion set (log/ignore) — the
+  /// fast-add field still works for "add as new" (AC3) even with no suggestions available.
   Future<void> bootstrap() async {
     try {
       final items = await itemsApi.listItems(householdId, listId);
-      _safeEmit(ListDetailState.ready(items: items, isReadOnly: state.isReadOnly));
+      // Carry the suggestion cache across: a retry (`refresh`) would otherwise blank the panel for
+      // the duration of the re-fetch and throw away every optimistic upsert made since the open.
+      _safeEmit(ListDetailState.ready(
+          items: items, isReadOnly: state.isReadOnly, suggestions: state.suggestions));
     } on Object catch (error) {
       _safeEmit(ListDetailState.failure(_toAppError(error), isReadOnly: state.isReadOnly));
+      return;
     }
+    if (state.isReadOnly) {
+      return;
+    }
+    try {
+      final suggestions = await itemSuggestionsApi.listSuggestions(householdId);
+      _safeEmit(state.copyWith(suggestions: _mergedWithLocalUpserts(suggestions)));
+    } on Object catch (error) {
+      // Degrade to an empty suggestion set — the items already rendered successfully (AC3 still
+      // works via "add as new" with no suggestions). Logged rather than swallowed silently: a member
+      // whose autocomplete is quietly broken is otherwise invisible to everyone.
+      developer.log('Loading item suggestions failed — autocomplete degrades to empty',
+          name: 'sgart.lists', error: error);
+    }
+  }
+
+  /// Folds the freshly-fetched server set over whatever the local cache already holds, keeping a
+  /// local entry whose name the server set does not carry yet. A successful add that lands *while*
+  /// this fetch is in flight would otherwise have its optimistic upsert (see [_upsertSuggestion])
+  /// clobbered by the older server snapshot, silently dropping the just-added name from
+  /// autocomplete.
+  List<ItemSuggestion> _mergedWithLocalUpserts(List<ItemSuggestion> fromServer) {
+    final serverNames = fromServer.map((suggestion) => suggestion.name.trim().toLowerCase()).toSet();
+    final localOnly =
+        state.suggestions.where((suggestion) => !serverNames.contains(suggestion.name.trim().toLowerCase()));
+    return _sortedByName([...fromServer, ...localOnly]);
+  }
+
+  /// Matches [query] against the cached suggestions (Story 2.5, AC1, Cl. 2/6): trimmed,
+  /// case-insensitive **prefix** match on the name, alphabetical (the cache is already ordered that
+  /// way), empty query yields no suggestions (the panel only shows once the member types). Pure —
+  /// filters the in-memory cache only, no network call (lag-free).
+  List<ItemSuggestion> suggestionsMatching(String query) {
+    final trimmedQuery = query.trim().toLowerCase();
+    if (trimmedQuery.isEmpty) {
+      return const [];
+    }
+    return state.suggestions
+        .where((suggestion) => suggestion.name.trim().toLowerCase().startsWith(trimmedQuery))
+        .toList();
   }
 
   /// Reloads the list's items — the failure retry affordance.
@@ -98,7 +152,11 @@ class ListDetailCubit extends Cubit<ListDetailState> {
         commandId: commandId,
       );
       final added = Item(itemId: itemId, name: trimmedName, note: noteOrNull, amount: amount, unit: unit);
-      _safeEmit(state.copyWith(items: [...state.items, added], isSubmitting: false));
+      _safeEmit(state.copyWith(
+        items: [...state.items, added],
+        isSubmitting: false,
+        suggestions: _upsertSuggestion(trimmedName, noteOrNull, amount, unit),
+      ));
       // A successful add completes this intent — the next add is a new intent and never reuses a
       // command id the server has already applied (which it would silently drop).
       _addIntent.complete();
@@ -148,7 +206,11 @@ class ListDetailCubit extends Cubit<ListDetailState> {
               ? Item(itemId: itemId, name: trimmedName, note: noteOrNull, amount: amount, unit: unit)
               : item)
           .toList();
-      _safeEmit(state.copyWith(items: updated, isSubmitting: false));
+      _safeEmit(state.copyWith(
+        items: updated,
+        isSubmitting: false,
+        suggestions: _upsertSuggestion(trimmedName, noteOrNull, amount, unit),
+      ));
       _updateIntent.complete();
       return true;
     } on Object catch (error) {
@@ -282,6 +344,25 @@ class ListDetailCubit extends Cubit<ListDetailState> {
       _safeEmit(state.copyWith(items: originalItems, isSubmitting: false, actionError: actionError));
     }
   }
+
+  /// Optimistically upserts [name]'s (normalized, case-insensitive) suggestion cache entry with its
+  /// just-used attributes (Story 2.5, AC6, Cl. 2) — read-your-writes for a just-added/edited name
+  /// even though the server-side projection is eventually consistent (AR3/NFR9). Mirrors the read
+  /// model's own upsert: last-used casing/attributes win, keyed by the normalized name.
+  List<ItemSuggestion> _upsertSuggestion(String name, String? note, String amount, String unit) {
+    final normalizedName = name.trim().toLowerCase();
+    final withoutExisting =
+        state.suggestions.where((suggestion) => suggestion.name.trim().toLowerCase() != normalizedName).toList();
+    final upserted = ItemSuggestion(name: name, note: note, amount: amount, unit: unit);
+    return _sortedByName([...withoutExisting, upserted]);
+  }
+
+  /// Orders the cache the way the panel reads it: alphabetically, case-insensitively. A raw
+  /// `compareTo` would sort by UTF-16 code unit, putting every lower-case name after every
+  /// upper-case one — an order the server's `ORDER BY name` never produces, so the panel would
+  /// reshuffle after a local upsert and (with the panel's row cap) could hide a real match.
+  static List<ItemSuggestion> _sortedByName(List<ItemSuggestion> suggestions) =>
+      suggestions..sort((first, second) => first.name.toLowerCase().compareTo(second.name.toLowerCase()));
 
   AppError _toAppError(Object error) {
     if (error is AppException) {

@@ -1,22 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
+import 'package:sgart/features/lists/data/item_suggestion.dart';
 import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/list_detail_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
+import '../../../support/fake_item_suggestions_api.dart';
 import '../../../support/fake_items_dependencies.dart';
 
 void main() {
   group('ListDetailCubit', () {
     late FakeItemsApi itemsApi;
+    late FakeItemSuggestionsApi itemSuggestionsApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
+      itemSuggestionsApi = FakeItemSuggestionsApi();
     });
 
     ListDetailCubit buildCubit({bool isReadOnly = false}) => ListDetailCubit(
           itemsApi: itemsApi,
+          itemSuggestionsApi: itemSuggestionsApi,
           householdId: 'household-1',
           listId: 'list-1',
           isReadOnly: isReadOnly,
@@ -493,6 +498,134 @@ void main() {
 
       // Must not throw despite the cubit being closed (every emit is isClosed-guarded).
       await cubit.bootstrap();
+    });
+
+    test('bootstrap_loadsAndExposesSuggestionsOnAnOpenList', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE'),
+      ];
+      final cubit = buildCubit();
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.suggestions, hasLength(1));
+      expect(cubit.state.suggestions.single.name, 'Milch');
+      await cubit.close();
+    });
+
+    test('bootstrap_neverFetchesSuggestionsOnAReadOnlyDoneList', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      final cubit = buildCubit(isReadOnly: true);
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.suggestions, isEmpty);
+      await cubit.close();
+    });
+
+    test('bootstrap_stillRendersItemsWhenTheSuggestionsLoadFails', () async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      itemSuggestionsApi.listError = const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      final cubit = buildCubit();
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.status, ListDetailStatus.ready);
+      expect(cubit.state.items, hasLength(1));
+      expect(cubit.state.suggestions, isEmpty);
+      await cubit.close();
+    });
+
+    test('bootstrap_keepsAnOptimisticUpsertTheServerSetDoesNotCarryYet', () async {
+      // The projection is eventually consistent: a name added while the suggestion fetch was still
+      // in flight is not in the returned snapshot. Replacing the cache wholesale would drop it back
+      // out of autocomplete right after the member created it.
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+      await cubit.addItem(name: 'Käse', note: null, amount: '1', unit: 'PIECE');
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE'),
+      ];
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.suggestions.map((suggestion) => suggestion.name), ['Käse', 'Milch']);
+      await cubit.close();
+    });
+
+    test('suggestionsMatching_ordersCaseInsensitivelySoALocalUpsertKeepsTheServersOrder', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Apfel', note: null, amount: '1', unit: 'PIECE'),
+        ItemSuggestion(name: 'Zucker', note: null, amount: '1', unit: 'PACK'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      // A lower-case name would land after every upper-case one under a raw UTF-16 `compareTo`.
+      await cubit.addItem(name: 'birne', note: null, amount: '1', unit: 'PIECE');
+
+      expect(cubit.state.suggestions.map((suggestion) => suggestion.name), ['Apfel', 'birne', 'Zucker']);
+      await cubit.close();
+    });
+
+    test('suggestionsMatching_matchesByTrimmedCaseInsensitivePrefixAndOrdersAlphabetically', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Brot', note: null, amount: '1', unit: 'PACK'),
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'LITRE'),
+        ItemSuggestion(name: 'Milchreis', note: null, amount: '1', unit: 'PACK'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      final matches = cubit.suggestionsMatching('  MIL ');
+
+      expect(matches.map((suggestion) => suggestion.name), ['Milch', 'Milchreis']);
+      await cubit.close();
+    });
+
+    test('suggestionsMatching_returnsEmptyForABlankQuery', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      expect(cubit.suggestionsMatching('   '), isEmpty);
+      await cubit.close();
+    });
+
+    test('addItem_optimisticallyUpsertsTheSuggestionCacheWithTheNewName', () async {
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.addItem(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE');
+
+      expect(cubit.state.suggestions, hasLength(1));
+      expect(cubit.state.suggestions.single.name, 'Milch');
+      expect(cubit.state.suggestions.single.amount, '2');
+      await cubit.close();
+    });
+
+    test('updateItem_refreshesTheSuggestionCacheWithTheEditedAttributes', () async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'LITRE'),
+      ];
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'LITRE'),
+      ];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.updateItem('i1', name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE');
+
+      expect(cubit.state.suggestions, hasLength(1));
+      expect(cubit.state.suggestions.single.note, 'Bio');
+      expect(cubit.state.suggestions.single.amount, '2');
+      await cubit.close();
     });
   });
 }

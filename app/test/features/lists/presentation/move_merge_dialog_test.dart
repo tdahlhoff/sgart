@@ -5,6 +5,7 @@ import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/move_merge_dialog.dart';
 
+import '../../../support/fake_item_suggestions_api.dart';
 import '../../../support/fake_items_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -13,14 +14,22 @@ import '../../../support/widget_test_harness.dart';
 void main() {
   group('move merge dialog', () {
     late FakeItemsApi itemsApi;
+    late FakeItemSuggestionsApi itemSuggestionsApi;
     late ListDetailCubit cubit;
 
     setUp(() {
       itemsApi = FakeItemsApi();
+      itemSuggestionsApi = FakeItemSuggestionsApi();
       itemsApi.itemsToReturn = const [
         Item(itemId: 'i1', name: 'Milch', note: 'Bio', amount: '1', unit: 'PIECE'),
       ];
-      cubit = ListDetailCubit(itemsApi: itemsApi, householdId: 'household-1', listId: 'source-list', isReadOnly: false);
+      cubit = ListDetailCubit(
+        itemsApi: itemsApi,
+        itemSuggestionsApi: itemSuggestionsApi,
+        householdId: 'household-1',
+        listId: 'source-list',
+        isReadOnly: false,
+      );
     });
 
     tearDown(() => cubit.close());

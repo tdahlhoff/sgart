@@ -58,7 +58,7 @@ class _MoveMergeDialogBody extends StatefulWidget {
 
 class _MoveMergeDialogBodyState extends State<_MoveMergeDialogBody> {
   late final TextEditingController _amountController = TextEditingController(text: _initialAmountText());
-  late formatting.Unit _selectedUnit = _unitFromServerName(widget.targetItem.unit) ?? formatting.Unit.piece;
+  late formatting.Unit _selectedUnit = formatting.unitFromServerName(widget.targetItem.unit) ?? formatting.Unit.piece;
 
   /// Pre-fills with the sum of source + target quantities when their units match (Cl. 3); otherwise
   /// the target's current quantity — the member edits from there if a sum makes no sense.
@@ -72,15 +72,6 @@ class _MoveMergeDialogBodyState extends State<_MoveMergeDialogBody> {
     // No thousands grouping — this string pre-fills the amount field and is parsed back on confirm;
     // a grouping `.` (e.g. "1.600" for 1600) would otherwise be read as a decimal point.
     return const NumberFormatter(groupThousands: false).format(amount);
-  }
-
-  static formatting.Unit? _unitFromServerName(String serverName) {
-    for (final unit in formatting.Unit.values) {
-      if (unit.name.toUpperCase() == serverName) {
-        return unit;
-      }
-    }
-    return null;
   }
 
   @override
@@ -121,7 +112,7 @@ class _MoveMergeDialogBodyState extends State<_MoveMergeDialogBody> {
     final localizations = AppLocalizations.of(context);
     final targetQuantityText = const formatting.QuantityFormatter().format(
       double.tryParse(widget.targetItem.amount) ?? 0,
-      _unitFromServerName(widget.targetItem.unit) ?? formatting.Unit.piece,
+      formatting.unitFromServerName(widget.targetItem.unit) ?? formatting.Unit.piece,
       localizations,
     );
 

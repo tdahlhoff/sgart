@@ -399,20 +399,7 @@
     }
   },
 
-  "itemAddAction": "+ Artikel hinzufügen",
-  "@itemAddAction": {
-    "description": "Button label that opens the add-item sheet on the list detail screen (Story 2.3, AC1)."
-  },
 
-  "itemAddHeading": "Artikel hinzufügen",
-  "@itemAddHeading": {
-    "description": "Heading of the item form sheet in add mode (Story 2.3, AC1)."
-  },
-
-  "itemAddSubmitButtonLabel": "Hinzufügen",
-  "@itemAddSubmitButtonLabel": {
-    "description": "Submit button label on the item form sheet in add mode (Story 2.3, AC1)."
-  },
 
   "itemEditAction": "Bearbeiten",
   "@itemEditAction": {
@@ -457,6 +444,22 @@
   "itemsEmptyState": "Noch keine Artikel. Füge deinen ersten Artikel hinzu.",
   "@itemsEmptyState": {
     "description": "Shown on the list detail screen when the list has no items yet (Story 2.3, AC6)."
+  },
+
+  "fastAddFieldPlaceholder": "Artikel hinzufügen …",
+  "@fastAddFieldPlaceholder": {
+    "description": "Placeholder of the persistent fast-add field on the list detail screen (Story 2.5, AC2/AC3/AC4)."
+  },
+
+  "fastAddNewItemAction": "„{name}“ als neuen Artikel hinzufügen",
+  "@fastAddNewItemAction": {
+    "description": "The always-present row in the fast-add suggestion panel that adds the typed name as a brand-new item (Story 2.5, AC3).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Milch"
+      }
+    }
   },
 
   "itemNameRequiredError": "Bitte gib einen Namen für den Artikel ein.",

@@ -12,6 +12,7 @@ import de.sgart.shared.Unit;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -49,6 +50,15 @@ public final class JdbcItemReadModel implements ItemReadModel {
                                     Unit.valueOf(resultSet.getString("quantity_unit"))));
                 })
                 .list();
+    }
+
+    @Override
+    public Optional<HouseholdId> householdIdOf(ItemId itemId) {
+        return jdbcClient
+                .sql("SELECT household_id FROM item_read_model WHERE item_id = :itemId")
+                .param("itemId", itemId.value())
+                .query((resultSet, rowNumber) -> HouseholdId.fromString(resultSet.getString("household_id")))
+                .optional();
     }
 
     /** Idempotent insert — re-projecting the same {@code ItemAdded} is a genuine no-op ({@code DO NOTHING}). */

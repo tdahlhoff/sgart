@@ -9,11 +9,12 @@ import '../data/item.dart';
 import 'list_detail_cubit.dart';
 import 'list_detail_state.dart';
 
-/// Opens the item form sheet (Story 2.3, AC1/AC3) — one sheet for both add and edit: name field,
-/// amount field + unit dropdown (defaulting to `1 Stück`, Clarification 1), and an optional note
-/// field. Pass [existingItem] to edit it in place; omit it to add a new item. The cubit is captured
-/// by the caller (never re-read from the sheet's own context), mirroring `showCreateListSheet`.
-void showItemFormSheet(BuildContext context, ListDetailCubit cubit, {Item? existingItem}) {
+/// Opens the item edit sheet (Story 2.3, AC3; Story 2.5, AC4) — name field, amount field + unit
+/// dropdown, and an optional note field, all pre-filled from [existingItem]. Edit-only since Story
+/// 2.5: adding runs through the persistent fast-add field (`FastAddField`), which is an Open list's
+/// single add surface (AC4). The cubit is captured by the caller (never re-read from the sheet's own
+/// context), mirroring `showCreateListSheet`.
+void showItemFormSheet(BuildContext context, ListDetailCubit cubit, {required Item existingItem}) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -22,37 +23,21 @@ void showItemFormSheet(BuildContext context, ListDetailCubit cubit, {Item? exist
 }
 
 class _ItemFormSheetBody extends StatefulWidget {
-  const _ItemFormSheetBody({required this.cubit, this.existingItem});
+  const _ItemFormSheetBody({required this.cubit, required this.existingItem});
 
   final ListDetailCubit cubit;
-  final Item? existingItem;
+  final Item existingItem;
 
   @override
   State<_ItemFormSheetBody> createState() => _ItemFormSheetBodyState();
 }
 
 class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
-  late final TextEditingController _nameController =
-      TextEditingController(text: widget.existingItem?.name ?? '');
-  late final TextEditingController _amountController =
-      TextEditingController(text: widget.existingItem?.amount ?? '1');
-  late final TextEditingController _noteController =
-      TextEditingController(text: widget.existingItem?.note ?? '');
-  late formatting.Unit _selectedUnit = _unitFromServerName(widget.existingItem?.unit) ?? formatting.Unit.piece;
-
-  bool get _isEditing => widget.existingItem != null;
-
-  static formatting.Unit? _unitFromServerName(String? serverName) {
-    if (serverName == null) {
-      return null;
-    }
-    for (final unit in formatting.Unit.values) {
-      if (unit.name.toUpperCase() == serverName) {
-        return unit;
-      }
-    }
-    return null;
-  }
+  late final TextEditingController _nameController = TextEditingController(text: widget.existingItem.name);
+  late final TextEditingController _amountController = TextEditingController(text: widget.existingItem.amount);
+  late final TextEditingController _noteController = TextEditingController(text: widget.existingItem.note ?? '');
+  late formatting.Unit _selectedUnit =
+      formatting.unitFromServerName(widget.existingItem.unit) ?? formatting.Unit.piece;
 
   @override
   void dispose() {
@@ -81,15 +66,13 @@ class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
     final note = _noteController.text;
     // Pop only on success — a rejection keeps the sheet open (and the typed values) while the error
     // shows inline on the list detail view; the cubit itself ignores a re-entrant call while submitting.
-    final succeeded = _isEditing
-        ? await widget.cubit.updateItem(
-            widget.existingItem!.itemId,
-            name: _nameController.text,
-            note: note,
-            amount: amount,
-            unit: unit,
-          )
-        : await widget.cubit.addItem(name: _nameController.text, note: note, amount: amount, unit: unit);
+    final succeeded = await widget.cubit.updateItem(
+      widget.existingItem.itemId,
+      name: _nameController.text,
+      note: note,
+      amount: amount,
+      unit: unit,
+    );
     if (succeeded) {
       navigator.pop();
     }
@@ -111,7 +94,7 @@ class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _isEditing ? localizations.itemEditHeading : localizations.itemAddHeading,
+            localizations.itemEditHeading,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: SgartShapes.space4),
@@ -172,7 +155,7 @@ class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
                 final canSubmit = !isNameBlank && _isAmountValid && !state.isSubmitting;
                 return SgartButton(
                   key: const Key('item-form-submit-button'),
-                  label: _isEditing ? localizations.itemEditSubmitButtonLabel : localizations.itemAddSubmitButtonLabel,
+                  label: localizations.itemEditSubmitButtonLabel,
                   onPressed: canSubmit ? _submit : null,
                 );
               },

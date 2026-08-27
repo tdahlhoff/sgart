@@ -22,6 +22,8 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.Unit;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -41,6 +43,24 @@ class ListItemsTest {
         return new ListItems(new ResolveMemberIdentity(mappingRepository), itemReadModel);
     }
 
+    /**
+     * An item read model answering {@code itemsOf} from the supplied function. {@code householdIdOf}
+     * is the projector's lookup (Story 2.5, Cl. 5), never a query's, so this fake answers it empty.
+     */
+    private record FakeItemReadModel(BiFunction<HouseholdId, ShoppingListId, List<ItemView>> items)
+            implements ItemReadModel {
+
+        @Override
+        public List<ItemView> itemsOf(HouseholdId householdId, ShoppingListId listId) {
+            return items.apply(householdId, listId);
+        }
+
+        @Override
+        public Optional<HouseholdId> householdIdOf(ItemId itemId) {
+            return Optional.empty();
+        }
+    }
+
     private void seedMembership() {
         mappingRepository.save(new MemberMapping(householdId, MemberId.generate(), new KeycloakUserId(MEMBER_SUB)));
     }
@@ -50,9 +70,9 @@ class ListItemsTest {
         seedMembership();
         ItemId milchId = ItemId.generate();
         ItemId brotId = ItemId.generate();
-        ListItems listItems = listItemsReading((household, list) -> List.of(
+        ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of(
                 new ItemView(milchId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE)),
-                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK))));
+                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK)))));
 
         List<ItemSummary> summaries = listItems.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
@@ -65,7 +85,7 @@ class ListItemsTest {
     @Test
     void forList_returnsEmptyWhenTheListHasNoItems() {
         seedMembership();
-        ListItems listItems = listItemsReading((household, list) -> List.of());
+        ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of()));
 
         assertThat(listItems.forList(MEMBER_SUB, householdId.toString(), listId.toString())).isEmpty();
     }
@@ -77,9 +97,9 @@ class ListItemsTest {
         // The read model enforces the (household_id, list_id) filter — the item exists only under the
         // OTHER household, so a member querying THEIR own household for the same list id sees nothing
         // (AC8 no-data-leak: the query threads householdId into itemsOf, mirroring the SQL WHERE).
-        ItemReadModel itemReadModel = (household, list) -> household.equals(otherHousehold)
+        ItemReadModel itemReadModel = new FakeItemReadModel((household, list) -> household.equals(otherHousehold)
                 ? List.of(new ItemView(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)))
-                : List.of();
+                : List.of());
 
         List<ItemSummary> summaries =
                 listItemsReading(itemReadModel).forList(MEMBER_SUB, householdId.toString(), listId.toString());
@@ -89,7 +109,7 @@ class ListItemsTest {
 
     @Test
     void forList_rejectsANonMemberWith403() {
-        ListItems listItems = listItemsReading((household, list) -> List.of());
+        ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of()));
 
         assertThatThrownBy(() -> listItems.forList("stranger-sub", householdId.toString(), listId.toString()))
                 .isInstanceOf(NotAMemberException.class);
@@ -98,7 +118,7 @@ class ListItemsTest {
     @Test
     void forList_mapsAMalformedListIdToListIdInvalid() {
         seedMembership();
-        ListItems listItems = listItemsReading((household, list) -> List.of());
+        ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of()));
 
         assertThatThrownBy(() -> listItems.forList(MEMBER_SUB, householdId.toString(), "not-a-uuid"))
                 .isInstanceOf(InvalidCommandEnvelopeException.class)

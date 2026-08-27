@@ -1,8 +1,10 @@
 package de.sgart.collaboration.domain.readmodel;
 
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
 import de.sgart.shared.ShoppingListId;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Domain-owned port over the item CQRS read model (AD-4) — built solely by {@code
@@ -18,4 +20,15 @@ public interface ItemReadModel {
      *     mirroring the write side's cross-household defense-in-depth).
      */
     List<ItemView> itemsOf(HouseholdId householdId, ShoppingListId listId);
+
+    /**
+     * @return the household owning {@code itemId}, if its row has been projected yet (Story 2.5,
+     *     Cl. 5) — used by the projector to resolve {@code ItemUpdated}'s missing {@code
+     *     householdId} when recording a suggestion. Empty on an out-of-order/replay edge (the
+     *     item's {@code ItemAdded} row not yet projected); the caller skips that suggestion and a
+     *     later full replay recovers it. Deliberately not a {@code default} returning {@code
+     *     Optional.empty()}: an implementation that forgot to answer it would silently stop
+     *     recording last-used attributes (AC6) with no compile-time or runtime signal (Fail Fast).
+     */
+    Optional<HouseholdId> householdIdOf(ItemId itemId);
 }

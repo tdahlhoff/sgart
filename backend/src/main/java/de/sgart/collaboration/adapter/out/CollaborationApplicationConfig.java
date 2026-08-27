@@ -11,6 +11,7 @@ import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
+import de.sgart.collaboration.application.query.ListItemSuggestions;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.query.ListOpenLists;
@@ -18,6 +19,7 @@ import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
+import de.sgart.collaboration.domain.readmodel.ItemSuggestionReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
@@ -109,6 +111,12 @@ public class CollaborationApplicationConfig {
     @Bean
     ListItems listItems(ResolveMemberIdentity resolveMemberIdentity, ItemReadModel itemReadModel) {
         return new ListItems(resolveMemberIdentity, itemReadModel);
+    }
+
+    @Bean
+    ListItemSuggestions listItemSuggestions(
+            ResolveMemberIdentity resolveMemberIdentity, ItemSuggestionReadModel itemSuggestionReadModel) {
+        return new ListItemSuggestions(resolveMemberIdentity, itemSuggestionReadModel);
     }
 
     @Bean

@@ -9,6 +9,7 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../lists/data/item_suggestions_api.dart';
 import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
@@ -41,6 +42,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final StoresApi _storesApi;
   late final ShoppingListsApi _shoppingListsApi;
   late final ItemsApi _itemsApi;
+  late final ItemSuggestionsApi _itemSuggestionsApi;
   static const ActiveHouseholdStore _activeHouseholdStore = SharedPreferencesActiveHouseholdStore();
   static const StoreChainReferenceCache _storeChainReferenceCache =
       SharedPreferencesStoreChainReferenceCache();
@@ -58,6 +60,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _storesApi = HttpStoresApi(httpClient);
     _shoppingListsApi = HttpShoppingListsApi(httpClient);
     _itemsApi = HttpItemsApi(httpClient);
+    _itemSuggestionsApi = HttpItemSuggestionsApi(httpClient);
   }
 
   @override
@@ -79,6 +82,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         RepositoryProvider<ShoppingListsApi>.value(value: _shoppingListsApi),
         // The list detail screen reads this to build its list-scoped ListDetailCubit (Story 2.3).
         RepositoryProvider<ItemsApi>.value(value: _itemsApi),
+        // The list detail screen's fast-add field reads this for autocomplete (Story 2.5).
+        RepositoryProvider<ItemSuggestionsApi>.value(value: _itemSuggestionsApi),
       ],
       child: BlocProvider(
         create: (_) => HouseholdsCubit(

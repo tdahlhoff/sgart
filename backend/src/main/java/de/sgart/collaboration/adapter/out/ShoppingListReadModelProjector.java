@@ -7,6 +7,7 @@ import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.shared.DomainEvent;
+import de.sgart.shared.HouseholdId;
 import de.sgart.shared.StreamId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.RecordedEvent;
@@ -17,6 +18,7 @@ import io.kurrent.dbclient.SubscriptionFilter;
 import io.kurrent.dbclient.SubscriptionListener;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +52,7 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
     private final KurrentDBClient client;
     private final JdbcShoppingListReadModel readModel;
     private final JdbcItemReadModel itemReadModel;
+    private final JdbcItemSuggestionReadModel itemSuggestionReadModel;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
@@ -57,18 +60,24 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
     private ScheduledExecutorService resubscribeScheduler;
 
     public ShoppingListReadModelProjector(
-            KurrentDBClient client, JdbcShoppingListReadModel readModel, JdbcItemReadModel itemReadModel) {
-        this(client, readModel, itemReadModel, false);
+            KurrentDBClient client,
+            JdbcShoppingListReadModel readModel,
+            JdbcItemReadModel itemReadModel,
+            JdbcItemSuggestionReadModel itemSuggestionReadModel) {
+        this(client, readModel, itemReadModel, itemSuggestionReadModel, false);
     }
 
     public ShoppingListReadModelProjector(
             KurrentDBClient client,
             JdbcShoppingListReadModel readModel,
             JdbcItemReadModel itemReadModel,
+            JdbcItemSuggestionReadModel itemSuggestionReadModel,
             boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.readModel = Objects.requireNonNull(readModel, "readModel must not be null");
         this.itemReadModel = Objects.requireNonNull(itemReadModel, "itemReadModel must not be null");
+        this.itemSuggestionReadModel =
+                Objects.requireNonNull(itemSuggestionReadModel, "itemSuggestionReadModel must not be null");
         this.autoStart = autoStart;
     }
 
@@ -78,10 +87,35 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             case ShoppingListCreated created ->
                 readModel.insertList(created.householdId(), created.listId(), created.name());
             case ShoppingListRenamed renamed -> readModel.renameList(renamed.listId(), renamed.newName());
-            case ItemAdded added -> itemReadModel.insertItem(
-                    added.householdId(), added.listId(), added.itemId(), added.name(), added.note(), added.quantity());
-            case ItemUpdated updated ->
+            case ItemAdded added -> {
+                itemReadModel.insertItem(
+                        added.householdId(),
+                        added.listId(),
+                        added.itemId(),
+                        added.name(),
+                        added.note(),
+                        added.quantity());
+                // Also record usage in the history-surviving suggestion read model (Story 2.5, Cl. 1/5) —
+                // ItemAdded carries householdId directly, unlike ItemUpdated below.
+                itemSuggestionReadModel.recordUsage(
+                        added.householdId(), added.name(), added.note(), added.quantity());
+            }
+            case ItemUpdated updated -> {
                 itemReadModel.updateItem(updated.itemId(), updated.name(), updated.note(), updated.quantity());
+                // ItemUpdated carries no householdId (Story 2.3 event) — resolve it via the item read
+                // model, whose row already exists (its ItemAdded was projected earlier on the same
+                // ordered stream). An empty lookup is an out-of-order/replay edge: skip the suggestion
+                // for this event, a later full replay recovers it (Cl. 5).
+                Optional<HouseholdId> householdId = itemReadModel.householdIdOf(updated.itemId());
+                if (householdId.isPresent()) {
+                    itemSuggestionReadModel.recordUsage(
+                            householdId.get(), updated.name(), updated.note(), updated.quantity());
+                } else {
+                    log.debug(
+                            "Skipping suggestion recording for ItemUpdated {} — household not yet resolvable",
+                            updated.itemId());
+                }
+            }
             case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId());
             case ItemMovedToList moved -> itemReadModel.removeItem(moved.itemId());
             default -> {

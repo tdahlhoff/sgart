@@ -7,6 +7,7 @@ import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/list_detail_page.dart';
 
+import '../../../support/fake_item_suggestions_api.dart';
 import '../../../support/fake_items_dependencies.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -17,10 +18,12 @@ import '../../../support/widget_test_harness.dart';
 void main() {
   group('move target sheet', () {
     late FakeItemsApi itemsApi;
+    late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeShoppingListsApi shoppingListsApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
+      itemSuggestionsApi = FakeItemSuggestionsApi();
       shoppingListsApi = FakeShoppingListsApi();
     });
 
@@ -30,6 +33,7 @@ void main() {
             child: BlocProvider(
               create: (_) => ListDetailCubit(
                 itemsApi: itemsApi,
+                itemSuggestionsApi: itemSuggestionsApi,
                 householdId: 'household-1',
                 listId: 'source-list',
                 isReadOnly: false,
