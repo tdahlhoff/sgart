@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
-import '../../../shared/widgets/sgart_button.dart';
-import '../../../shared/widgets/status_label.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
-import '../data/item_suggestions_api.dart';
-import '../data/items_api.dart';
-import '../data/shopping_list_summary.dart';
-import '../data/shopping_lists_api.dart';
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../shared/errors/error_message_resolver.dart';
+import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../shared/widgets/status_label.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/shopping_list_summary.dart';
+import '../list_detail/list_detail_page.dart';
 import 'create_list_dialog.dart';
-import 'list_detail_cubit.dart';
-import 'list_detail_page.dart';
 import 'rename_list_dialog.dart';
 import 'shopping_lists_cubit.dart';
 import 'shopping_lists_state.dart';
@@ -110,12 +106,16 @@ class _OpenListsBody extends StatelessWidget {
                 listId: list.listId,
                 currentName: list.name ?? localizations.listsDefaultName(index + 1),
               ),
-              onOpen: () => _openListDetail(
+              onOpen: () => ListDetailPage.push(
                 context,
                 householdId: cubit.householdId,
                 listId: list.listId,
                 title: list.name ?? localizations.listsDefaultName(index + 1),
                 isReadOnly: false,
+                // On return from an editable (Open) list, refresh the overview so each row's
+                // itemCount reflects any add/remove the user just made (the count is a server-side
+                // COUNT, not mutated by the detail cubit — otherwise it reads stale).
+                onEditableReturn: cubit.refresh,
               ),
             ),
         if (state.actionError != null) ...[
@@ -185,56 +185,6 @@ class _ListRow extends StatelessWidget {
   }
 }
 
-/// Pushes the list detail screen, re-providing [ItemsApi] + [ItemSuggestionsApi] (Story 2.5, AC1) +
-/// [ShoppingListsApi] (the latter needed by the move target picker, Story 2.4, AC7) + a
-/// household/list-scoped [ListDetailCubit] (the overview already re-provides dependencies this way
-/// for its sheets/switcher sheet pattern — mirrors `HouseholdShell._openSwitcher`).
-void _openListDetail(
-  BuildContext context, {
-  required String householdId,
-  required String listId,
-  required String title,
-  required bool isReadOnly,
-}) {
-  final itemsApi = context.read<ItemsApi>();
-  final itemSuggestionsApi = context.read<ItemSuggestionsApi>();
-  final shoppingListsApi = context.read<ShoppingListsApi>();
-  // Captured before the push so it survives the awaited navigation.
-  final overviewCubit = context.read<ShoppingListsCubit>();
-  Navigator.of(context)
-      .push(MaterialPageRoute<void>(
-        builder: (_) => RepositoryProvider<ItemsApi>.value(
-          value: itemsApi,
-          child: RepositoryProvider<ItemSuggestionsApi>.value(
-            value: itemSuggestionsApi,
-            child: RepositoryProvider<ShoppingListsApi>.value(
-              value: shoppingListsApi,
-              child: BlocProvider<ListDetailCubit>(
-                create: (context) => ListDetailCubit(
-                  itemsApi: context.read<ItemsApi>(),
-                  itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
-                  householdId: householdId,
-                  listId: listId,
-                  isReadOnly: isReadOnly,
-                )..bootstrap(),
-                child: ListDetailPage(title: title),
-              ),
-            ),
-          ),
-        ),
-      ))
-      .then((_) {
-        // On return from an editable (Open) list, refresh the overview so each row's itemCount
-        // reflects any add/remove the user just made (the count is a server-side COUNT, not mutated
-        // by the detail cubit — otherwise it reads stale). A Done list opens read-only: nothing
-        // changed, and a refresh would reset the overview to the Open filter, snapping the user off
-        // the Done archive they were browsing — so only refresh when edits were possible.
-        if (!isReadOnly) {
-          overviewCubit.refresh();
-        }
-      });
-}
-
 class _DoneArchiveBody extends StatelessWidget {
   const _DoneArchiveBody({required this.state});
 
@@ -271,12 +221,15 @@ class _DoneArchiveBody extends StatelessWidget {
               for (final list in state.doneLists)
                 _ArchiveRow(
                   list: list,
-                  onOpen: () => _openListDetail(
+                  onOpen: () => ListDetailPage.push(
                     context,
                     householdId: context.read<ShoppingListsCubit>().householdId,
                     listId: list.listId,
                     title: list.name ?? localizations.listsArchiveUnnamedFallback,
                     isReadOnly: true,
+                    // No onEditableReturn: a Done list is immutable, and push never fires the
+                    // callback for a read-only list anyway (a refresh here would reset the overview
+                    // to the Open filter, snapping the user off the Done archive they were browsing).
                   ),
                 ),
           ],

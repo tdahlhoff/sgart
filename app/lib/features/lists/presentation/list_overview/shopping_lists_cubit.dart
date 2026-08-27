@@ -1,10 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../shared/commands/command_intent.dart';
-import '../../../shared/errors/app_error.dart';
-import '../../../shared/http/app_exception.dart';
-import '../data/shopping_list_summary.dart';
-import '../data/shopping_lists_api.dart';
+import '../../../../shared/commands/command_intent.dart';
+import '../../../../shared/errors/app_error.dart';
+import '../../../../shared/http/app_exception.dart';
+import '../../data/shopping_list_summary.dart';
+import '../../data/shopping_lists_api.dart';
 import 'shopping_lists_state.dart';
 
 /// Drives the Listen overview (Story 2.1 AC1–AC3; Story 2.2 AC1/AC2): loads the household's Open

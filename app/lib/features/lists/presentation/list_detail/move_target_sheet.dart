@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/widgets/sgart_button.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
-import '../data/item.dart';
-import '../data/shopping_list_summary.dart';
-import '../data/shopping_lists_api.dart';
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/item.dart';
+import '../../data/shopping_list_summary.dart';
+import '../../data/shopping_lists_api.dart';
 import 'list_detail_cubit.dart';
 import 'move_merge_dialog.dart';
 

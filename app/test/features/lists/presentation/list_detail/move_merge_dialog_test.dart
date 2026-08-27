@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
-import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
-import 'package:sgart/features/lists/presentation/move_merge_dialog.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_detail/move_merge_dialog.dart';
 
-import '../../../support/fake_item_suggestions_api.dart';
-import '../../../support/fake_items_dependencies.dart';
-import '../../../support/widget_test_harness.dart';
+import '../../../../support/fake_item_suggestions_api.dart';
+import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the quantity-merge sheet (Story 2.4, AC4, Clarification 3): pre-fill rules and
 /// that each confirm action calls the right cubit path.

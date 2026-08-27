@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/widgets/sgart_button.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
 import 'shopping_lists_cubit.dart';
 import 'shopping_lists_state.dart';
 

@@ -1,8 +1,8 @@
 import 'package:collection/collection.dart';
 
-import '../../../shared/errors/app_error.dart';
-import '../data/item.dart';
-import '../data/item_suggestion.dart';
+import '../../../../shared/errors/app_error.dart';
+import '../../data/item.dart';
+import '../../data/item_suggestion.dart';
 
 enum ListDetailStatus { loading, ready, failure }
 

@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
-import 'package:sgart/features/lists/presentation/shopping_lists_cubit.dart';
-import 'package:sgart/features/lists/presentation/shopping_lists_state.dart';
+import 'package:sgart/features/lists/presentation/list_overview/shopping_lists_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_overview/shopping_lists_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
-import '../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/fake_shopping_lists_dependencies.dart';
 
 void main() {
   group('ShoppingListsCubit', () {

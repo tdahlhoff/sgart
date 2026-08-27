@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../l10n/formatting/quantity_formatter.dart' as formatting;
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
-import '../../../shared/widgets/sgart_app_bar.dart';
-import '../../../shared/widgets/sgart_button.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
-import '../data/item.dart';
-import '../data/shopping_lists_api.dart';
+import '../../../../l10n/formatting/quantity_formatter.dart' as formatting;
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../shared/errors/error_message_resolver.dart';
+import '../../../../shared/widgets/sgart_app_bar.dart';
+import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/item.dart';
+import '../../data/item_suggestions_api.dart';
+import '../../data/items_api.dart';
+import '../../data/shopping_lists_api.dart';
 import 'fast_add_field.dart';
 import 'item_form_sheet.dart';
 import 'list_detail_cubit.dart';
@@ -28,6 +30,54 @@ class ListDetailPage extends StatelessWidget {
   /// Already-derived display title (the list's name, or the „Liste N" fallback the overview
   /// computed) — this screen never re-derives the ordinal itself.
   final String title;
+
+  /// Pushes this screen, re-providing [ItemsApi] + [ItemSuggestionsApi] (Story 2.5, AC1) +
+  /// [ShoppingListsApi] (needed by the move target picker, Story 2.4, AC7) + a household/list-scoped
+  /// [ListDetailCubit] (mirrors `HouseholdShell._openSwitcher`'s re-providing pattern). Calls
+  /// [onEditableReturn] after the pushed route is popped, but only when the list was editable — a
+  /// read-only Done list is immutable, so nothing can have changed on return and the callback is
+  /// never worth firing. This guarantee lives here so no caller can accidentally pair a read-only
+  /// push with an on-return refresh (which would, for the overview, snap the user off the Done
+  /// archive by resetting its filter).
+  static Future<void> push(
+    BuildContext context, {
+    required String householdId,
+    required String listId,
+    required String title,
+    required bool isReadOnly,
+    VoidCallback? onEditableReturn,
+  }) {
+    final itemsApi = context.read<ItemsApi>();
+    final itemSuggestionsApi = context.read<ItemSuggestionsApi>();
+    final shoppingListsApi = context.read<ShoppingListsApi>();
+    return Navigator.of(context)
+        .push(MaterialPageRoute<void>(
+          builder: (_) => RepositoryProvider<ItemsApi>.value(
+            value: itemsApi,
+            child: RepositoryProvider<ItemSuggestionsApi>.value(
+              value: itemSuggestionsApi,
+              child: RepositoryProvider<ShoppingListsApi>.value(
+                value: shoppingListsApi,
+                child: BlocProvider<ListDetailCubit>(
+                  create: (context) => ListDetailCubit(
+                    itemsApi: context.read<ItemsApi>(),
+                    itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
+                    householdId: householdId,
+                    listId: listId,
+                    isReadOnly: isReadOnly,
+                  )..bootstrap(),
+                  child: ListDetailPage(title: title),
+                ),
+              ),
+            ),
+          ),
+        ))
+        .then((_) {
+          if (!isReadOnly) {
+            onEditableReturn?.call();
+          }
+        });
+  }
 
   @override
   Widget build(BuildContext context) {

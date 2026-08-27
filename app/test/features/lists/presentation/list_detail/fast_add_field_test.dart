@@ -3,14 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/item_suggestion.dart';
-import 'package:sgart/features/lists/presentation/fast_add_field.dart';
-import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_detail/fast_add_field.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
-import '../../../support/fake_item_suggestions_api.dart';
-import '../../../support/fake_items_dependencies.dart';
-import '../../../support/widget_test_harness.dart';
+import '../../../../support/fake_item_suggestions_api.dart';
+import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the persistent fast-add field (Story 2.5, AC2/AC3/AC4) in isolation — mirrors
 /// the list_detail_page_test.dart route-level coverage but drives the widget directly.

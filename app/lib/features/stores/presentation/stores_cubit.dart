@@ -4,10 +4,10 @@ import '../../../shared/commands/command_intent.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../data/store_chain.dart';
+import '../data/store_chain_matcher.dart';
 import '../data/store_chain_reference_cache.dart';
 import '../data/store_summary.dart';
 import '../data/stores_api.dart';
-import '../domain/store_chain_matcher.dart';
 import 'stores_state.dart';
 
 /// Drives the manage-stores screen (Story 1.8, AC1–AC4): loads the active stores and the cached

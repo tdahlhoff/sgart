@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../l10n/formatting/quantity_formatter.dart' as formatting;
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
-import '../data/item_suggestion.dart';
+import '../../../../l10n/formatting/quantity_formatter.dart' as formatting;
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/item_suggestion.dart';
 import 'list_detail_cubit.dart';
 import 'list_detail_state.dart';
 

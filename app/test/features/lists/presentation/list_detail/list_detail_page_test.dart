@@ -3,14 +3,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/item_suggestion.dart';
-import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
-import 'package:sgart/features/lists/presentation/list_detail_page.dart';
+import 'package:sgart/features/lists/data/item_suggestions_api.dart';
+import 'package:sgart/features/lists/data/items_api.dart';
+import 'package:sgart/features/lists/data/shopping_lists_api.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_page.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
-import '../../../support/fake_item_suggestions_api.dart';
-import '../../../support/fake_items_dependencies.dart';
-import '../../../support/widget_test_harness.dart';
+import '../../../../support/fake_item_suggestions_api.dart';
+import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/widget_test_harness.dart';
 
 void main() {
   group('ListDetailPage', () {
@@ -276,6 +280,59 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('item-move-button-i1')), findsOneWidget);
+    });
+
+    group('push', () {
+      // Drives push from a launcher button that has the three re-provided APIs in scope, then pops
+      // back, so the on-return guarantee is exercised through the real navigation path.
+      Future<void> pushAndReturn(
+        WidgetTester tester, {
+        required bool isReadOnly,
+        required VoidCallback onEditableReturn,
+      }) async {
+        await tester.pumpWidget(wrapForTesting(
+          MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<ItemsApi>.value(value: itemsApi),
+              RepositoryProvider<ItemSuggestionsApi>.value(value: itemSuggestionsApi),
+              RepositoryProvider<ShoppingListsApi>.value(value: FakeShoppingListsApi()),
+            ],
+            child: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => ListDetailPage.push(
+                  context,
+                  householdId: 'household-1',
+                  listId: 'list-1',
+                  title: 'Wocheneinkauf',
+                  isReadOnly: isReadOnly,
+                  onEditableReturn: onEditableReturn,
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ));
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        // The app's SgartAppBar has no default back button for pageBack() to tap, so pop the
+        // pushed route directly.
+        tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('firesOnEditableReturnAfterPoppingAnOpenList', (tester) async {
+        var returned = false;
+        await pushAndReturn(tester, isReadOnly: false, onEditableReturn: () => returned = true);
+
+        expect(returned, isTrue);
+      });
+
+      testWidgets('doesNotFireOnEditableReturnAfterPoppingAReadOnlyDoneList', (tester) async {
+        var returned = false;
+        await pushAndReturn(tester, isReadOnly: true, onEditableReturn: () => returned = true);
+
+        expect(returned, isFalse);
+      });
     });
   });
 }

@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/item_suggestion.dart';
-import 'package:sgart/features/lists/presentation/list_detail_cubit.dart';
-import 'package:sgart/features/lists/presentation/list_detail_state.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_detail/list_detail_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
-import '../../../support/fake_item_suggestions_api.dart';
-import '../../../support/fake_items_dependencies.dart';
+import '../../../../support/fake_item_suggestions_api.dart';
+import '../../../../support/fake_items_dependencies.dart';
 
 void main() {
   group('ListDetailCubit', () {

@@ -6,15 +6,15 @@ import 'package:sgart/features/lists/data/item_suggestions_api.dart';
 import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
-import 'package:sgart/features/lists/presentation/lists_view.dart';
-import 'package:sgart/features/lists/presentation/shopping_lists_cubit.dart';
+import 'package:sgart/features/lists/presentation/list_overview/lists_view.dart';
+import 'package:sgart/features/lists/presentation/list_overview/shopping_lists_cubit.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
-import '../../../support/fake_item_suggestions_api.dart';
-import '../../../support/fake_items_dependencies.dart';
-import '../../../support/fake_shopping_lists_dependencies.dart';
-import '../../../support/widget_test_harness.dart';
+import '../../../../support/fake_item_suggestions_api.dart';
+import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/widget_test_harness.dart';
 
 void main() {
   group('ListsView', () {

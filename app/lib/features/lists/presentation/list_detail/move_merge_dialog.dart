@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../l10n/formatting/number_formatter.dart';
-import '../../../l10n/formatting/quantity_formatter.dart' as formatting;
-import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/widgets/sgart_button.dart';
-import '../../../theme/tokens/sgart_shapes.dart';
-import '../data/item.dart';
+import '../../../../l10n/formatting/number_formatter.dart';
+import '../../../../l10n/formatting/quantity_formatter.dart' as formatting;
+import '../../../../l10n/gen/app_localizations.dart';
+import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/item.dart';
 import 'list_detail_cubit.dart';
 
 /// Opens the quantity-merge sheet (Story 2.4, AC4, Clarification 3): shown when the move target

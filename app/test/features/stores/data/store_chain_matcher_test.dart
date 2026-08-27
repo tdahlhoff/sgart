@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/stores/data/store_chain.dart';
-import 'package:sgart/features/stores/domain/store_chain_matcher.dart';
+import 'package:sgart/features/stores/data/store_chain_matcher.dart';
 
 void main() {
   group('StoreChainMatcher', () {

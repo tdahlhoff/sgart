@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 
-import '../../../shared/errors/app_error.dart';
-import '../data/shopping_list_summary.dart';
+import '../../../../shared/errors/app_error.dart';
+import '../../data/shopping_list_summary.dart';
 
 enum ShoppingListsStatus { loading, ready, failure }
 
