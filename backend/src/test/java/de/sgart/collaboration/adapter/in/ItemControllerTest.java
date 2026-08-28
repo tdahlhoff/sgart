@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,6 +27,7 @@ import de.sgart.shared.ItemId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import de.sgart.shared.Unit;
 import de.sgart.shared.support.InMemoryEventStore;
@@ -112,6 +114,18 @@ class ItemControllerTest {
         /** The projector's lookup (Story 2.5, Cl. 5) — never reached through a controller GET. */
         @Override
         public Optional<HouseholdId> householdIdOf(ItemId itemId) {
+            return Optional.empty();
+        }
+
+        /** The projector's write (Story 2.6) — never reached through this slice's command endpoints. */
+        @Override
+        public void assignStore(ItemId itemId, StoreId storeId) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
+        }
+
+        /** The projector's lookup (Story 2.6, Cl. 6) — never reached through a controller GET. */
+        @Override
+        public Optional<ItemName> nameOf(ItemId itemId) {
             return Optional.empty();
         }
     }
@@ -245,7 +259,7 @@ class ItemControllerTest {
         ItemId itemId = ItemId.generate();
         itemReadModel.put(
                 listId,
-                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE))));
+                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null)));
 
         mockMvc.perform(get(
                         "/api/v1/households/{householdId}/lists/{listId}/items",
@@ -460,6 +474,105 @@ class ItemControllerTest {
                                 .formatted(targetListId, UUID.randomUUID())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void assignStore_returns204ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), listId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(put(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/store",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(StoreId.generate(), UUID.randomUUID())))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void assignStore_rejectsAMalformedStoreIdWith400() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), listId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(put(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/store",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"not-a-uuid\",\"commandId\":\"%s\"}".formatted(UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("command.storeIdInvalid"));
+    }
+
+    @Test
+    void assignStore_rejectsANonMemberWith403() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+
+        mockMvc.perform(put(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/store",
+                        householdId.toString(),
+                        listId.toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(StoreId.generate(), UUID.randomUUID())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void assignStore_returns404ForAnUnknownList() throws Exception {
+        HouseholdId householdId = seedMembership();
+
+        mockMvc.perform(put(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/store",
+                        householdId.toString(),
+                        ShoppingListId.generate().toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(StoreId.generate(), UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    @Test
+    void assignStore_returns404ForAnUnknownItem() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+
+        mockMvc.perform(put(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/store",
+                        householdId.toString(),
+                        listId.toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(StoreId.generate(), UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("item.notFound"));
     }
 
     @Test

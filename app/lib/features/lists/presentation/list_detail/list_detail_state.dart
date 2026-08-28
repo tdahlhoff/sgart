@@ -1,18 +1,21 @@
 import 'package:collection/collection.dart';
 
 import '../../../../shared/errors/app_error.dart';
+import '../../../stores/data/store_summary.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestion.dart';
 
 enum ListDetailStatus { loading, ready, failure }
 
-/// State of [ListDetailCubit] (Story 2.3, AC6; Story 2.5, AC1). [loading]/[failure] cover the
-/// initial load of the list's items; once [ready] it carries the `items` in creation order,
-/// `isReadOnly` (a Done list — no add/edit/remove affordances, and no suggestions, AC5), the
-/// `isSubmitting` flag for an in-flight add/update/remove, `actionError` for a rejection shown
-/// inline — kept separate from `loadError` so a rejected action never tears down the screen — and
-/// `suggestions`, the household's in-memory suggestion cache the fast-add field filters (empty on a
-/// read-only list or while the suggestions load is still in flight/failed).
+/// State of [ListDetailCubit] (Story 2.3, AC6; Story 2.5, AC1; Story 2.6, AC1/AC4/AC6).
+/// [loading]/[failure] cover the initial load of the list's items; once [ready] it carries the
+/// `items` in creation order, `isReadOnly` (a Done list — no add/edit/remove/assign affordances,
+/// and no suggestions/stores, AC5), the `isSubmitting` flag for an in-flight add/update/remove/
+/// assign, `actionError` for a rejection shown inline — kept separate from `loadError` so a
+/// rejected action never tears down the screen — `suggestions`, the household's in-memory
+/// suggestion cache the fast-add field filters, and `stores`, the household's active stores the
+/// store picker offers (both empty on a read-only list or while their load is still in
+/// flight/failed).
 class ListDetailState {
   const ListDetailState._(
     this.status, {
@@ -22,6 +25,7 @@ class ListDetailState {
     this.loadError,
     this.actionError,
     this.suggestions = const [],
+    this.stores = const [],
   });
 
   const ListDetailState.loading({required bool isReadOnly})
@@ -36,6 +40,7 @@ class ListDetailState {
     bool isSubmitting = false,
     AppError? actionError,
     List<ItemSuggestion> suggestions = const [],
+    List<StoreSummary> stores = const [],
   }) : this._(
           ListDetailStatus.ready,
           items: items,
@@ -43,6 +48,7 @@ class ListDetailState {
           isSubmitting: isSubmitting,
           actionError: actionError,
           suggestions: suggestions,
+          stores: stores,
         );
 
   final ListDetailStatus status;
@@ -52,6 +58,7 @@ class ListDetailState {
   final AppError? loadError;
   final AppError? actionError;
   final List<ItemSuggestion> suggestions;
+  final List<StoreSummary> stores;
 
   ListDetailState copyWith({
     List<Item>? items,
@@ -59,6 +66,7 @@ class ListDetailState {
     AppError? actionError,
     bool clearActionError = false,
     List<ItemSuggestion>? suggestions,
+    List<StoreSummary>? stores,
   }) {
     return ListDetailState.ready(
       items: items ?? this.items,
@@ -66,6 +74,7 @@ class ListDetailState {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       actionError: clearActionError ? null : (actionError ?? this.actionError),
       suggestions: suggestions ?? this.suggestions,
+      stores: stores ?? this.stores,
     );
   }
 
@@ -78,7 +87,8 @@ class ListDetailState {
       other.isSubmitting == isSubmitting &&
       other.loadError == loadError &&
       other.actionError == actionError &&
-      const ListEquality<ItemSuggestion>().equals(other.suggestions, suggestions);
+      const ListEquality<ItemSuggestion>().equals(other.suggestions, suggestions) &&
+      const ListEquality<StoreSummary>().equals(other.stores, stores);
 
   @override
   int get hashCode => Object.hash(
@@ -89,5 +99,6 @@ class ListDetailState {
         loadError,
         actionError,
         const ListEquality<ItemSuggestion>().hash(suggestions),
+        const ListEquality<StoreSummary>().hash(stores),
       );
 }

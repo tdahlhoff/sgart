@@ -1,3 +1,22 @@
+## Deferred from: planning of story-2.6 (2026-08-28)
+
+- **„Zuordnung entfernen" (clear a store assignment back to unassigned) → post-MVP.** 2.6 is
+  reassign-only (Timo, 2026-08-28): correcting a wrong store = pick the right one; the archived-store
+  fallback (Story 1.8 E6 / 2.6 AC4) covers a store that vanishes. `ItemAssignedToStore` carries a
+  **required** `storeId` — no null-store event. If members want to fully un-assign an item post-MVP,
+  add either a nullable-store variant or a second `ItemStoreAssignmentCleared` event + a picker
+  „Zuordnung entfernen" row. [Story 2.6 Cl. 3]
+- **A moved item's store assignment does NOT travel to the target list.** Story 2.4's `ItemMovedToList`
+  and `ItemMoveProcessManager` are unchanged (name/note/quantity only); a moved assigned item shows „+
+  Geschäft" on the target and is re-assigned in one tap (Timo, 2026-08-28). If carrying the assignment
+  across a move is wanted later, version `ItemMovedToList` (+ old-event codec tolerance) and widen the
+  PM's target-side `AddItem` — coupled to the Epic-3 mid-move compensation defer. [Story 2.6 Cl. 4]
+- **AC3's trip/print store-grouping consumers are Epic 3.** 2.6 makes the assignment durable +
+  queryable (`item_read_model.store_id`) and proves it with a read-model test; the store-grouped trip
+  view (Story 3.2) and print layout (Story 3.5) consume it. No trip/print UI is built in 2.6.
+- **The reusable store picker (UX-DR22) is single-select in 2.6.** Story 3.1 (trip start, ≥1 store)
+  extends it to multi-select; 3.2 (in-trip reroute) reuses it. Don't overbuild for those now (Cl. 8).
+
 ## Deferred from: dev-story of 2-2-listen-overview-with-offen-erledigt-filter (2026-08-26)
 
 - **Item counts (Story 2.3) and check-off progress (Epic 3) on overview rows** — 2.2 ships the Offen/Erledigt filter and the Done archive shell only (LOCKED Clarification 1). Story 2.3 lights up a per-row item count in the row 2.2 builds; the progress bar (checked/total) lands in Epic 3 with check-off. No `item_count` column or count/progress UI exists yet — none should be added before the capability that produces the data.
@@ -76,3 +95,8 @@
 - **The suggestion panel is inline layout, not a floating overlay** — `_SuggestionPanel` is a plain sibling above the `TextField` in the page `Column` while the item list sits in an `Expanded`, so opening the panel (up to 280px) shrinks the visible item list instead of floating over it. Task 10 says "overlay/panel that rises ABOVE the field"; functionally "above" as AC4 requires, but not the artifact's State B overlay. Revisit if the shrink proves jarring on a small screen. [app/lib/features/lists/presentation/fast_add_field.dart:98]
 - **`actionError` renders at the bottom of the scrolling item list** — a fast-add rejection (e.g. a duplicate) shows inside `_ReadyBody`'s scroll view, so on a list longer than one screen the message can land off-screen while the field that triggered it sits pinned at the bottom, making the add look like it silently did nothing. Pre-existing Story 2.3 placement, newly more visible now that the add surface is the bottom field. [app/lib/features/lists/presentation/list_detail_page.dart:99]
 - **Let a member remove an article from the autocomplete history (post-MVP)** — `item_suggestion_read_model` is upsert-only by design (Cl. 1): nothing ever deletes a row, `suggestionsOf` has no `LIMIT`, so the table grows monotonically per household and its whole lifetime content ships on every list-detail open. A note the member deliberately removed also keeps being re-attached by the prefill, and erasure exists only at household level (Epic 6). Decision (Timo, 2026-08-27): keep it growing for now — a household's distinct-article count is not expected to grow fast enough to matter pre-MVP. Post-MVP, add a member-facing "remove this article from suggestions" action; that same delete path becomes the item-level erasure/retention answer for CLAUDE.md §5, and a payload cap can follow if it is ever needed. [Story 2.5 Cl. 1; backend/.../adapter/out/JdbcItemSuggestionReadModel.java:31; backend/.../db/migration/V7__item_suggestion_read_model.sql]
+
+## Deferred from: planning of story-2.6 (2026-08-28)
+
+- **"Zuordnung entfernen" (clear-to-unassigned) — post-MVP.** `ItemAssignedToStore` carries a required `storeId`; there is no null-store event/command in MVP (Cl. 3). Correcting a wrong assignment means reassigning to the right store (last-wins) — the epic ACs require only assign + inline-create, and the archived-store fallback (AC4) already covers a store that later vanishes. Decision (Timo, 2026-08-28): add a member-facing "Zuordnung entfernen" action post-MVP if wanted (a new nullable-`storeId` event, or a sentinel, mirroring the `ItemAssignedToStore` shape). [Story 2.6 Cl. 3; backend/.../collaboration/domain/event/ItemAssignedToStore.java]
+- **Picker multi-select for trip start (Story 3.1) is not built here.** `store_picker_sheet.dart` is deliberately single-select, returning one `StoreSummary` (Cl. 8) — Story 3.1 (trip start, needs ≥1 store) extends the same reusable sheet rather than duplicating it. [Story 2.6 Cl. 8; app/lib/features/stores/presentation/store_picker_sheet.dart]

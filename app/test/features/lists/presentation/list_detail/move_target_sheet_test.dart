@@ -6,10 +6,13 @@ import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_page.dart';
+import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
+import 'package:sgart/features/stores/data/stores_api.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/fake_stores_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the move target picker (Story 2.4, AC3, AC4, AC7), driven through the real list
@@ -20,25 +23,36 @@ void main() {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeShoppingListsApi shoppingListsApi;
+    late FakeStoresApi storesApi;
+    late FakeStoreChainReferenceCache referenceCache;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
       shoppingListsApi = FakeShoppingListsApi();
+      storesApi = FakeStoresApi();
+      referenceCache = FakeStoreChainReferenceCache();
     });
 
     Widget buildSubject() => wrapForTesting(
           RepositoryProvider<ShoppingListsApi>.value(
             value: shoppingListsApi,
-            child: BlocProvider(
-              create: (_) => ListDetailCubit(
-                itemsApi: itemsApi,
-                itemSuggestionsApi: itemSuggestionsApi,
-                householdId: 'household-1',
-                listId: 'source-list',
-                isReadOnly: false,
-              )..bootstrap(),
-              child: const ListDetailPage(title: 'Wocheneinkauf'),
+            child: RepositoryProvider<StoresApi>.value(
+              value: storesApi,
+              child: RepositoryProvider<StoreChainReferenceCache>.value(
+                value: referenceCache,
+                child: BlocProvider(
+                  create: (_) => ListDetailCubit(
+                    itemsApi: itemsApi,
+                    itemSuggestionsApi: itemSuggestionsApi,
+                    storesApi: storesApi,
+                    householdId: 'household-1',
+                    listId: 'source-list',
+                    isReadOnly: false,
+                  )..bootstrap(),
+                  child: const ListDetailPage(title: 'Wocheneinkauf'),
+                ),
+              ),
             ),
           ),
         );

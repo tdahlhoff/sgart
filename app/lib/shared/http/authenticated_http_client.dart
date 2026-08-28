@@ -63,6 +63,16 @@ class AuthenticatedHttpClient {
     }
   }
 
+  /// Sends a `PUT` whose success is a `204 No Content` (a command — no domain body to read). Maps a
+  /// `{code,message,details}` error body to [AppError] exactly as the other verbs do.
+  Future<void> putJson(String path, Map<String, dynamic> body) async {
+    try {
+      await _dio.put<void>(path, data: body);
+    } on DioException catch (exception) {
+      throw AppException(_mapToAppError(exception));
+    }
+  }
+
   /// Sends a `DELETE` (carrying the command envelope as its body) whose success is a `204 No
   /// Content` (a command — no domain body to read). Maps a `{code,message,details}` error body to
   /// [AppError] exactly as the other verbs do.

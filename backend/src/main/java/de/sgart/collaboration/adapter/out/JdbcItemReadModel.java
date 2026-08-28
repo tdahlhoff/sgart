@@ -8,6 +8,7 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.Unit;
 import java.math.BigDecimal;
 import java.util.List;
@@ -33,7 +34,7 @@ public final class JdbcItemReadModel implements ItemReadModel {
     public List<ItemView> itemsOf(HouseholdId householdId, ShoppingListId listId) {
         return jdbcClient
                 .sql("""
-                        SELECT item_id, name, note, quantity_amount, quantity_unit FROM item_read_model
+                        SELECT item_id, name, note, quantity_amount, quantity_unit, store_id FROM item_read_model
                         WHERE household_id = :householdId AND list_id = :listId
                         ORDER BY sequence_number ASC
                         """)
@@ -41,13 +42,15 @@ public final class JdbcItemReadModel implements ItemReadModel {
                 .param("listId", listId.value())
                 .query((resultSet, rowNumber) -> {
                     String note = resultSet.getString("note");
+                    String storeId = resultSet.getString("store_id");
                     return new ItemView(
                             ItemId.fromString(resultSet.getString("item_id")),
                             new ItemName(resultSet.getString("name")),
                             note == null ? null : new ItemNote(note),
                             new Quantity(
                                     resultSet.getBigDecimal("quantity_amount"),
-                                    Unit.valueOf(resultSet.getString("quantity_unit"))));
+                                    Unit.valueOf(resultSet.getString("quantity_unit"))),
+                            storeId == null ? null : StoreId.fromString(storeId));
                 })
                 .list();
     }
@@ -58,6 +61,24 @@ public final class JdbcItemReadModel implements ItemReadModel {
                 .sql("SELECT household_id FROM item_read_model WHERE item_id = :itemId")
                 .param("itemId", itemId.value())
                 .query((resultSet, rowNumber) -> HouseholdId.fromString(resultSet.getString("household_id")))
+                .optional();
+    }
+
+    @Override
+    public void assignStore(ItemId itemId, StoreId storeId) {
+        jdbcClient
+                .sql("UPDATE item_read_model SET store_id = :storeId WHERE item_id = :itemId")
+                .param("itemId", itemId.value())
+                .param("storeId", storeId.value())
+                .update();
+    }
+
+    @Override
+    public Optional<ItemName> nameOf(ItemId itemId) {
+        return jdbcClient
+                .sql("SELECT name FROM item_read_model WHERE item_id = :itemId")
+                .param("itemId", itemId.value())
+                .query((resultSet, rowNumber) -> new ItemName(resultSet.getString("name")))
                 .optional();
     }
 

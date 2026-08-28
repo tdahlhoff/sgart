@@ -56,15 +56,16 @@ public final class ListItemSuggestions {
                 suggestion.name().value(),
                 note == null ? null : note.value(),
                 suggestion.quantity().amount().toPlainString(),
-                suggestion.quantity().unit().name());
+                suggestion.quantity().unit().name(),
+                suggestion.defaultStore() == null ? null : suggestion.defaultStore().toString());
     }
 
     /**
-     * A suggestion as seen by the caller: name + optional note + last-used quantity — the shape the
-     * fast-add field needs. Plain {@code String}s, not domain types, so {@code adapter.in} can
-     * consume this record without reaching into {@code collaboration.domain} (mirrors {@link
-     * ListItems.ItemSummary}). {@code note} is {@code null} when absent; {@code amount} is a decimal
-     * string, {@code unit} the enum name.
+     * A suggestion as seen by the caller: name + optional note + last-used quantity + last-used
+     * store — the shape the fast-add field needs. Plain {@code String}s, not domain types, so {@code
+     * adapter.in} can consume this record without reaching into {@code collaboration.domain}
+     * (mirrors {@link ListItems.ItemSummary}). {@code note}/{@code defaultStoreId} are {@code null}
+     * when absent; {@code amount} is a decimal string, {@code unit} the enum name.
      */
-    public record ItemSuggestionSummary(String name, String note, String amount, String unit) {}
+    public record ItemSuggestionSummary(String name, String note, String amount, String unit, String defaultStoreId) {}
 }

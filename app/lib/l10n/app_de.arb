@@ -566,6 +566,46 @@
     "description": "Shown when a quantity-merge move updated the target but the source removal failed — tells the member to re-remove the source rather than re-merge (would double-count) (Story 2.4, Clarification 3)."
   },
 
+  "itemStoreUnassignedChip": "+ Geschäft",
+  "@itemStoreUnassignedChip": {
+    "description": "The ghost chip on an unassigned item row, and the store picker's trigger label (Story 2.6, AC1/AC4)."
+  },
+
+  "itemStoreAssignAction": "Geschäft zuweisen",
+  "@itemStoreAssignAction": {
+    "description": "Accessibility label for the tappable store chip on an Open list's item row (Story 2.6, AC1, UX-DR5)."
+  },
+
+  "storePickerTitle": "Geschäft wählen",
+  "@storePickerTitle": {
+    "description": "Heading of the reusable store picker sheet (Story 2.6, AC1, UX-DR22)."
+  },
+
+  "storePickerAddNewAction": "+ Neues Geschäft",
+  "@storePickerAddNewAction": {
+    "description": "The store picker's inline store-creation row label (Story 2.6, AC2, Cl. 2/8)."
+  },
+
+  "storePickerNewStoreNameFieldLabel": "Name des neuen Geschäfts",
+  "@storePickerNewStoreNameFieldLabel": {
+    "description": "Label of the store picker's inline name field for a new store (Story 2.6, AC2)."
+  },
+
+  "storePickerAddSubmitButtonLabel": "Hinzufügen",
+  "@storePickerAddSubmitButtonLabel": {
+    "description": "Submits the store picker's inline new-store name (Story 2.6, AC2)."
+  },
+
+  "suggestionLastUsedStore": "zuletzt {store}",
+  "@suggestionLastUsedStore": {
+    "description": "The fast-add suggestion row's last-used-store chip, e.g. 'zuletzt Edeka' (Story 2.6, AC6).",
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+
   "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
   "@onboardingChoicePrivacyNote": {
     "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."

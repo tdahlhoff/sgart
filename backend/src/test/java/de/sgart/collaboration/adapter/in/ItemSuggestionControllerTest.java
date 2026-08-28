@@ -16,6 +16,7 @@ import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.Unit;
 import java.util.HashMap;
 import java.util.List;
@@ -90,9 +91,11 @@ class ItemSuggestionControllerTest {
     @Test
     void list_returns200WithTheMappedSuggestions() throws Exception {
         HouseholdId householdId = seedMembership();
+        StoreId storeId = StoreId.generate();
         itemSuggestionReadModel.put(
                 householdId,
-                List.of(new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE))));
+                List.of(new ItemSuggestionView(
+                        new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE), storeId)));
 
         mockMvc.perform(get("/api/v1/households/{householdId}/item-suggestions", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
@@ -100,7 +103,8 @@ class ItemSuggestionControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Milch"))
                 .andExpect(jsonPath("$[0].note").value("Bio"))
                 .andExpect(jsonPath("$[0].amount").value("2"))
-                .andExpect(jsonPath("$[0].unit").value("LITRE"));
+                .andExpect(jsonPath("$[0].unit").value("LITRE"))
+                .andExpect(jsonPath("$[0].defaultStoreId").value(storeId.toString()));
     }
 
     @Test

@@ -8,12 +8,15 @@ import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/lists/presentation/list_overview/lists_view.dart';
 import 'package:sgart/features/lists/presentation/list_overview/shopping_lists_cubit.dart';
+import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
+import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/fake_stores_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 void main() {
@@ -21,11 +24,15 @@ void main() {
     late FakeShoppingListsApi shoppingListsApi;
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
+    late FakeStoresApi storesApi;
+    late FakeStoreChainReferenceCache referenceCache;
 
     setUp(() {
       shoppingListsApi = FakeShoppingListsApi();
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
+      storesApi = FakeStoresApi();
+      referenceCache = FakeStoreChainReferenceCache();
     });
 
     Widget buildSubject() => wrapForTesting(
@@ -35,12 +42,18 @@ void main() {
               value: itemSuggestionsApi,
               child: RepositoryProvider<ShoppingListsApi>.value(
                 value: shoppingListsApi,
-                child: BlocProvider(
-                  create: (_) => ShoppingListsCubit(
-                    shoppingListsApi: shoppingListsApi,
-                    householdId: 'household-1',
-                  )..bootstrap(),
-                  child: const Scaffold(body: ListsView()),
+                child: RepositoryProvider<StoresApi>.value(
+                  value: storesApi,
+                  child: RepositoryProvider<StoreChainReferenceCache>.value(
+                    value: referenceCache,
+                    child: BlocProvider(
+                      create: (_) => ShoppingListsCubit(
+                        shoppingListsApi: shoppingListsApi,
+                        householdId: 'household-1',
+                      )..bootstrap(),
+                      child: const Scaffold(body: ListsView()),
+                    ),
+                  ),
                 ),
               ),
             ),

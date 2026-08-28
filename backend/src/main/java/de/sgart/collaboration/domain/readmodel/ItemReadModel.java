@@ -1,8 +1,10 @@
 package de.sgart.collaboration.domain.readmodel;
 
+import de.sgart.collaboration.domain.ItemName;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,4 +33,17 @@ public interface ItemReadModel {
      *     recording last-used attributes (AC6) with no compile-time or runtime signal (Fail Fast).
      */
     Optional<HouseholdId> householdIdOf(ItemId itemId);
+
+    /** The projector's {@code ItemAssignedToStore} write (AC1) — sets the item's assigned store. */
+    void assignStore(ItemId itemId, StoreId storeId);
+
+    /**
+     * @return the item's name, if its row has been projected yet (Story 2.6, Cl. 6) — used by the
+     *     projector to resolve the name {@code ItemAssignedToStore} does not carry, so it can record
+     *     the suggestion's default store. Empty on an out-of-order/replay edge; the caller skips
+     *     that suggestion write and a later full replay recovers it. Deliberately not a {@code
+     *     default} returning {@code Optional.empty()} — same Fail-Fast reasoning as {@link
+     *     #householdIdOf}.
+     */
+    Optional<ItemName> nameOf(ItemId itemId);
 }

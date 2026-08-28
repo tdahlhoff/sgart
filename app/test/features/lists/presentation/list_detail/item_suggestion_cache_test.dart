@@ -59,5 +59,36 @@ void main() {
       expect(milch.note, 'Bio');
       expect(milch.amount, '2');
     });
+
+    test('upserted_carriesTheExistingDefaultStoreIdForward', () {
+      // Cl. 7 mirrored client-side: an add/update upsert must not wipe the "zuletzt" chip.
+      const current = [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'LITRE', defaultStoreId: 's1'),
+      ];
+
+      final upserted = cache.upserted(current, 'Milch', 'Bio', '2', 'LITRE');
+
+      expect(upserted.single.defaultStoreId, 's1');
+    });
+
+    test('withDefaultStore_setsTheMatchingEntrysDefaultStoreId', () {
+      const current = [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'LITRE'),
+        ItemSuggestion(name: 'Brot', note: null, amount: '1', unit: 'PACK'),
+      ];
+
+      final updated = cache.withDefaultStore(current, 'milch', 's1');
+
+      expect(updated.singleWhere((suggestion) => suggestion.name == 'Milch').defaultStoreId, 's1');
+      expect(updated.singleWhere((suggestion) => suggestion.name == 'Brot').defaultStoreId, isNull);
+    });
+
+    test('withDefaultStore_isANoOpWhenTheNameHasNoCachedEntry', () {
+      const current = [ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'LITRE')];
+
+      final updated = cache.withDefaultStore(current, 'Brot', 's1');
+
+      expect(updated, current);
+    });
   });
 }

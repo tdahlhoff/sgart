@@ -8,34 +8,49 @@ import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_page.dart';
+import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
+import 'package:sgart/features/stores/data/store_summary.dart';
+import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../../support/fake_stores_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 void main() {
   group('ListDetailPage', () {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
+    late FakeStoresApi storesApi;
+    late FakeStoreChainReferenceCache referenceCache;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
+      storesApi = FakeStoresApi();
+      referenceCache = FakeStoreChainReferenceCache();
     });
 
     Widget buildSubject({bool isReadOnly = false}) => wrapForTesting(
-          BlocProvider(
-            create: (_) => ListDetailCubit(
-              itemsApi: itemsApi,
-              itemSuggestionsApi: itemSuggestionsApi,
-              householdId: 'household-1',
-              listId: 'list-1',
-              isReadOnly: isReadOnly,
-            )..bootstrap(),
-            child: const ListDetailPage(title: 'Wocheneinkauf'),
+          RepositoryProvider<StoresApi>.value(
+            value: storesApi,
+            child: RepositoryProvider<StoreChainReferenceCache>.value(
+              value: referenceCache,
+              child: BlocProvider(
+                create: (_) => ListDetailCubit(
+                  itemsApi: itemsApi,
+                  itemSuggestionsApi: itemSuggestionsApi,
+                  storesApi: storesApi,
+                  householdId: 'household-1',
+                  listId: 'list-1',
+                  isReadOnly: isReadOnly,
+                )..bootstrap(),
+                child: const ListDetailPage(title: 'Wocheneinkauf'),
+              ),
+            ),
           ),
         );
 
@@ -282,6 +297,77 @@ void main() {
       expect(find.byKey(const Key('item-move-button-i1')), findsOneWidget);
     });
 
+    testWidgets('anAssignedItemShowsItsStoreChip', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 's1'),
+      ];
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.descendant(of: find.byKey(const Key('item-store-chip-i1')), matching: find.text('Edeka')),
+          findsOneWidget);
+    });
+
+    testWidgets('anUnassignedItemShowsTheGhostChip', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('item-store-chip-i1')), matching: find.text('+ Geschäft')),
+          findsOneWidget);
+    });
+
+    testWidgets('anItemAssignedToAnArchivedStoreFallsBackToTheGhostChip', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'archived'),
+      ];
+      storesApi.storesToReturn = const []; // the assigned store is no longer active
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('item-store-chip-i1')), matching: find.text('+ Geschäft')),
+          findsOneWidget);
+    });
+
+    testWidgets('tappingTheStoreChipOnAnOpenListOpensThePickerAndAssigns', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('item-store-chip-i1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('store-picker-sheet')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('store-picker-option-s1')));
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.lastAssignedItemId, 'i1');
+      expect(itemsApi.lastAssignedStoreId, 's1');
+    });
+
+    testWidgets('aDoneListsStoreChipIsInert', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject(isReadOnly: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('item-store-chip-i1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('store-picker-sheet')), findsNothing);
+    });
+
     group('push', () {
       // Drives push from a launcher button that has the three re-provided APIs in scope, then pops
       // back, so the on-return guarantee is exercised through the real navigation path.
@@ -296,6 +382,8 @@ void main() {
               RepositoryProvider<ItemsApi>.value(value: itemsApi),
               RepositoryProvider<ItemSuggestionsApi>.value(value: itemSuggestionsApi),
               RepositoryProvider<ShoppingListsApi>.value(value: FakeShoppingListsApi()),
+              RepositoryProvider<StoresApi>.value(value: storesApi),
+              RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
             ],
             child: Builder(
               builder: (context) => ElevatedButton(

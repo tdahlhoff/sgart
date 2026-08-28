@@ -46,17 +46,14 @@ class _FastAddFieldState extends State<FastAddField> {
   bool get _showPanel => _focusNode.hasFocus && _controller.text.trim().isNotEmpty;
 
   /// Tapping a suggestion adds immediately with its last-used quantity/note prefilled (AC2) — no
-  /// pre-commit editing; overriding happens via the just-added row's edit sheet (Cl. 3).
+  /// pre-commit editing; overriding happens via the just-added row's edit sheet (Cl. 3). When the
+  /// suggestion carries a still-active last-used store, the cubit also assigns it in the same call
+  /// (add-then-assign, Story 2.6, AC6).
   Future<void> _addSuggestion(ItemSuggestion suggestion) async {
     if (widget.cubit.state.isSubmitting) {
       return;
     }
-    final succeeded = await widget.cubit.addItem(
-      name: suggestion.name,
-      note: suggestion.note,
-      amount: suggestion.amount,
-      unit: suggestion.unit,
-    );
+    final succeeded = await widget.cubit.addItemFromSuggestion(suggestion);
     _clearOnSuccess(succeeded);
   }
 
@@ -107,6 +104,7 @@ class _FastAddFieldState extends State<FastAddField> {
                   query: query.trim(),
                   onSuggestionTap: _addSuggestion,
                   onAddAsNew: _addAsNew,
+                  storeNameFor: (storeId) => widget.cubit.storeFor(storeId)?.name,
                 ),
               Padding(
                 padding: const EdgeInsets.all(SgartShapes.cardPadding),
@@ -155,12 +153,17 @@ class _SuggestionPanel extends StatelessWidget {
     required this.query,
     required this.onSuggestionTap,
     required this.onAddAsNew,
+    required this.storeNameFor,
   });
 
   final List<ItemSuggestion> suggestions;
   final String query;
   final ValueChanged<ItemSuggestion> onSuggestionTap;
   final VoidCallback onAddAsNew;
+
+  /// Resolves a suggestion's `defaultStoreId` to its active store name, or `null` when unassigned
+  /// or archived (Story 2.6, AC6) — mirrors `ListDetailCubit.storeFor`.
+  final String? Function(String? storeId) storeNameFor;
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +177,11 @@ class _SuggestionPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final suggestion in suggestions)
-              _SuggestionRow(suggestion: suggestion, onTap: () => onSuggestionTap(suggestion)),
+              _SuggestionRow(
+                suggestion: suggestion,
+                onTap: () => onSuggestionTap(suggestion),
+                lastUsedStoreName: storeNameFor(suggestion.defaultStoreId),
+              ),
             ListTile(
               key: const Key('fast-add-new-row'),
               dense: true,
@@ -189,10 +196,14 @@ class _SuggestionPanel extends StatelessWidget {
 }
 
 class _SuggestionRow extends StatelessWidget {
-  const _SuggestionRow({required this.suggestion, required this.onTap});
+  const _SuggestionRow({required this.suggestion, required this.onTap, required this.lastUsedStoreName});
 
   final ItemSuggestion suggestion;
   final VoidCallback onTap;
+
+  /// The suggestion's last-used store name, resolved against the active store list — `null` when
+  /// the name has no last-used store, or it is no longer active (Story 2.6, AC6/AC4).
+  final String? lastUsedStoreName;
 
   @override
   Widget build(BuildContext context) {
@@ -201,16 +212,24 @@ class _SuggestionRow extends StatelessWidget {
     final amount = double.tryParse(suggestion.amount) ?? 0;
     final unit = formatting.unitFromServerName(suggestion.unit) ?? formatting.Unit.piece;
     final quantityText = const formatting.QuantityFormatter().format(amount, unit, localizations);
+    final storeChipText =
+        lastUsedStoreName == null ? null : localizations.suggestionLastUsedStore(lastUsedStoreName!);
 
-    // One semantics node reading „<name>, <quantity>" as a button — without it a screen reader
-    // announces the name and the prefill hint as two unrelated fragments (UX-DR5).
+    // One semantics node reading „<name>, <quantity>[, zuletzt <store>]" as a button — without it a
+    // screen reader announces the name and the prefill hint as unrelated fragments (UX-DR5).
+    final semanticsLabel =
+        storeChipText == null ? '${suggestion.name}, $quantityText' : '${suggestion.name}, $quantityText, $storeChipText';
+
     return Semantics(
       button: true,
-      label: '${suggestion.name}, $quantityText',
+      label: semanticsLabel,
       child: ListTile(
         key: Key('fast-add-suggestion-$normalizedName'),
         dense: true,
         title: Text(suggestion.name),
+        subtitle: storeChipText == null
+            ? null
+            : Text(storeChipText, key: Key('fast-add-suggestion-store-$normalizedName')),
         trailing: Text(quantityText),
         onTap: onTap,
       ),

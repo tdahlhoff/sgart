@@ -26,6 +26,32 @@ void main() {
       expect(item.note, isNull);
     });
 
+    test('parsesAnAssignedStoreId', () {
+      final item = Item.fromJson(const {
+        'itemId': 'i1',
+        'name': 'Milch',
+        'amount': '1',
+        'unit': 'PIECE',
+        'storeId': 's1',
+      });
+
+      expect(item.storeId, 's1');
+    });
+
+    test('parsesAMissingStoreIdAsNull', () {
+      final item = Item.fromJson(const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE'});
+
+      expect(item.storeId, isNull);
+    });
+
+    test('throwsWhenStoreIdIsPresentButNotAString', () {
+      expect(
+        () => Item.fromJson(
+            const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE', 'storeId': 7}),
+        throwsA(isA<AppException>()),
+      );
+    });
+
     test('throwsAMappedAppExceptionOnAMalformedShape', () {
       expect(
         () => Item.fromJson(const {'itemId': 'i1', 'name': 'Milch'}),

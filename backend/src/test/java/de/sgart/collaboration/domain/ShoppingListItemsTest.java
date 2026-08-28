@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
@@ -16,6 +17,7 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import de.sgart.shared.Unit;
 import java.lang.reflect.RecordComponent;
@@ -37,8 +39,9 @@ import org.junit.jupiter.api.Test;
  * end-to-end once Epic 3 introduces a status-changing transition beyond {@code ShoppingListCreated}
  * — see Story 2.1 Clarification 1 and {@code deferred-work.md}; no synthetic Epic-3 event exists to
  * drive the aggregate into {@code DONE}, so it is not exercised here. {@link ShoppingList#moveItem}
- * (Story 2.4, AD-10 — the source side of the move) reuses the identical guard, so its {@code DONE}
- * branch is deferred for the same reason.
+ * (Story 2.4, AD-10 — the source side of the move) and {@link ShoppingList#assignItemToStore}
+ * (Story 2.6, AC5) reuse the identical guard, so their {@code DONE} branches are deferred for the
+ * same reason.
  */
 class ShoppingListItemsTest {
 
@@ -312,11 +315,89 @@ class ShoppingListItemsTest {
     }
 
     @Test
+    void assigningAnItemToAStoreRaisesItemAssignedToStore() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.assignItemToStore(itemId, storeId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemAssignedToStore.class);
+        ItemAssignedToStore assigned = (ItemAssignedToStore) events.get(0);
+        assertThat(assigned.householdId()).isEqualTo(householdId);
+        assertThat(assigned.listId()).isEqualTo(listId);
+        assertThat(assigned.itemId()).isEqualTo(itemId);
+        assertThat(assigned.storeId()).isEqualTo(storeId);
+    }
+
+    @Test
+    void reassigningAnItemToADifferentStoreRaisesANewEvent() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.assignItemToStore(itemId, StoreId.generate(), CommandId.generate());
+        list.markEventsCommitted();
+        StoreId otherStoreId = StoreId.generate();
+
+        list.assignItemToStore(itemId, otherStoreId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(((ItemAssignedToStore) events.get(0)).storeId()).isEqualTo(otherStoreId);
+    }
+
+    @Test
+    void assigningAnItemToItsCurrentStoreAgainRaisesNothing() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.assignItemToStore(itemId, storeId, CommandId.generate());
+        list.markEventsCommitted();
+
+        list.assignItemToStore(itemId, storeId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void assigningAnUnknownItemToAStoreIsNotFound() {
+        ShoppingList list = openList();
+
+        assertThatThrownBy(
+                        () -> list.assignItemToStore(ItemId.generate(), StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void updatingAnAssignedItemPreservesItsStoreAssignment() {
+        // Cl. 7 regression trap: apply(ItemUpdated) must carry the folded assignedStore forward.
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.assignItemToStore(itemId, storeId, CommandId.generate());
+        list.updateItem(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        // Assigning the SAME store again after the edit must still be a convergent no-op — proving
+        // the fold kept the assignment through the ItemUpdated, not wiped it.
+        list.assignItemToStore(itemId, storeId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
     void noItemEventCarriesADisplayNameEmailOrKeycloakUserId() {
         assertNoPersonalDataComponent(ItemAdded.class);
         assertNoPersonalDataComponent(ItemUpdated.class);
         assertNoPersonalDataComponent(ItemRemoved.class);
         assertNoPersonalDataComponent(ItemMovedToList.class);
+        assertNoPersonalDataComponent(ItemAssignedToStore.class);
     }
 
     private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {

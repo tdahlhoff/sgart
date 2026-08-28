@@ -1,6 +1,7 @@
 package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
@@ -18,6 +19,7 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -219,6 +221,34 @@ public final class ShoppingList extends EventSourcedAggregate {
                 existing.quantity()));
     }
 
+    /**
+     * Assigns an item to a store while planning (Story 2.6, AC1, AC5) — only the list root accepts
+     * the command (AD-10). Permitted only while {@link ListStatus#OPEN} (AC5). Does
+     * <strong>not</strong> validate that {@code storeId} exists in the household — {@code Store} is
+     * an entity inside the separate {@code Household} aggregate, which this root never loads or
+     * mutates (Cl. 1, mirrors {@link #moveItem} not validating {@code targetListId}). Validity is
+     * enforced client-side (the picker offers only active household stores) and by the read-side
+     * archived-store fallback (AC4). Reassigning to a different store raises a new event
+     * (last-wins); assigning the same store again is a convergent no-op (raises nothing, AD-8).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void assignItemToStore(ItemId itemId, StoreId storeId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(storeId, "storeId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireOpen();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (storeId.equals(existing.assignedStore())) {
+            return; // convergent no-op — already assigned to this store (AD-8)
+        }
+        raise(new ItemAssignedToStore(EventId.generate(), householdId, listId, itemId, storeId));
+    }
+
     private void requireOpen() {
         if (status != ListStatus.OPEN) {
             throw new ItemChangeNotPermittedException(
@@ -260,11 +290,29 @@ public final class ShoppingList extends EventSourcedAggregate {
             }
             case ShoppingListRenamed renamed -> this.name = renamed.newName();
             case ItemAdded added ->
-                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity()));
-            case ItemUpdated updated ->
-                itemsById.put(updated.itemId(), new ItemState(updated.name(), updated.note(), updated.quantity()));
+                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity(), null));
+            case ItemUpdated updated -> {
+                // Cl. 7 regression trap: an edit must carry the existing assignment forward, never
+                // wipe it — only ItemAssignedToStore may change assignedStore.
+                ItemState existing = itemsById.get(updated.itemId());
+                StoreId assignedStore = existing == null ? null : existing.assignedStore();
+                itemsById.put(
+                        updated.itemId(),
+                        new ItemState(updated.name(), updated.note(), updated.quantity(), assignedStore));
+            }
             case ItemRemoved removed -> itemsById.remove(removed.itemId());
             case ItemMovedToList moved -> itemsById.remove(moved.itemId());
+            case ItemAssignedToStore assigned -> {
+                // The command guards item existence before raising, so `existing` is non-null for any
+                // well-formed stream; skip defensively on a reordered/repaired stream rather than NPE
+                // (mirrors the ItemUpdated case's null-tolerance).
+                ItemState existing = itemsById.get(assigned.itemId());
+                if (existing != null) {
+                    itemsById.put(
+                            assigned.itemId(),
+                            new ItemState(existing.name(), existing.note(), existing.quantity(), assigned.storeId()));
+                }
+            }
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }
@@ -272,8 +320,9 @@ public final class ShoppingList extends EventSourcedAggregate {
 
     /**
      * An item as held inside the {@link ShoppingList} aggregate (AD-10) — the folded state the
-     * invariants read (dedup by (name, note), no-op update/remove). Not the read model; that is
-     * projected separately (AD-4).
+     * invariants read (dedup by (name, note), no-op update/remove/assign). Not the read model; that
+     * is projected separately (AD-4). {@code assignedStore} is a bare reference into the separate
+     * {@code Household} aggregate (AD-3) — {@code null} means unassigned.
      */
-    private record ItemState(ItemName name, ItemNote note, Quantity quantity) {}
+    private record ItemState(ItemName name, ItemNote note, Quantity quantity, StoreId assignedStore) {}
 }

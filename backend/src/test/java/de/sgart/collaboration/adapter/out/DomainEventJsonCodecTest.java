@@ -9,6 +9,7 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
@@ -221,6 +222,15 @@ class DomainEventJsonCodecTest {
         ItemMovedToList decoded = (ItemMovedToList) roundTrip(event);
         assertThat(decoded).isEqualTo(event);
         assertThat(decoded.note()).isNull();
+    }
+
+    @Test
+    void itemAssignedToStoreRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemAssignedToStore event = new ItemAssignedToStore(
+                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(), StoreId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemAssignedToStore");
+        assertThat(roundTrip(event)).isEqualTo(event);
     }
 
     private DomainEvent roundTrip(DomainEvent event) {

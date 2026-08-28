@@ -18,6 +18,7 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.Unit;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -45,16 +46,17 @@ class ListItemSuggestionsTest {
     @Test
     void forHousehold_returnsTheHouseholdsSuggestionsMappedCorrectly() {
         seedMembership();
+        StoreId storeId = StoreId.generate();
         ListItemSuggestions listItemSuggestions = listItemSuggestionsReading(household -> List.of(
-                new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE)),
-                new ItemSuggestionView(new ItemName("Brot"), null, Quantity.of(1, Unit.PACK))));
+                new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.LITRE), storeId),
+                new ItemSuggestionView(new ItemName("Brot"), null, Quantity.of(1, Unit.PACK), null)));
 
         List<ItemSuggestionSummary> summaries = listItemSuggestions.forHousehold(MEMBER_SUB, householdId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ItemSuggestionSummary("Milch", "Bio", "2", "LITRE"),
-                        new ItemSuggestionSummary("Brot", null, "1", "PACK"));
+                        new ItemSuggestionSummary("Milch", "Bio", "2", "LITRE", storeId.toString()),
+                        new ItemSuggestionSummary("Brot", null, "1", "PACK", null));
     }
 
     @Test

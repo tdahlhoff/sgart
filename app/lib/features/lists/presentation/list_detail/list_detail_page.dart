@@ -7,6 +7,9 @@ import '../../../../shared/errors/error_message_resolver.dart';
 import '../../../../shared/widgets/sgart_app_bar.dart';
 import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../../stores/data/store_chain_reference_cache.dart';
+import '../../../stores/data/stores_api.dart';
+import '../../../stores/presentation/store_picker_sheet.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestions_api.dart';
 import '../../data/items_api.dart';
@@ -32,13 +35,14 @@ class ListDetailPage extends StatelessWidget {
   final String title;
 
   /// Pushes this screen, re-providing [ItemsApi] + [ItemSuggestionsApi] (Story 2.5, AC1) +
-  /// [ShoppingListsApi] (needed by the move target picker, Story 2.4, AC7) + a household/list-scoped
-  /// [ListDetailCubit] (mirrors `HouseholdShell._openSwitcher`'s re-providing pattern). Calls
-  /// [onEditableReturn] after the pushed route is popped, but only when the list was editable — a
-  /// read-only Done list is immutable, so nothing can have changed on return and the callback is
-  /// never worth firing. This guarantee lives here so no caller can accidentally pair a read-only
-  /// push with an on-return refresh (which would, for the overview, snap the user off the Done
-  /// archive by resetting its filter).
+  /// [ShoppingListsApi] (needed by the move target picker, Story 2.4, AC7) + [StoresApi] +
+  /// [StoreChainReferenceCache] (needed by the store picker, Story 2.6, AC1/AC2) + a
+  /// household/list-scoped [ListDetailCubit] (mirrors `HouseholdShell._openSwitcher`'s re-providing
+  /// pattern). Calls [onEditableReturn] after the pushed route is popped, but only when the list was
+  /// editable — a read-only Done list is immutable, so nothing can have changed on return and the
+  /// callback is never worth firing. This guarantee lives here so no caller can accidentally pair a
+  /// read-only push with an on-return refresh (which would, for the overview, snap the user off the
+  /// Done archive by resetting its filter).
   static Future<void> push(
     BuildContext context, {
     required String householdId,
@@ -50,6 +54,8 @@ class ListDetailPage extends StatelessWidget {
     final itemsApi = context.read<ItemsApi>();
     final itemSuggestionsApi = context.read<ItemSuggestionsApi>();
     final shoppingListsApi = context.read<ShoppingListsApi>();
+    final storesApi = context.read<StoresApi>();
+    final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
     return Navigator.of(context)
         .push(MaterialPageRoute<void>(
           builder: (_) => RepositoryProvider<ItemsApi>.value(
@@ -58,15 +64,22 @@ class ListDetailPage extends StatelessWidget {
               value: itemSuggestionsApi,
               child: RepositoryProvider<ShoppingListsApi>.value(
                 value: shoppingListsApi,
-                child: BlocProvider<ListDetailCubit>(
-                  create: (context) => ListDetailCubit(
-                    itemsApi: context.read<ItemsApi>(),
-                    itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
-                    householdId: householdId,
-                    listId: listId,
-                    isReadOnly: isReadOnly,
-                  )..bootstrap(),
-                  child: ListDetailPage(title: title),
+                child: RepositoryProvider<StoresApi>.value(
+                  value: storesApi,
+                  child: RepositoryProvider<StoreChainReferenceCache>.value(
+                    value: storeChainReferenceCache,
+                    child: BlocProvider<ListDetailCubit>(
+                      create: (context) => ListDetailCubit(
+                        itemsApi: context.read<ItemsApi>(),
+                        itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
+                        storesApi: context.read<StoresApi>(),
+                        householdId: householdId,
+                        listId: listId,
+                        isReadOnly: isReadOnly,
+                      )..bootstrap(),
+                      child: ListDetailPage(title: title),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -135,6 +148,7 @@ class _ReadyBody extends StatelessWidget {
               _ItemRow(
                 item: item,
                 isReadOnly: state.isReadOnly,
+                storeName: cubit.storeFor(item.storeId)?.name,
                 onEdit: () => showItemFormSheet(context, cubit, existingItem: item),
                 onRemove: () => cubit.removeItem(item.itemId),
                 onMove: () => showMoveTargetSheet(
@@ -145,6 +159,20 @@ class _ReadyBody extends StatelessWidget {
                   householdId: cubit.householdId,
                   sourceListId: cubit.listId,
                 ),
+                onAssignStore: () async {
+                  final selected = await showStorePickerSheet(
+                    context,
+                    stores: state.stores,
+                    storesApi: context.read<StoresApi>(),
+                    referenceCache: context.read<StoreChainReferenceCache>(),
+                    householdId: cubit.householdId,
+                  );
+                  if (selected != null) {
+                    // Pass the returned store so an inline-created one is registered in state
+                    // (its chip resolves + a re-opened picker offers it) — Story 2.6 review patch.
+                    cubit.assignStore(item.itemId, selected.storeId, store: selected);
+                  }
+                },
               ),
           if (state.actionError != null) ...[
             const SizedBox(height: SgartShapes.space4),
@@ -163,16 +191,23 @@ class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
     required this.isReadOnly,
+    required this.storeName,
     required this.onEdit,
     required this.onRemove,
     required this.onMove,
+    required this.onAssignStore,
   });
 
   final Item item;
   final bool isReadOnly;
+
+  /// The resolved active store's name, or `null` for unassigned/archived (Story 2.6, AC4) — the row
+  /// renders the „+ Geschäft" ghost chip in that case.
+  final String? storeName;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
   final VoidCallback onMove;
+  final VoidCallback onAssignStore;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +219,21 @@ class _ItemRow extends StatelessWidget {
       key: Key('item-row-${item.itemId}'),
       contentPadding: EdgeInsets.zero,
       title: Text(item.name),
-      subtitle: Text(subtitle, key: Key('item-quantity-${item.itemId}')),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(subtitle, key: Key('item-quantity-${item.itemId}')),
+          const SizedBox(height: SgartShapes.spaceHalfUnit),
+          _StoreChip(
+            key: Key('item-store-chip-${item.itemId}'),
+            storeName: storeName,
+            isReadOnly: isReadOnly,
+            onTap: onAssignStore,
+          ),
+        ],
+      ),
+      isThreeLine: true,
       trailing: isReadOnly
           ? null
           : Row(
@@ -217,6 +266,46 @@ class _ItemRow extends StatelessWidget {
     final amount = double.tryParse(item.amount) ?? 0;
     final unit = formatting.unitFromServerName(item.unit) ?? formatting.Unit.piece;
     return const formatting.QuantityFormatter().format(amount, unit, localizations);
+  }
+}
+
+/// The item row's store chip (Story 2.6, AC1, AC4, AC5, UX-DR5): shows the resolved [storeName], or
+/// the ghost „+ Geschäft" label when unresolved (unassigned, or assigned to an archived/absent
+/// store — both render identically, AC4). Tappable only on an Open list ([isReadOnly] `false`) — a
+/// Done list's chip is inert and opens no picker (AC5), mirroring the row's other affordances.
+class _StoreChip extends StatelessWidget {
+  const _StoreChip({super.key, required this.storeName, required this.isReadOnly, required this.onTap});
+
+  final String? storeName;
+  final bool isReadOnly;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final label = storeName ?? localizations.itemStoreUnassignedChip;
+    final chip = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: SgartShapes.pill,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: SgartShapes.space3, vertical: SgartShapes.spaceHalfUnit),
+        child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+      ),
+    );
+    if (isReadOnly) {
+      return chip;
+    }
+    return Semantics(
+      button: true,
+      label: localizations.itemStoreAssignAction,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: SgartShapes.pill,
+        child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48), child: Center(child: chip)),
+      ),
+    );
   }
 }
 

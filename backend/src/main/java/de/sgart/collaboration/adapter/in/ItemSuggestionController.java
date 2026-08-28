@@ -34,10 +34,10 @@ class ItemSuggestionController {
 
         return listItemSuggestions.forHousehold(caller.keycloakUserId(), householdId).stream()
                 .map(summary -> new ItemSuggestionResponse(
-                        summary.name(), summary.note(), summary.amount(), summary.unit()))
+                        summary.name(), summary.note(), summary.amount(), summary.unit(), summary.defaultStoreId()))
                 .toList();
     }
 
-    /** {@code note} is {@code null} when absent; {@code amount} a decimal string, {@code unit} the enum name. */
-    record ItemSuggestionResponse(String name, String note, String amount, String unit) {}
+    /** {@code note}/{@code defaultStoreId} are {@code null} when absent; {@code amount} a decimal string, {@code unit} the enum name. */
+    record ItemSuggestionResponse(String name, String note, String amount, String unit, String defaultStoreId) {}
 }

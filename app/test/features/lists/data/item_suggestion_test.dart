@@ -40,6 +40,27 @@ void main() {
       );
     });
 
+    test('parsesADefaultStoreId', () {
+      final suggestion = ItemSuggestion.fromJson(
+          const {'name': 'Milch', 'amount': '2', 'unit': 'LITRE', 'defaultStoreId': 's1'});
+
+      expect(suggestion.defaultStoreId, 's1');
+    });
+
+    test('parsesAMissingDefaultStoreIdAsNull', () {
+      final suggestion = ItemSuggestion.fromJson(const {'name': 'Brot', 'amount': '1', 'unit': 'PIECE'});
+
+      expect(suggestion.defaultStoreId, isNull);
+    });
+
+    test('throwsWhenDefaultStoreIdIsPresentButNotAString', () {
+      expect(
+        () => ItemSuggestion.fromJson(
+            const {'name': 'Milch', 'amount': '1', 'unit': 'LITRE', 'defaultStoreId': 7}),
+        throwsA(isA<AppException>()),
+      );
+    });
+
     test('treatsTheSameAttributesAsEqual', () {
       const first = ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE');
       const second = ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE');

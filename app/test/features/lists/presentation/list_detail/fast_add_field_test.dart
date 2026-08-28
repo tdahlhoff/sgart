@@ -5,11 +5,13 @@ import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/item_suggestion.dart';
 import 'package:sgart/features/lists/presentation/list_detail/fast_add_field.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
+import 'package:sgart/features/stores/data/store_summary.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/fake_stores_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the persistent fast-add field (Story 2.5, AC2/AC3/AC4) in isolation — mirrors
@@ -18,11 +20,13 @@ void main() {
   group('FastAddField', () {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
+    late FakeStoresApi storesApi;
     late ListDetailCubit cubit;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
+      storesApi = FakeStoresApi();
     });
 
     tearDown(() => cubit.close());
@@ -31,6 +35,7 @@ void main() {
       cubit = ListDetailCubit(
         itemsApi: itemsApi,
         itemSuggestionsApi: itemSuggestionsApi,
+        storesApi: storesApi,
         householdId: 'household-1',
         listId: 'list-1',
         isReadOnly: false,
@@ -81,6 +86,44 @@ void main() {
       expect(itemsApi.lastAddedNote, 'Bio');
       expect(itemsApi.lastAddedAmount, '2');
       expect(itemsApi.lastAddedUnit, 'LITRE');
+    });
+
+    testWidgets('aSuggestionWithAnActiveLastUsedStoreShowsTheZuletztChipAndAddThenAssigns', (tester) async {
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE', defaultStoreId: 's1'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('fast-add-field')));
+      await tester.enterText(find.byKey(const Key('fast-add-field')), 'Milch');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('fast-add-suggestion-store-milch')), findsOneWidget);
+      expect(find.text('zuletzt Edeka'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('fast-add-suggestion-milch')));
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.lastAddedName, 'Milch');
+      expect(itemsApi.lastAssignedStoreId, 's1');
+    });
+
+    testWidgets('aSuggestionWithNoLastUsedStoreShowsNoZuletztChip', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('fast-add-field')));
+      await tester.enterText(find.byKey(const Key('fast-add-field')), 'Milch');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('fast-add-suggestion-store-milch')), findsNothing);
     });
 
     testWidgets('theAddAsNewRowCallsAddItemWithStory23Defaults', (tester) async {

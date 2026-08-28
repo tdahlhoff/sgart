@@ -3,25 +3,30 @@ import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/item_suggestion.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.dart';
 import 'package:sgart/features/lists/presentation/list_detail/list_detail_state.dart';
+import 'package:sgart/features/stores/data/store_summary.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
+import '../../../../support/fake_stores_dependencies.dart';
 
 void main() {
   group('ListDetailCubit', () {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
+    late FakeStoresApi storesApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
+      storesApi = FakeStoresApi();
     });
 
     ListDetailCubit buildCubit({bool isReadOnly = false}) => ListDetailCubit(
           itemsApi: itemsApi,
           itemSuggestionsApi: itemSuggestionsApi,
+          storesApi: storesApi,
           householdId: 'household-1',
           listId: 'list-1',
           isReadOnly: isReadOnly,
@@ -163,6 +168,23 @@ void main() {
       expect(itemsApi.lastUpdatedItemId, 'i1');
       expect(cubit.state.items.single.note, 'Bio');
       expect(cubit.state.items.single.amount, '2');
+      await cubit.close();
+    });
+
+    test('updateItem_preservesTheItemsStoreAssignmentOptimistically', () async {
+      // Cl. 7 (client mirror): an edit changes name/note/quantity only — it must not wipe the store
+      // chip optimistically (the backend preserves store_id too). Story 2.6 review patch.
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 's1'),
+      ];
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.updateItem('i1', name: 'Milch', note: 'Bio', amount: '2', unit: 'PIECE');
+
+      expect(cubit.state.items.single.storeId, 's1');
+      expect(cubit.storeFor(cubit.state.items.single.storeId)?.name, 'Edeka');
       await cubit.close();
     });
 
@@ -626,6 +648,214 @@ void main() {
       expect(cubit.state.suggestions.single.note, 'Bio');
       expect(cubit.state.suggestions.single.amount, '2');
       await cubit.close();
+    });
+
+    test('bootstrap_loadsTheHouseholdsActiveStores', () async {
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      final cubit = buildCubit();
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.stores.map((store) => store.storeId), ['s1']);
+      await cubit.close();
+    });
+
+    test('bootstrap_neverFetchesStoresOnAReadOnlyDoneList', () async {
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      final cubit = buildCubit(isReadOnly: true);
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.stores, isEmpty);
+      await cubit.close();
+    });
+
+    test('bootstrap_stillRendersItemsWhenTheStoresLoadFails', () async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      storesApi.listStoresError = const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      final cubit = buildCubit();
+
+      await cubit.bootstrap();
+
+      expect(cubit.state.status, ListDetailStatus.ready);
+      expect(cubit.state.items, hasLength(1));
+      expect(cubit.state.stores, isEmpty);
+      await cubit.close();
+    });
+
+    group('storeFor', () {
+      test('resolvesAnActiveStoreById', () async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        expect(cubit.storeFor('s1')?.name, 'Edeka');
+      });
+
+      test('returnsNullForAnAbsentId', () async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        expect(cubit.storeFor('archived-store'), isNull);
+      });
+
+      test('returnsNullForANullId', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        expect(cubit.storeFor(null), isNull);
+      });
+    });
+
+    group('assignStore', () {
+      test('optimisticallySetsTheItemsStoreId', () async {
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        await cubit.assignStore('i1', 's1');
+
+        expect(cubit.state.items.single.storeId, 's1');
+        expect(itemsApi.lastAssignedItemId, 'i1');
+        expect(itemsApi.lastAssignedStoreId, 's1');
+        await cubit.close();
+      });
+
+      test('revertsOnFailureAndSurfacesAnInlineActionError', () async {
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        itemsApi.assignStoreError = const AppException(AppError(code: 'item.notFound', message: 'debug'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        await cubit.assignStore('i1', 's1');
+
+        expect(cubit.state.items.single.storeId, isNull);
+        expect(cubit.state.actionError?.code, 'item.notFound');
+        await cubit.close();
+      });
+
+      test('reusesOneCommandIdAcrossRetriesOfTheSameAssignmentAndFreshensAfterSuccess', () async {
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        itemsApi.assignStoreError = const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+        await cubit.assignStore('i1', 's1');
+        itemsApi.assignStoreError = null;
+        await cubit.assignStore('i1', 's1');
+
+        expect(itemsApi.assignStoreCommandIds, hasLength(2));
+        expect(itemsApi.assignStoreCommandIds.first, itemsApi.assignStoreCommandIds.last);
+
+        // A third, same-store assign is a fresh intent (the second succeeded) — a new command id,
+        // never the completed one (which the server would silently drop).
+        await cubit.assignStore('i1', 's1');
+        expect(itemsApi.assignStoreCommandIds, hasLength(3));
+        expect(itemsApi.assignStoreCommandIds.last, isNot(itemsApi.assignStoreCommandIds[1]));
+        await cubit.close();
+      });
+
+      test('isANoOpOnAReadOnlyList', () async {
+        final cubit = buildCubit(isReadOnly: true);
+        await cubit.bootstrap();
+
+        await cubit.assignStore('i1', 's1');
+
+        expect(itemsApi.assignStoreCallCount, 0);
+        await cubit.close();
+      });
+
+      test('upsertsTheSuggestionCachesDefaultStoreForTheItemsName', () async {
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        itemSuggestionsApi.suggestionsToReturn = const [
+          ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        await cubit.assignStore('i1', 's1');
+
+        expect(cubit.state.suggestions.single.defaultStoreId, 's1');
+        await cubit.close();
+      });
+
+      test('registersAnInlineCreatedStoreSoTheAssignedChipResolves', () async {
+        // The picker returns a store the bootstrap cache does not hold — an inline-created one. It
+        // must land in state.stores so storeFor resolves the just-assigned chip (read-your-writes),
+        // rather than falling back to the „+ Geschäft" ghost chip (Story 2.6 review patch).
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        const created = StoreSummary(storeId: 's2', name: 'Netto');
+        await cubit.assignStore('i1', 's2', store: created);
+
+        expect(cubit.state.items.single.storeId, 's2');
+        expect(cubit.storeFor('s2')?.name, 'Netto');
+        await cubit.close();
+      });
+    });
+
+    group('addItemFromSuggestion', () {
+      test('assignsTheJustAddedItemWhenTheLastUsedStoreIsStillActive', () async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        const suggestion =
+            ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE', defaultStoreId: 's1');
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.addItemFromSuggestion(suggestion);
+
+        expect(succeeded, isTrue);
+        expect(cubit.state.items.single.storeId, 's1');
+        expect(itemsApi.lastAssignedStoreId, 's1');
+        await cubit.close();
+      });
+
+      test('skipsTheAssignWhenTheLastUsedStoreIsArchived', () async {
+        storesApi.storesToReturn = const []; // s1 no longer active
+        const suggestion =
+            ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE', defaultStoreId: 's1');
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.addItemFromSuggestion(suggestion);
+
+        expect(succeeded, isTrue);
+        expect(cubit.state.items.single.storeId, isNull);
+        expect(itemsApi.assignStoreCallCount, 0);
+        await cubit.close();
+      });
+
+      test('addsUnassignedWhenTheSuggestionHasNoLastUsedStore', () async {
+        const suggestion = ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE');
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.addItemFromSuggestion(suggestion);
+
+        expect(succeeded, isTrue);
+        expect(cubit.state.items.single.storeId, isNull);
+        expect(itemsApi.assignStoreCallCount, 0);
+        await cubit.close();
+      });
     });
   });
 }

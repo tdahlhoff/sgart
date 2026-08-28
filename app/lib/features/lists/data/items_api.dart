@@ -50,6 +50,16 @@ abstract interface class ItemsApi {
     required String targetListId,
     required String commandId,
   });
+
+  /// Assigns [itemId] to [storeId] (Story 2.6, AC1). [commandId] is the reused idempotency key for
+  /// the assign intent — re-assigning the same store again is a convergent no-op server-side.
+  Future<void> assignStore(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String storeId,
+    required String commandId,
+  });
 }
 
 class HttpItemsApi implements ItemsApi {
@@ -124,6 +134,20 @@ class HttpItemsApi implements ItemsApi {
   }) {
     return _client.postJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/move', {
       'targetListId': targetListId,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> assignStore(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String storeId,
+    required String commandId,
+  }) {
+    return _client.putJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/store', {
+      'storeId': storeId,
       'commandId': commandId,
     });
   }

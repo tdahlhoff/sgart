@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart';
+
 import '../../data/item_suggestion.dart';
 
 /// Pure, stateless transformations over the fast-add autocomplete cache (Story 2.5, AC1, AC6, Cl.
@@ -32,13 +34,43 @@ class ItemSuggestionCache {
   /// Optimistically upserts [name]'s (normalized, case-insensitive) entry in [current] with its
   /// just-used attributes (Story 2.5, AC6, Cl. 2) — read-your-writes for a just-added/edited name even
   /// though the server-side projection is eventually consistent (AR3/NFR9). Mirrors the read model's
-  /// own upsert: last-used casing/attributes win, keyed by the normalized name.
+  /// own upsert: last-used casing/attributes win, keyed by the normalized name. Carries the existing
+  /// entry's `defaultStoreId` forward unchanged (Story 2.6, Cl. 7 — an add/update never knows the
+  /// store; only [withDefaultStore] writes it), mirroring the server's `recordUsage`/`store_id` split.
   List<ItemSuggestion> upserted(List<ItemSuggestion> current, String name, String? note, String amount, String unit) {
     final normalizedName = name.trim().toLowerCase();
+    final existingDefaultStoreId = current
+        .firstWhereOrNull((suggestion) => suggestion.name.trim().toLowerCase() == normalizedName)
+        ?.defaultStoreId;
     final withoutExisting =
         current.where((suggestion) => suggestion.name.trim().toLowerCase() != normalizedName).toList();
-    final upserted = ItemSuggestion(name: name, note: note, amount: amount, unit: unit);
+    final upserted = ItemSuggestion(
+      name: name,
+      note: note,
+      amount: amount,
+      unit: unit,
+      defaultStoreId: existingDefaultStoreId,
+    );
     return _sortedByName([...withoutExisting, upserted]);
+  }
+
+  /// Records [name]'s (normalized) last-used store in [current] (Story 2.6, AC6) — the client-side
+  /// mirror of the projector's `recordDefaultStore`, called after a successful `assignStore` so the
+  /// "zuletzt {Geschäft}" chip reflects the just-assigned store without waiting on the projection
+  /// (read-your-writes, AR3/NFR9). A no-op if [name] has no cached entry yet.
+  List<ItemSuggestion> withDefaultStore(List<ItemSuggestion> current, String name, String storeId) {
+    final normalizedName = name.trim().toLowerCase();
+    return current
+        .map((suggestion) => suggestion.name.trim().toLowerCase() == normalizedName
+            ? ItemSuggestion(
+                name: suggestion.name,
+                note: suggestion.note,
+                amount: suggestion.amount,
+                unit: suggestion.unit,
+                defaultStoreId: storeId,
+              )
+            : suggestion)
+        .toList();
   }
 
   /// Orders the cache the way the panel reads it: alphabetically, case-insensitively. A raw

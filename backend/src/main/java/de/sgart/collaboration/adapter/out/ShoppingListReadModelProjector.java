@@ -1,6 +1,8 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
@@ -118,6 +120,21 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             }
             case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId());
             case ItemMovedToList moved -> itemReadModel.removeItem(moved.itemId());
+            case ItemAssignedToStore assigned -> {
+                itemReadModel.assignStore(assigned.itemId(), assigned.storeId());
+                // Also record the name's last-used store on the suggestion read model (AC6, Cl. 6) —
+                // the event carries no name, so resolve it via the item read model (its ItemAdded row
+                // was projected earlier on the same ordered stream). Empty on an out-of-order/replay
+                // edge: skip the suggestion write, a later full replay recovers it (mirrors ItemUpdated).
+                Optional<ItemName> name = itemReadModel.nameOf(assigned.itemId());
+                if (name.isPresent()) {
+                    itemSuggestionReadModel.recordDefaultStore(assigned.householdId(), name.get(), assigned.storeId());
+                } else {
+                    log.debug(
+                            "Skipping suggestion default-store recording for ItemAssignedToStore {} — name not yet resolvable",
+                            assigned.itemId());
+                }
+            }
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events.
             }

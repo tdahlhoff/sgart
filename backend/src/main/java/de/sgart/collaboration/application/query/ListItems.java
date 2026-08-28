@@ -56,15 +56,16 @@ public final class ListItems {
                 item.name().value(),
                 note == null ? null : note.value(),
                 item.quantity().amount().toPlainString(),
-                item.quantity().unit().name());
+                item.quantity().unit().name(),
+                item.storeId() == null ? null : item.storeId().toString());
     }
 
     /**
-     * An item as seen by the caller: id + name + optional note + quantity — the shape the list
-     * detail screen needs. Plain {@code String}s, not domain types, so {@code adapter.in} can
-     * consume this record without reaching into {@code collaboration.domain} (mirrors {@link
-     * ListOpenLists.ShoppingListSummary}). {@code note} is {@code null} when absent; {@code amount}
-     * is a decimal string, {@code unit} the enum name.
+     * An item as seen by the caller: id + name + optional note + quantity + assigned store — the
+     * shape the list detail screen needs. Plain {@code String}s, not domain types, so {@code
+     * adapter.in} can consume this record without reaching into {@code collaboration.domain}
+     * (mirrors {@link ListOpenLists.ShoppingListSummary}). {@code note}/{@code storeId} are {@code
+     * null} when absent; {@code amount} is a decimal string, {@code unit} the enum name.
      */
-    public record ItemSummary(String itemId, String name, String note, String amount, String unit) {}
+    public record ItemSummary(String itemId, String name, String note, String amount, String unit, String storeId) {}
 }

@@ -10,6 +10,7 @@ import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
@@ -50,6 +51,7 @@ final class DomainEventJsonCodec {
     static final String ITEM_UPDATED_TYPE = "ItemUpdated";
     static final String ITEM_REMOVED_TYPE = "ItemRemoved";
     static final String ITEM_MOVED_TO_LIST_TYPE = "ItemMovedToList";
+    static final String ITEM_ASSIGNED_TO_STORE_TYPE = "ItemAssignedToStore";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -66,6 +68,7 @@ final class DomainEventJsonCodec {
             case ItemUpdated ignored -> ITEM_UPDATED_TYPE;
             case ItemRemoved ignored -> ITEM_REMOVED_TYPE;
             case ItemMovedToList ignored -> ITEM_MOVED_TO_LIST_TYPE;
+            case ItemAssignedToStore ignored -> ITEM_ASSIGNED_TO_STORE_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -135,6 +138,12 @@ final class DomainEventJsonCodec {
                     moved.note() == null ? null : moved.note().value(),
                     moved.quantity().amount().toPlainString(),
                     moved.quantity().unit().name()));
+            case ItemAssignedToStore assigned -> jsonMapper.writeValueAsBytes(new ItemAssignedToStorePayload(
+                    assigned.eventId().value().toString(),
+                    assigned.householdId().value().toString(),
+                    assigned.listId().value().toString(),
+                    assigned.itemId().value().toString(),
+                    assigned.storeId().value().toString()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -234,6 +243,15 @@ final class DomainEventJsonCodec {
                         payload.note() == null ? null : new ItemNote(payload.note()),
                         new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())));
             }
+            case ITEM_ASSIGNED_TO_STORE_TYPE -> {
+                ItemAssignedToStorePayload payload = jsonMapper.readValue(json, ItemAssignedToStorePayload.class);
+                yield new ItemAssignedToStore(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()),
+                        StoreId.fromString(payload.storeId()));
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -282,4 +300,7 @@ final class DomainEventJsonCodec {
             String note,
             String amount,
             String unit) {}
+
+    private record ItemAssignedToStorePayload(
+            String eventId, String householdId, String listId, String itemId, String storeId) {}
 }
