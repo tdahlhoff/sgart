@@ -596,6 +596,36 @@
     "description": "Submits the store picker's inline new-store name (Story 2.6, AC2)."
   },
 
+  "tripStartAction": "Einkauf starten",
+  "@tripStartAction": {
+    "description": "The list-detail action that opens the trip store-selection sheet on an Open list (Story 3.1, AC1, AC6)."
+  },
+
+  "tripStoreSelectionTitle": "Geschäfte wählen",
+  "@tripStoreSelectionTitle": {
+    "description": "Heading of the trip store-selection sheet (Story 3.1, AC1, AC3)."
+  },
+
+  "tripStoreSelectionHelper": "In welchen Geschäften kaufst du diesmal ein? Mindestens eines.",
+  "@tripStoreSelectionHelper": {
+    "description": "Helper text explaining the trip store-selection sheet requires at least one store (Story 3.1, AC3, UX-DR17)."
+  },
+
+  "tripStoreSelectionConfirm": "Einkauf starten",
+  "@tripStoreSelectionConfirm": {
+    "description": "Confirms the trip store selection and starts the trip; disabled until at least one store is selected (Story 3.1, AC1, AC3)."
+  },
+
+  "tripStartedConfirmation": "Einkauf gestartet",
+  "@tripStartedConfirmation": {
+    "description": "Brief confirmation shown after a trip is successfully started (Story 3.1, Cl. 7 — no trip navigation)."
+  },
+
+  "listStatusInTrip": "Im Einkauf",
+  "@listStatusInTrip": {
+    "description": "Status label for an In-Trip list, shown in the list overview under \"Offen\" and on the read-only list detail (Story 3.1, AC5, AC6)."
+  },
+
   "suggestionLastUsedStore": "zuletzt {store}",
   "@suggestionLastUsedStore": {
     "description": "The fast-add suggestion row's last-used-store chip, e.g. 'zuletzt Edeka' (Story 2.6, AC6).",

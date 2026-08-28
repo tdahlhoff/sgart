@@ -13,6 +13,7 @@ import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.readmodel.ItemSuggestionView;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.collaboration.domain.readmodel.ShoppingListView;
@@ -23,6 +24,7 @@ import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
@@ -567,5 +569,63 @@ class ShoppingListReadModelProjectorTest {
                 .containsExactlyInAnyOrder(
                         "household_id", "normalized_name", "name", "note", "quantity_amount", "quantity_unit",
                         "default_store_id");
+    }
+
+    @Test
+    void projectingTripStartedForListFlipsTheListStatusToInTrip() {
+        // Story 3.1, AC5.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new TripStartedForList(
+                EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())));
+
+        assertThat(readModel.listsOf(householdId))
+                .containsExactly(new ShoppingListView(
+                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0));
+    }
+
+    @Test
+    void aTripStartedForListNeverFlipsAListInAnotherHousehold() {
+        // Story 3.1, AC7 — read-side isolation (retro Action 4).
+        HouseholdId householdA = HouseholdId.generate();
+        HouseholdId householdB = HouseholdId.generate();
+        ShoppingListId listAId = ShoppingListId.generate();
+        ShoppingListId listBId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listAId, householdA, new ShoppingListName("A"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(ShoppingList.create(listBId, householdB, new ShoppingListName("B"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+
+        projector.project(new TripStartedForList(
+                EventId.generate(), householdA, listAId, TripId.generate(), List.of(StoreId.generate())));
+
+        assertThat(readModel.listsOf(householdA))
+                .containsExactly(new ShoppingListView(listAId, new ShoppingListName("A"), ListStatus.IN_TRIP, 0));
+        assertThat(readModel.listsOf(householdB))
+                .containsExactly(new ShoppingListView(listBId, new ShoppingListName("B"), ListStatus.OPEN, 0));
+    }
+
+    @Test
+    void reProjectingTripStartedForListIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        TripStartedForList started = new TripStartedForList(
+                EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate()));
+
+        projector.project(started);
+        projector.project(started);
+
+        assertThat(readModel.listsOf(householdId))
+                .containsExactly(new ShoppingListView(
+                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0));
     }
 }

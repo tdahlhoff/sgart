@@ -19,6 +19,8 @@ import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.event.TripStarted;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
@@ -29,8 +31,10 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import java.math.BigDecimal;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -230,6 +234,32 @@ class DomainEventJsonCodecTest {
                 EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(), StoreId.generate());
 
         assertThat(codec.typeTagFor(event)).isEqualTo("ItemAssignedToStore");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void tripStartedForListRoundTripsThroughJsonUnderItsStableTypeTagWithAMultiStoreList() {
+        TripStartedForList event = new TripStartedForList(
+                EventId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                TripId.generate(),
+                List.of(StoreId.generate(), StoreId.generate()));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("TripStartedForList");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void tripStartedRoundTripsThroughJsonUnderItsStableTypeTagWithAMultiStoreList() {
+        TripStarted event = new TripStarted(
+                EventId.generate(),
+                TripId.generate(),
+                householdId,
+                ShoppingListId.generate(),
+                List.of(StoreId.generate(), StoreId.generate()));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("TripStarted");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

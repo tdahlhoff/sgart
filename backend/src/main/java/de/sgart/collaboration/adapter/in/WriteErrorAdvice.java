@@ -10,6 +10,7 @@ import de.sgart.collaboration.application.exception.InvalidItemQuantityException
 import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
+import de.sgart.collaboration.application.exception.InvalidTripStoreSelectionException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
@@ -17,6 +18,7 @@ import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
+import de.sgart.collaboration.application.exception.TripNotStartableApplicationException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -132,5 +134,15 @@ class WriteErrorAdvice {
     @ExceptionHandler(InvalidMoveTargetException.class)
     ResponseEntity<ErrorDescriptor> handleInvalidMoveTarget(InvalidMoveTargetException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InvalidTripStoreSelectionException.class)
+    ResponseEntity<ErrorDescriptor> handleInvalidTripStoreSelection(InvalidTripStoreSelectionException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(TripNotStartableApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleTripNotStartable(TripNotStartableApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 }

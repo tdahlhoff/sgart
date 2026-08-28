@@ -10,6 +10,7 @@ import '../../../../theme/tokens/sgart_shapes.dart';
 import '../../../stores/data/store_chain_reference_cache.dart';
 import '../../../stores/data/stores_api.dart';
 import '../../../stores/presentation/store_picker_sheet.dart';
+import '../../../trips/data/trips_api.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestions_api.dart';
 import '../../data/items_api.dart';
@@ -36,13 +37,16 @@ class ListDetailPage extends StatelessWidget {
 
   /// Pushes this screen, re-providing [ItemsApi] + [ItemSuggestionsApi] (Story 2.5, AC1) +
   /// [ShoppingListsApi] (needed by the move target picker, Story 2.4, AC7) + [StoresApi] +
-  /// [StoreChainReferenceCache] (needed by the store picker, Story 2.6, AC1/AC2) + a
-  /// household/list-scoped [ListDetailCubit] (mirrors `HouseholdShell._openSwitcher`'s re-providing
-  /// pattern). Calls [onEditableReturn] after the pushed route is popped, but only when the list was
+  /// [StoreChainReferenceCache] (needed by the store picker, Story 2.6, AC1/AC2) + [TripsApi]
+  /// (needed by the „Einkauf starten" action, Story 3.1, AC1) + a household/list-scoped
+  /// [ListDetailCubit] (mirrors `HouseholdShell._openSwitcher`'s re-providing pattern). Calls
+  /// [onEditableReturn] after the pushed route is popped, but only when the list was **opened**
   /// editable — a read-only Done list is immutable, so nothing can have changed on return and the
-  /// callback is never worth firing. This guarantee lives here so no caller can accidentally pair a
-  /// read-only push with an on-return refresh (which would, for the overview, snap the user off the
-  /// Done archive by resetting its filter).
+  /// callback is never worth firing. An Open list that transitions to In-Trip mid-session still
+  /// fires the callback on return (it *was* opened editable, and a trip start is exactly the kind of
+  /// change the overview needs to refresh for — the In-Trip label, Story 3.1 AC5). This guarantee
+  /// lives here so no caller can accidentally pair a read-only push with an on-return refresh (which
+  /// would, for the overview, snap the user off the Done archive by resetting its filter).
   static Future<void> push(
     BuildContext context, {
     required String householdId,
@@ -56,6 +60,7 @@ class ListDetailPage extends StatelessWidget {
     final shoppingListsApi = context.read<ShoppingListsApi>();
     final storesApi = context.read<StoresApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
+    final tripsApi = context.read<TripsApi>();
     return Navigator.of(context)
         .push(MaterialPageRoute<void>(
           builder: (_) => RepositoryProvider<ItemsApi>.value(
@@ -68,16 +73,20 @@ class ListDetailPage extends StatelessWidget {
                   value: storesApi,
                   child: RepositoryProvider<StoreChainReferenceCache>.value(
                     value: storeChainReferenceCache,
-                    child: BlocProvider<ListDetailCubit>(
-                      create: (context) => ListDetailCubit(
-                        itemsApi: context.read<ItemsApi>(),
-                        itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
-                        storesApi: context.read<StoresApi>(),
-                        householdId: householdId,
-                        listId: listId,
-                        isReadOnly: isReadOnly,
-                      )..bootstrap(),
-                      child: ListDetailPage(title: title),
+                    child: RepositoryProvider<TripsApi>.value(
+                      value: tripsApi,
+                      child: BlocProvider<ListDetailCubit>(
+                        create: (context) => ListDetailCubit(
+                          itemsApi: context.read<ItemsApi>(),
+                          itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
+                          storesApi: context.read<StoresApi>(),
+                          tripsApi: context.read<TripsApi>(),
+                          householdId: householdId,
+                          listId: listId,
+                          isReadOnly: isReadOnly,
+                        )..bootstrap(),
+                        child: ListDetailPage(title: title),
+                      ),
                     ),
                   ),
                 ),
@@ -179,6 +188,35 @@ class _ReadyBody extends StatelessWidget {
             Text(
               localizedMessageForErrorCode(localizations, state.actionError!.code),
               key: const Key('item-list-action-error'),
+            ),
+          ],
+          // „Einkauf starten" is offered only on an Open list — hidden on In-Trip and Done alike,
+          // since both key off the same isReadOnly flag (Story 3.1, AC1, AC6, UX-DR7/UX-DR17).
+          if (!state.isReadOnly) ...[
+            const SizedBox(height: SgartShapes.space4),
+            SgartButton(
+              key: const Key('list-detail-start-trip'),
+              label: localizations.tripStartAction,
+              variant: SgartButtonVariant.tonal,
+              onPressed: state.isSubmitting
+                  ? null
+                  : () async {
+                      final selection = await showTripStoreSelectionSheet(
+                        context,
+                        stores: state.stores,
+                        storesApi: context.read<StoresApi>(),
+                        referenceCache: context.read<StoreChainReferenceCache>(),
+                        householdId: cubit.householdId,
+                      );
+                      if (selection == null || selection.isEmpty) {
+                        return;
+                      }
+                      final started = await cubit.startTrip(selection.map((store) => store.storeId).toList());
+                      if (started && context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
+                      }
+                    },
             ),
           ],
         ],

@@ -18,6 +18,11 @@ import java.util.Objects;
  * list read model. Returns lists in creation order so the client can derive the AC2 "Liste N"
  * ordinal from the array position — the ordinal itself is never computed or stored here
  * (derivation lives on the client, Dev Notes).
+ *
+ * <p>Returns the "active, not archived" set: {@code OPEN} and {@code IN_TRIP} (Story 3.1, AC5,
+ * Cl. 3). A list stays visible here across its whole shopping trip, never hidden mid-trip, and
+ * the AC2 "Liste N" ordinal now counts In-Trip lists too (the {@code deferred-work.md}
+ * under-count fix). {@code ListDoneLists} stays Done-only.
  */
 public final class ListOpenLists {
 
@@ -45,7 +50,7 @@ public final class ListOpenLists {
         resolveMemberIdentity.resolve(keycloakUserId, householdId);
 
         return shoppingListReadModel.listsOf(householdId).stream()
-                .filter(list -> list.status() == ListStatus.OPEN)
+                .filter(list -> list.status() == ListStatus.OPEN || list.status() == ListStatus.IN_TRIP)
                 .map(ListOpenLists::toSummary)
                 .toList();
     }

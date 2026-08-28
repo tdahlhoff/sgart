@@ -19,6 +19,8 @@ import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.event.TripStarted;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -28,8 +30,10 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import java.math.BigDecimal;
+import java.util.List;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -52,6 +56,8 @@ final class DomainEventJsonCodec {
     static final String ITEM_REMOVED_TYPE = "ItemRemoved";
     static final String ITEM_MOVED_TO_LIST_TYPE = "ItemMovedToList";
     static final String ITEM_ASSIGNED_TO_STORE_TYPE = "ItemAssignedToStore";
+    static final String TRIP_STARTED_FOR_LIST_TYPE = "TripStartedForList";
+    static final String TRIP_STARTED_TYPE = "TripStarted";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -69,6 +75,8 @@ final class DomainEventJsonCodec {
             case ItemRemoved ignored -> ITEM_REMOVED_TYPE;
             case ItemMovedToList ignored -> ITEM_MOVED_TO_LIST_TYPE;
             case ItemAssignedToStore ignored -> ITEM_ASSIGNED_TO_STORE_TYPE;
+            case TripStartedForList ignored -> TRIP_STARTED_FOR_LIST_TYPE;
+            case TripStarted ignored -> TRIP_STARTED_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -144,6 +152,18 @@ final class DomainEventJsonCodec {
                     assigned.listId().value().toString(),
                     assigned.itemId().value().toString(),
                     assigned.storeId().value().toString()));
+            case TripStartedForList started -> jsonMapper.writeValueAsBytes(new TripStartedForListPayload(
+                    started.eventId().value().toString(),
+                    started.householdId().value().toString(),
+                    started.listId().value().toString(),
+                    started.tripId().value().toString(),
+                    started.storeIds().stream().map(storeId -> storeId.value().toString()).toList()));
+            case TripStarted started -> jsonMapper.writeValueAsBytes(new TripStartedPayload(
+                    started.eventId().value().toString(),
+                    started.tripId().value().toString(),
+                    started.householdId().value().toString(),
+                    started.listId().value().toString(),
+                    started.storeIds().stream().map(storeId -> storeId.value().toString()).toList()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -252,6 +272,24 @@ final class DomainEventJsonCodec {
                         ItemId.fromString(payload.itemId()),
                         StoreId.fromString(payload.storeId()));
             }
+            case TRIP_STARTED_FOR_LIST_TYPE -> {
+                TripStartedForListPayload payload = jsonMapper.readValue(json, TripStartedForListPayload.class);
+                yield new TripStartedForList(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        TripId.fromString(payload.tripId()),
+                        payload.storeIds().stream().map(StoreId::fromString).toList());
+            }
+            case TRIP_STARTED_TYPE -> {
+                TripStartedPayload payload = jsonMapper.readValue(json, TripStartedPayload.class);
+                yield new TripStarted(
+                        EventId.fromString(payload.eventId()),
+                        TripId.fromString(payload.tripId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        payload.storeIds().stream().map(StoreId::fromString).toList());
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -303,4 +341,10 @@ final class DomainEventJsonCodec {
 
     private record ItemAssignedToStorePayload(
             String eventId, String householdId, String listId, String itemId, String storeId) {}
+
+    private record TripStartedForListPayload(
+            String eventId, String householdId, String listId, String tripId, List<String> storeIds) {}
+
+    private record TripStartedPayload(
+            String eventId, String tripId, String householdId, String listId, List<String> storeIds) {}
 }

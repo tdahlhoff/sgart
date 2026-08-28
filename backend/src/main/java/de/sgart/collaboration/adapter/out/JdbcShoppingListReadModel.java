@@ -77,4 +77,19 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
                 .param("name", newName.value())
                 .update();
     }
+
+    /**
+     * Idempotent update — re-projecting the same {@code TripStartedForList} is a safe no-op (Story
+     * 3.1, AC5, Cl. 6). No migration: {@code status} already stores the {@link
+     * de.sgart.collaboration.domain.ListStatus} enum name (V5); {@code IN_TRIP} is simply a
+     * newly-reachable value.
+     */
+    @Override
+    public void markInTrip(ShoppingListId listId) {
+        jdbcClient
+                .sql("UPDATE shopping_list_read_model SET status = :status WHERE list_id = :listId")
+                .param("listId", listId.value())
+                .param("status", ListStatus.IN_TRIP.name())
+                .update();
+    }
 }

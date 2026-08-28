@@ -10,23 +10,27 @@ import 'package:sgart/shared/http/app_exception.dart';
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_stores_dependencies.dart';
+import '../../../../support/fake_trips_dependencies.dart';
 
 void main() {
   group('ListDetailCubit', () {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeStoresApi storesApi;
+    late FakeTripsApi tripsApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
       storesApi = FakeStoresApi();
+      tripsApi = FakeTripsApi();
     });
 
     ListDetailCubit buildCubit({bool isReadOnly = false}) => ListDetailCubit(
           itemsApi: itemsApi,
           itemSuggestionsApi: itemSuggestionsApi,
           storesApi: storesApi,
+          tripsApi: tripsApi,
           householdId: 'household-1',
           listId: 'list-1',
           isReadOnly: isReadOnly,
@@ -854,6 +858,93 @@ void main() {
         expect(succeeded, isTrue);
         expect(cubit.state.items.single.storeId, isNull);
         expect(itemsApi.assignStoreCallCount, 0);
+        await cubit.close();
+      });
+    });
+
+    group('startTrip', () {
+      test('optimisticallyFlipsIsReadOnlyToTrueOnAnOpenList', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.startTrip(['s1']);
+
+        expect(succeeded, isTrue);
+        expect(cubit.state.isReadOnly, isTrue);
+        expect(cubit.state.isSubmitting, isFalse);
+        expect(tripsApi.lastListId, 'list-1');
+        expect(tripsApi.lastStoreIds, ['s1']);
+        await cubit.close();
+      });
+
+      test('revertsIsReadOnlyAndSurfacesAnActionErrorOnAnUnrelatedFailure', () async {
+        tripsApi.startError =
+            const AppException(AppError(code: 'concurrency.staleVersion', message: 'debug'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.startTrip(['s1']);
+
+        expect(succeeded, isFalse);
+        expect(cubit.state.isReadOnly, isFalse);
+        expect(cubit.state.actionError?.code, 'concurrency.staleVersion');
+        await cubit.close();
+      });
+
+      test('keepsReadOnlyWhenTheStartIsRejectedAsAlreadyInTrip', () async {
+        // A `trip.notStartable` conflict means the list is already In-Trip (someone started the trip
+        // first). The cubit must converge on that server reality — stay read-only — rather than
+        // restoring an editable Open view every follow-up edit would 409 (optimistic-state drift).
+        tripsApi.startError = const AppException(AppError(code: 'trip.notStartable', message: 'debug'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.startTrip(['s1']);
+
+        expect(succeeded, isFalse);
+        expect(cubit.state.isReadOnly, isTrue);
+        expect(cubit.state.actionError?.code, 'trip.notStartable');
+        await cubit.close();
+      });
+
+      test('theIsSubmittingGuardDropsAReEntrantSecondCallWhileTheFirstIsInFlight', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final first = cubit.startTrip(['s1']);
+        final second = await cubit.startTrip(['s2']);
+
+        expect(second, isFalse);
+        await first;
+        expect(tripsApi.startCallCount, 1);
+        await cubit.close();
+      });
+
+      test('isRefusedWhenTheListIsAlreadyReadOnly', () async {
+        final cubit = buildCubit(isReadOnly: true);
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.startTrip(['s1']);
+
+        expect(succeeded, isFalse);
+        expect(tripsApi.startCallCount, 0);
+        await cubit.close();
+      });
+
+      test('anInTripListLoadsReadOnlyWithNoAddEditRemoveMoveAssignAffordancesImplied', () async {
+        // isReadOnly is the single flag both Done and In-Trip key off (Story 3.1) — a list pushed
+        // already read-only (mirrors an In-Trip list reopened later) must refuse every mutation.
+        itemsApi.itemsToReturn = const [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE')];
+        final cubit = buildCubit(isReadOnly: true);
+        await cubit.bootstrap();
+
+        expect(cubit.state.isReadOnly, isTrue);
+        expect(await cubit.addItem(name: 'Brot', amount: '1', unit: 'PIECE'), isFalse);
+        expect(await cubit.updateItem('i1', name: 'Milch', amount: '2', unit: 'PIECE'), isFalse);
+        await cubit.removeItem('i1');
+        await cubit.moveItem('i1', 'list-2');
+        await cubit.assignStore('i1', 's1');
+        expect(cubit.state.items, hasLength(1)); // nothing changed
         await cubit.close();
       });
     });

@@ -8,6 +8,7 @@ import 'package:sgart/features/lists/presentation/list_detail/move_merge_dialog.
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_stores_dependencies.dart';
+import '../../../../support/fake_trips_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the quantity-merge sheet (Story 2.4, AC4, Clarification 3): pre-fill rules and
@@ -17,12 +18,14 @@ void main() {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeStoresApi storesApi;
+    late FakeTripsApi tripsApi;
     late ListDetailCubit cubit;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
       storesApi = FakeStoresApi();
+      tripsApi = FakeTripsApi();
       itemsApi.itemsToReturn = const [
         Item(itemId: 'i1', name: 'Milch', note: 'Bio', amount: '1', unit: 'PIECE'),
       ];
@@ -30,6 +33,7 @@ void main() {
         itemsApi: itemsApi,
         itemSuggestionsApi: itemSuggestionsApi,
         storesApi: storesApi,
+        tripsApi: tripsApi,
         householdId: 'household-1',
         listId: 'source-list',
         isReadOnly: false,

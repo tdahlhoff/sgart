@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ItemMoveProcessManager;
+import de.sgart.collaboration.application.TripStartProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
@@ -10,6 +11,7 @@ import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
 import de.sgart.collaboration.application.query.ListItemSuggestions;
@@ -134,5 +136,15 @@ public class CollaborationApplicationConfig {
     @Bean
     ItemMoveProcessManager itemMoveProcessManager(EventStore eventStore) {
         return new ItemMoveProcessManager(eventStore);
+    }
+
+    @Bean
+    StartTripHandler startTripHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new StartTripHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    TripStartProcessManager tripStartProcessManager(EventStore eventStore) {
+        return new TripStartProcessManager(eventStore);
     }
 }

@@ -5,12 +5,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripStartedForList;
+import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
+import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.ItemId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.TripId;
+import de.sgart.shared.Unit;
+import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -21,11 +31,15 @@ import org.junit.jupiter.api.Test;
  * Pure domain-layer unit test — no framework, persistence, or transport (CLAUDE.md §6). Proves the
  * second aggregate: creating a list raises {@code ShoppingListCreated} (named or unnamed) into
  * {@code OPEN}, renaming an {@code OPEN} list raises {@code ShoppingListRenamed}, a rename to the
- * same name is a convergent no-op, and replaying history rebuilds identical state (AC1, AC3).
+ * same name is a convergent no-op, and replaying history rebuilds identical state (AC1, AC3). Also
+ * proves the Story 3.1 {@code startTrip} transition: {@code OPEN} → {@code IN_TRIP} raises {@code
+ * TripStartedForList}; a second start on an already {@code IN_TRIP} list is refused (AC2, the
+ * at-most-one-Active-trip guard); and the {@code IN_TRIP}-reachable branches deferred since Story
+ * 2.1/2.3/2.4/2.6 are now exercised for real: rename stays permitted, item commands are refused.
  *
- * <p>The {@code DONE}-rejects-rename branch is coded but only reachable end-to-end once Epic 3
- * introduces a status-changing transition beyond {@code ShoppingListCreated} — see Story 2.1
- * Clarification 1 and {@code deferred-work.md}; it is not tested here (no synthetic Epic-3 event).
+ * <p>The {@code DONE}-rejects-{startTrip,rename} branches are coded but {@code DONE} has no
+ * driving event yet (Story 3.4) — {@link #setStatus} forces the enum via reflection purely as a
+ * test fixture (Cl. 8: no fabricated completion path in the aggregate itself).
  */
 class ShoppingListTest {
 
@@ -127,6 +141,139 @@ class ShoppingListTest {
         assertThat(rehydrated.name()).isEqualTo(original.name());
         assertThat(rehydrated.status()).isEqualTo(original.status());
         assertThat(rehydrated.version()).isEqualTo(original.version());
+    }
+
+    @Test
+    void startTrip_raisesTripStartedForList_andFoldsInTrip() {
+        ShoppingList list =
+                ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        list.markEventsCommitted();
+        TripId tripId = TripId.generate();
+        StoreId storeId = StoreId.generate();
+
+        list.startTrip(tripId, List.of(storeId), CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(TripStartedForList.class);
+        TripStartedForList started = (TripStartedForList) events.get(0);
+        assertThat(started.householdId()).isEqualTo(householdId);
+        assertThat(started.listId()).isEqualTo(listId);
+        assertThat(started.tripId()).isEqualTo(tripId);
+        assertThat(started.storeIds()).containsExactly(storeId);
+        assertThat(list.status()).isEqualTo(ListStatus.IN_TRIP);
+    }
+
+    @Test
+    void startTrip_withDuplicateStores_dedupesThemInTheEvent() {
+        ShoppingList list =
+                ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        list.markEventsCommitted();
+        StoreId storeId = StoreId.generate();
+
+        list.startTrip(TripId.generate(), List.of(storeId, storeId), CommandId.generate());
+
+        TripStartedForList started = (TripStartedForList) list.uncommittedEvents().get(0);
+        assertThat(started.storeIds()).containsExactly(storeId);
+    }
+
+    @Test
+    void startTrip_onAnInTripList_throwsTripNotStartable() {
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                new ShoppingListName("Wocheneinkauf")),
+                        new TripStartedForList(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                TripId.generate(),
+                                List.of(StoreId.generate()))));
+
+        assertThatThrownBy(() -> list.startTrip(TripId.generate(), List.of(StoreId.generate()), CommandId.generate()))
+                .isInstanceOf(TripNotStartableException.class);
+    }
+
+    @Test
+    void startTrip_onADoneList_throwsTripNotStartable() {
+        // Synthetic Epic-3 fixture: DONE is not yet drivable by a real command, so we assert the
+        // guard directly against the enum, exactly the way the existing DONE-branches are noted as
+        // "coded but not end-to-end reachable" elsewhere until Story 3.4 lands completion.
+        ShoppingList list =
+                ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        list.markEventsCommitted();
+        setStatus(list, ListStatus.DONE);
+
+        assertThatThrownBy(() -> list.startTrip(TripId.generate(), List.of(StoreId.generate()), CommandId.generate()))
+                .isInstanceOf(TripNotStartableException.class);
+    }
+
+    @Test
+    void rename_onAnInTripList_isPermitted() {
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                new ShoppingListName("Wocheneinkauf")),
+                        new TripStartedForList(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                TripId.generate(),
+                                List.of(StoreId.generate()))));
+
+        list.rename(new ShoppingListName("Getränke"), CommandId.generate());
+
+        assertThat(list.name()).isEqualTo(new ShoppingListName("Getränke"));
+    }
+
+    @Test
+    void itemCommands_onAnInTripList_areRefused() {
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                new ShoppingListName("Wocheneinkauf")),
+                        new TripStartedForList(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                TripId.generate(),
+                                List.of(StoreId.generate()))));
+        ItemId itemId = ItemId.generate();
+
+        assertThatThrownBy(() -> list.addItem(
+                        itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(ItemChangeNotPermittedException.class);
+        assertThatThrownBy(() -> list.updateItem(
+                        itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(ItemChangeNotPermittedException.class);
+        assertThatThrownBy(() -> list.removeItem(itemId, CommandId.generate()))
+                .isInstanceOf(ItemChangeNotPermittedException.class);
+        assertThatThrownBy(() -> list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemChangeNotPermittedException.class);
+        assertThatThrownBy(() -> list.assignItemToStore(itemId, StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemChangeNotPermittedException.class);
+    }
+
+    private void setStatus(ShoppingList list, ListStatus status) {
+        try {
+            Field field = ShoppingList.class.getDeclaredField("status");
+            field.setAccessible(true);
+            field.set(list, status);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

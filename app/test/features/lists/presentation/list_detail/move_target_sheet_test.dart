@@ -13,6 +13,7 @@ import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../../support/fake_stores_dependencies.dart';
+import '../../../../support/fake_trips_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the move target picker (Story 2.4, AC3, AC4, AC7), driven through the real list
@@ -25,6 +26,7 @@ void main() {
     late FakeShoppingListsApi shoppingListsApi;
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
+    late FakeTripsApi tripsApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
@@ -32,6 +34,7 @@ void main() {
       shoppingListsApi = FakeShoppingListsApi();
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
+      tripsApi = FakeTripsApi();
     });
 
     Widget buildSubject() => wrapForTesting(
@@ -46,6 +49,7 @@ void main() {
                     itemsApi: itemsApi,
                     itemSuggestionsApi: itemSuggestionsApi,
                     storesApi: storesApi,
+                    tripsApi: tripsApi,
                     householdId: 'household-1',
                     listId: 'source-list',
                     isReadOnly: false,
@@ -74,6 +78,28 @@ void main() {
       expect(find.byKey(const Key('move-target-row-source-list')), findsNothing);
       expect(find.byKey(const Key('move-target-row-other-list')), findsOneWidget);
       expect(find.text('Getränke'), findsOneWidget);
+    });
+
+    testWidgets('excludesInTripListsWhichAMoveWouldReject', (tester) async {
+      // `listOpenLists` returns In-Trip lists too (Story 3.1, AC5), but a move to one is refused
+      // (409) — so it must not be offered as a target, only the Open list may be picked.
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'source-list', name: 'Wocheneinkauf', status: 'OPEN'),
+        ShoppingListSummary(listId: 'open-list', name: 'Getränke', status: 'OPEN'),
+        ShoppingListSummary(listId: 'in-trip-list', name: 'Baumarkt', status: 'IN_TRIP'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('item-move-button-i1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('move-target-row-open-list')), findsOneWidget);
+      expect(find.byKey(const Key('move-target-row-in-trip-list')), findsNothing);
+      expect(find.text('Baumarkt'), findsNothing);
     });
 
     testWidgets('showsTheEmptyStateWhenThereIsNoOtherOpenList', (tester) async {

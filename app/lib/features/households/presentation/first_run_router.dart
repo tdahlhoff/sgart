@@ -14,6 +14,7 @@ import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
+import '../../trips/data/trips_api.dart';
 import '../data/active_household_store.dart';
 import '../data/households_api.dart';
 import 'create_or_await_choice_page.dart';
@@ -43,6 +44,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final ShoppingListsApi _shoppingListsApi;
   late final ItemsApi _itemsApi;
   late final ItemSuggestionsApi _itemSuggestionsApi;
+  late final TripsApi _tripsApi;
   static const ActiveHouseholdStore _activeHouseholdStore = SharedPreferencesActiveHouseholdStore();
   static const StoreChainReferenceCache _storeChainReferenceCache =
       SharedPreferencesStoreChainReferenceCache();
@@ -61,6 +63,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _shoppingListsApi = HttpShoppingListsApi(httpClient);
     _itemsApi = HttpItemsApi(httpClient);
     _itemSuggestionsApi = HttpItemSuggestionsApi(httpClient);
+    _tripsApi = HttpTripsApi(httpClient);
   }
 
   @override
@@ -84,6 +87,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         RepositoryProvider<ItemsApi>.value(value: _itemsApi),
         // The list detail screen's fast-add field reads this for autocomplete (Story 2.5).
         RepositoryProvider<ItemSuggestionsApi>.value(value: _itemSuggestionsApi),
+        // The list detail screen's "Einkauf starten" action reads this to start a trip (Story 3.1).
+        RepositoryProvider<TripsApi>.value(value: _tripsApi),
       ],
       child: BlocProvider(
         create: (_) => HouseholdsCubit(

@@ -111,10 +111,14 @@ class _OpenListsBody extends StatelessWidget {
                 householdId: cubit.householdId,
                 listId: list.listId,
                 title: list.name ?? localizations.listsDefaultName(index + 1),
-                isReadOnly: false,
+                // „Offen" now includes In-Trip lists (Story 3.1, AC5) — an already In-Trip list
+                // reopens read-only (AC6, no off-trip item edits); only a still-Open list opens
+                // editable (and may itself transition to In-Trip mid-session via "Einkauf starten").
+                isReadOnly: list.status != 'OPEN',
                 // On return from an editable (Open) list, refresh the overview so each row's
                 // itemCount reflects any add/remove the user just made (the count is a server-side
-                // COUNT, not mutated by the detail cubit — otherwise it reads stale).
+                // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
+                // just-started trip's In-Trip label appears (Story 3.1, AC5).
                 onEditableReturn: cubit.refresh,
               ),
             ),
@@ -163,7 +167,9 @@ class _ListRow extends StatelessWidget {
             children: [
               StatusLabel(
                 key: Key('list-status-${list.listId}'),
-                text: localizations.listStatusOpen,
+                // „Offen" now returns both Open and In-Trip lists (Story 3.1, AC5) — the row shows
+                // the matching label rather than assuming Open.
+                text: list.status == 'IN_TRIP' ? localizations.listStatusInTrip : localizations.listStatusOpen,
               ),
               const SizedBox(width: SgartShapes.space2),
               Text(

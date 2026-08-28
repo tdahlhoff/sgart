@@ -11,6 +11,7 @@ import 'package:sgart/features/lists/presentation/list_detail/list_detail_page.d
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/store_summary.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
+import 'package:sgart/features/trips/data/trips_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
@@ -18,6 +19,7 @@ import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../../support/fake_stores_dependencies.dart';
+import '../../../../support/fake_trips_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 void main() {
@@ -26,12 +28,14 @@ void main() {
     late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
+    late FakeTripsApi tripsApi;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
+      tripsApi = FakeTripsApi();
     });
 
     Widget buildSubject({bool isReadOnly = false}) => wrapForTesting(
@@ -44,6 +48,7 @@ void main() {
                   itemsApi: itemsApi,
                   itemSuggestionsApi: itemSuggestionsApi,
                   storesApi: storesApi,
+                  tripsApi: tripsApi,
                   householdId: 'household-1',
                   listId: 'list-1',
                   isReadOnly: isReadOnly,
@@ -368,6 +373,71 @@ void main() {
       expect(find.byKey(const Key('store-picker-sheet')), findsNothing);
     });
 
+    group('startTrip (Story 3.1)', () {
+      testWidgets('anOpenListShowsTheStartTripActionWhichOpensTheSelectionSheet', (tester) async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('list-detail-start-trip')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('list-detail-start-trip')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('trip-store-selection-sheet')), findsOneWidget);
+      });
+
+      testWidgets('aDoneListNeverShowsTheStartTripAction', (tester) async {
+        await tester.pumpWidget(buildSubject(isReadOnly: true));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('list-detail-start-trip')), findsNothing);
+      });
+
+      testWidgets(
+          'confirmingASelectionStartsTheTripAndTheDetailBecomesReadOnlyWithTheActionHidden',
+          (tester) async {
+        itemsApi.itemsToReturn = const [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+        ];
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('list-detail-start-trip')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('trip-store-option-s1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('trip-store-selection-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(tripsApi.lastListId, 'list-1');
+        expect(tripsApi.lastStoreIds, ['s1']);
+        // Optimistically In-Trip: the start-trip action hides and item edit affordances go inert —
+        // everywhere the transition is server-visible on this screen (Story 3.1, Cl. 7/9).
+        expect(find.byKey(const Key('list-detail-start-trip')), findsNothing);
+        expect(find.byKey(const Key('item-edit-button-i1')), findsNothing);
+        expect(find.byKey(const Key('item-store-chip-i1')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('item-store-chip-i1')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('store-picker-sheet')), findsNothing);
+      });
+
+      testWidgets('dismissingTheSelectionSheetWithoutConfirmingStartsNoTrip', (tester) async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('list-detail-start-trip')));
+        await tester.pumpAndSettle();
+        await tester.tapAt(const Offset(20, 20)); // tap the scrim to dismiss
+        await tester.pumpAndSettle();
+
+        expect(tripsApi.startCallCount, 0);
+        expect(find.byKey(const Key('list-detail-start-trip')), findsOneWidget);
+      });
+    });
+
     group('push', () {
       // Drives push from a launcher button that has the three re-provided APIs in scope, then pops
       // back, so the on-return guarantee is exercised through the real navigation path.
@@ -384,6 +454,7 @@ void main() {
               RepositoryProvider<ShoppingListsApi>.value(value: FakeShoppingListsApi()),
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+              RepositoryProvider<TripsApi>.value(value: tripsApi),
             ],
             child: Builder(
               builder: (context) => ElevatedButton(

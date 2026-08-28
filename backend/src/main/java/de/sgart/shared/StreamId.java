@@ -8,10 +8,10 @@ import java.util.UUID;
  * {@code list-{id}} / {@code trip-{id}} (AR10) as one unambiguous value so no handler hand-builds a
  * stream-key string.
  *
- * <p>{@link #forHousehold(HouseholdId)} (households, the first aggregate, Story 1.6) and
- * {@link #forList(ShoppingListId)} (lists, the second aggregate, Story 2.1) exist today; {@code
- * forTrip} arrives with its id type in Epic 3 — the {@link StreamType} prefixes are already fixed
- * here because the convention is the whole point.
+ * <p>{@link #forHousehold(HouseholdId)} (households, the first aggregate, Story 1.6), {@link
+ * #forList(ShoppingListId)} (lists, the second aggregate, Story 2.1), and {@link #forTrip(TripId)}
+ * (trips, the third aggregate, Story 3.1) all use the {@link StreamType} prefixes fixed here
+ * because the convention is the whole point.
  */
 public record StreamId(StreamType type, UUID id) {
 
@@ -28,6 +28,11 @@ public record StreamId(StreamType type, UUID id) {
     public static StreamId forList(ShoppingListId listId) {
         Objects.requireNonNull(listId, "listId must not be null");
         return new StreamId(StreamType.LIST, listId.value());
+    }
+
+    public static StreamId forTrip(TripId tripId) {
+        Objects.requireNonNull(tripId, "tripId must not be null");
+        return new StreamId(StreamType.TRIP, tripId.value());
     }
 
     /** The wire/store key, e.g. {@code household-3f2504e0-4f89-41d3-9a0c-0305e82c3301}. */

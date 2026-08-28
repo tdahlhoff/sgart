@@ -12,6 +12,7 @@ import 'package:sgart/shared/http/app_exception.dart';
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
 import '../../../../support/fake_stores_dependencies.dart';
+import '../../../../support/fake_trips_dependencies.dart';
 import '../../../../support/widget_test_harness.dart';
 
 /// Widget tests for the persistent fast-add field (Story 2.5, AC2/AC3/AC4) in isolation — mirrors
@@ -21,12 +22,14 @@ void main() {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
     late FakeStoresApi storesApi;
+    late FakeTripsApi tripsApi;
     late ListDetailCubit cubit;
 
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
       storesApi = FakeStoresApi();
+      tripsApi = FakeTripsApi();
     });
 
     tearDown(() => cubit.close());
@@ -36,6 +39,7 @@ void main() {
         itemsApi: itemsApi,
         itemSuggestionsApi: itemSuggestionsApi,
         storesApi: storesApi,
+        tripsApi: tripsApi,
         householdId: 'household-1',
         listId: 'list-1',
         isReadOnly: false,

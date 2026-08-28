@@ -141,8 +141,12 @@ class _MoveTargetSheetBodyState extends State<_MoveTargetSheetBody> {
       }
       setState(() {
         _targets = [
+          // `listOpenLists` now also returns In-Trip lists (Story 3.1, AC5) so the overview keeps
+          // showing them — but a move to an In-Trip list is refused by the server (409), so exclude
+          // them here rather than offering a target that always fails. The ordinal is still counted
+          // over the full enumeration so a target's „Liste N" matches the overview (AC2).
           for (final (index, list) in openLists.indexed)
-            if (list.listId != widget.sourceListId) (index + 1, list),
+            if (list.listId != widget.sourceListId && list.status == 'OPEN') (index + 1, list),
         ];
         _status = _LoadStatus.ready;
       });

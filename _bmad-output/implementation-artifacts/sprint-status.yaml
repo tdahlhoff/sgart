@@ -41,7 +41,10 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-08-28
+last_updated: 2026-08-29
+# Story 3.1 review (dev-story, Sonnet 5) 2026-08-29 — Epic 3's first story / SGART's third aggregate (ShoppingTrip) + second process manager (TripStartProcessManager), implemented as planned across all 24 tasks in one vertical slice: TripStartedForList (list-{id}, guarded primary, AC2 at-most-one-Active-trip) + TripStarted (trip-{id}, PM-created) events, ShoppingList.startTrip Open→In-Trip transition, minimal ShoppingTrip aggregate, StartTrip command/handler, TripStartProcessManager (deterministic command id + converge-on-conflict from the start per retro Action 6), list read-model markInTrip (no migration), ListOpenLists In-Trip inclusion (fixes the deferred "Liste N" ordinal under-count), new TripController, DomainEventJsonCodec registration. Found+fixed a pre-existing bug along the way: ShoppingList.rename's guard never matched its own "Open or In-Trip" Javadoc (unreachable until now). Flutter: new trips feature (TripsApi), the 2.6 store picker's inline-create row extracted into a shared widget and reused by a new multi-select showTripStoreSelectionSheet (single-select regression-tested), ListDetailCubit.startTrip (optimistic In-Trip via the existing isReadOnly flag, isSubmitting guard), "Einkauf starten" tonal action + confirmation, overview "Im Einkauf" label. Epic-2 retro actions 1/2/3/4/6 addressed inline as DoD, not review-discovered. Backend 415→455 green (incl. ArchUnit + Testcontainers). Flutter 418→439 green (incl. analyze).
+# Story 3.1 in-progress (dev-story, Sonnet 5) 2026-08-28
+# Epic 2 retrospective done 2026-08-28 (epic-2-retro-2026-08-28.md) — 4/6 Epic-1 actions fully landed (commandId abstraction + premature-value rule both held for a full epic); new dominant bug class: optimistic client-state drift after multi-step flows (2.4 merge-dialog thousands-separator corruption, 2.6 inline-store-not-merged + storeId-dropped-on-edit); 6 action items carried into Epic 3, 3 debt items routed into specific Epic 3 stories (Done-archive invalidation → 3.4, PM concurrency-retry pattern → 3.3/3.4). Readiness: Epic 3 clear to start, no manual QA pass required (Timo, 2026-08-28).
 # Story 2.6 review (dev-story, Sonnet 5) 2026-08-28 — full vertical slice implemented as planned: ItemAssignedToStore event + AssignItemToStore command/handler + ShoppingList.assignItemToStore (convergent same-store no-op, requireOpen guard); V8 (item_read_model.store_id, item_suggestion_read_model.default_store_id) + projector ItemAssignedToStore case (assignStore + recordDefaultStore via new ItemReadModel.nameOf, out-of-order-replay-safe skip); ListItems/ListItemSuggestions + controllers thread storeId/defaultStoreId. Cl. 7 preserve-on-edit regression trap covered by a dedicated aggregate test and a dedicated Testcontainers projector test. Flutter: new reusable store_picker_sheet.dart (active stores + inline AddStore with live chain suggestion, single-select); ListDetailCubit loads stores + storeFor + assignStore (optimistic, CommandIntent) + addItemFromSuggestion (add-then-assign, skips an archived last-used store); list-detail item rows get a tappable store chip (inert on Done); fast-add suggestion rows show a "zuletzt {Geschäft}" chip. Backend 392→415 green (incl. ArchUnit + Testcontainers). Flutter 373→416 green (incl. analyze).
 # Story 2.6 ready-for-dev (create-story, Opus 4.8) 2026-08-28 — first Epic-2 store slice + Epic 2's LAST story: full vertical slice adding item→store assignment. NEW ItemAssignedToStore event + AssignItemToStore command/handler + ShoppingList.assignItemToStore on the list-{id} stream (Item holds a bare StoreId reference, AD-3/AD-10 — NO cross-aggregate PM, mirrors moveItem's unvalidated targetListId); V8 ALTERs adding item_read_model.store_id + item_suggestion_read_model.default_store_id; projector ItemAssignedToStore case (assignStore + recordDefaultStore via new ItemReadModel.nameOf lookup); ListItems/ItemController thread storeId, ListItemSuggestions threads defaultStoreId; new reusable store_picker_sheet (UX-DR22 first realization) with inline AddStore creation (reuses Story 1.8 chain-suggestion) + client add-then-assign for the suggestion default-store prefill (the Story 2.5 Cl. 4 deferral, now landed). 9 LOCKED clarifications; Timo decided (2026-08-28): build default-store prefill here (last Epic-2 story), reassign-only (no explicit clear), moved item starts unassigned (2.4 unchanged). Key regression trap (Cl. 7): ItemUpdated must PRESERVE store assignment in the fold + both JDBC read models — only ItemAssignedToStore writes the store columns. Baseline backend 392 / Flutter 373.
 # Story 2.5 review (dev-story, Sonnet 5) 2026-08-27 — read-side + presentation slice implemented as planned: V7 item_suggestion_read_model (upsert-only, survives remove/move) + ShoppingListReadModelProjector extension (ItemAdded/ItemUpdated record usage via new ItemReadModel.householdIdOf lookup) + ListItemSuggestions query + ItemSuggestionController; Flutter FastAddField replaces the 2.3 add button/sheet-add path (sheet now edit-only), suggestionsMatching prefix filter + optimistic cache upsert on add/update. One naming snag: the migration's display_name column tripped NoPersistedPersonalDataTest's AD-6 guard (a person's-display-name false positive on an item-name column) — renamed to `name`. No new domain event/command/aggregate, per plan. Backend 375→390 green (incl. ArchUnit + Testcontainers), Flutter 345→363 green (incl. analyze).
@@ -90,18 +93,18 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Shared Lists & Fast Capture
-  epic-2: in-progress
+  epic-2: done
   2-1-create-and-name-multiple-open-lists: done
   2-2-listen-overview-with-offen-erledigt-filter: done
   2-3-add-edit-and-remove-items: done
   2-4-move-an-item-to-another-list: done
   2-5-fast-item-entry-with-autocomplete-attribute-prefill: done
   2-6-assign-an-item-to-a-store-with-inline-store-creation: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Shopping Trips & Print
-  epic-3: backlog
-  3-1-start-a-trip-across-selected-stores: backlog
+  epic-3: in-progress
+  3-1-start-a-trip-across-selected-stores: done
   3-2-store-grouped-trip-view-with-assignment-rerouting: backlog
   3-3-check-off-uncheck-and-postpone-during-a-trip: backlog
   3-4-complete-a-trip-with-leftover-review: backlog
@@ -148,12 +151,36 @@ action_items:
   - epic: 1
     action: "Adopt the premature-value story-authoring rule: at create-story time, don't author a surface whose value depends on a later-epic capability; move it or ship an explicit minimal placeholder, and right-size thin MVP-scoped stories"
     owner: "PM"
-    status: open
+    status: done
   - epic: 1
     action: "Keep the current epic order (no reorder); ensure Epic 4 stories explicitly complete the Epic 1 placeholders (invite step, notifications toggle, 'Auf Einladung warten' flow)"
     owner: "PM"
-    status: open
+    status: done
   - epic: 1
     action: "Do one real end-to-end stack run before/early in Epic 2 (needs SGART_FLYWAY_ENABLED=true and SGART_PROJECTOR_AUTOSTART=true); everything to date is Testcontainers/unit-verified only"
+    owner: "Dev"
+    status: done
+  - epic: 2
+    action: "Add an explicit optimistic-state DoD check: any client action with a side effect beyond the edited item (inline-created objects, fields preserved through an unrelated update, focus/keyboard state across a submit) must have its optimistic rebuild verified in dev, not caught in review"
+    owner: "Dev"
+    status: open
+  - epic: 2
+    action: "Re-commit to Epic 1 Actions 2 and 3 (base error-advice contract test; extended DoD covering a11y labels/no dead code/fail-fast guards), explicitly scoped to Epic 3's first story"
+    owner: "Dev"
+    status: open
+  - epic: 2
+    action: "Apply the isSubmitting/re-entrancy command guard pattern uniformly on first pass for every new client command handler, not as a per-story review rediscovery"
+    owner: "Dev"
+    status: open
+  - epic: 2
+    action: "Give every new read model an isolation (two-household) + replay/idempotency test in the same PR that introduces it, not added in review"
+    owner: "Dev"
+    status: open
+  - epic: 2
+    action: "Fix the cached Done-archive invalidation gap (deferred from 2.2) when Story 3.4 introduces the first real Done transition, rather than waiting for review to rediscover it"
+    owner: "Dev"
+    status: open
+  - epic: 2
+    action: "Apply the Story 2.4 process-manager concurrency-conflict-retry fix (retry on ConcurrencyConflictException, re-derive the same commandId) from the start in Epic 3's new process managers (postpone-to-list, leftover-transfer)"
     owner: "Dev"
     status: open

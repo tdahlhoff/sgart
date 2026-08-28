@@ -8,6 +8,7 @@ import '../../../../shared/errors/app_error.dart';
 import '../../../../shared/http/app_exception.dart';
 import '../../../stores/data/store_summary.dart';
 import '../../../stores/data/stores_api.dart';
+import '../../../trips/data/trips_api.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestion.dart';
 import '../../data/item_suggestions_api.dart';
@@ -16,20 +17,22 @@ import 'item_suggestion_cache.dart';
 import 'list_detail_state.dart';
 
 /// Drives the list detail screen (Story 2.3, AC1, AC3, AC4, AC6; Story 2.5, AC1/AC2/AC3/AC6; Story
-/// 2.6, AC1, AC4, AC6): loads the list's items, adds an item with a required quantity and optional
-/// note, edits an item's name/note/quantity, removes an item, loads the household's item
-/// suggestions for the fast-add field's autocomplete, loads the household's active stores for the
-/// store picker, and assigns an item to a store (optionally add-then-assign from a suggestion's
-/// last-used store) — the cache/filter/upsert logic itself lives in [ItemSuggestionCache]. Depends
-/// only on [ItemsApi]/[ItemSuggestionsApi]/[StoresApi] so tests never touch the network (CLAUDE.md
-/// §6); guards every `emit` with `isClosed`. A Done list (`isReadOnly`) never issues add/edit/
-/// remove/assign nor loads suggestions/stores (AC5) — the page simply never wires the affordances,
-/// but the cubit also refuses defensively.
+/// 2.6, AC1, AC4, AC6; Story 3.1, AC1, AC5, AC6): loads the list's items, adds an item with a
+/// required quantity and optional note, edits an item's name/note/quantity, removes an item, loads
+/// the household's item suggestions for the fast-add field's autocomplete, loads the household's
+/// active stores for the store picker, assigns an item to a store (optionally add-then-assign from
+/// a suggestion's last-used store), and starts a trip across selected stores — the cache/filter/
+/// upsert logic itself lives in [ItemSuggestionCache]. Depends only on
+/// [ItemsApi]/[ItemSuggestionsApi]/[StoresApi]/[TripsApi] so tests never touch the network
+/// (CLAUDE.md §6); guards every `emit` with `isClosed`. A read-only list (Done **or** In-Trip,
+/// `isReadOnly`) never issues add/edit/remove/assign/start-trip nor loads suggestions/stores
+/// (AC5/AC6) — the page simply never wires the affordances, but the cubit also refuses defensively.
 class ListDetailCubit extends Cubit<ListDetailState> {
   ListDetailCubit({
     required this.itemsApi,
     required this.itemSuggestionsApi,
     required this.storesApi,
+    required this.tripsApi,
     required this.householdId,
     required this.listId,
     required bool isReadOnly,
@@ -39,6 +42,7 @@ class ListDetailCubit extends Cubit<ListDetailState> {
   final ItemsApi itemsApi;
   final ItemSuggestionsApi itemSuggestionsApi;
   final StoresApi storesApi;
+  final TripsApi tripsApi;
   final String householdId;
   final String listId;
   final ItemSuggestionCache suggestionCache;
@@ -77,6 +81,12 @@ class ListDetailCubit extends Cubit<ListDetailState> {
   /// across retries of the same assignment, freshened when a different item or store is assigned,
   /// and freshened again after a successful assign (the Epic-1 spent-command-id footgun).
   final CommandIntent _assignIntent = CommandIntent();
+
+  /// The start-trip intent's ids: the command id plus one paired client-minted trip id (Story 3.1,
+  /// AC1). Reused across retries of the same store selection (idempotent retry, AD-8), freshened
+  /// when the selection changes (a new intent), and freshened again after a successful start (the
+  /// Epic-1 spent-command-id footgun, retro Action 3).
+  final CommandIntent _startTripIntent = CommandIntent(hasResourceId: true);
 
   /// Loads the list's items, then — on an Open list only (AC5) — the household's suggestion cache
   /// and its active stores (Story 2.6). Called once, right after construction. A suggestions- or
@@ -455,6 +465,46 @@ class ListDetailCubit extends Cubit<ListDetailState> {
       _assignIntent.complete();
     } on Object catch (error) {
       _safeEmit(state.copyWith(items: originalItems, isSubmitting: false, actionError: _toAppError(error)));
+    }
+  }
+
+  /// Starts a trip against this list across [storeIds] (Story 3.1, AC1, AC3). Guarded to only an
+  /// **Open** list, not already submitting (`ready && !isSubmitting && !isReadOnly`, retro Action
+  /// 3's re-entrancy guard) — [storeIds] is expected non-empty (the store-selection sheet already
+  /// enforces the ≥1-confirm gate, AC3; the server 400s defensively too). Mints `tripId` client-side
+  /// and optimistically flips `isReadOnly` to `true` (Cl. 7/9 — the detail becomes read-only and the
+  /// „Einkauf starten" action hides immediately, everywhere this state is server-visible) so the
+  /// caller can show the „Einkauf gestartet" confirmation on success. A `trip.notStartable`
+  /// rejection keeps `isReadOnly` (the list is already In-Trip); any other rejection reverts it.
+  /// Both surface an inline `actionError`. Returns whether the start succeeded.
+  Future<bool> startTrip(List<String> storeIds) async {
+    if (state.status != ListDetailStatus.ready || state.isSubmitting || state.isReadOnly) {
+      return false;
+    }
+    _startTripIntent.beginAttempt(storeIds.join(','));
+    final commandId = _startTripIntent.commandId;
+    final tripId = _startTripIntent.resourceId();
+    _safeEmit(state.copyWith(isSubmitting: true, isReadOnly: true, clearActionError: true));
+    try {
+      await tripsApi.startTrip(householdId, listId, tripId: tripId, storeIds: storeIds, commandId: commandId);
+      _safeEmit(state.copyWith(isSubmitting: false));
+      _startTripIntent.complete();
+      return true;
+    } on Object catch (error) {
+      final appError = _toAppError(error);
+      // A `trip.notStartable` rejection means the list is already In-Trip — the trip was started
+      // first (by another member/tab/device, or a retried request that actually landed). Converge on
+      // that server reality: stay read-only rather than restoring an editable Open view whose every
+      // follow-up edit would 409 (the Epic-2 optimistic-state-drift bug class). Any other failure
+      // (a stale-version conflict from an unrelated concurrent edit, network, 400) reverts so the
+      // caller can retry — a retry that now finds the list In-Trip self-corrects to this branch.
+      final listIsAlreadyInTrip = appError.code == 'trip.notStartable';
+      _safeEmit(state.copyWith(
+        isSubmitting: false,
+        isReadOnly: listIsAlreadyInTrip,
+        actionError: appError,
+      ));
+      return false;
     }
   }
 

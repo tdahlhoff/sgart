@@ -46,6 +46,23 @@ class StreamIdTest {
     }
 
     @Test
+    void forTrip_encodesTheTripStreamKeyConvention() {
+        TripId tripId = TripId.generate();
+
+        StreamId streamId = StreamId.forTrip(tripId);
+
+        assertThat(streamId.type()).isEqualTo(StreamType.TRIP);
+        assertThat(streamId.key()).isEqualTo("trip-" + tripId);
+        assertThat(streamId).hasToString("trip-" + tripId);
+    }
+
+    @Test
+    void forTrip_rejectsANullTripId() {
+        assertThatThrownBy(() -> StreamId.forTrip(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void streamTypePrefixes_followTheSpineConvention() {
         assertThat(StreamType.HOUSEHOLD.prefix()).isEqualTo("household");
         assertThat(StreamType.LIST.prefix()).isEqualTo("list");

@@ -22,9 +22,11 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Shared fail-fast translators from raw request strings to validated command-envelope/domain
@@ -94,6 +96,28 @@ public final class CommandFieldTranslations {
             return StoreId.fromString(rawStoreId);
         } catch (IllegalArgumentException notAUuid) {
             throw new InvalidCommandEnvelopeException("command.storeIdInvalid", "storeId must be a valid UUID");
+        }
+    }
+
+    /** Translates each raw store id in a start-trip selection (Story 3.1, AC1/AC3); does not
+     * enforce non-emptiness — that is the handler's job with its own {@code
+     * InvalidTripStoreSelectionException} (AC3), a distinct client-facing code from a malformed id.
+     */
+    public static List<StoreId> toStoreIdList(List<String> rawStoreIds) {
+        if (rawStoreIds == null) {
+            throw new InvalidCommandEnvelopeException("command.storeIdsRequired", "storeIds must be provided");
+        }
+        return rawStoreIds.stream().map(CommandFieldTranslations::toStoreId).toList();
+    }
+
+    public static TripId toTripId(String rawTripId) {
+        if (rawTripId == null || rawTripId.isBlank()) {
+            throw new InvalidCommandEnvelopeException("command.tripIdRequired", "tripId must be provided");
+        }
+        try {
+            return TripId.fromString(rawTripId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new InvalidCommandEnvelopeException("command.tripIdInvalid", "tripId must be a valid UUID");
         }
     }
 

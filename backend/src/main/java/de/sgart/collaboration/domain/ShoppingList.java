@@ -7,10 +7,12 @@ import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
@@ -21,6 +23,7 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.TripId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -108,7 +111,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         Objects.requireNonNull(newName, "newName must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
 
-        if (status != ListStatus.OPEN) {
+        if (status != ListStatus.OPEN && status != ListStatus.IN_TRIP) {
             throw new ListNameChangeNotPermittedException(
                     "Only an Open (or In-Trip) list's name may be changed, list is " + status);
         }
@@ -249,6 +252,33 @@ public final class ShoppingList extends EventSourcedAggregate {
         raise(new ItemAssignedToStore(EventId.generate(), householdId, listId, itemId, storeId));
     }
 
+    /**
+     * Starts a trip against this list across the given stores (Story 3.1, AC1, AC2, AC3, Cl. 1/5).
+     * Permitted only while {@link ListStatus#OPEN} — a second start on an already {@code IN_TRIP}
+     * (or a {@code DONE}) list raises {@link TripNotStartableException} (AC2, the atomic "at most
+     * one Active trip per list" guard, since this is the list stream's own expected-version
+     * append). Raises {@link TripStartedForList} carrying {@code tripId}/{@code storeIds} as the
+     * payload the {@code TripStartProcessManager} needs to create the {@code ShoppingTrip}
+     * aggregate (Cl. 1) — this root does <strong>not</strong> load or validate that aggregate (it
+     * does not exist yet) and does <strong>not</strong> validate that the stores exist (client
+     * picker + AD-3 reference-by-id, mirrors {@link #moveItem} not validating {@code
+     * targetListId}). At-least-one-store is enforced fail-fast by the handler (AC3) and, in depth,
+     * by the event constructor.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void startTrip(TripId tripId, List<StoreId> storeIds, CommandId commandId) {
+        Objects.requireNonNull(tripId, "tripId must not be null");
+        Objects.requireNonNull(storeIds, "storeIds must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        if (status != ListStatus.OPEN) {
+            throw new TripNotStartableException(
+                    "A trip may only be started from an Open list, list is " + status);
+        }
+        raise(new TripStartedForList(EventId.generate(), householdId, listId, tripId, storeIds));
+    }
+
     private void requireOpen() {
         if (status != ListStatus.OPEN) {
             throw new ItemChangeNotPermittedException(
@@ -313,6 +343,7 @@ public final class ShoppingList extends EventSourcedAggregate {
                             new ItemState(existing.name(), existing.note(), existing.quantity(), assigned.storeId()));
                 }
             }
+            case TripStartedForList started -> this.status = ListStatus.IN_TRIP;
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }

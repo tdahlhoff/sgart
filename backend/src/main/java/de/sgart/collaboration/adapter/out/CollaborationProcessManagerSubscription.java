@@ -1,7 +1,9 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ItemMoveProcessManager;
+import de.sgart.collaboration.application.TripStartProcessManager;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.StreamId;
 import io.kurrent.dbclient.KurrentDBClient;
@@ -21,15 +23,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * The transport for {@link ItemMoveProcessManager} (Story 2.4, AD-10): a <strong>second,
- * independent</strong> subscription over the {@code list-} stream prefix, alongside {@link
- * ShoppingListReadModelProjector}'s — same prefix, different consumer, no interaction between the
- * two (the projector only projects; this only reacts to {@code ItemMovedToList}). Structurally
- * mirrors {@link ShoppingListReadModelProjector} exactly: a {@link SmartLifecycle} bean, auto-start
- * gated by the same flag pattern (default off; construction does no I/O so {@code contextLoads()}
- * survives KurrentDB down), catch-up-from-start on every (re)subscribe (which is what makes the
- * process manager's derived-command-id idempotency the exactly-once mechanism, AC2), and per-event
- * log-and-skip so one bad event never tears the subscription down.
+ * The transport for {@link ItemMoveProcessManager} and {@link TripStartProcessManager} (Stories
+ * 2.4/3.1, AD-10): a <strong>second, independent</strong> subscription over the {@code list-}
+ * stream prefix, alongside {@link ShoppingListReadModelProjector}'s — same prefix, two distinct
+ * consumers reacting to two distinct event types, no interaction between the three (the projector
+ * only projects; this only reacts to {@code ItemMovedToList} and {@code TripStartedForList}).
+ * Structurally mirrors {@link ShoppingListReadModelProjector} exactly: a {@link SmartLifecycle}
+ * bean, auto-start gated by the same flag pattern (default off; construction does no I/O so {@code
+ * contextLoads()} survives KurrentDB down), catch-up-from-start on every (re)subscribe (which is
+ * what makes each process manager's derived-command-id idempotency the exactly-once mechanism), and
+ * per-event log-and-skip so one bad event never tears the subscription down.
  */
 public final class CollaborationProcessManagerSubscription implements SmartLifecycle {
 
@@ -37,28 +40,40 @@ public final class CollaborationProcessManagerSubscription implements SmartLifec
     private static final Duration RESUBSCRIBE_DELAY = Duration.ofSeconds(5);
 
     private final KurrentDBClient client;
-    private final ItemMoveProcessManager processManager;
+    private final ItemMoveProcessManager itemMoveProcessManager;
+    private final TripStartProcessManager tripStartProcessManager;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
     private volatile boolean running;
     private ScheduledExecutorService resubscribeScheduler;
 
-    public CollaborationProcessManagerSubscription(KurrentDBClient client, ItemMoveProcessManager processManager) {
-        this(client, processManager, false);
+    public CollaborationProcessManagerSubscription(
+            KurrentDBClient client,
+            ItemMoveProcessManager itemMoveProcessManager,
+            TripStartProcessManager tripStartProcessManager) {
+        this(client, itemMoveProcessManager, tripStartProcessManager, false);
     }
 
     public CollaborationProcessManagerSubscription(
-            KurrentDBClient client, ItemMoveProcessManager processManager, boolean autoStart) {
+            KurrentDBClient client,
+            ItemMoveProcessManager itemMoveProcessManager,
+            TripStartProcessManager tripStartProcessManager,
+            boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
-        this.processManager = Objects.requireNonNull(processManager, "processManager must not be null");
+        this.itemMoveProcessManager =
+                Objects.requireNonNull(itemMoveProcessManager, "itemMoveProcessManager must not be null");
+        this.tripStartProcessManager =
+                Objects.requireNonNull(tripStartProcessManager, "tripStartProcessManager must not be null");
         this.autoStart = autoStart;
     }
 
-    /** Reacts to one event; only {@code ItemMovedToList} triggers the process manager. */
+    /** Reacts to one event, routing it to the process manager it belongs to (if any). */
     void react(DomainEvent event) {
         if (event instanceof ItemMovedToList moved) {
-            processManager.onItemMovedToList(moved);
+            itemMoveProcessManager.onItemMovedToList(moved);
+        } else if (event instanceof TripStartedForList started) {
+            tripStartProcessManager.onTripStartedForList(started);
         }
     }
 
@@ -109,7 +124,7 @@ public final class CollaborationProcessManagerSubscription implements SmartLifec
                         } catch (RuntimeException failure) {
                             // Never let one bad event tear down the whole subscription — log and skip;
                             // a later catch-up replay retries with the same derived command id (idempotent).
-                            log.error("Failed to process move event {}", recordedEvent.getEventType(), failure);
+                            log.error("Failed to process process-manager event {}", recordedEvent.getEventType(), failure);
                         }
                     }
 

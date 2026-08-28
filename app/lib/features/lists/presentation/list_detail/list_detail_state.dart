@@ -7,14 +7,16 @@ import '../../data/item_suggestion.dart';
 
 enum ListDetailStatus { loading, ready, failure }
 
-/// State of [ListDetailCubit] (Story 2.3, AC6; Story 2.5, AC1; Story 2.6, AC1/AC4/AC6).
-/// [loading]/[failure] cover the initial load of the list's items; once [ready] it carries the
-/// `items` in creation order, `isReadOnly` (a Done list — no add/edit/remove/assign affordances,
-/// and no suggestions/stores, AC5), the `isSubmitting` flag for an in-flight add/update/remove/
-/// assign, `actionError` for a rejection shown inline — kept separate from `loadError` so a
-/// rejected action never tears down the screen — `suggestions`, the household's in-memory
-/// suggestion cache the fast-add field filters, and `stores`, the household's active stores the
-/// store picker offers (both empty on a read-only list or while their load is still in
+/// State of [ListDetailCubit] (Story 2.3, AC6; Story 2.5, AC1; Story 2.6, AC1/AC4/AC6; Story 3.1,
+/// AC1/AC5/AC6). [loading]/[failure] cover the initial load of the list's items; once [ready] it
+/// carries the `items` in creation order, `isReadOnly` (a Done **or** In-Trip list — no add/edit/
+/// remove/assign affordances, and no suggestions/stores loaded, AC5/AC6; derived from `status !=
+/// OPEN` server-side, mutable here so a successful `startTrip` optimistically flips a live Open
+/// session to read-only without a reload), the `isSubmitting` flag for an in-flight add/update/
+/// remove/assign/start-trip, `actionError` for a rejection shown inline — kept separate from
+/// `loadError` so a rejected action never tears down the screen — `suggestions`, the household's
+/// in-memory suggestion cache the fast-add field filters, and `stores`, the household's active
+/// stores the store picker offers (both empty on a read-only list or while their load is still in
 /// flight/failed).
 class ListDetailState {
   const ListDetailState._(
@@ -62,6 +64,7 @@ class ListDetailState {
 
   ListDetailState copyWith({
     List<Item>? items,
+    bool? isReadOnly,
     bool? isSubmitting,
     AppError? actionError,
     bool clearActionError = false,
@@ -70,7 +73,7 @@ class ListDetailState {
   }) {
     return ListDetailState.ready(
       items: items ?? this.items,
-      isReadOnly: isReadOnly,
+      isReadOnly: isReadOnly ?? this.isReadOnly,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       actionError: clearActionError ? null : (actionError ?? this.actionError),
       suggestions: suggestions ?? this.suggestions,

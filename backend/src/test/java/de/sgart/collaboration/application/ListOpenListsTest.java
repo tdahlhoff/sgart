@@ -59,6 +59,43 @@ class ListOpenListsTest {
     }
 
     @Test
+    void forHousehold_includesAnInTripList_withItsStatus() {
+        // Story 3.1, AC5: an In-Trip list is part of the "active, not archived" set.
+        seedMembership();
+        ShoppingListId openId = ShoppingListId.generate();
+        ShoppingListId inTripId = ShoppingListId.generate();
+        ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
+                new ShoppingListView(inTripId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 3)));
+
+        List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
+
+        assertThat(summaries)
+                .containsExactly(
+                        new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0),
+                        new ShoppingListSummary(inTripId.toString(), "Wocheneinkauf", "IN_TRIP", 3));
+    }
+
+    @Test
+    void forHousehold_theOrdinalPositionCountsAnInTripListAmongOpenLists() {
+        // Story 3.1, Cl. 3: the "Liste N" ordinal is derived client-side from array position, so the
+        // server-returned order across [Open, In-Trip, Open] must include all three in creation order.
+        seedMembership();
+        ShoppingListId firstId = ShoppingListId.generate();
+        ShoppingListId secondId = ShoppingListId.generate();
+        ShoppingListId thirdId = ShoppingListId.generate();
+        ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
+                new ShoppingListView(firstId, null, ListStatus.OPEN, 0),
+                new ShoppingListView(secondId, null, ListStatus.IN_TRIP, 0),
+                new ShoppingListView(thirdId, null, ListStatus.OPEN, 0)));
+
+        List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
+
+        assertThat(summaries).extracting(ShoppingListSummary::listId)
+                .containsExactly(firstId.toString(), secondId.toString(), thirdId.toString());
+    }
+
+    @Test
     void forHousehold_excludesADoneList() {
         seedMembership();
         ShoppingListId openId = ShoppingListId.generate();
