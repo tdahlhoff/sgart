@@ -779,9 +779,66 @@
     "description": "Label of the Profil bottom-navigation tab in the authenticated app shell (Story 1.11, AC1)."
   },
 
-  "shellTabShoppingPlaceholder": "Der Einkauf kommt in einer späteren Version.",
-  "@shellTabShoppingPlaceholder": {
-    "description": "Calm placeholder copy shown on the Einkauf tab until Epic 3 delivers it (Story 1.11, AC1)."
+  "shellTabShoppingActiveTitle": "Aktive Einkäufe",
+  "@shellTabShoppingActiveTitle": {
+    "description": "Heading of the Einkauf tab's active-trips index — one row per In-Trip list (Story 3.2, AC4, Cl. 3)."
+  },
+
+  "tripsIndexEmptyState": "Noch kein Einkauf aktiv. Starte einen Einkauf aus einer Liste.",
+  "@tripsIndexEmptyState": {
+    "description": "Calm empty state on the Einkauf tab's active-trips index when no list is In-Trip (Story 3.2, AC4, Cl. 3)."
+  },
+
+  "tripScreenTitle": "Aktiver Einkauf",
+  "@tripScreenTitle": {
+    "description": "Kicker/title on the trip screen, above the list name (Story 3.2, AC1, UX-DR7)."
+  },
+
+  "tripUnassignedGroupLabel": "Noch nicht zugeordnet",
+  "@tripUnassignedGroupLabel": {
+    "description": "Section heading for items with no trip-store assignment on the trip screen (Story 3.2, AC1, Cl. 7)."
+  },
+
+  "tripItemAssignAction": "Zuordnen",
+  "@tripItemAssignAction": {
+    "description": "Action on an unassigned trip item row that opens the reroute/assign picker (Story 3.2, AC2)."
+  },
+
+  "tripItemRerouteAction": "Umleiten",
+  "@tripItemRerouteAction": {
+    "description": "Action on an assigned trip item row that opens the reroute picker (Story 3.2, AC2)."
+  },
+
+  "tripAddStoreAction": "Geschäft hinzufügen",
+  "@tripAddStoreAction": {
+    "description": "Action on the trip screen that opens the add-store-to-trip picker (Story 3.2, AC3)."
+  },
+
+  "tripStoreItemCount": "{count, plural, =0{0 Artikel} =1{1 Artikel} other{{count} Artikel}}",
+  "@tripStoreItemCount": {
+    "description": "Item-count text shown on each trip store group's header (Story 3.2, AC1).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+
+  "tripUnassignedEmptyState": "Noch nichts zuzuordnen.",
+  "@tripUnassignedEmptyState": {
+    "description": "Calm empty state for the „Noch nicht zugeordnet\" section when every item is routed (Story 3.2, AC1)."
+  },
+
+  "tripsIndexRowItemCount": "{count, plural, =0{0 Artikel} =1{1 Artikel} other{{count} Artikel}}",
+  "@tripsIndexRowItemCount": {
+    "description": "Item-count text shown on each row of the Einkauf tab's active-trips index (Story 3.2, AC4, Cl. 3).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
   },
 
   "profileDisplaySectionLabel": "Darstellung",

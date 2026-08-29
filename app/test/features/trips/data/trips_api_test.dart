@@ -75,5 +75,75 @@ void main() {
         throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'trip.storeSelectionRequired')),
       );
     });
+
+    test('activeTrip_getsTheCorrectPathAndParsesTheGroupedPayload', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter((options) async => _jsonResponse(const {
+            'tripId': 'trip-1',
+            'listId': 'list-1',
+            'storeIds': ['store-1', 'store-2'],
+            'items': [
+              {'itemId': 'item-1', 'name': 'Milch', 'note': null, 'amount': '1', 'unit': 'PIECE', 'storeId': 'store-1'},
+            ],
+          }, 200));
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpTripsApi(client);
+
+      final result = await api.activeTrip('household-1', 'list-1');
+
+      expect(adapter.lastRequest!.path, '/api/v1/households/household-1/lists/list-1/trips/active');
+      expect(adapter.lastRequest!.method, 'GET');
+      expect(result.tripId, 'trip-1');
+      expect(result.listId, 'list-1');
+      expect(result.storeIds, ['store-1', 'store-2']);
+      expect(result.items, hasLength(1));
+      expect(result.items.first.itemId, 'item-1');
+    });
+
+    test('activeTrip_mapsAServerErrorToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'trip.notFound', 'message': 'debug only'}, 404),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpTripsApi(client);
+
+      await expectLater(
+        api.activeTrip('household-1', 'list-1'),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'trip.notFound')),
+      );
+    });
+
+    test('addStoreToTrip_postsTheCorrectPathAndBodyShape', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter((options) async => _jsonResponse(const {}, 201));
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpTripsApi(client);
+
+      await api.addStoreToTrip('household-1', 'list-1', 'trip-1', storeId: 'store-3', commandId: 'command-2');
+
+      final request = adapter.lastRequest!;
+      expect(request.path, '/api/v1/households/household-1/lists/list-1/trips/trip-1/stores');
+      expect(request.method, 'POST');
+      final body = request.data as Map<String, dynamic>;
+      expect(body['storeId'], 'store-3');
+      expect(body['commandId'], 'command-2');
+    });
+
+    test('addStoreToTrip_mapsAServerErrorToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'trip.notFound', 'message': 'debug only'}, 404),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpTripsApi(client);
+
+      await expectLater(
+        api.addStoreToTrip('household-1', 'list-1', 'trip-1', storeId: 'store-3', commandId: 'command-2'),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'trip.notFound')),
+      );
+    });
   });
 }

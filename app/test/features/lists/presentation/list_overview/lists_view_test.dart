@@ -355,6 +355,27 @@ void main() {
       expect(find.byKey(const Key('fast-add-field')), findsOneWidget);
     });
 
+    testWidgets('tappingAnInTripRowOpensTheTripScreen', (tester) async {
+      // Story 3.2, AC4 — an „Im Einkauf" row opens the trip screen directly, not list detail.
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Wocheneinkauf', status: 'IN_TRIP', activeTripId: 'trip-1'),
+      ];
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'l1',
+        storeIds: ['store-1'],
+        items: [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-1')],
+      );
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('list-row-l1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('trip-screen')), findsOneWidget);
+      expect(find.byKey(const Key('trip-item-i1')), findsOneWidget);
+    });
+
     testWidgets('tappingADoneRowNavigatesToAReadOnlyListDetailScreen', (tester) async {
       shoppingListsApi.doneListsToReturn = const [
         ShoppingListSummary(listId: 'd1', name: 'Alte Liste', status: 'DONE'),

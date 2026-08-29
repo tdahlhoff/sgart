@@ -7,6 +7,7 @@ import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../shared/widgets/status_label.dart';
 import '../../../../theme/tokens/sgart_shapes.dart';
 import '../../data/shopping_list_summary.dart';
+import '../../../trips/presentation/trip_screen.dart';
 import '../list_detail/list_detail_page.dart';
 import 'create_list_dialog.dart';
 import 'rename_list_dialog.dart';
@@ -106,21 +107,30 @@ class _OpenListsBody extends StatelessWidget {
                 listId: list.listId,
                 currentName: list.name ?? localizations.listsDefaultName(index + 1),
               ),
-              onOpen: () => ListDetailPage.push(
-                context,
-                householdId: cubit.householdId,
-                listId: list.listId,
-                title: list.name ?? localizations.listsDefaultName(index + 1),
-                // „Offen" now includes In-Trip lists (Story 3.1, AC5) — an already In-Trip list
-                // reopens read-only (AC6, no off-trip item edits); only a still-Open list opens
-                // editable (and may itself transition to In-Trip mid-session via "Einkauf starten").
-                isReadOnly: list.status != 'OPEN',
-                // On return from an editable (Open) list, refresh the overview so each row's
-                // itemCount reflects any add/remove the user just made (the count is a server-side
-                // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
-                // just-started trip's In-Trip label appears (Story 3.1, AC5).
-                onEditableReturn: cubit.refresh,
-              ),
+              onOpen: () {
+                final displayName = list.name ?? localizations.listsDefaultName(index + 1);
+                // An „Im Einkauf" row opens the trip screen directly (Story 3.2, AC4) — the
+                // list-detail's own item edits are off-trip only (Story 3.1, AC6). A still-Open row
+                // opens list detail, which may itself transition In-Trip mid-session ("Einkauf
+                // starten") and navigate on from there (Story 3.2, Cl. 3).
+                final activeTripId = list.activeTripId;
+                if (list.status == 'IN_TRIP' && activeTripId != null) {
+                  TripScreen.push(context, householdId: cubit.householdId, listId: list.listId, listTitle: displayName);
+                  return;
+                }
+                ListDetailPage.push(
+                  context,
+                  householdId: cubit.householdId,
+                  listId: list.listId,
+                  title: displayName,
+                  isReadOnly: list.status != 'OPEN',
+                  // On return from an editable (Open) list, refresh the overview so each row's
+                  // itemCount reflects any add/remove the user just made (the count is a server-side
+                  // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
+                  // just-started trip's In-Trip label appears (Story 3.1, AC5).
+                  onEditableReturn: cubit.refresh,
+                );
+              },
             ),
         if (state.actionError != null) ...[
           const SizedBox(height: SgartShapes.space4),

@@ -1,11 +1,15 @@
 package de.sgart.collaboration.adapter.in;
 
+import de.sgart.collaboration.application.command.AddStoreToTripHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
+import de.sgart.collaboration.application.query.ListItems;
+import de.sgart.collaboration.application.query.TripView;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,9 +33,13 @@ import org.springframework.web.bind.annotation.RestController;
 class TripController {
 
     private final StartTripHandler startTripHandler;
+    private final AddStoreToTripHandler addStoreToTripHandler;
+    private final TripView tripView;
 
-    TripController(StartTripHandler startTripHandler) {
+    TripController(StartTripHandler startTripHandler, AddStoreToTripHandler addStoreToTripHandler, TripView tripView) {
         this.startTripHandler = startTripHandler;
+        this.addStoreToTripHandler = addStoreToTripHandler;
+        this.tripView = tripView;
     }
 
     @PostMapping
@@ -52,10 +60,48 @@ class TripController {
                 request.commandId());
     }
 
+    /** The store-grouped active-trip view (Story 3.2, AC1). */
+    @GetMapping("/active")
+    TripViewResponse activeTrip(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String householdId, @PathVariable String listId) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        TripView.TripViewResult result = tripView.forList(caller.keycloakUserId(), householdId, listId);
+        return new TripViewResponse(
+                result.tripId(),
+                result.listId(),
+                result.storeIds(),
+                result.items().stream()
+                        .map(item -> new ItemController.ItemResponse(
+                                item.itemId(), item.name(), item.note(), item.amount(), item.unit(), item.storeId()))
+                        .toList());
+    }
+
+    /** Adds a store to the trip spontaneously (Story 3.2, AC3) — the trip's first in-trip mutation. */
+    @PostMapping("/{tripId}/stores")
+    @ResponseStatus(HttpStatus.CREATED)
+    void addStore(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String tripId,
+            @RequestBody AddStoreToTripRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        addStoreToTripHandler.handle(
+                caller.keycloakUserId(), householdId, tripId, request.storeId(), request.commandId());
+    }
+
     /**
      * Transport DTO for {@code POST} — the start-trip command envelope (AR10). {@code tripId} is
      * the client-minted id; {@code storeIds} are plain {@code String}s so this controller never
      * imports {@code ..domain..} (ArchUnit).
      */
     record StartTripRequest(String tripId, List<String> storeIds, String commandId) {}
+
+    /** Transport DTO for {@code POST .../stores} — the add-store-to-trip command envelope (AR10). */
+    record AddStoreToTripRequest(String storeId, String commandId) {}
+
+    /** The grouped-view payload (Story 3.2, AC1) — grouping by store is the client's job (Cl. 7). */
+    record TripViewResponse(String tripId, String listId, List<String> storeIds, List<ItemController.ItemResponse> items) {}
 }

@@ -55,6 +55,7 @@ public final class ListDoneLists {
                 list.listId().toString(),
                 list.name() == null ? null : list.name().value(),
                 list.status().name(),
-                list.itemCount());
+                list.itemCount(),
+                list.activeTripId() == null ? null : list.activeTripId().toString());
     }
 }

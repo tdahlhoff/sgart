@@ -5,6 +5,7 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -136,7 +137,8 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
                             assigned.itemId());
                 }
             }
-            case TripStartedForList started -> readModel.markInTrip(started.listId());
+            case TripStartedForList started -> readModel.markInTrip(started.listId(), started.tripId());
+            case ItemRerouted rerouted -> itemReadModel.assignStore(rerouted.itemId(), rerouted.storeId());
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events. The
                 // trip's own TripStarted (on trip-{id}) is not projected in 3.1 (Cl. 2) — it never

@@ -60,6 +60,17 @@ abstract interface class ItemsApi {
     required String storeId,
     required String commandId,
   });
+
+  /// Re-routes [itemId] to [storeId] during a trip (Story 3.2, AC2). [commandId] is the reused
+  /// idempotency key for the reroute intent — rerouting to the item's current store is a
+  /// convergent no-op server-side. Throws `item.notReroutable` when the list is no longer In-Trip.
+  Future<void> rerouteItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String storeId,
+    required String commandId,
+  });
 }
 
 class HttpItemsApi implements ItemsApi {
@@ -147,6 +158,20 @@ class HttpItemsApi implements ItemsApi {
     required String commandId,
   }) {
     return _client.putJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/store', {
+      'storeId': storeId,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> rerouteItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String storeId,
+    required String commandId,
+  }) async {
+    await _client.postJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/reroute', {
       'storeId': storeId,
       'commandId': commandId,
     });

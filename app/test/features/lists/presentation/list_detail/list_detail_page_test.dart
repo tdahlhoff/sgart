@@ -43,17 +43,23 @@ void main() {
             value: storesApi,
             child: RepositoryProvider<StoreChainReferenceCache>.value(
               value: referenceCache,
-              child: BlocProvider(
-                create: (_) => ListDetailCubit(
-                  itemsApi: itemsApi,
-                  itemSuggestionsApi: itemSuggestionsApi,
-                  storesApi: storesApi,
-                  tripsApi: tripsApi,
-                  householdId: 'household-1',
-                  listId: 'list-1',
-                  isReadOnly: isReadOnly,
-                )..bootstrap(),
-                child: const ListDetailPage(title: 'Wocheneinkauf'),
+              child: RepositoryProvider<ItemsApi>.value(
+                value: itemsApi,
+                child: RepositoryProvider<TripsApi>.value(
+                  value: tripsApi,
+                  child: BlocProvider(
+                    create: (_) => ListDetailCubit(
+                      itemsApi: itemsApi,
+                      itemSuggestionsApi: itemSuggestionsApi,
+                      storesApi: storesApi,
+                      tripsApi: tripsApi,
+                      householdId: 'household-1',
+                      listId: 'list-1',
+                      isReadOnly: isReadOnly,
+                    )..bootstrap(),
+                    child: const ListDetailPage(title: 'Wocheneinkauf'),
+                  ),
+                ),
               ),
             ),
           ),
@@ -395,12 +401,20 @@ void main() {
       });
 
       testWidgets(
-          'confirmingASelectionStartsTheTripAndTheDetailBecomesReadOnlyWithTheActionHidden',
+          'confirmingASelectionStartsTheTripAndNavigatesToTheTripScreen',
           (tester) async {
+        // Story 3.2, AC4, Cl. 3 — starting a trip now navigates straight to the trip screen (3.1
+        // deferred this navigation; it used to end at the "Einkauf gestartet" toast alone).
         itemsApi.itemsToReturn = const [
           Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
         ];
         storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        tripsApi.tripViewToReturn = const TripView(
+          tripId: 'trip-1',
+          listId: 'list-1',
+          storeIds: ['s1'],
+          items: [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 's1')],
+        );
         await tester.pumpWidget(buildSubject());
         await tester.pumpAndSettle();
 
@@ -413,14 +427,8 @@ void main() {
 
         expect(tripsApi.lastListId, 'list-1');
         expect(tripsApi.lastStoreIds, ['s1']);
-        // Optimistically In-Trip: the start-trip action hides and item edit affordances go inert —
-        // everywhere the transition is server-visible on this screen (Story 3.1, Cl. 7/9).
-        expect(find.byKey(const Key('list-detail-start-trip')), findsNothing);
-        expect(find.byKey(const Key('item-edit-button-i1')), findsNothing);
-        expect(find.byKey(const Key('item-store-chip-i1')), findsOneWidget);
-        await tester.tap(find.byKey(const Key('item-store-chip-i1')));
-        await tester.pumpAndSettle();
-        expect(find.byKey(const Key('store-picker-sheet')), findsNothing);
+        expect(find.byKey(const Key('trip-screen')), findsOneWidget);
+        expect(find.byKey(const Key('trip-item-i1')), findsOneWidget);
       });
 
       testWidgets('dismissingTheSelectionSheetWithoutConfirmingStartsNoTrip', (tester) async {

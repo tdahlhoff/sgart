@@ -4,6 +4,7 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -11,6 +12,7 @@ import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.collaboration.domain.exception.ItemNotReroutableException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.CommandId;
@@ -279,10 +281,45 @@ public final class ShoppingList extends EventSourcedAggregate {
         raise(new TripStartedForList(EventId.generate(), householdId, listId, tripId, storeIds));
     }
 
+    /**
+     * Re-routes an item to a different trip store <em>during</em> a trip (Story 3.2, AC2, Cl. 1) —
+     * the inverse-phase counterpart to {@link #assignItemToStore}: permitted only while {@link
+     * ListStatus#IN_TRIP} ({@link #requireInTrip()}), where planning's {@code assignItemToStore}
+     * requires {@code OPEN}. An unknown item raises {@link ItemNotFoundException}; rerouting to the
+     * item's current store is a convergent no-op (raises nothing, AD-8, mirrors {@link
+     * #assignItemToStore}). Does <strong>not</strong> validate that {@code storeId} is one of the
+     * trip's stores (Cl. 5) — this aggregate does not know the trip's store set (a separate
+     * aggregate, AD-3); the client picker + read-side grouping enforce it.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void rerouteItem(ItemId itemId, StoreId storeId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(storeId, "storeId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireInTrip();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (storeId.equals(existing.assignedStore())) {
+            return; // convergent no-op — already routed to this store (AD-8)
+        }
+        raise(new ItemRerouted(EventId.generate(), householdId, listId, itemId, storeId));
+    }
+
     private void requireOpen() {
         if (status != ListStatus.OPEN) {
             throw new ItemChangeNotPermittedException(
                     "Items may only be changed on an Open list, list is " + status);
+        }
+    }
+
+    private void requireInTrip() {
+        if (status != ListStatus.IN_TRIP) {
+            throw new ItemNotReroutableException(
+                    "Items may only be rerouted during a trip, list is " + status);
         }
     }
 
@@ -332,20 +369,26 @@ public final class ShoppingList extends EventSourcedAggregate {
             }
             case ItemRemoved removed -> itemsById.remove(removed.itemId());
             case ItemMovedToList moved -> itemsById.remove(moved.itemId());
-            case ItemAssignedToStore assigned -> {
-                // The command guards item existence before raising, so `existing` is non-null for any
-                // well-formed stream; skip defensively on a reordered/repaired stream rather than NPE
-                // (mirrors the ItemUpdated case's null-tolerance).
-                ItemState existing = itemsById.get(assigned.itemId());
-                if (existing != null) {
-                    itemsById.put(
-                            assigned.itemId(),
-                            new ItemState(existing.name(), existing.note(), existing.quantity(), assigned.storeId()));
-                }
-            }
+            case ItemAssignedToStore assigned -> assignStore(assigned.itemId(), assigned.storeId());
+            case ItemRerouted rerouted -> assignStore(rerouted.itemId(), rerouted.storeId());
             case TripStartedForList started -> this.status = ListStatus.IN_TRIP;
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
+        }
+    }
+
+    /**
+     * Folds an item's store assignment — shared by {@link ItemAssignedToStore} (planning) and
+     * {@link ItemRerouted} (in-trip, Cl. 1) since both converge on the same {@code assignedStore}
+     * field (one source of truth for item→store). The command guards item existence before
+     * raising, so {@code existing} is non-null for any well-formed stream; skip defensively on a
+     * reordered/repaired stream rather than NPE (mirrors the {@code ItemUpdated} case's
+     * null-tolerance).
+     */
+    private void assignStore(ItemId itemId, StoreId storeId) {
+        ItemState existing = itemsById.get(itemId);
+        if (existing != null) {
+            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), storeId));
         }
     }
 

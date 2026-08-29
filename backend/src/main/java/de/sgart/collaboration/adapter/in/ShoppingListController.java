@@ -77,7 +77,11 @@ class ShoppingListController {
 
         return summaries.stream()
                 .map(summary -> new ShoppingListSummaryResponse(
-                        summary.listId(), summary.name(), summary.status(), summary.itemCount()))
+                        summary.listId(),
+                        summary.name(),
+                        summary.status(),
+                        summary.itemCount(),
+                        summary.activeTripId()))
                 .toList();
     }
 
@@ -103,7 +107,8 @@ class ShoppingListController {
 
     /**
      * {@code name} is {@code null} for an unnamed list; the client derives „Liste N" from position.
-     * {@code itemCount} is 0 for an empty list (Story 2.3, AC7).
+     * {@code itemCount} is 0 for an empty list (Story 2.3, AC7). {@code activeTripId} is {@code
+     * null} for an {@code OPEN} list — the navigation key list→trip (Story 3.2, AC4, Cl. 4).
      */
-    record ShoppingListSummaryResponse(String listId, String name, String status, int itemCount) {}
+    record ShoppingListSummaryResponse(String listId, String name, String status, int itemCount, String activeTripId) {}
 }

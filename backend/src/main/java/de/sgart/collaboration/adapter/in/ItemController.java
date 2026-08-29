@@ -4,6 +4,7 @@ import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
+import de.sgart.collaboration.application.command.RerouteItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
@@ -40,6 +41,7 @@ class ItemController {
     private final RemoveItemHandler removeItemHandler;
     private final MoveItemHandler moveItemHandler;
     private final AssignItemToStoreHandler assignItemToStoreHandler;
+    private final RerouteItemHandler rerouteItemHandler;
     private final ListItems listItems;
 
     ItemController(
@@ -48,12 +50,14 @@ class ItemController {
             RemoveItemHandler removeItemHandler,
             MoveItemHandler moveItemHandler,
             AssignItemToStoreHandler assignItemToStoreHandler,
+            RerouteItemHandler rerouteItemHandler,
             ListItems listItems) {
         this.addItemHandler = addItemHandler;
         this.updateItemHandler = updateItemHandler;
         this.removeItemHandler = removeItemHandler;
         this.moveItemHandler = moveItemHandler;
         this.assignItemToStoreHandler = assignItemToStoreHandler;
+        this.rerouteItemHandler = rerouteItemHandler;
         this.listItems = listItems;
     }
 
@@ -157,6 +161,21 @@ class ItemController {
                 caller.keycloakUserId(), householdId, listId, itemId, request.storeId(), request.commandId());
     }
 
+    /** Re-routes an item to a different trip store during a trip (Story 3.2, AC2). */
+    @PostMapping("/{itemId}/reroute")
+    @ResponseStatus(HttpStatus.OK)
+    void reroute(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody RerouteItemRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        rerouteItemHandler.handle(
+                caller.keycloakUserId(), householdId, listId, itemId, request.storeId(), request.commandId());
+    }
+
     /**
      * Transport DTO for {@code POST} — the add-item command envelope (AR10). {@code itemId} is the
      * client-minted id; {@code note} is optional; {@code amount} is a decimal string, {@code unit}
@@ -179,6 +198,9 @@ class ItemController {
 
     /** Transport DTO for {@code PUT .../store} — the assign-item-to-store command envelope (Story 2.6). */
     record AssignStoreRequest(String storeId, String commandId) {}
+
+    /** Transport DTO for {@code POST .../reroute} — the reroute-item command envelope (Story 3.2). */
+    record RerouteItemRequest(String storeId, String commandId) {}
 
     /** {@code note}/{@code storeId} are {@code null} when absent; {@code amount} a decimal string, {@code unit} the enum name. */
     record ItemResponse(String itemId, String name, String note, String amount, String unit, String storeId) {}

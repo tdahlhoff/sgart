@@ -4,6 +4,7 @@ import de.sgart.collaboration.application.ItemMoveProcessManager;
 import de.sgart.collaboration.application.TripStartProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
+import de.sgart.collaboration.application.command.AddStoreToTripHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
@@ -11,6 +12,7 @@ import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.command.RerouteItemHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
@@ -19,12 +21,14 @@ import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.query.ListOpenLists;
 import de.sgart.collaboration.application.query.ListStores;
+import de.sgart.collaboration.application.query.TripView;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemSuggestionReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
+import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -146,5 +150,24 @@ public class CollaborationApplicationConfig {
     @Bean
     TripStartProcessManager tripStartProcessManager(EventStore eventStore) {
         return new TripStartProcessManager(eventStore);
+    }
+
+    @Bean
+    RerouteItemHandler rerouteItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new RerouteItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    AddStoreToTripHandler addStoreToTripHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new AddStoreToTripHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    TripView tripView(
+            ResolveMemberIdentity resolveMemberIdentity,
+            ShoppingListReadModel shoppingListReadModel,
+            TripStoreReadModel tripStoreReadModel,
+            ItemReadModel itemReadModel) {
+        return new TripView(resolveMemberIdentity, shoppingListReadModel, tripStoreReadModel, itemReadModel);
     }
 }

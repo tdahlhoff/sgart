@@ -11,6 +11,7 @@ import '../../../stores/data/store_chain_reference_cache.dart';
 import '../../../stores/data/stores_api.dart';
 import '../../../stores/presentation/store_picker_sheet.dart';
 import '../../../trips/data/trips_api.dart';
+import '../../../trips/presentation/trip_screen.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestions_api.dart';
 import '../../data/items_api.dart';
@@ -114,7 +115,7 @@ class ListDetailPage extends StatelessWidget {
                   ListDetailStatus.loading =>
                     const Center(child: CircularProgressIndicator(key: Key('item-list-loading'))),
                   ListDetailStatus.failure => const _FailureBody(),
-                  ListDetailStatus.ready => _ReadyBody(state: state),
+                  ListDetailStatus.ready => _ReadyBody(state: state, title: title),
                 };
               },
             ),
@@ -136,9 +137,10 @@ class ListDetailPage extends StatelessWidget {
 }
 
 class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({required this.state});
+  const _ReadyBody({required this.state, required this.title});
 
   final ListDetailState state;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +217,14 @@ class _ReadyBody extends StatelessWidget {
                       if (started && context.mounted) {
                         ScaffoldMessenger.of(context)
                             .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
+                        // Story 3.2, AC4, Cl. 3 — a started trip now navigates straight to the trip
+                        // screen (3.1 deferred this; it used to end at the toast alone).
+                        await TripScreen.push(
+                          context,
+                          householdId: cubit.householdId,
+                          listId: cubit.listId,
+                          listTitle: title,
+                        );
                       }
                     },
             ),

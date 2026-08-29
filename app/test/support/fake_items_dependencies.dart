@@ -17,6 +17,7 @@ class FakeItemsApi implements ItemsApi {
   Object? removeError;
   Object? moveError;
   Object? assignStoreError;
+  Object? rerouteError;
 
   String? lastAddedItemId;
   String? lastAddedName;
@@ -47,6 +48,11 @@ class FakeItemsApi implements ItemsApi {
   String? lastAssignedStoreId;
   final List<String> assignStoreCommandIds = [];
   int assignStoreCallCount = 0;
+
+  String? lastReroutedItemId;
+  String? lastReroutedStoreId;
+  final List<String> rerouteCommandIds = [];
+  int rerouteCallCount = 0;
 
   @override
   Future<List<Item>> listItems(String householdId, String listId) async {
@@ -132,5 +138,20 @@ class FakeItemsApi implements ItemsApi {
     assignStoreCommandIds.add(commandId);
     assignStoreCallCount++;
     if (assignStoreError != null) throw assignStoreError!;
+  }
+
+  @override
+  Future<void> rerouteItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String storeId,
+    required String commandId,
+  }) async {
+    lastReroutedItemId = itemId;
+    lastReroutedStoreId = storeId;
+    rerouteCommandIds.add(commandId);
+    rerouteCallCount++;
+    if (rerouteError != null) throw rerouteError!;
   }
 }

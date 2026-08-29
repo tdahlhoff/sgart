@@ -29,6 +29,7 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import de.sgart.shared.support.InMemoryEventStore;
 import java.util.HashMap;
@@ -143,6 +144,135 @@ class ItemControllerTest {
         eventStore.append(
                 AggregateVersion.initial(StreamId.forList(listId)), list.uncommittedEvents(), CommandId.generate());
         return listId;
+    }
+
+    private ItemId seedItemIn(ShoppingListId listId, String name) {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(StreamId.forList(listId), eventStore.readStream(StreamId.forList(listId)));
+        AggregateVersion loadedVersion = list.version();
+        list.addItem(itemId, new ItemName(name), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        eventStore.append(loadedVersion, list.uncommittedEvents(), CommandId.generate());
+        return itemId;
+    }
+
+    private void startTripOn(ShoppingListId listId, StoreId storeId) {
+        ShoppingList list = ShoppingList.rehydrate(StreamId.forList(listId), eventStore.readStream(StreamId.forList(listId)));
+        AggregateVersion loadedVersion = list.version();
+        list.startTrip(TripId.generate(), List.of(storeId), CommandId.generate());
+        eventStore.append(loadedVersion, list.uncommittedEvents(), CommandId.generate());
+    }
+
+    private static String rerouteRequestBody(String storeId) {
+        return "{\"storeId\":\"%s\",\"commandId\":\"%s\"}".formatted(storeId, UUID.randomUUID());
+    }
+
+    @Test
+    void reroute_returns200ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody(StoreId.generate().toString())))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void reroute_rejectsAMalformedStoreIdWith400() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody("not-a-uuid")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("command.storeIdInvalid"));
+    }
+
+    @Test
+    void reroute_rejectsANonMemberWith403() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody(StoreId.generate().toString())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void reroute_returns404ForAnUnknownList() throws Exception {
+        HouseholdId householdId = seedMembership();
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        ShoppingListId.generate().toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody(StoreId.generate().toString())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    @Test
+    void reroute_returns404ForAnUnknownItem() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        listId.toString(),
+                        ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody(StoreId.generate().toString())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("item.notFound"));
+    }
+
+    @Test
+    void reroute_returns409WhenTheListIsNotInTrip() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        // No startTripOn(...) — the list is still Open.
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/reroute",
+                        householdId.toString(),
+                        listId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rerouteRequestBody(StoreId.generate().toString())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("item.notReroutable"));
     }
 
     private static String addRequestBody(String itemId, String name) {

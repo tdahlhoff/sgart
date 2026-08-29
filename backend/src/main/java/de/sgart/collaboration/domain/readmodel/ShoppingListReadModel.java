@@ -2,6 +2,7 @@ package de.sgart.collaboration.domain.readmodel;
 
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.TripId;
 import java.util.List;
 
 /**
@@ -21,12 +22,12 @@ public interface ShoppingListReadModel {
     List<ShoppingListView> listsOf(HouseholdId householdId);
 
     /**
-     * Flips a list's status to {@code IN_TRIP} (Story 3.1, AC5) — written only by the projector.
-     * Defaulted (rather than a bare abstract method) so the many read-only query tests that supply
-     * this port as a {@code listsOf}-only lambda keep compiling; a real implementation always
-     * overrides it.
+     * Flips a list's status to {@code IN_TRIP} and records its active trip (Story 3.1 AC5; Story
+     * 3.2 {@code active_trip_id}, Cl. 4) — written only by the projector. Defaulted (rather than a
+     * bare abstract method) so the many read-only query tests that supply this port as a {@code
+     * listsOf}-only lambda keep compiling; a real implementation always overrides it.
      */
-    default void markInTrip(ShoppingListId listId) {
+    default void markInTrip(ShoppingListId listId, TripId tripId) {
         throw new UnsupportedOperationException("markInTrip is not implemented by this read model");
     }
 }

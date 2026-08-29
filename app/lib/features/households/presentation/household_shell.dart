@@ -8,6 +8,8 @@ import '../../lists/data/shopping_lists_api.dart';
 import '../../lists/presentation/list_overview/lists_view.dart';
 import '../../lists/presentation/list_overview/shopping_lists_cubit.dart';
 import '../../settings/presentation/profile_screen.dart';
+import '../../trips/presentation/active_trips_cubit.dart';
+import '../../trips/presentation/active_trips_view.dart';
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
 import 'household_switcher_sheet.dart';
@@ -67,7 +69,14 @@ class _HouseholdShellState extends State<HouseholdShell> {
             )..bootstrap(),
             child: const ListsView(),
           ),
-          const _ShoppingPlaceholder(),
+          BlocProvider<ActiveTripsCubit>(
+            key: ValueKey(widget.activeHousehold.householdId),
+            create: (context) => ActiveTripsCubit(
+              shoppingListsApi: context.read<ShoppingListsApi>(),
+              householdId: widget.activeHousehold.householdId,
+            )..bootstrap(),
+            child: const ActiveTripsView(),
+          ),
           const ProfileScreen(),
         ],
       ),
@@ -110,23 +119,6 @@ class _HouseholdShellState extends State<HouseholdShell> {
           value: householdsCubit,
           child: HouseholdSwitcherSheet(activeHousehold: widget.activeHousehold, households: widget.households),
         ),
-      ),
-    );
-  }
-}
-
-/// Calm, plain-German placeholder for the Einkauf tab (Epic 3 delivers the real screen).
-class _ShoppingPlaceholder extends StatelessWidget {
-  const _ShoppingPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(SgartShapes.cardPadding),
-        child: Text(localizations.shellTabShoppingPlaceholder, textAlign: TextAlign.center),
       ),
     );
   }

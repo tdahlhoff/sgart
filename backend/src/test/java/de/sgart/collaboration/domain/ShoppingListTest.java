@@ -3,10 +3,14 @@ package de.sgart.collaboration.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.sgart.collaboration.domain.event.ItemAdded;
+import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.collaboration.domain.exception.ItemNotReroutableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
@@ -264,6 +268,104 @@ class ShoppingListTest {
                 .isInstanceOf(ItemChangeNotPermittedException.class);
         assertThatThrownBy(() -> list.assignItemToStore(itemId, StoreId.generate(), CommandId.generate()))
                 .isInstanceOf(ItemChangeNotPermittedException.class);
+    }
+
+    @Test
+    void rerouteItem_onAnInTripList_raisesItemRerouted_andFolds() {
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                itemId,
+                                new ItemName("Milch"),
+                                null,
+                                Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(
+                                EventId.generate(), householdId, listId, TripId.generate(), List.of(storeId))));
+
+        list.rerouteItem(itemId, storeId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemRerouted.class);
+        ItemRerouted rerouted = (ItemRerouted) events.get(0);
+        assertThat(rerouted.householdId()).isEqualTo(householdId);
+        assertThat(rerouted.listId()).isEqualTo(listId);
+        assertThat(rerouted.itemId()).isEqualTo(itemId);
+        assertThat(rerouted.storeId()).isEqualTo(storeId);
+    }
+
+    @Test
+    void rerouteItem_toTheSameStore_isAConvergentNoOp() {
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                itemId,
+                                new ItemName("Milch"),
+                                null,
+                                Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(
+                                EventId.generate(), householdId, listId, TripId.generate(), List.of(storeId)),
+                        new ItemRerouted(EventId.generate(), householdId, listId, itemId, storeId)));
+
+        list.rerouteItem(itemId, storeId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void rerouteItem_onAnOpenList_throwsItemNotReroutable() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                itemId,
+                                new ItemName("Milch"),
+                                null,
+                                Quantity.of(1, Unit.PIECE))));
+
+        assertThatThrownBy(() -> list.rerouteItem(itemId, StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotReroutableException.class);
+    }
+
+    @Test
+    void rerouteItem_forAnUnknownItem_throwsItemNotFound() {
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(
+                                EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new TripStartedForList(
+                                EventId.generate(),
+                                householdId,
+                                listId,
+                                TripId.generate(),
+                                List.of(StoreId.generate()))));
+
+        assertThatThrownBy(() ->
+                        list.rerouteItem(ItemId.generate(), StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
     }
 
     private void setStatus(ShoppingList list, ListStatus status) {

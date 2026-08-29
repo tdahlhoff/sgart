@@ -60,15 +60,18 @@ public final class ListOpenLists {
                 list.listId().toString(),
                 list.name() == null ? null : list.name().value(),
                 list.status().name(),
-                list.itemCount());
+                list.itemCount(),
+                list.activeTripId() == null ? null : list.activeTripId().toString());
     }
 
     /**
-     * A list as seen by the caller: id + optional name + status + item count, in creation order —
-     * the shape the minimal lists surface needs. Plain {@code String}s/{@code int}, not domain
-     * types, so {@code adapter.in} can consume this record without reaching into {@code
-     * collaboration.domain}. {@code name} is {@code null} for an unnamed list. {@code itemCount} is
-     * 0 for an empty list (Story 2.3, AC7); the checked/total progress bar is Epic 3.
+     * A list as seen by the caller: id + optional name + status + item count + active trip id, in
+     * creation order — the shape the minimal lists surface needs. Plain {@code String}s/{@code
+     * int}, not domain types, so {@code adapter.in} can consume this record without reaching into
+     * {@code collaboration.domain}. {@code name} is {@code null} for an unnamed list. {@code
+     * itemCount} is 0 for an empty list (Story 2.3, AC7); the checked/total progress bar is Epic 3.
+     * {@code activeTripId} is {@code null} for an {@code OPEN} list — the navigation key list→trip
+     * (Story 3.2, AC4, Cl. 4).
      */
-    public record ShoppingListSummary(String listId, String name, String status, int itemCount) {}
+    public record ShoppingListSummary(String listId, String name, String status, int itemCount, String activeTripId) {}
 }

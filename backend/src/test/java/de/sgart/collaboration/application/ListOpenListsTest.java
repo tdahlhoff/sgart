@@ -47,15 +47,15 @@ class ListOpenListsTest {
         ShoppingListId drinksId = ShoppingListId.generate();
         ShoppingListId unnamedId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(drinksId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
-                new ShoppingListView(unnamedId, null, ListStatus.OPEN, 0)));
+                new ShoppingListView(drinksId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                new ShoppingListView(unnamedId, null, ListStatus.OPEN, 0, null)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ShoppingListSummary(drinksId.toString(), "Getränke", "OPEN", 0),
-                        new ShoppingListSummary(unnamedId.toString(), null, "OPEN", 0));
+                        new ShoppingListSummary(drinksId.toString(), "Getränke", "OPEN", 0, null),
+                        new ShoppingListSummary(unnamedId.toString(), null, "OPEN", 0, null));
     }
 
     @Test
@@ -65,15 +65,35 @@ class ListOpenListsTest {
         ShoppingListId openId = ShoppingListId.generate();
         ShoppingListId inTripId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
-                new ShoppingListView(inTripId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 3)));
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                new ShoppingListView(inTripId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 3, null)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0),
-                        new ShoppingListSummary(inTripId.toString(), "Wocheneinkauf", "IN_TRIP", 3));
+                        new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0, null),
+                        new ShoppingListSummary(inTripId.toString(), "Wocheneinkauf", "IN_TRIP", 3, null));
+    }
+
+    @Test
+    void forHousehold_anInTripListCarriesItsActiveTripId_andAnOpenListsIsNull() {
+        // Story 3.2, AC4, Cl. 4 — activeTripId is the navigation key list→trip.
+        seedMembership();
+        ShoppingListId openId = ShoppingListId.generate();
+        ShoppingListId inTripId = ShoppingListId.generate();
+        de.sgart.shared.TripId tripId = de.sgart.shared.TripId.generate();
+        ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                new ShoppingListView(inTripId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 3, tripId)));
+
+        List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
+
+        assertThat(summaries)
+                .containsExactly(
+                        new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0, null),
+                        new ShoppingListSummary(
+                                inTripId.toString(), "Wocheneinkauf", "IN_TRIP", 3, tripId.toString()));
     }
 
     @Test
@@ -85,9 +105,9 @@ class ListOpenListsTest {
         ShoppingListId secondId = ShoppingListId.generate();
         ShoppingListId thirdId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(firstId, null, ListStatus.OPEN, 0),
-                new ShoppingListView(secondId, null, ListStatus.IN_TRIP, 0),
-                new ShoppingListView(thirdId, null, ListStatus.OPEN, 0)));
+                new ShoppingListView(firstId, null, ListStatus.OPEN, 0, null),
+                new ShoppingListView(secondId, null, ListStatus.IN_TRIP, 0, null),
+                new ShoppingListView(thirdId, null, ListStatus.OPEN, 0, null)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
@@ -101,12 +121,12 @@ class ListOpenListsTest {
         ShoppingListId openId = ShoppingListId.generate();
         ShoppingListId doneId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(id -> List.of(
-                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
-                new ShoppingListView(doneId, new ShoppingListName("Erledigt"), ListStatus.DONE, 0)));
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                new ShoppingListView(doneId, new ShoppingListName("Erledigt"), ListStatus.DONE, 0, null)));
 
         List<ShoppingListSummary> summaries = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
 
-        assertThat(summaries).containsExactly(new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0));
+        assertThat(summaries).containsExactly(new ShoppingListSummary(openId.toString(), "Getränke", "OPEN", 0, null));
     }
 
     @Test
@@ -141,7 +161,7 @@ class ListOpenListsTest {
         seedMembership();
         ShoppingListId listId = ShoppingListId.generate();
         ListOpenLists listOpenLists = listOpenListsReading(
-                id -> List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0)));
+                id -> List.of(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null)));
 
         List<ShoppingListSummary> first = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());
         List<ShoppingListSummary> second = listOpenLists.forHousehold(MEMBER_SUB, householdId.toString());

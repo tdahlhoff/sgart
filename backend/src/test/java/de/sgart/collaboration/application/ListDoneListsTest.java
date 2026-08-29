@@ -47,15 +47,15 @@ class ListDoneListsTest {
         ShoppingListId firstDoneId = ShoppingListId.generate();
         ShoppingListId secondDoneId = ShoppingListId.generate();
         ListDoneLists listDoneLists = listDoneListsReading(id -> List.of(
-                new ShoppingListView(firstDoneId, new ShoppingListName("Wocheneinkauf"), ListStatus.DONE, 0),
-                new ShoppingListView(secondDoneId, null, ListStatus.DONE, 0)));
+                new ShoppingListView(firstDoneId, new ShoppingListName("Wocheneinkauf"), ListStatus.DONE, 0, null),
+                new ShoppingListView(secondDoneId, null, ListStatus.DONE, 0, null)));
 
         List<ShoppingListSummary> summaries = listDoneLists.forHousehold(MEMBER_SUB, householdId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ShoppingListSummary(firstDoneId.toString(), "Wocheneinkauf", "DONE", 0),
-                        new ShoppingListSummary(secondDoneId.toString(), null, "DONE", 0));
+                        new ShoppingListSummary(firstDoneId.toString(), "Wocheneinkauf", "DONE", 0, null),
+                        new ShoppingListSummary(secondDoneId.toString(), null, "DONE", 0, null));
     }
 
     @Test
@@ -64,12 +64,12 @@ class ListDoneListsTest {
         ShoppingListId openId = ShoppingListId.generate();
         ShoppingListId doneId = ShoppingListId.generate();
         ListDoneLists listDoneLists = listDoneListsReading(id -> List.of(
-                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
-                new ShoppingListView(doneId, new ShoppingListName("Alte Liste"), ListStatus.DONE, 0)));
+                new ShoppingListView(openId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                new ShoppingListView(doneId, new ShoppingListName("Alte Liste"), ListStatus.DONE, 0, null)));
 
         List<ShoppingListSummary> summaries = listDoneLists.forHousehold(MEMBER_SUB, householdId.toString());
 
-        assertThat(summaries).containsExactly(new ShoppingListSummary(doneId.toString(), "Alte Liste", "DONE", 0));
+        assertThat(summaries).containsExactly(new ShoppingListSummary(doneId.toString(), "Alte Liste", "DONE", 0, null));
     }
 
     @Test
@@ -94,7 +94,7 @@ class ListDoneListsTest {
         seedMembership();
         ShoppingListId doneId = ShoppingListId.generate();
         ListDoneLists listDoneLists = listDoneListsReading(
-                id -> List.of(new ShoppingListView(doneId, new ShoppingListName("Getränke"), ListStatus.DONE, 0)));
+                id -> List.of(new ShoppingListView(doneId, new ShoppingListName("Getränke"), ListStatus.DONE, 0, null)));
 
         List<ShoppingListSummary> first = listDoneLists.forHousehold(MEMBER_SUB, householdId.toString());
         List<ShoppingListSummary> second = listDoneLists.forHousehold(MEMBER_SUB, householdId.toString());

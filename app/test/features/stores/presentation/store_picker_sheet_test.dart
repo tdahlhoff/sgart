@@ -128,5 +128,42 @@ void main() {
       expect(addButton.onPressed, isNull);
       expect(storesApi.addCallCount, 0);
     });
+
+    testWidgets('onInlineStoreCreated_runsBeforePopping_forTheTripReroutePath', (tester) async {
+      // Story 3.2, Cl. 5 — the trip's reroute picker hooks inline creation to also add the store to
+      // the trip before the sheet pops it selected.
+      StoreSummary? hooked;
+      await tester.pumpWidget(wrapForTesting(
+        Builder(
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () async {
+                result = await showStorePickerSheet(
+                  context,
+                  stores: const [],
+                  storesApi: storesApi,
+                  referenceCache: referenceCache,
+                  householdId: 'household-1',
+                  onInlineStoreCreated: (created) async {
+                    hooked = created;
+                  },
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('store-picker-new-name-field')), 'Netto');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('store-picker-add-new')));
+      await tester.pumpAndSettle();
+
+      expect(hooked?.name, 'Netto');
+      expect(result?.name, 'Netto');
+    });
   });
 }

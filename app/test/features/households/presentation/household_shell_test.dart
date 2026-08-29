@@ -178,7 +178,8 @@ void main() {
       expect(find.byKey(const Key('sign-out-button')), findsOneWidget);
     });
 
-    testWidgets('theListenTabShowsTheRealListsViewAndEinkaufStaysAPlaceholder', (tester) async {
+    testWidgets('theListenTabShowsTheRealListsViewAndEinkaufShowsTheActiveTripsIndex', (tester) async {
+      // Story 3.2, AC4, Cl. 3 — the Einkauf tab is now the active-trips index, not a placeholder.
       shoppingListsApi.listsToReturn = const [
         ShoppingListSummary(listId: 'list-1', name: 'Wocheneinkauf', status: 'OPEN'),
       ];
@@ -191,7 +192,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 1);
-      expect(find.text('Der Einkauf kommt in einer späteren Version.'), findsOneWidget);
+      // No In-Trip list yet — the calm empty state renders.
+      expect(find.byKey(const Key('active-trips-empty-state')), findsOneWidget);
     });
 
     testWidgets('theSwitcherChipStaysVisibleOnEveryTab', (tester) async {

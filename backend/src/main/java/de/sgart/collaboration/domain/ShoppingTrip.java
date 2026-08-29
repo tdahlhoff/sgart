@@ -1,6 +1,8 @@
 package de.sgart.collaboration.domain;
 
+import de.sgart.collaboration.domain.event.StoreAddedToTrip;
 import de.sgart.collaboration.domain.event.TripStarted;
+import de.sgart.collaboration.domain.exception.TripNotActiveException;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
@@ -10,6 +12,7 @@ import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import de.sgart.shared.TripId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -91,6 +94,30 @@ public final class ShoppingTrip extends EventSourcedAggregate {
         return status;
     }
 
+    /**
+     * Adds a store to the trip spontaneously (Story 3.2, AC3) — the trip's <strong>first in-trip
+     * mutation</strong>. Permitted only while {@link TripStatus#ACTIVE} ({@code DONE} is
+     * unreachable until Story 3.4, so this guard is defensive). A store already in the trip is a
+     * convergent no-op (raises nothing, AD-8). Does <strong>not</strong> validate that {@code
+     * storeId} exists in the household — {@code Store} is an entity inside the separate {@code
+     * Household} aggregate this root never loads or mutates (AD-3, mirrors {@link
+     * ShoppingList#assignItemToStore}).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void addStore(StoreId storeId, CommandId commandId) {
+        Objects.requireNonNull(storeId, "storeId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        if (status != TripStatus.ACTIVE) {
+            throw new TripNotActiveException("A store may only be added to an Active trip, trip is " + status);
+        }
+        if (storeIds.contains(storeId)) {
+            return; // convergent no-op — the store is already part of the trip (AD-8)
+        }
+        raise(new StoreAddedToTrip(EventId.generate(), tripId, householdId, storeId));
+    }
+
     @Override
     protected void apply(DomainEvent event) {
         switch (event) {
@@ -100,6 +127,11 @@ public final class ShoppingTrip extends EventSourcedAggregate {
                 this.listId = started.listId();
                 this.storeIds = List.copyOf(started.storeIds());
                 this.status = TripStatus.ACTIVE;
+            }
+            case StoreAddedToTrip added -> {
+                List<StoreId> updated = new ArrayList<>(storeIds);
+                updated.add(added.storeId());
+                this.storeIds = List.copyOf(updated);
             }
             default -> throw new IllegalArgumentException(
                     "ShoppingTrip cannot apply unknown event type: " + event.getClass());

@@ -11,6 +11,7 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.TripStartedForList;
@@ -97,7 +98,7 @@ class ShoppingListReadModelProjectorTest {
         list.uncommittedEvents().forEach(projector::project);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Wocheneinkauf"), ListStatus.OPEN, 0));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Wocheneinkauf"), ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -109,7 +110,7 @@ class ShoppingListReadModelProjectorTest {
         list.uncommittedEvents().forEach(projector::project);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, null, ListStatus.OPEN, 0));
+                .containsExactly(new ShoppingListView(listId, null, ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -128,8 +129,8 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(readModel.listsOf(householdId))
                 .containsExactly(
-                        new ShoppingListView(firstListId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0),
-                        new ShoppingListView(secondListId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0));
+                        new ShoppingListView(firstListId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null),
+                        new ShoppingListView(secondListId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -162,7 +163,7 @@ class ShoppingListReadModelProjectorTest {
         projector.project(created);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke"), ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -180,7 +181,7 @@ class ShoppingListReadModelProjectorTest {
         projector.project(created);
 
         assertThat(readModel.listsOf(householdId))
-                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0));
+                .containsExactly(new ShoppingListView(listId, new ShoppingListName("Getränke 2"), ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -580,12 +581,13 @@ class ShoppingListReadModelProjectorTest {
                 .uncommittedEvents()
                 .get(0));
 
+        TripId tripId = TripId.generate();
         projector.project(new TripStartedForList(
-                EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())));
+                EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())));
 
         assertThat(readModel.listsOf(householdId))
                 .containsExactly(new ShoppingListView(
-                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0));
+                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0, tripId));
     }
 
     @Test
@@ -602,13 +604,14 @@ class ShoppingListReadModelProjectorTest {
                 .uncommittedEvents()
                 .get(0));
 
+        TripId tripId = TripId.generate();
         projector.project(new TripStartedForList(
-                EventId.generate(), householdA, listAId, TripId.generate(), List.of(StoreId.generate())));
+                EventId.generate(), householdA, listAId, tripId, List.of(StoreId.generate())));
 
         assertThat(readModel.listsOf(householdA))
-                .containsExactly(new ShoppingListView(listAId, new ShoppingListName("A"), ListStatus.IN_TRIP, 0));
+                .containsExactly(new ShoppingListView(listAId, new ShoppingListName("A"), ListStatus.IN_TRIP, 0, tripId));
         assertThat(readModel.listsOf(householdB))
-                .containsExactly(new ShoppingListView(listBId, new ShoppingListName("B"), ListStatus.OPEN, 0));
+                .containsExactly(new ShoppingListView(listBId, new ShoppingListName("B"), ListStatus.OPEN, 0, null));
     }
 
     @Test
@@ -618,14 +621,72 @@ class ShoppingListReadModelProjectorTest {
         projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
                 .uncommittedEvents()
                 .get(0));
+        TripId tripId = TripId.generate();
         TripStartedForList started = new TripStartedForList(
-                EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate()));
+                EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate()));
 
         projector.project(started);
         projector.project(started);
 
         assertThat(readModel.listsOf(householdId))
                 .containsExactly(new ShoppingListView(
-                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0));
+                        listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 0, tripId));
+    }
+
+    @Test
+    void anItemReroutedUpdatesTheItemsStoreId_andLeavesTheSuggestionsDefaultStoreIdUntouched() {
+        // Story 3.2, AC2, Cl. 6 — reroute converges on item_read_model.store_id only; the
+        // suggestion's default_store_id (planning) is untouched.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        StoreId planningStore = StoreId.generate();
+        StoreId tripStore = StoreId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(),
+                householdId,
+                listId,
+                itemId,
+                new ItemName("Milch"),
+                null,
+                Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemAssignedToStore(EventId.generate(), householdId, listId, itemId, planningStore));
+
+        projector.project(new ItemRerouted(EventId.generate(), householdId, listId, itemId, tripStore));
+
+        List<ItemView> items = itemReadModel.itemsOf(householdId, listId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).storeId()).isEqualTo(tripStore);
+        List<ItemSuggestionView> suggestions = itemSuggestionReadModel.suggestionsOf(householdId);
+        assertThat(suggestions).hasSize(1);
+        assertThat(suggestions.get(0).defaultStore()).isEqualTo(planningStore);
+    }
+
+    @Test
+    void reProjectingItemReroutedIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(),
+                householdId,
+                listId,
+                itemId,
+                new ItemName("Milch"),
+                null,
+                Quantity.of(1, Unit.PIECE)));
+        ItemRerouted rerouted = new ItemRerouted(EventId.generate(), householdId, listId, itemId, storeId);
+
+        projector.project(rerouted);
+        projector.project(rerouted);
+
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).storeId()).isEqualTo(storeId);
     }
 }

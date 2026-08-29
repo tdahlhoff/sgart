@@ -263,6 +263,25 @@ class DomainEventJsonCodecTest {
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 
+    @Test
+    void itemReroutedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.ItemRerouted event = new de.sgart.collaboration.domain.event.ItemRerouted(
+                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(), StoreId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemRerouted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void storeAddedToTripRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.StoreAddedToTrip event =
+                new de.sgart.collaboration.domain.event.StoreAddedToTrip(
+                        EventId.generate(), TripId.generate(), householdId, StoreId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("StoreAddedToTrip");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
     private DomainEvent roundTrip(DomainEvent event) {
         return codec.fromJsonBytes(codec.typeTagFor(event), codec.toJsonBytes(event));
     }

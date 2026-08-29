@@ -25,6 +25,12 @@ import '../data/stores_api.dart';
 ///
 /// Single-select, returns one store — kept working unchanged (Cl. 4) since list-detail's existing
 /// assignment flow and Story 3.2's in-trip reroute both reuse it as-is.
+///
+/// [onInlineStoreCreated], when supplied, runs after a **newly created** store lands on the
+/// household but *before* the sheet pops it (Story 3.2, AC3, Cl. 5) — the in-trip reroute picker
+/// hooks this to also add the store to the trip (`AddStoreToTrip`), so routing to a brand-new store
+/// is one flow. Left `null` for the plain list-detail assignment path, which only ever creates a
+/// household store (Story 2.6, unchanged).
 Future<StoreSummary?> showStorePickerSheet(
   BuildContext context, {
   required List<StoreSummary> stores,
@@ -32,6 +38,7 @@ Future<StoreSummary?> showStorePickerSheet(
   required StoreChainReferenceCache referenceCache,
   required String householdId,
   StoreChainMatcher matcher = const StoreChainMatcher(),
+  Future<void> Function(StoreSummary created)? onInlineStoreCreated,
 }) {
   return showModalBottomSheet<StoreSummary>(
     context: context,
@@ -42,6 +49,7 @@ Future<StoreSummary?> showStorePickerSheet(
       referenceCache: referenceCache,
       householdId: householdId,
       matcher: matcher,
+      onInlineStoreCreated: onInlineStoreCreated,
     ),
   );
 }
@@ -79,6 +87,7 @@ class _StorePickerSheetBody extends StatefulWidget {
     required this.referenceCache,
     required this.householdId,
     required this.matcher,
+    this.onInlineStoreCreated,
   });
 
   final List<StoreSummary> stores;
@@ -86,6 +95,7 @@ class _StorePickerSheetBody extends StatefulWidget {
   final StoreChainReferenceCache referenceCache;
   final String householdId;
   final StoreChainMatcher matcher;
+  final Future<void> Function(StoreSummary created)? onInlineStoreCreated;
 
   @override
   State<_StorePickerSheetBody> createState() => _StorePickerSheetBodyState();
@@ -130,7 +140,12 @@ class _StorePickerSheetBodyState extends State<_StorePickerSheetBody> {
                 householdId: widget.householdId,
                 matcher: widget.matcher,
                 onChainsLoaded: (chains) => setState(() => _chains = chains),
-                onCreated: (store) => Navigator.of(context).pop(store),
+                onCreated: (store) async {
+                  await widget.onInlineStoreCreated?.call(store);
+                  if (context.mounted) {
+                    Navigator.of(context).pop(store);
+                  }
+                },
               ),
             ],
           ),

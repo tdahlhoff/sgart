@@ -13,11 +13,14 @@ import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.application.exception.InvalidTripStoreSelectionException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemNotReroutableApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.RenameNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
+import de.sgart.collaboration.application.exception.TripNotActiveApplicationException;
+import de.sgart.collaboration.application.exception.TripNotFoundException;
 import de.sgart.collaboration.application.exception.TripNotStartableApplicationException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
@@ -143,6 +146,21 @@ class WriteErrorAdvice {
 
     @ExceptionHandler(TripNotStartableApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleTripNotStartable(TripNotStartableApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ItemNotReroutableApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleItemNotReroutable(ItemNotReroutableApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(TripNotFoundException.class)
+    ResponseEntity<ErrorDescriptor> handleTripNotFound(TripNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(TripNotActiveApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleTripNotActive(TripNotActiveApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 }

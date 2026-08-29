@@ -6,6 +6,7 @@ import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListView;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.TripId;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -28,21 +29,23 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
     public List<ShoppingListView> listsOf(HouseholdId householdId) {
         return jdbcClient
                 .sql("""
-                        SELECT l.list_id, l.name, l.status, COUNT(i.item_id) AS item_count
+                        SELECT l.list_id, l.name, l.status, l.active_trip_id, COUNT(i.item_id) AS item_count
                         FROM shopping_list_read_model l
                         LEFT JOIN item_read_model i ON i.list_id = l.list_id
                         WHERE l.household_id = :householdId
-                        GROUP BY l.list_id, l.name, l.status, l.sequence_number
+                        GROUP BY l.list_id, l.name, l.status, l.active_trip_id, l.sequence_number
                         ORDER BY l.sequence_number ASC
                         """)
                 .param("householdId", householdId.value())
                 .query((resultSet, rowNumber) -> {
                     String name = resultSet.getString("name");
+                    String activeTripId = resultSet.getString("active_trip_id");
                     return new ShoppingListView(
                             ShoppingListId.fromString(resultSet.getString("list_id")),
                             name == null ? null : new ShoppingListName(name),
                             ListStatus.valueOf(resultSet.getString("status")),
-                            resultSet.getInt("item_count"));
+                            resultSet.getInt("item_count"),
+                            activeTripId == null ? null : TripId.fromString(activeTripId));
                 })
                 .list();
     }
@@ -80,16 +83,17 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
 
     /**
      * Idempotent update — re-projecting the same {@code TripStartedForList} is a safe no-op (Story
-     * 3.1, AC5, Cl. 6). No migration: {@code status} already stores the {@link
-     * de.sgart.collaboration.domain.ListStatus} enum name (V5); {@code IN_TRIP} is simply a
-     * newly-reachable value.
+     * 3.1, AC5, Cl. 6; Story 3.2 {@code active_trip_id}, Cl. 4). {@code status} already stores the
+     * {@link de.sgart.collaboration.domain.ListStatus} enum name (V5); {@code IN_TRIP} is simply a
+     * newly-reachable value. {@code active_trip_id} is the 1:1 navigation key list→trip (V9).
      */
     @Override
-    public void markInTrip(ShoppingListId listId) {
+    public void markInTrip(ShoppingListId listId, TripId tripId) {
         jdbcClient
-                .sql("UPDATE shopping_list_read_model SET status = :status WHERE list_id = :listId")
+                .sql("UPDATE shopping_list_read_model SET status = :status, active_trip_id = :tripId WHERE list_id = :listId")
                 .param("listId", listId.value())
                 .param("status", ListStatus.IN_TRIP.name())
+                .param("tripId", tripId.value())
                 .update();
     }
 }
