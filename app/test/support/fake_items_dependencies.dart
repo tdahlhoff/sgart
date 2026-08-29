@@ -54,6 +54,28 @@ class FakeItemsApi implements ItemsApi {
   final List<String> rerouteCommandIds = [];
   int rerouteCallCount = 0;
 
+  Object? checkOffError;
+  Object? uncheckError;
+  Object? postponeError;
+  Object? postponeToListError;
+
+  String? lastCheckedOffItemId;
+  final List<String> checkOffCommandIds = [];
+  int checkOffCallCount = 0;
+
+  String? lastUncheckedItemId;
+  final List<String> uncheckCommandIds = [];
+  int uncheckCallCount = 0;
+
+  String? lastPostponedItemId;
+  final List<String> postponeCommandIds = [];
+  int postponeCallCount = 0;
+
+  String? lastPostponedToListItemId;
+  String? lastPostponedTargetListId;
+  final List<String> postponeToListCommandIds = [];
+  int postponeToListCallCount = 0;
+
   @override
   Future<List<Item>> listItems(String householdId, String listId) async {
     if (listError != null) throw listError!;
@@ -153,5 +175,44 @@ class FakeItemsApi implements ItemsApi {
     rerouteCommandIds.add(commandId);
     rerouteCallCount++;
     if (rerouteError != null) throw rerouteError!;
+  }
+
+  @override
+  Future<void> checkOffItem(String householdId, String listId, String itemId, {required String commandId}) async {
+    lastCheckedOffItemId = itemId;
+    checkOffCommandIds.add(commandId);
+    checkOffCallCount++;
+    if (checkOffError != null) throw checkOffError!;
+  }
+
+  @override
+  Future<void> uncheckItem(String householdId, String listId, String itemId, {required String commandId}) async {
+    lastUncheckedItemId = itemId;
+    uncheckCommandIds.add(commandId);
+    uncheckCallCount++;
+    if (uncheckError != null) throw uncheckError!;
+  }
+
+  @override
+  Future<void> postponeItem(String householdId, String listId, String itemId, {required String commandId}) async {
+    lastPostponedItemId = itemId;
+    postponeCommandIds.add(commandId);
+    postponeCallCount++;
+    if (postponeError != null) throw postponeError!;
+  }
+
+  @override
+  Future<void> postponeItemToList(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  }) async {
+    lastPostponedToListItemId = itemId;
+    lastPostponedTargetListId = targetListId;
+    postponeToListCommandIds.add(commandId);
+    postponeToListCallCount++;
+    if (postponeToListError != null) throw postponeToListError!;
   }
 }

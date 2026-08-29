@@ -26,6 +26,7 @@ void main() {
   group('ListDetailPage', () {
     late FakeItemsApi itemsApi;
     late FakeItemSuggestionsApi itemSuggestionsApi;
+    late FakeShoppingListsApi shoppingListsApi;
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeTripsApi tripsApi;
@@ -33,31 +34,35 @@ void main() {
     setUp(() {
       itemsApi = FakeItemsApi();
       itemSuggestionsApi = FakeItemSuggestionsApi();
+      shoppingListsApi = FakeShoppingListsApi();
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
       tripsApi = FakeTripsApi();
     });
 
     Widget buildSubject({bool isReadOnly = false}) => wrapForTesting(
-          RepositoryProvider<StoresApi>.value(
-            value: storesApi,
-            child: RepositoryProvider<StoreChainReferenceCache>.value(
-              value: referenceCache,
-              child: RepositoryProvider<ItemsApi>.value(
-                value: itemsApi,
-                child: RepositoryProvider<TripsApi>.value(
-                  value: tripsApi,
-                  child: BlocProvider(
-                    create: (_) => ListDetailCubit(
-                      itemsApi: itemsApi,
-                      itemSuggestionsApi: itemSuggestionsApi,
-                      storesApi: storesApi,
-                      tripsApi: tripsApi,
-                      householdId: 'household-1',
-                      listId: 'list-1',
-                      isReadOnly: isReadOnly,
-                    )..bootstrap(),
-                    child: const ListDetailPage(title: 'Wocheneinkauf'),
+          RepositoryProvider<ShoppingListsApi>.value(
+            value: shoppingListsApi,
+            child: RepositoryProvider<StoresApi>.value(
+              value: storesApi,
+              child: RepositoryProvider<StoreChainReferenceCache>.value(
+                value: referenceCache,
+                child: RepositoryProvider<ItemsApi>.value(
+                  value: itemsApi,
+                  child: RepositoryProvider<TripsApi>.value(
+                    value: tripsApi,
+                    child: BlocProvider(
+                      create: (_) => ListDetailCubit(
+                        itemsApi: itemsApi,
+                        itemSuggestionsApi: itemSuggestionsApi,
+                        storesApi: storesApi,
+                        tripsApi: tripsApi,
+                        householdId: 'household-1',
+                        listId: 'list-1',
+                        isReadOnly: isReadOnly,
+                      )..bootstrap(),
+                      child: const ListDetailPage(title: 'Wocheneinkauf'),
+                    ),
                   ),
                 ),
               ),

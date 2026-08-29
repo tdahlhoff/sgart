@@ -71,6 +71,44 @@ abstract interface class ItemsApi {
     required String storeId,
     required String commandId,
   });
+
+  /// Checks off [itemId] during a trip (Story 3.3, AC2) — marks it `DONE`. Already-DONE is a
+  /// convergent no-op server-side. Throws `item.notDuringTrip` when the list is no longer In-Trip.
+  Future<void> checkOffItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  });
+
+  /// Unchecks [itemId] during a trip (Story 3.3, AC2) — returns it to `OPEN`. Already-OPEN is a
+  /// convergent no-op server-side.
+  Future<void> uncheckItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  });
+
+  /// Postpones [itemId] in place during a trip (Story 3.3, AC3) — marks it `POSTPONED`. Already-
+  /// POSTPONED is a convergent no-op server-side.
+  Future<void> postponeItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  });
+
+  /// Postpones [itemId] to [targetListId] during a trip (Story 3.3, AC4) — removes the item from
+  /// the source list; the backend's process manager adds it to the target. [commandId] is the reused
+  /// idempotency key.
+  Future<void> postponeItemToList(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  });
 }
 
 class HttpItemsApi implements ItemsApi {
@@ -173,6 +211,53 @@ class HttpItemsApi implements ItemsApi {
   }) async {
     await _client.postJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/reroute', {
       'storeId': storeId,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> checkOffItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  }) async {
+    await _client.postJson(
+        '/api/v1/households/$householdId/lists/$listId/items/$itemId/check-off', {'commandId': commandId});
+  }
+
+  @override
+  Future<void> uncheckItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  }) async {
+    await _client.postJson(
+        '/api/v1/households/$householdId/lists/$listId/items/$itemId/uncheck', {'commandId': commandId});
+  }
+
+  @override
+  Future<void> postponeItem(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String commandId,
+  }) async {
+    await _client.postJson(
+        '/api/v1/households/$householdId/lists/$listId/items/$itemId/postpone', {'commandId': commandId});
+  }
+
+  @override
+  Future<void> postponeItemToList(
+    String householdId,
+    String listId,
+    String itemId, {
+    required String targetListId,
+    required String commandId,
+  }) async {
+    await _client.postJson('/api/v1/households/$householdId/lists/$listId/items/$itemId/postpone-to-list', {
+      'targetListId': targetListId,
       'commandId': commandId,
     });
   }

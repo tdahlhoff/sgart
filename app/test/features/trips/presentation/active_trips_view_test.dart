@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
+import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/features/trips/data/trips_api.dart';
@@ -33,20 +34,23 @@ void main() {
     });
 
     Widget buildSubject() => wrapForTesting(
-          RepositoryProvider<TripsApi>.value(
-            value: tripsApi,
-            child: RepositoryProvider<ItemsApi>.value(
-              value: itemsApi,
-              child: RepositoryProvider<StoresApi>.value(
-                value: storesApi,
-                child: RepositoryProvider<StoreChainReferenceCache>.value(
-                  value: referenceCache,
-                  child: BlocProvider(
-                    create: (_) => ActiveTripsCubit(
-                      shoppingListsApi: shoppingListsApi,
-                      householdId: 'household-1',
-                    )..bootstrap(),
-                    child: const Scaffold(body: ActiveTripsView()),
+          RepositoryProvider<ShoppingListsApi>.value(
+            value: shoppingListsApi,
+            child: RepositoryProvider<TripsApi>.value(
+              value: tripsApi,
+              child: RepositoryProvider<ItemsApi>.value(
+                value: itemsApi,
+                child: RepositoryProvider<StoresApi>.value(
+                  value: storesApi,
+                  child: RepositoryProvider<StoreChainReferenceCache>.value(
+                    value: referenceCache,
+                    child: BlocProvider(
+                      create: (_) => ActiveTripsCubit(
+                        shoppingListsApi: shoppingListsApi,
+                        householdId: 'household-1',
+                      )..bootstrap(),
+                      child: const Scaffold(body: ActiveTripsView()),
+                    ),
                   ),
                 ),
               ),

@@ -13,7 +13,7 @@ import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.application.exception.InvalidTripStoreSelectionException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
-import de.sgart.collaboration.application.exception.ItemNotReroutableApplicationException;
+import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
@@ -149,8 +149,8 @@ class WriteErrorAdvice {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 
-    @ExceptionHandler(ItemNotReroutableApplicationException.class)
-    ResponseEntity<ErrorDescriptor> handleItemNotReroutable(ItemNotReroutableApplicationException exception) {
+    @ExceptionHandler(ItemNotDuringTripApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleItemNotDuringTrip(ItemNotDuringTripApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 

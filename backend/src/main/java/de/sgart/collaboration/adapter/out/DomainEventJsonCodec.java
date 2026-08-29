@@ -11,9 +11,13 @@ import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
+import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
@@ -62,6 +66,10 @@ final class DomainEventJsonCodec {
     static final String TRIP_STARTED_TYPE = "TripStarted";
     static final String ITEM_REROUTED_TYPE = "ItemRerouted";
     static final String STORE_ADDED_TO_TRIP_TYPE = "StoreAddedToTrip";
+    static final String ITEM_CHECKED_OFF_TYPE = "ItemCheckedOff";
+    static final String ITEM_UNCHECKED_TYPE = "ItemUnchecked";
+    static final String ITEM_POSTPONED_TYPE = "ItemPostponed";
+    static final String ITEM_POSTPONED_TO_LIST_TYPE = "ItemPostponedToList";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -83,6 +91,10 @@ final class DomainEventJsonCodec {
             case TripStarted ignored -> TRIP_STARTED_TYPE;
             case ItemRerouted ignored -> ITEM_REROUTED_TYPE;
             case StoreAddedToTrip ignored -> STORE_ADDED_TO_TRIP_TYPE;
+            case ItemCheckedOff ignored -> ITEM_CHECKED_OFF_TYPE;
+            case ItemUnchecked ignored -> ITEM_UNCHECKED_TYPE;
+            case ItemPostponed ignored -> ITEM_POSTPONED_TYPE;
+            case ItemPostponedToList ignored -> ITEM_POSTPONED_TO_LIST_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -181,6 +193,31 @@ final class DomainEventJsonCodec {
                     added.tripId().value().toString(),
                     added.householdId().value().toString(),
                     added.storeId().value().toString()));
+            case ItemCheckedOff checkedOff -> jsonMapper.writeValueAsBytes(new ItemStatusEventPayload(
+                    checkedOff.eventId().value().toString(),
+                    checkedOff.householdId().value().toString(),
+                    checkedOff.listId().value().toString(),
+                    checkedOff.itemId().value().toString()));
+            case ItemUnchecked unchecked -> jsonMapper.writeValueAsBytes(new ItemStatusEventPayload(
+                    unchecked.eventId().value().toString(),
+                    unchecked.householdId().value().toString(),
+                    unchecked.listId().value().toString(),
+                    unchecked.itemId().value().toString()));
+            case ItemPostponed postponed -> jsonMapper.writeValueAsBytes(new ItemStatusEventPayload(
+                    postponed.eventId().value().toString(),
+                    postponed.householdId().value().toString(),
+                    postponed.listId().value().toString(),
+                    postponed.itemId().value().toString()));
+            case ItemPostponedToList postponedToList -> jsonMapper.writeValueAsBytes(new ItemPostponedToListPayload(
+                    postponedToList.eventId().value().toString(),
+                    postponedToList.householdId().value().toString(),
+                    postponedToList.sourceListId().value().toString(),
+                    postponedToList.itemId().value().toString(),
+                    postponedToList.targetListId().value().toString(),
+                    postponedToList.name().value(),
+                    postponedToList.note() == null ? null : postponedToList.note().value(),
+                    postponedToList.quantity().amount().toPlainString(),
+                    postponedToList.quantity().unit().name()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -324,6 +361,42 @@ final class DomainEventJsonCodec {
                         HouseholdId.fromString(payload.householdId()),
                         StoreId.fromString(payload.storeId()));
             }
+            case ITEM_CHECKED_OFF_TYPE -> {
+                ItemStatusEventPayload payload = jsonMapper.readValue(json, ItemStatusEventPayload.class);
+                yield new ItemCheckedOff(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()));
+            }
+            case ITEM_UNCHECKED_TYPE -> {
+                ItemStatusEventPayload payload = jsonMapper.readValue(json, ItemStatusEventPayload.class);
+                yield new ItemUnchecked(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()));
+            }
+            case ITEM_POSTPONED_TYPE -> {
+                ItemStatusEventPayload payload = jsonMapper.readValue(json, ItemStatusEventPayload.class);
+                yield new ItemPostponed(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()));
+            }
+            case ITEM_POSTPONED_TO_LIST_TYPE -> {
+                ItemPostponedToListPayload payload = jsonMapper.readValue(json, ItemPostponedToListPayload.class);
+                yield new ItemPostponedToList(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        ShoppingListId.fromString(payload.sourceListId()),
+                        ItemId.fromString(payload.itemId()),
+                        ShoppingListId.fromString(payload.targetListId()),
+                        new ItemName(payload.name()),
+                        payload.note() == null ? null : new ItemNote(payload.note()),
+                        new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())));
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -386,4 +459,19 @@ final class DomainEventJsonCodec {
             String eventId, String householdId, String listId, String itemId, String storeId) {}
 
     private record StoreAddedToTripPayload(String eventId, String tripId, String householdId, String storeId) {}
+
+    /** Shared payload for {@code ItemCheckedOff}, {@code ItemUnchecked}, and {@code ItemPostponed} — all carry the same four fields. */
+    private record ItemStatusEventPayload(String eventId, String householdId, String listId, String itemId) {}
+
+    /** {@code note} is nullable — a postponed item with no note round-trips a JSON {@code null}. */
+    private record ItemPostponedToListPayload(
+            String eventId,
+            String householdId,
+            String sourceListId,
+            String itemId,
+            String targetListId,
+            String name,
+            String note,
+            String amount,
+            String unit) {}
 }

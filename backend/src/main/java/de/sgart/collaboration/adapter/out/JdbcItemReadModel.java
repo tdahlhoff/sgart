@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.shared.HouseholdId;
@@ -34,7 +35,7 @@ public final class JdbcItemReadModel implements ItemReadModel {
     public List<ItemView> itemsOf(HouseholdId householdId, ShoppingListId listId) {
         return jdbcClient
                 .sql("""
-                        SELECT item_id, name, note, quantity_amount, quantity_unit, store_id FROM item_read_model
+                        SELECT item_id, name, note, quantity_amount, quantity_unit, store_id, status FROM item_read_model
                         WHERE household_id = :householdId AND list_id = :listId
                         ORDER BY sequence_number ASC
                         """)
@@ -50,7 +51,8 @@ public final class JdbcItemReadModel implements ItemReadModel {
                             new Quantity(
                                     resultSet.getBigDecimal("quantity_amount"),
                                     Unit.valueOf(resultSet.getString("quantity_unit"))),
-                            storeId == null ? null : StoreId.fromString(storeId));
+                            storeId == null ? null : StoreId.fromString(storeId),
+                            ItemStatus.valueOf(resultSet.getString("status")));
                 })
                 .list();
     }
@@ -120,6 +122,15 @@ public final class JdbcItemReadModel implements ItemReadModel {
                 .param("note", note == null ? null : note.value())
                 .param("amount", quantity.amount())
                 .param("unit", quantity.unit().name())
+                .update();
+    }
+
+    @Override
+    public void setStatus(ItemId itemId, ItemStatus status) {
+        jdbcClient
+                .sql("UPDATE item_read_model SET status = :status WHERE item_id = :itemId")
+                .param("itemId", itemId.value())
+                .param("status", status.name())
                 .update();
     }
 

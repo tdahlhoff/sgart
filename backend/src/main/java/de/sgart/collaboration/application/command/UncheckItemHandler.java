@@ -17,24 +17,22 @@ import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.ShoppingListId;
-import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * Orchestrates {@link RerouteItem} (AC2, AC5, Cl. 1/8): resolve the caller's household-scoped
- * {@code MemberId} (AD-2), load the {@link ShoppingList} aggregate, and let it enforce the {@code
- * IN_TRIP}-only, unknown-item, and same-store-no-op invariants. The append uses the <em>loaded</em>
- * stream version as the expected version (AD-8); a same-store no-op raises nothing, so the append
- * is skipped (convergent no-op, mirroring {@link AssignItemToStoreHandler}).
+ * Orchestrates {@link UncheckItem} (Story 3.3, AC2): resolve the caller's household-scoped
+ * {@code MemberId} (AD-2), load the {@link ShoppingList} aggregate, and let it enforce the
+ * {@code IN_TRIP}-only and unknown-item invariants. A convergent no-op (already OPEN) raises
+ * nothing; the append is skipped in that case.
  */
-public final class RerouteItemHandler {
+public final class UncheckItemHandler {
 
     private final EventStore eventStore;
     private final ResolveMemberIdentity resolveMemberIdentity;
 
-    public RerouteItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+    public UncheckItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.resolveMemberIdentity =
                 Objects.requireNonNull(resolveMemberIdentity, "resolveMemberIdentity must not be null");
@@ -42,7 +40,6 @@ public final class RerouteItemHandler {
 
     /**
      * @param keycloakUserId the caller's identity, resolved server-side from the JWT {@code sub}
-     *     (AR10, AD-5).
      * @throws InvalidCommandEnvelopeException if the command envelope is malformed (400)
      * @throws NotAMemberException if the caller is not a member of the household (403)
      * @throws ShoppingListNotFoundException if {@code listId} is unknown or belongs to another household (404)
@@ -54,7 +51,6 @@ public final class RerouteItemHandler {
             String rawHouseholdId,
             String rawListId,
             String rawItemId,
-            String rawStoreId,
             String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
 
@@ -62,7 +58,6 @@ public final class RerouteItemHandler {
         HouseholdId householdId = CommandFieldTranslations.toHouseholdId(rawHouseholdId);
         ShoppingListId listId = CommandFieldTranslations.toShoppingListId(rawListId);
         ItemId itemId = CommandFieldTranslations.toItemId(rawItemId);
-        StoreId storeId = CommandFieldTranslations.toStoreId(rawStoreId);
 
         resolveMemberIdentity.resolve(keycloakUserId, householdId);
 
@@ -76,10 +71,10 @@ public final class RerouteItemHandler {
             throw new ShoppingListNotFoundException("No shopping list found for id " + listId);
         }
         AggregateVersion loadedVersion = list.version();
-        RerouteItem command = new RerouteItem(listId, itemId, storeId, commandId, loadedVersion);
+        UncheckItem command = new UncheckItem(listId, itemId, commandId, loadedVersion);
 
         try {
-            list.rerouteItem(command.itemId(), command.storeId(), command.commandId());
+            list.uncheckItem(command.itemId(), command.commandId());
         } catch (ItemNotFoundException notFound) {
             throw new ItemNotFoundApplicationException(notFound.getMessage());
         } catch (ItemNotDuringTripException notDuringTrip) {

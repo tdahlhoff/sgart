@@ -8,7 +8,7 @@ import de.sgart.collaboration.application.command.RerouteItemHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
-import de.sgart.collaboration.application.exception.ItemNotReroutableApplicationException;
+import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
@@ -180,6 +180,6 @@ class RerouteItemHandlerTest {
         assertThatThrownBy(() -> handler.handle(
                         MEMBER_SUB, householdId.toString(), listId.toString(), itemId.toString(),
                         StoreId.generate().toString(), UUID.randomUUID().toString()))
-                .isInstanceOf(ItemNotReroutableApplicationException.class);
+                .isInstanceOf(ItemNotDuringTripApplicationException.class);
     }
 }

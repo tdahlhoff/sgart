@@ -7,6 +7,7 @@ import de.sgart.collaboration.application.exception.TripNotFoundException;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.TripView;
 import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
@@ -100,6 +101,11 @@ class TripViewTest {
         public Optional<ItemName> nameOf(ItemId itemId) {
             return Optional.empty();
         }
+
+        @Override
+        public void setStatus(ItemId itemId, ItemStatus status) {
+            throw new UnsupportedOperationException("the projector's write, never a query's");
+        }
     }
 
     @Test
@@ -115,7 +121,7 @@ class TripViewTest {
                 new FakeShoppingListReadModel((household, id) -> household.equals(householdId) ? list : null),
                 new FakeTripStoreReadModel(java.util.Map.of(tripId, List.of(edeka, netto))),
                 new FakeItemReadModel(List.of(
-                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka))));
+                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.OPEN))));
 
         TripView.TripViewResult result = tripView.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
@@ -124,7 +130,7 @@ class TripViewTest {
         assertThat(result.storeIds()).containsExactly(edeka.toString(), netto.toString());
         assertThat(result.items())
                 .containsExactly(new ListItems.ItemSummary(
-                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString()));
+                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "OPEN"));
     }
 
     @Test

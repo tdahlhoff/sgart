@@ -10,8 +10,12 @@ import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
+import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.ShoppingListName;
@@ -270,6 +274,44 @@ class DomainEventJsonCodecTest {
 
         assertThat(codec.typeTagFor(event)).isEqualTo("ItemRerouted");
         assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemCheckedOffRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemCheckedOff event = new ItemCheckedOff(EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemCheckedOff");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemUncheckedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemUnchecked event = new ItemUnchecked(EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemUnchecked");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemPostponedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemPostponed event = new ItemPostponed(EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemPostponed");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemPostponedToListRoundTripsThroughJsonWithNullableNote() {
+        ItemPostponedToList withNote = new ItemPostponedToList(
+                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(),
+                ShoppingListId.generate(), new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE));
+        ItemPostponedToList withoutNote = new ItemPostponedToList(
+                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(),
+                ShoppingListId.generate(), new ItemName("Brot"), null, Quantity.of(2, Unit.PACK));
+
+        assertThat(codec.typeTagFor(withNote)).isEqualTo("ItemPostponedToList");
+        assertThat(roundTrip(withNote)).isEqualTo(withNote);
+        assertThat(roundTrip(withoutNote)).isEqualTo(withoutNote);
     }
 
     @Test

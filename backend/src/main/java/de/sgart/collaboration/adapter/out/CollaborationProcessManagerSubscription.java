@@ -3,6 +3,7 @@ package de.sgart.collaboration.adapter.out;
 import de.sgart.collaboration.application.ItemMoveProcessManager;
 import de.sgart.collaboration.application.TripStartProcessManager;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.StreamId;
@@ -72,6 +73,8 @@ public final class CollaborationProcessManagerSubscription implements SmartLifec
     void react(DomainEvent event) {
         if (event instanceof ItemMovedToList moved) {
             itemMoveProcessManager.onItemMovedToList(moved);
+        } else if (event instanceof ItemPostponedToList postponed) {
+            itemMoveProcessManager.onItemPostponedToList(postponed);
         } else if (event instanceof TripStartedForList started) {
             tripStartProcessManager.onTripStartedForList(started);
         }

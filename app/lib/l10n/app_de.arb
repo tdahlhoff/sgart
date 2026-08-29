@@ -841,6 +841,56 @@
     }
   },
 
+  "tripProgressLabel": "{done} von {total} erledigt",
+  "@tripProgressLabel": {
+    "description": "Progress label in the trip screen header — N of M items done (Story 3.3, AC5).",
+    "placeholders": {
+      "done": {
+        "type": "int",
+        "example": "2"
+      },
+      "total": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+
+  "tripItemCheckOffSemantic": "Artikel abhaken",
+  "@tripItemCheckOffSemantic": {
+    "description": "Accessibility label for the checkbox when an item is OPEN — action marks it DONE (Story 3.3, AC2, UX-DR5)."
+  },
+
+  "tripItemUncheckSemantic": "Abhaken rückgängig machen",
+  "@tripItemUncheckSemantic": {
+    "description": "Accessibility label for the checkbox when an item is DONE — action returns it to OPEN (Story 3.3, AC2, UX-DR5)."
+  },
+
+  "tripItemPostponeAction": "Verschieben",
+  "@tripItemPostponeAction": {
+    "description": "Label / accessibility label of the postpone affordance on a trip item row (Story 3.3, AC3/AC4, UX-DR5)."
+  },
+
+  "tripPostponeSheetTitle": "Wohin verschieben?",
+  "@tripPostponeSheetTitle": {
+    "description": "Heading of the postpone target picker sheet (Story 3.3, AC3/AC4)."
+  },
+
+  "tripPostponeInPlace": "Hier vormerken",
+  "@tripPostponeInPlace": {
+    "description": "The postpone-in-place option in the postpone target sheet — keeps the item on this list with status POSTPONED (Story 3.3, AC3)."
+  },
+
+  "tripPostponedLabel": "Verschoben",
+  "@tripPostponedLabel": {
+    "description": "Set-aside status label shown on a POSTPONED item row in the trip screen (Story 3.3, AC3, Cl. 7)."
+  },
+
+  "tripPostponeEmptyTargets": "Keine andere offene Liste.",
+  "@tripPostponeEmptyTargets": {
+    "description": "Shown in the postpone target sheet when the household has no other Open list (Story 3.3, AC4)."
+  },
+
   "profileDisplaySectionLabel": "Darstellung",
   "@profileDisplaySectionLabel": {
     "description": "Section heading on the Profil screen grouping display/appearance settings (Story 1.11, AC2)."

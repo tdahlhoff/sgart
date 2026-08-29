@@ -2,9 +2,13 @@ package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
+import de.sgart.collaboration.application.command.CheckOffItemHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
+import de.sgart.collaboration.application.command.PostponeItemHandler;
+import de.sgart.collaboration.application.command.PostponeItemToListHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RerouteItemHandler;
+import de.sgart.collaboration.application.command.UncheckItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
@@ -42,6 +46,10 @@ class ItemController {
     private final MoveItemHandler moveItemHandler;
     private final AssignItemToStoreHandler assignItemToStoreHandler;
     private final RerouteItemHandler rerouteItemHandler;
+    private final CheckOffItemHandler checkOffItemHandler;
+    private final UncheckItemHandler uncheckItemHandler;
+    private final PostponeItemHandler postponeItemHandler;
+    private final PostponeItemToListHandler postponeItemToListHandler;
     private final ListItems listItems;
 
     ItemController(
@@ -51,6 +59,10 @@ class ItemController {
             MoveItemHandler moveItemHandler,
             AssignItemToStoreHandler assignItemToStoreHandler,
             RerouteItemHandler rerouteItemHandler,
+            CheckOffItemHandler checkOffItemHandler,
+            UncheckItemHandler uncheckItemHandler,
+            PostponeItemHandler postponeItemHandler,
+            PostponeItemToListHandler postponeItemToListHandler,
             ListItems listItems) {
         this.addItemHandler = addItemHandler;
         this.updateItemHandler = updateItemHandler;
@@ -58,6 +70,10 @@ class ItemController {
         this.moveItemHandler = moveItemHandler;
         this.assignItemToStoreHandler = assignItemToStoreHandler;
         this.rerouteItemHandler = rerouteItemHandler;
+        this.checkOffItemHandler = checkOffItemHandler;
+        this.uncheckItemHandler = uncheckItemHandler;
+        this.postponeItemHandler = postponeItemHandler;
+        this.postponeItemToListHandler = postponeItemToListHandler;
         this.listItems = listItems;
     }
 
@@ -94,7 +110,8 @@ class ItemController {
                         summary.note(),
                         summary.amount(),
                         summary.unit(),
-                        summary.storeId()))
+                        summary.storeId(),
+                        summary.status()))
                 .toList();
     }
 
@@ -176,6 +193,55 @@ class ItemController {
                 caller.keycloakUserId(), householdId, listId, itemId, request.storeId(), request.commandId());
     }
 
+    @PostMapping("/{itemId}/check-off")
+    @ResponseStatus(HttpStatus.OK)
+    void checkOff(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody StatusCommandRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+        checkOffItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
+    }
+
+    @PostMapping("/{itemId}/uncheck")
+    @ResponseStatus(HttpStatus.OK)
+    void uncheck(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody StatusCommandRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+        uncheckItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
+    }
+
+    @PostMapping("/{itemId}/postpone")
+    @ResponseStatus(HttpStatus.OK)
+    void postpone(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody StatusCommandRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+        postponeItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
+    }
+
+    @PostMapping("/{itemId}/postpone-to-list")
+    @ResponseStatus(HttpStatus.OK)
+    void postponeToList(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String itemId,
+            @RequestBody PostponeToListRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+        postponeItemToListHandler.handle(
+                caller.keycloakUserId(), householdId, listId, itemId, request.targetListId(), request.commandId());
+    }
+
     /**
      * Transport DTO for {@code POST} — the add-item command envelope (AR10). {@code itemId} is the
      * client-minted id; {@code note} is optional; {@code amount} is a decimal string, {@code unit}
@@ -202,6 +268,12 @@ class ItemController {
     /** Transport DTO for {@code POST .../reroute} — the reroute-item command envelope (Story 3.2). */
     record RerouteItemRequest(String storeId, String commandId) {}
 
-    /** {@code note}/{@code storeId} are {@code null} when absent; {@code amount} a decimal string, {@code unit} the enum name. */
-    record ItemResponse(String itemId, String name, String note, String amount, String unit, String storeId) {}
+    /** Transport DTO for {@code POST .../check-off}, {@code .../uncheck}, {@code .../postpone} (Story 3.3). */
+    record StatusCommandRequest(String commandId) {}
+
+    /** Transport DTO for {@code POST .../postpone-to-list} (Story 3.3, AC4/AC5). */
+    record PostponeToListRequest(String targetListId, String commandId) {}
+
+    /** {@code note}/{@code storeId} are {@code null} when absent; {@code amount} a decimal string, {@code unit} and {@code status} enum names. */
+    record ItemResponse(String itemId, String name, String note, String amount, String unit, String storeId, String status) {}
 }

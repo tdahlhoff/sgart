@@ -1,6 +1,7 @@
 package de.sgart.collaboration.domain.readmodel;
 
 import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.ShoppingListId;
@@ -34,8 +35,11 @@ public interface ItemReadModel {
      */
     Optional<HouseholdId> householdIdOf(ItemId itemId);
 
-    /** The projector's {@code ItemAssignedToStore} write (AC1) — sets the item's assigned store. */
+    /** The projector's {@code ItemAssignedToStore} write — sets the item's assigned store. */
     void assignStore(ItemId itemId, StoreId storeId);
+
+    /** The projector's status-event write (Story 3.3) — sets the item's in-trip status. */
+    void setStatus(ItemId itemId, ItemStatus status);
 
     /**
      * @return the item's name, if its row has been projected yet (Story 2.6, Cl. 6) — used by the

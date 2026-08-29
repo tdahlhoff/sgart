@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
+import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.TripStartedForList;
@@ -218,7 +223,7 @@ class ShoppingListReadModelProjectorTest {
                 Quantity.of(1, Unit.PIECE)));
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN));
     }
 
     @Test
@@ -236,7 +241,7 @@ class ShoppingListReadModelProjectorTest {
                 EventId.generate(), listId, itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE)));
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), null));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), null, ItemStatus.OPEN));
     }
 
     @Test
@@ -301,7 +306,7 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, sourceListId)).isEmpty();
         assertThat(itemReadModel.itemsOf(householdId, targetListId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN));
     }
 
     @Test
@@ -465,7 +470,7 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
                 .containsExactly(
-                        new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId));
+                        new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN));
         assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
                 .containsExactly(
                         new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId));
@@ -663,6 +668,79 @@ class ShoppingListReadModelProjectorTest {
         List<ItemSuggestionView> suggestions = itemSuggestionReadModel.suggestionsOf(householdId);
         assertThat(suggestions).hasSize(1);
         assertThat(suggestions.get(0).defaultStore()).isEqualTo(planningStore);
+    }
+
+    @Test
+    void projectingItemCheckedOffSetsStatusToDone() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemCheckedOff(EventId.generate(), householdId, listId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DONE);
+    }
+
+    @Test
+    void projectingItemUncheckedSetsStatusToOpen() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemCheckedOff(EventId.generate(), householdId, listId, itemId));
+
+        projector.project(new ItemUnchecked(EventId.generate(), householdId, listId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.OPEN);
+    }
+
+    @Test
+    void projectingItemPostponedSetsStatusToPostponed() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemPostponed(EventId.generate(), householdId, listId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.POSTPONED);
+    }
+
+    @Test
+    void projectingItemPostponedToListDeletesTheSourceRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemPostponedToList(EventId.generate(), householdId, listId, itemId,
+                ShoppingListId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void projectingItemCheckedOffDoesNotLeakStatusAcrossHouseholds() {
+        HouseholdId householdAId = HouseholdId.generate();
+        HouseholdId householdBId = HouseholdId.generate();
+        ShoppingListId listAId = ShoppingListId.generate();
+        ShoppingListId listBId = ShoppingListId.generate();
+        ItemId itemAId = ItemId.generate();
+        ItemId itemBId = ItemId.generate();
+        projector.project(ShoppingList.create(listAId, householdAId, new ShoppingListName("Liste A"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(ShoppingList.create(listBId, householdBId, new ShoppingListName("Liste B"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdAId, listAId, itemAId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemAdded(EventId.generate(), householdBId, listBId, itemBId, new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemCheckedOff(EventId.generate(), householdAId, listAId, itemAId));
+
+        assertThat(itemReadModel.itemsOf(householdAId, listAId).get(0).status()).isEqualTo(ItemStatus.DONE);
+        assertThat(itemReadModel.itemsOf(householdBId, listBId).get(0).status()).isEqualTo(ItemStatus.OPEN);
     }
 
     @Test

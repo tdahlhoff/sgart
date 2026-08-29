@@ -42,6 +42,15 @@ class TripCubit extends Cubit<TripState> {
   /// reused for an inline-created store (created inside the picker, then added to the trip here).
   final CommandIntent _addStoreIntent = CommandIntent();
 
+  /// Per-item status intents, each keyed on `itemId` — check-off, uncheck, postpone-in-place (Story
+  /// 3.3, AC2/AC3).
+  final CommandIntent _checkOffIntent = CommandIntent();
+  final CommandIntent _uncheckIntent = CommandIntent();
+  final CommandIntent _postponeInPlaceIntent = CommandIntent();
+
+  /// Postpone-to-list intent, keyed on `(itemId, targetListId)` (Story 3.3, AC4).
+  final CommandIntent _postponeToListIntent = CommandIntent();
+
   /// Loads the trip's grouped view, then the household's active stores (best-effort — a store-load
   /// failure never fails the whole screen, mirroring `ListDetailCubit.bootstrap`). Called once,
   /// right after construction.
@@ -88,7 +97,15 @@ class TripCubit extends Cubit<TripState> {
     final commandId = _rerouteIntent.commandId;
     final updatedItems = originalItems
         .map((item) => item.itemId == itemId
-            ? Item(itemId: item.itemId, name: item.name, note: item.note, amount: item.amount, unit: item.unit, storeId: storeId)
+            ? Item(
+                itemId: item.itemId,
+                name: item.name,
+                note: item.note,
+                amount: item.amount,
+                unit: item.unit,
+                storeId: storeId,
+                status: item.status,
+              )
             : item)
         .toList();
     _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
@@ -133,6 +150,101 @@ class TripCubit extends Cubit<TripState> {
         isSubmitting: false,
         actionError: _toAppError(error),
       ));
+    }
+  }
+
+  /// Checks off [itemId] (Story 3.3, AC2) — optimistically sets status to `DONE`; reverts on
+  /// failure. A re-entrant call while a submit is in flight is ignored.
+  Future<void> checkOff(String itemId) async {
+    await _applyStatusChange(
+      itemId: itemId,
+      newStatus: 'DONE',
+      intent: _checkOffIntent,
+      send: (commandId) => itemsApi.checkOffItem(householdId, listId, itemId, commandId: commandId),
+    );
+  }
+
+  /// Unchecks [itemId] (Story 3.3, AC2) — optimistically sets status to `OPEN`; reverts on failure.
+  Future<void> uncheck(String itemId) async {
+    await _applyStatusChange(
+      itemId: itemId,
+      newStatus: 'OPEN',
+      intent: _uncheckIntent,
+      send: (commandId) => itemsApi.uncheckItem(householdId, listId, itemId, commandId: commandId),
+    );
+  }
+
+  /// Postpones [itemId] in place (Story 3.3, AC3) — optimistically sets status to `POSTPONED`;
+  /// reverts on failure.
+  Future<void> postponeInPlace(String itemId) async {
+    await _applyStatusChange(
+      itemId: itemId,
+      newStatus: 'POSTPONED',
+      intent: _postponeInPlaceIntent,
+      send: (commandId) => itemsApi.postponeItem(householdId, listId, itemId, commandId: commandId),
+    );
+  }
+
+  Future<void> _applyStatusChange({
+    required String itemId,
+    required String newStatus,
+    required CommandIntent intent,
+    required Future<void> Function(String commandId) send,
+  }) async {
+    if (state.status != TripStatus.ready || state.isSubmitting) {
+      return;
+    }
+    final originalItems = state.items;
+    final target = originalItems.where((item) => item.itemId == itemId).firstOrNull;
+    if (target == null) {
+      return;
+    }
+    intent.beginAttempt(itemId);
+    final commandId = intent.commandId;
+    final updatedItems = originalItems
+        .map((item) => item.itemId == itemId
+            ? Item(
+                itemId: item.itemId,
+                name: item.name,
+                note: item.note,
+                amount: item.amount,
+                unit: item.unit,
+                storeId: item.storeId,
+                status: newStatus,
+              )
+            : item)
+        .toList();
+    _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
+    try {
+      await send(commandId);
+      _safeEmit(state.copyWith(isSubmitting: false));
+      intent.complete();
+    } on Object catch (error) {
+      _safeEmit(state.copyWith(items: originalItems, isSubmitting: false, actionError: _toAppError(error)));
+    }
+  }
+
+  /// Postpones [itemId] to [targetListId] (Story 3.3, AC4) — optimistically removes the item from
+  /// the list; reverts on failure. A re-entrant call while a submit is in flight is ignored.
+  Future<void> postponeToList(String itemId, String targetListId) async {
+    if (state.status != TripStatus.ready || state.isSubmitting) {
+      return;
+    }
+    final originalItems = state.items;
+    final target = originalItems.where((item) => item.itemId == itemId).firstOrNull;
+    if (target == null) {
+      return;
+    }
+    _postponeToListIntent.beginAttempt((itemId, targetListId));
+    final commandId = _postponeToListIntent.commandId;
+    final updatedItems = originalItems.where((item) => item.itemId != itemId).toList();
+    _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
+    try {
+      await itemsApi.postponeItemToList(householdId, listId, itemId, targetListId: targetListId, commandId: commandId);
+      _safeEmit(state.copyWith(isSubmitting: false));
+      _postponeToListIntent.complete();
+    } on Object catch (error) {
+      _safeEmit(state.copyWith(items: originalItems, isSubmitting: false, actionError: _toAppError(error)));
     }
   }
 

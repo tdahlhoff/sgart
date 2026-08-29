@@ -65,5 +65,23 @@ void main() {
         throwsA(isA<AppException>()),
       );
     });
+
+    test('parsesStatusWhenPresent', () {
+      final item = Item.fromJson(const {
+        'itemId': 'i1',
+        'name': 'Milch',
+        'amount': '1',
+        'unit': 'PIECE',
+        'status': 'DONE',
+      });
+
+      expect(item.status, 'DONE');
+    });
+
+    test('defaultsStatusToOpenWhenAbsent', () {
+      final item = Item.fromJson(const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE'});
+
+      expect(item.status, 'OPEN');
+    });
   });
 }

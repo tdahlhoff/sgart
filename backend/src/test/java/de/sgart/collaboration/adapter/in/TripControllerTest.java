@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.sgart.collaboration.domain.ItemName;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
@@ -171,6 +172,11 @@ class TripControllerTest {
         @Override
         public Optional<ItemName> nameOf(ItemId itemId) {
             return Optional.empty();
+        }
+
+        @Override
+        public void setStatus(ItemId itemId, ItemStatus status) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
         }
     }
 

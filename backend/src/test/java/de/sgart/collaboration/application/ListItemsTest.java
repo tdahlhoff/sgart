@@ -8,6 +8,7 @@ import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListItems.ItemSummary;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
@@ -70,6 +71,11 @@ class ListItemsTest {
         public Optional<ItemName> nameOf(ItemId itemId) {
             return Optional.empty();
         }
+
+        @Override
+        public void setStatus(ItemId itemId, ItemStatus status) {
+            throw new UnsupportedOperationException("the projector's write, never a query's");
+        }
     }
 
     private void seedMembership() {
@@ -83,15 +89,15 @@ class ListItemsTest {
         ItemId brotId = ItemId.generate();
         StoreId storeId = StoreId.generate();
         ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of(
-                new ItemView(milchId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId),
-                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK), null))));
+                new ItemView(milchId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN),
+                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK), null, ItemStatus.OPEN))));
 
         List<ItemSummary> summaries = listItems.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ItemSummary(milchId.toString(), "Milch", "Bio", "1", "PIECE", storeId.toString()),
-                        new ItemSummary(brotId.toString(), "Brot", null, "2", "PACK", null));
+                        new ItemSummary(milchId.toString(), "Milch", "Bio", "1", "PIECE", storeId.toString(), "OPEN"),
+                        new ItemSummary(brotId.toString(), "Brot", null, "2", "PACK", null, "OPEN"));
     }
 
     @Test
@@ -110,7 +116,7 @@ class ListItemsTest {
         // OTHER household, so a member querying THEIR own household for the same list id sees nothing
         // (AC8 no-data-leak: the query threads householdId into itemsOf, mirroring the SQL WHERE).
         ItemReadModel itemReadModel = new FakeItemReadModel((household, list) -> household.equals(otherHousehold)
-                ? List.of(new ItemView(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null))
+                ? List.of(new ItemView(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN))
                 : List.of());
 
         List<ItemSummary> summaries =

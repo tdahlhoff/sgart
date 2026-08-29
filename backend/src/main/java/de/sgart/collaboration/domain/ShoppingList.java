@@ -2,9 +2,13 @@ package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
+import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -12,7 +16,7 @@ import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
-import de.sgart.collaboration.domain.exception.ItemNotReroutableException;
+import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.CommandId;
@@ -309,6 +313,110 @@ public final class ShoppingList extends EventSourcedAggregate {
         raise(new ItemRerouted(EventId.generate(), householdId, listId, itemId, storeId));
     }
 
+    /**
+     * Checks an item off during a trip (Story 3.3, AC2, Cl. 1) — the item's status becomes
+     * {@link ItemStatus#DONE}. Permitted only while {@link ListStatus#IN_TRIP}. An unknown item
+     * raises {@link ItemNotFoundException}; an already-{@code DONE} item is a convergent no-op
+     * (raises nothing, AD-8). Check-off does not require a store assignment — unassigned items are
+     * checkable. This is the only place an item reaches {@code DONE}.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void checkOffItem(ItemId itemId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireInTrip();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (existing.status() == ItemStatus.DONE) {
+            return; // convergent no-op — already DONE (AD-8)
+        }
+        raise(new ItemCheckedOff(EventId.generate(), householdId, listId, itemId));
+    }
+
+    /**
+     * Unchecks an item during a trip (Story 3.3, AC2/AC3, Cl. 1) — the item's status returns to
+     * {@link ItemStatus#OPEN}. Permitted only while {@link ListStatus#IN_TRIP}. An unknown item
+     * raises {@link ItemNotFoundException}; an already-{@code OPEN} item is a convergent no-op
+     * (raises nothing, AD-8). This is the undo affordance for both {@code DONE} and {@code
+     * POSTPONED} — unchecking returns a {@code POSTPONED} item to {@code OPEN} as well.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void uncheckItem(ItemId itemId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireInTrip();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (existing.status() == ItemStatus.OPEN) {
+            return; // convergent no-op — already OPEN (AD-8)
+        }
+        raise(new ItemUnchecked(EventId.generate(), householdId, listId, itemId));
+    }
+
+    /**
+     * Postpones an item in place during a trip (Story 3.3, AC3, Cl. 1) — the item's status
+     * becomes {@link ItemStatus#POSTPONED}. The item stays on this list (not moved). Permitted
+     * only while {@link ListStatus#IN_TRIP}. An unknown item raises {@link ItemNotFoundException};
+     * an already-{@code POSTPONED} item is a convergent no-op (raises nothing, AD-8). {@link
+     * #uncheckItem} returns a {@code POSTPONED} item to {@code OPEN}; {@link #checkOffItem} may
+     * still move a {@code POSTPONED} item to {@code DONE}.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void postponeItemInPlace(ItemId itemId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireInTrip();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        if (existing.status() == ItemStatus.POSTPONED) {
+            return; // convergent no-op — already POSTPONED (AD-8)
+        }
+        raise(new ItemPostponed(EventId.generate(), householdId, listId, itemId));
+    }
+
+    /**
+     * Postpones an item onto another list during a trip (Story 3.3, AC4, Cl. 3/6) — the source
+     * side of the in-trip cross-aggregate effect (AD-10). The item leaves this list (folds to a
+     * removal). Permitted only while {@link ListStatus#IN_TRIP}. An unknown item raises {@link
+     * ItemNotFoundException}. Does <strong>not</strong> validate {@code targetListId} — this
+     * aggregate does not own the target; that is the handler's job (Cl. 6, mirrors {@link
+     * #moveItem}). The target-side add is the {@code ItemMoveProcessManager}'s job.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void postponeItemToList(ItemId itemId, ShoppingListId targetListId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(targetListId, "targetListId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireInTrip();
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
+            throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
+        }
+        raise(new ItemPostponedToList(
+                EventId.generate(),
+                householdId,
+                listId,
+                itemId,
+                targetListId,
+                existing.name(),
+                existing.note(),
+                existing.quantity()));
+    }
+
     private void requireOpen() {
         if (status != ListStatus.OPEN) {
             throw new ItemChangeNotPermittedException(
@@ -318,8 +426,8 @@ public final class ShoppingList extends EventSourcedAggregate {
 
     private void requireInTrip() {
         if (status != ListStatus.IN_TRIP) {
-            throw new ItemNotReroutableException(
-                    "Items may only be rerouted during a trip, list is " + status);
+            throw new ItemNotDuringTripException(
+                    "Items may only be changed during a trip, list is " + status);
         }
     }
 
@@ -357,21 +465,27 @@ public final class ShoppingList extends EventSourcedAggregate {
             }
             case ShoppingListRenamed renamed -> this.name = renamed.newName();
             case ItemAdded added ->
-                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity(), null));
+                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity(), null, ItemStatus.OPEN));
             case ItemUpdated updated -> {
-                // Cl. 7 regression trap: an edit must carry the existing assignment forward, never
-                // wipe it — only ItemAssignedToStore may change assignedStore.
+                // Cl. 4/7 regression trap: an edit must carry the existing assignment and status
+                // forward — only ItemAssignedToStore may change assignedStore; only the three status
+                // events may change status.
                 ItemState existing = itemsById.get(updated.itemId());
                 StoreId assignedStore = existing == null ? null : existing.assignedStore();
+                ItemStatus status = existing == null ? ItemStatus.OPEN : existing.status();
                 itemsById.put(
                         updated.itemId(),
-                        new ItemState(updated.name(), updated.note(), updated.quantity(), assignedStore));
+                        new ItemState(updated.name(), updated.note(), updated.quantity(), assignedStore, status));
             }
             case ItemRemoved removed -> itemsById.remove(removed.itemId());
             case ItemMovedToList moved -> itemsById.remove(moved.itemId());
             case ItemAssignedToStore assigned -> assignStore(assigned.itemId(), assigned.storeId());
             case ItemRerouted rerouted -> assignStore(rerouted.itemId(), rerouted.storeId());
             case TripStartedForList started -> this.status = ListStatus.IN_TRIP;
+            case ItemCheckedOff checkedOff -> setStatus(checkedOff.itemId(), ItemStatus.DONE);
+            case ItemUnchecked unchecked -> setStatus(unchecked.itemId(), ItemStatus.OPEN);
+            case ItemPostponed postponed -> setStatus(postponed.itemId(), ItemStatus.POSTPONED);
+            case ItemPostponedToList postponedToList -> itemsById.remove(postponedToList.itemId());
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }
@@ -380,15 +494,29 @@ public final class ShoppingList extends EventSourcedAggregate {
     /**
      * Folds an item's store assignment — shared by {@link ItemAssignedToStore} (planning) and
      * {@link ItemRerouted} (in-trip, Cl. 1) since both converge on the same {@code assignedStore}
-     * field (one source of truth for item→store). The command guards item existence before
-     * raising, so {@code existing} is non-null for any well-formed stream; skip defensively on a
+     * field (one source of truth for item→store). The command guards item existence before raising,
+     * so {@code existing} is non-null for any well-formed stream; skip defensively on a
      * reordered/repaired stream rather than NPE (mirrors the {@code ItemUpdated} case's
-     * null-tolerance).
+     * null-tolerance). Preserves {@code status} — only the status events may change it (Cl. 4).
      */
     private void assignStore(ItemId itemId, StoreId storeId) {
         ItemState existing = itemsById.get(itemId);
         if (existing != null) {
-            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), storeId));
+            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), storeId, existing.status()));
+        }
+    }
+
+    /**
+     * Folds an item's status — shared by {@link ItemCheckedOff}, {@link ItemUnchecked}, and {@link
+     * ItemPostponed} (Story 3.3, Cl. 1/4). The command guards item existence before raising, so
+     * {@code existing} is non-null for any well-formed stream; skip defensively on a
+     * reordered/repaired stream rather than NPE (mirrors {@link #assignStore}). Preserves all other
+     * fields — only this fold may write {@code status}.
+     */
+    private void setStatus(ItemId itemId, ItemStatus newStatus) {
+        ItemState existing = itemsById.get(itemId);
+        if (existing != null) {
+            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), existing.assignedStore(), newStatus));
         }
     }
 
@@ -396,7 +524,9 @@ public final class ShoppingList extends EventSourcedAggregate {
      * An item as held inside the {@link ShoppingList} aggregate (AD-10) — the folded state the
      * invariants read (dedup by (name, note), no-op update/remove/assign). Not the read model; that
      * is projected separately (AD-4). {@code assignedStore} is a bare reference into the separate
-     * {@code Household} aggregate (AD-3) — {@code null} means unassigned.
+     * {@code Household} aggregate (AD-3) — {@code null} means unassigned. {@code status} is the
+     * item's in-trip lifecycle ({@link ItemStatus}), {@code OPEN} at birth, changed only by the
+     * three status events (Story 3.3, Cl. 4).
      */
-    private record ItemState(ItemName name, ItemNote note, Quantity quantity, StoreId assignedStore) {}
+    private record ItemState(ItemName name, ItemNote note, Quantity quantity, StoreId assignedStore, ItemStatus status) {}
 }

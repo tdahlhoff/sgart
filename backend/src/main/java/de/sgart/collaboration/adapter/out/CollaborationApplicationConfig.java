@@ -9,11 +9,15 @@ import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
+import de.sgart.collaboration.application.command.CheckOffItemHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
+import de.sgart.collaboration.application.command.PostponeItemHandler;
+import de.sgart.collaboration.application.command.PostponeItemToListHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
 import de.sgart.collaboration.application.command.RerouteItemHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
+import de.sgart.collaboration.application.command.UncheckItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
 import de.sgart.collaboration.application.query.ListItemSuggestions;
@@ -155,6 +159,26 @@ public class CollaborationApplicationConfig {
     @Bean
     RerouteItemHandler rerouteItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
         return new RerouteItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    CheckOffItemHandler checkOffItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new CheckOffItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    UncheckItemHandler uncheckItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new UncheckItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    PostponeItemHandler postponeItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new PostponeItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    PostponeItemToListHandler postponeItemToListHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new PostponeItemToListHandler(eventStore, resolveMemberIdentity);
     }
 
     @Bean

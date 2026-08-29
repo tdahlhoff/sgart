@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
+import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
@@ -128,6 +129,12 @@ class ItemControllerTest {
         @Override
         public Optional<ItemName> nameOf(ItemId itemId) {
             return Optional.empty();
+        }
+
+        /** The projector's status write (Story 3.3) — never reached through this slice's command endpoints. */
+        @Override
+        public void setStatus(ItemId itemId, ItemStatus status) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
         }
     }
 
@@ -272,7 +279,7 @@ class ItemControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(rerouteRequestBody(StoreId.generate().toString())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("item.notReroutable"));
+                .andExpect(jsonPath("$.code").value("item.notDuringTrip"));
     }
 
     private static String addRequestBody(String itemId, String name) {
@@ -389,7 +396,7 @@ class ItemControllerTest {
         ItemId itemId = ItemId.generate();
         itemReadModel.put(
                 listId,
-                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null)));
+                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN)));
 
         mockMvc.perform(get(
                         "/api/v1/households/{householdId}/lists/{listId}/items",
