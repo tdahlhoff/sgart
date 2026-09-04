@@ -8,6 +8,7 @@ import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
+import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.ConcurrencyConflictException;
@@ -18,7 +19,9 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
+import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import de.sgart.shared.support.InMemoryEventStore;
 import java.util.List;
@@ -171,5 +174,66 @@ class ItemMoveProcessManagerTest {
         processManager.onItemMovedToList(moved);
 
         assertThat(eventStore.readStream(targetStreamId)).isEmpty();
+    }
+
+    // --- Story 3.3: the postpone-to-list reaction shares the same add-to-target machinery ---
+
+    private ItemPostponedToList postponedEvent() {
+        return new ItemPostponedToList(
+                EventId.generate(),
+                householdId,
+                sourceListId,
+                ItemId.generate(),
+                targetListId,
+                new ItemName("Milch"),
+                new ItemNote("Bio"),
+                Quantity.of(2, Unit.PIECE));
+    }
+
+    @Test
+    void appendsItemAddedToTheTargetForAPostponeToList() {
+        seedTargetList();
+        ItemPostponedToList postponed = postponedEvent();
+
+        processManager.onItemPostponedToList(postponed);
+
+        List<DomainEvent> targetEvents = eventStore.readStream(targetStreamId);
+        assertThat(targetEvents).hasSize(2);
+        assertThat(targetEvents.get(1)).isInstanceOf(ItemAdded.class);
+        ItemAdded added = (ItemAdded) targetEvents.get(1);
+        assertThat(added.itemId()).isEqualTo(postponed.itemId());
+        assertThat(added.name()).isEqualTo(postponed.name());
+        assertThat(added.note()).isEqualTo(postponed.note());
+        assertThat(added.quantity()).isEqualTo(postponed.quantity());
+    }
+
+    @Test
+    void processingTheSamePostponeTwiceAppendsOnlyOnce() {
+        seedTargetList();
+        ItemPostponedToList postponed = postponedEvent();
+
+        processManager.onItemPostponedToList(postponed);
+        processManager.onItemPostponedToList(postponed);
+
+        assertThat(eventStore.readStream(targetStreamId)).hasSize(2); // create + exactly one ItemAdded
+    }
+
+    @Test
+    void aTargetThatLeftOpenDropsThePostponeWithoutAppendingOrThrowing() {
+        // D2 interim guard (story 3-6): the target starts a trip (→ IN_TRIP) between the handler's
+        // OPEN check and this async add, so target.addItem raises ItemChangeNotPermittedException.
+        // The PM must not throw — it logs the unrecoverable-transfer condition and drops, appending
+        // nothing to the target (the auto-recovering two-phase saga is deferred to story 3-6).
+        seedTargetList();
+        ShoppingList target = ShoppingList.rehydrate(targetStreamId, eventStore.readStream(targetStreamId));
+        target.startTrip(TripId.generate(), List.of(StoreId.generate()), CommandId.generate());
+        eventStore.append(AggregateVersion.initial(targetStreamId).next(), target.uncommittedEvents(), CommandId.generate());
+        int sizeBefore = eventStore.readStream(targetStreamId).size();
+
+        processManager.onItemPostponedToList(postponedEvent());
+
+        // create + TripStartedForList only — no ItemAdded, and no exception escaped.
+        assertThat(eventStore.readStream(targetStreamId)).hasSize(sizeBefore);
+        assertThat(eventStore.readStream(targetStreamId).stream().filter(event -> event instanceof ItemAdded)).isEmpty();
     }
 }

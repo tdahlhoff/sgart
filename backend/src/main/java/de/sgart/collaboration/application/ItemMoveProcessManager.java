@@ -49,6 +49,9 @@ public final class ItemMoveProcessManager {
 
     private static final Logger log = LoggerFactory.getLogger(ItemMoveProcessManager.class);
 
+    /** Log marker for an interim data-loss condition operators/alerting should watch (story 3-6). */
+    private static final String UNRECOVERABLE_TRANSFER = "UNRECOVERABLE_TRANSFER";
+
     /**
      * Bounded retries for the target append when a concurrent write advances the target stream
      * between the load and the append. The conflict window is tiny (load-then-append on one stream),
@@ -100,8 +103,14 @@ public final class ItemMoveProcessManager {
         for (int attempt = 1; attempt <= MAX_APPEND_ATTEMPTS; attempt++) {
             List<DomainEvent> targetHistory = eventStore.readStream(targetStreamId);
             if (targetHistory.isEmpty()) {
-                log.warn("ItemMoveProcessManager: target list {} has no stream, skipping {} of item {}",
-                        targetListId, operation, itemId);
+                // The source already removed the item, but the target stream is gone — the item is
+                // now on neither list. Interim guard (story 3-6): surface this loudly instead of a
+                // quiet warn-and-drop, so it is alertable and an operator can restore it manually.
+                // The auto-recovering reserve-then-remove saga is deferred to 3-6.
+                log.error("{}: TRANSFER FAILED — target list {} has no stream; item {} was removed "
+                        + "from source but NOT placed on target ({}). Manual recovery needed; "
+                        + "auto-recovery tracked in story 3-6-two-phase-transfer-saga.",
+                        UNRECOVERABLE_TRANSFER, targetListId, itemId, operation);
                 return;
             }
 
@@ -115,8 +124,13 @@ public final class ItemMoveProcessManager {
                         targetListId, itemId, operation);
                 return;
             } catch (ItemChangeNotPermittedException targetNoLongerOpen) {
-                log.warn("ItemMoveProcessManager: target {} is no longer Open, dropping {} of item {}",
-                        targetListId, operation, itemId);
+                // The target left OPEN (e.g. a concurrent StartTrip) between the handler's OPEN check
+                // and this async add. The source already removed the item, so it is now on neither
+                // list. Interim guard (story 3-6): surface loudly instead of the old silent drop.
+                log.error("{}: TRANSFER FAILED — target list {} is no longer Open; item {} was removed "
+                        + "from source but NOT placed on target ({}). Manual recovery needed; "
+                        + "auto-recovery tracked in story 3-6-two-phase-transfer-saga.",
+                        UNRECOVERABLE_TRANSFER, targetListId, itemId, operation);
                 return;
             }
 

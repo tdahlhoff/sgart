@@ -728,4 +728,180 @@ class ItemControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));
     }
+
+    // --- Story 3.3: the four in-trip status endpoints + their error-advice contract ---
+
+    private static String commandBody() {
+        return "{\"commandId\":\"%s\"}".formatted(UUID.randomUUID());
+    }
+
+    private static String postponeToListBody(String targetListId) {
+        return "{\"targetListId\":\"%s\",\"commandId\":\"%s\"}".formatted(targetListId, UUID.randomUUID());
+    }
+
+    @Test
+    void checkOff_returns200ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/check-off",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void checkOff_returns409WhenTheListIsNotInTrip() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        // No startTripOn(...) — the list is still Open.
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/check-off",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("item.notDuringTrip"));
+    }
+
+    @Test
+    void uncheck_returns200ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/uncheck",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void uncheck_rejectsANonMemberWith403() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/uncheck",
+                        householdId.toString(), listId.toString(), ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void postpone_returns200ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void postpone_returns404ForAnUnknownItem() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone",
+                        householdId.toString(), listId.toString(), ItemId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("item.notFound"));
+    }
+
+    @Test
+    void postponeToList_returns200ForAMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(sourceListId, "Milch");
+        startTripOn(sourceListId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone-to-list",
+                        householdId.toString(), sourceListId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(postponeToListBody(targetListId.toString())))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void postponeToList_returns400WhenTargetEqualsSource() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone-to-list",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(postponeToListBody(listId.toString())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("list.moveTargetSameAsSource"));
+    }
+
+    @Test
+    void postponeToList_returns409WhenTargetIsNotOpen() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(sourceListId, "Milch");
+        startTripOn(sourceListId, StoreId.generate());
+        startTripOn(targetListId, StoreId.generate()); // target is now IN_TRIP, not Open
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone-to-list",
+                        householdId.toString(), sourceListId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(postponeToListBody(targetListId.toString())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("list.moveTargetNotOpen"));
+    }
+
+    @Test
+    void postponeToList_returns404ForAnUnknownTarget() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(sourceListId, "Milch");
+        startTripOn(sourceListId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone-to-list",
+                        householdId.toString(), sourceListId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(postponeToListBody(ShoppingListId.generate().toString())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
 }

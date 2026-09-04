@@ -29,6 +29,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'item.duplicate' => localizations.itemDuplicateError,
     'item.notFound' => localizations.itemNotFoundError,
     'item.changeNotPermitted' => localizations.itemChangeNotPermittedError,
+    'item.notDuringTrip' => localizations.itemNotDuringTripError,
     'list.moveTargetNotOpen' => localizations.listsMoveTargetNotOpenError,
     'list.moveTargetSameAsSource' => localizations.listsMoveTargetSameAsSourceError,
     'list.moveMergeRemoveFailed' => localizations.listsMoveMergeRemoveFailedError,

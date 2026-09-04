@@ -20,6 +20,13 @@ void main() {
       expect(resolved, isNot(rawDebugMessage));
     });
 
+    test('itemNotDuringTripResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'item.notDuringTrip');
+
+      expect(resolved, localizations.itemNotDuringTripError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('householdNameRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'household.nameRequired');
 

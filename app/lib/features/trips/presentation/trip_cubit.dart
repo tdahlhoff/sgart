@@ -96,17 +96,7 @@ class TripCubit extends Cubit<TripState> {
     _rerouteIntent.beginAttempt((itemId, storeId));
     final commandId = _rerouteIntent.commandId;
     final updatedItems = originalItems
-        .map((item) => item.itemId == itemId
-            ? Item(
-                itemId: item.itemId,
-                name: item.name,
-                note: item.note,
-                amount: item.amount,
-                unit: item.unit,
-                storeId: storeId,
-                status: item.status,
-              )
-            : item)
+        .map((item) => item.itemId == itemId ? item.copyWith(storeId: storeId) : item)
         .toList();
     _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
     try {
@@ -158,28 +148,29 @@ class TripCubit extends Cubit<TripState> {
   Future<void> checkOff(String itemId) async {
     await _applyStatusChange(
       itemId: itemId,
-      newStatus: 'DONE',
+      newStatus: ItemStatus.done,
       intent: _checkOffIntent,
       send: (commandId) => itemsApi.checkOffItem(householdId, listId, itemId, commandId: commandId),
     );
   }
 
-  /// Unchecks [itemId] (Story 3.3, AC2) — optimistically sets status to `OPEN`; reverts on failure.
+  /// Unchecks [itemId] (Story 3.3, AC2) — optimistically sets status to [ItemStatus.open]; reverts
+  /// on failure.
   Future<void> uncheck(String itemId) async {
     await _applyStatusChange(
       itemId: itemId,
-      newStatus: 'OPEN',
+      newStatus: ItemStatus.open,
       intent: _uncheckIntent,
       send: (commandId) => itemsApi.uncheckItem(householdId, listId, itemId, commandId: commandId),
     );
   }
 
-  /// Postpones [itemId] in place (Story 3.3, AC3) — optimistically sets status to `POSTPONED`;
-  /// reverts on failure.
+  /// Postpones [itemId] in place (Story 3.3, AC3) — optimistically sets status to
+  /// [ItemStatus.postponed]; reverts on failure.
   Future<void> postponeInPlace(String itemId) async {
     await _applyStatusChange(
       itemId: itemId,
-      newStatus: 'POSTPONED',
+      newStatus: ItemStatus.postponed,
       intent: _postponeInPlaceIntent,
       send: (commandId) => itemsApi.postponeItem(householdId, listId, itemId, commandId: commandId),
     );
@@ -187,7 +178,7 @@ class TripCubit extends Cubit<TripState> {
 
   Future<void> _applyStatusChange({
     required String itemId,
-    required String newStatus,
+    required ItemStatus newStatus,
     required CommandIntent intent,
     required Future<void> Function(String commandId) send,
   }) async {
@@ -202,17 +193,7 @@ class TripCubit extends Cubit<TripState> {
     intent.beginAttempt(itemId);
     final commandId = intent.commandId;
     final updatedItems = originalItems
-        .map((item) => item.itemId == itemId
-            ? Item(
-                itemId: item.itemId,
-                name: item.name,
-                note: item.note,
-                amount: item.amount,
-                unit: item.unit,
-                storeId: item.storeId,
-                status: newStatus,
-              )
-            : item)
+        .map((item) => item.itemId == itemId ? item.copyWith(status: newStatus) : item)
         .toList();
     _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
     try {

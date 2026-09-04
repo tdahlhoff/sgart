@@ -307,8 +307,8 @@ class _TripItemRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onPostpone;
 
-  bool get _isDone => item.status == 'DONE';
-  bool get _isPostponed => item.status == 'POSTPONED';
+  bool get _isDone => item.status == ItemStatus.done;
+  bool get _isPostponed => item.status == ItemStatus.postponed;
 
   @override
   Widget build(BuildContext context) {
@@ -347,35 +347,62 @@ class _TripItemRow extends StatelessWidget {
         subtitle: _isPostponed
             ? Text(localizations.tripPostponedLabel, style: TextStyle(color: colors.textSecondary))
             : Text(subtitle),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Semantics(
-              button: true,
-              label: localizations.tripItemPostponeAction,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: IconButton(
-                  key: Key('trip-item-postpone-${item.itemId}'),
-                  icon: const Icon(Icons.more_time),
-                  tooltip: localizations.tripItemPostponeAction,
-                  onPressed: onPostpone,
-                ),
-              ),
-            ),
-            Semantics(
-              button: true,
-              label: actionLabel,
-              child: TextButton(
-                key: Key('trip-item-reroute-${item.itemId}'),
-                onPressed: onTap,
-                child: Text(actionLabel),
-              ),
-            ),
-          ],
-        ),
+        // Affordances depend on status (Story 3.3 review fix): a DONE row offers only its
+        // checkbox (uncheck → OPEN) — postponing or rerouting a bought item made no sense and
+        // silently un-checked it; a POSTPONED row offers an UNDO (→ OPEN) beside its checkbox
+        // („doch bekommen" → DONE); only an OPEN row carries postpone + reroute/assign.
+        trailing: _buildTrailing(localizations, cubit),
       ),
+    );
+  }
+
+  Widget? _buildTrailing(AppLocalizations localizations, TripCubit cubit) {
+    if (_isDone) {
+      return null;
+    }
+    if (_isPostponed) {
+      return Semantics(
+        button: true,
+        label: localizations.tripItemUndoPostponeAction,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            key: Key('trip-item-undo-postpone-${item.itemId}'),
+            icon: const Icon(Icons.undo),
+            tooltip: localizations.tripItemUndoPostponeAction,
+            onPressed: () => cubit.uncheck(item.itemId),
+          ),
+        ),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          label: localizations.tripItemPostponeAction,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              key: Key('trip-item-postpone-${item.itemId}'),
+              icon: const Icon(Icons.more_time),
+              tooltip: localizations.tripItemPostponeAction,
+              onPressed: onPostpone,
+            ),
+          ),
+        ),
+        Semantics(
+          button: true,
+          label: actionLabel,
+          child: TextButton(
+            key: Key('trip-item-reroute-${item.itemId}'),
+            onPressed: onTap,
+            child: Text(actionLabel),
+          ),
+        ),
+      ],
     );
   }
 

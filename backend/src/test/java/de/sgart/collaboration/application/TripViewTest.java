@@ -134,6 +134,27 @@ class TripViewTest {
     }
 
     @Test
+    void forList_rendersACheckedItemsDoneStatus() {
+        seedMembership();
+        TripId tripId = TripId.generate();
+        StoreId edeka = StoreId.generate();
+        ItemId itemId = ItemId.generate();
+        ShoppingListView list = new ShoppingListView(
+                listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 1, tripId);
+        TripView tripView = tripView(
+                new FakeShoppingListReadModel((household, id) -> household.equals(householdId) ? list : null),
+                new FakeTripStoreReadModel(java.util.Map.of(tripId, List.of(edeka))),
+                new FakeItemReadModel(List.of(
+                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.DONE))));
+
+        TripView.TripViewResult result = tripView.forList(MEMBER_SUB, householdId.toString(), listId.toString());
+
+        assertThat(result.items())
+                .containsExactly(new ListItems.ItemSummary(
+                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "DONE"));
+    }
+
+    @Test
     void forList_rejectsANonMemberWith403() {
         TripView tripView = tripView(
                 new FakeShoppingListReadModel((household, id) -> null),

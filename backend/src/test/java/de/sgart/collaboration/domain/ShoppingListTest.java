@@ -333,7 +333,7 @@ class ShoppingListTest {
     }
 
     @Test
-    void rerouteItem_onAnOpenList_throwsItemNotReroutable() {
+    void rerouteItem_onAnOpenList_throwsItemNotDuringTrip() {
         ItemId itemId = ItemId.generate();
         ShoppingList list = ShoppingList.rehydrate(
                 StreamId.forList(listId),
@@ -524,6 +524,14 @@ class ShoppingListTest {
 
         assertThatThrownBy(() -> list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate()))
                 .isInstanceOf(ItemNotDuringTripException.class);
+    }
+
+    @Test
+    void postponeItemToList_forAnUnknownItem_throwsItemNotFound() {
+        ShoppingList list = inTripListWithItem(ItemId.generate());
+
+        assertThatThrownBy(() -> list.postponeItemToList(ItemId.generate(), ShoppingListId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
     }
 
     // ── Cl. 4 regression: status events must not reset status ────────────────────────────────────

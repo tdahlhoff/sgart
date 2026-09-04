@@ -767,4 +767,39 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, listId).get(0).storeId()).isEqualTo(storeId);
     }
+
+    @Test
+    void reroutingAfterACheckOffLeavesTheStatusDone() {
+        // Cl. 4 regression: only the status events write status — a later ItemRerouted must update
+        // storeId while leaving DONE untouched.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemCheckedOff(EventId.generate(), householdId, listId, itemId));
+
+        projector.project(new ItemRerouted(EventId.generate(), householdId, listId, itemId, storeId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DONE);
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).storeId()).isEqualTo(storeId);
+    }
+
+    @Test
+    void reProjectingItemCheckedOffIsIdempotent() {
+        // Replay idempotency for the status column: a redelivered ItemCheckedOff leaves status DONE.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        ItemCheckedOff checkedOff = new ItemCheckedOff(EventId.generate(), householdId, listId, itemId);
+
+        projector.project(checkedOff);
+        projector.project(checkedOff);
+
+        assertThat(itemReadModel.itemsOf(householdId, listId)).hasSize(1);
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DONE);
+    }
 }

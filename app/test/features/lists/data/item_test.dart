@@ -75,13 +75,33 @@ void main() {
         'status': 'DONE',
       });
 
-      expect(item.status, 'DONE');
+      expect(item.status, ItemStatus.done);
     });
 
     test('defaultsStatusToOpenWhenAbsent', () {
       final item = Item.fromJson(const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE'});
 
-      expect(item.status, 'OPEN');
+      expect(item.status, ItemStatus.open);
+    });
+
+    test('throwsWhenStatusIsAnUnknownValue', () {
+      expect(
+        () => Item.fromJson(const {
+          'itemId': 'i1',
+          'name': 'Milch',
+          'amount': '1',
+          'unit': 'PIECE',
+          'status': 'ARCHIVED',
+        }),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'items.malformedResponse')),
+      );
+    });
+
+    test('throwsWhenStatusIsPresentButNotAString', () {
+      expect(
+        () => Item.fromJson(const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE', 'status': 7}),
+        throwsA(isA<AppException>()),
+      );
     });
   });
 }

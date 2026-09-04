@@ -123,13 +123,20 @@ void main() {
       expect(find.byKey(const Key('postpone-target-row-list-other')), findsOneWidget);
     });
 
-    testWidgets('movingViaThePlanningMoveSheetStillWorks', (tester) async {
-      // Regression: the 2.4 planning-move sheet must not be broken.
-      // The move affordance lives on the list detail page, not the trip screen — it still works
-      // as long as ItemsApi.moveItem is callable (it has not been removed or broken).
-      expect(itemsApi.moveCallCount, 0);
-      // No action needed here — the fact that FakeItemsApi still implements moveItem with its
-      // original signature is sufficient regression coverage for the interface contract.
+    testWidgets('creatingANewList_thatFails_showsAnInlineError_andDoesNotPostpone', (tester) async {
+      shoppingListsApi.createError = Exception('create failed');
+
+      await openSheet(tester);
+      await tester.tap(find.byKey(const Key('postpone-target-new-list-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('postpone-target-new-list-name-field')), 'Getränke');
+      await tester.tap(find.byKey(const Key('postpone-target-new-list-submit-button')));
+      await tester.pumpAndSettle();
+
+      // The failure is surfaced inline, the sheet stays open, and no postpone was issued.
+      expect(find.byKey(const Key('postpone-target-create-error')), findsOneWidget);
+      expect(find.byKey(const Key('postpone-target-sheet')), findsOneWidget);
+      expect(itemsApi.lastPostponedToListItemId, isNull);
     });
   });
 }

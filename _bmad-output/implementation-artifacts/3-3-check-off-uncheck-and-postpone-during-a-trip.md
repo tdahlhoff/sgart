@@ -4,7 +4,7 @@ baseline_commit: a1b2a872
 
 # Story 3.3: Check off, uncheck, and postpone during a trip
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -655,6 +655,30 @@ Claude Sonnet 4.6 (implementation), Claude Opus 4.8 (planning/review)
 - Optimistic updates implemented via shared `_applyStatusChange()` helper in `TripCubit`;
   `postponeToList()` has its own path (optimistic removal, not a status flip).
 
+#### Review re-dev (2026-08-29, correct-course outcome) — all Review Findings cleared
+
+- **Decision resolved: keep in-place postpone** (`ItemStatus {OPEN,DONE,POSTPONED}` unchanged) after
+  Timo recognized its purpose (resolve a "not bought, not moving" item so a trip can close). No
+  PRD/epics/architecture/UX change.
+- **Affordance fix** (`trip_screen.dart`): the trailing controls are now status-dependent — DONE rows
+  show only the checkbox (uncheck→OPEN), POSTPONED rows show the checkbox (→DONE) plus a new UNDO
+  affordance (→OPEN); reroute/postpone are hidden on both. Kills the silent DONE→POSTPONED un-check.
+- **D2 carved into story `3-6-two-phase-transfer-saga`**; interim guard applied: the process manager's
+  no-target-stream and target-not-Open branches now log an `UNRECOVERABLE_TRANSFER` error (alertable)
+  instead of a silent warn-and-drop. Auto-recovering reserve-then-remove saga deferred to 3-6.
+- **Patches**: `item.notDuringTrip` mapped in `error_message_resolver.dart` (+ ARB); silent
+  `createList` failure in the postpone sheet now surfaces an inline error; stale `item.notReroutable`
+  doc + test corrected to `item.notDuringTrip`; the hollow `movingViaThePlanningMoveSheetStillWorks`
+  test replaced with a real create-failure test; the over-promising postpone-to-list idempotency doc
+  corrected.
+- **Missing tests written** (the DoD gaps Tasks 7/8/9/12/13/14/22 had claimed): `UncheckItemHandlerTest`,
+  `PostponeItemHandlerTest`, `PostponeItemToListHandlerTest`, `ItemMoveProcessManagerTest` extended for
+  `ItemPostponedToList` (incl. the D2 target-not-Open drop), `ItemControllerTest` ×4 new endpoints +
+  error-advice, projector Cl.4 regression + status replay-idempotency, aggregate unknown-item, TripView
+  DONE.
+- **Green build**: backend `./gradlew test` (incl. ArchUnit) **577** tests; `flutter test` **488** tests;
+  `flutter analyze` clean.
+
 ### File List
 
 **Backend (unchanged from Task 1–16 baseline, commit a1b2a87 + 3.3 backend work)**
@@ -677,7 +701,34 @@ Claude Sonnet 4.6 (implementation), Claude Opus 4.8 (planning/review)
 - `app/test/features/lists/presentation/list_detail/list_detail_page_test.dart` — added `ShoppingListsApi` provider
 - `app/test/support/fake_items_dependencies.dart` — 4 new method stubs + tracking fields
 
+**Review re-dev (2026-08-29) — modified/new files**
+- `backend/.../application/ItemMoveProcessManager.java` — D2 interim guard (loud `UNRECOVERABLE_TRANSFER` on drop)
+- `backend/.../application/UncheckItemHandlerTest.java` — new
+- `backend/.../application/PostponeItemHandlerTest.java` — new
+- `backend/.../application/PostponeItemToListHandlerTest.java` — new
+- `backend/.../application/ItemMoveProcessManagerTest.java` — postpone-to-list happy/idempotent/target-not-Open
+- `backend/.../adapter/in/ItemControllerTest.java` — check-off/uncheck/postpone/postpone-to-list + error advice
+- `backend/.../adapter/out/ShoppingListReadModelProjectorTest.java` — Cl.4 reroute-after-check + status replay-idempotency
+- `backend/.../domain/ShoppingListTest.java` — `postponeItemToList_forAnUnknownItem_throwsItemNotFound`
+- `backend/.../application/TripViewTest.java` — DONE-in-trip render
+- `app/lib/features/trips/presentation/trip_screen.dart` — status-dependent row affordances (DONE/POSTPONED)
+- `app/lib/features/trips/presentation/postpone_target_sheet.dart` — inline error on create-list failure
+- `app/lib/features/lists/data/items_api.dart` — corrected reroute + postpone-to-list docs
+- `app/lib/shared/errors/error_message_resolver.dart` — `item.notDuringTrip` mapping
+- `app/lib/l10n/app_de.arb` — `itemNotDuringTripError`, `tripItemUndoPostponeAction`, `tripPostponeCreateFailedError`
+- `app/test/features/trips/presentation/trip_screen_test.dart` — 4 affordance tests
+- `app/test/features/trips/presentation/postpone_target_sheet_test.dart` — hollow test replaced with create-failure test
+- `app/test/features/trips/presentation/trip_cubit_test.dart` — reroute-failure code corrected
+- `app/test/shared/errors/error_message_resolver_test.dart` — `item.notDuringTrip` case
+
 ## Change Log
+
+- 2026-08-29: Review re-dev (correct-course outcome, Opus 4.8). Kept in-place postpone; fixed the
+  non-OPEN-row affordances (DONE uncheck-only, POSTPONED check-off + UNDO); carved the transfer
+  data-loss race into story `3-6-two-phase-transfer-saga` with an interim log-and-surface guard in
+  `ItemMoveProcessManager`; applied 6 patch findings; wrote the missing handler/PM/controller/projector/
+  aggregate/TripView tests the DoD had claimed. Green: backend 577 (incl. ArchUnit), Flutter 488,
+  analyze clean.
 
 - 2026-08-29: Flutter implementation complete (Tasks 17–23, Sonnet 4.6). Added `status` to `Item`,
   extended `ItemsApi` with 4 new mutation methods (`checkOffItem`, `uncheckItem`, `postponeItem`,
@@ -700,3 +751,62 @@ Claude Sonnet 4.6 (implementation), Claude Opus 4.8 (planning/review)
   status events write it. Epic-2 retro actions 2/3/7/8/9/10/12 baked into the DoD (Cl. 9); completion +
   Done-archive invalidation + Done-rename test stay with Story 3.4 (Cl. 2). Baseline backend 507 /
   Flutter 462.
+
+### Review Findings
+
+_Code review 2026-08-29 (bmad-code-review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor — all at Opus 4.8). 2 decision-needed, 11 patch, 1 deferred, 4 dismissed._
+
+**Decision-needed**
+
+- [x] [Review][Decision] **RESOLVED (correct-course 2026-08-29): keep in-place postpone, fix the affordances.** Status-transition affordances on non-OPEN trip rows — a POSTPONED item has no UI path back to OPEN (`trip_screen.dart:333-340`); a DONE row shows postpone and silently drives DONE→POSTPONED (`trip_screen.dart:347-372`). **Timo initially considered removing the in-place variant, then recognized its purpose: it resolves a "not bought, not moving it" item so a trip can close cleanly. `ItemStatus {OPEN, DONE, POSTPONED}` and all three postpone variants STAY — no PRD/epics/architecture/UX change.** Fix is UI-only (domain already supports every transition): OPEN row = checkbox(→DONE) + postpone + reroute [unchanged]; **DONE row = checkbox(→OPEN uncheck) only, hide postpone + reroute** (kills the silent-uncheck); **POSTPONED row = checkbox(→DONE "found it") + an UNDO affordance(→OPEN uncheck), hide reroute**. → becomes a patch/dev task.
+- [x] [Review][Decision] **RESOLVED (correct-course 2026-08-29): carved into its own story `3-6-two-phase-transfer-saga`; 3.3 ships an interim log-and-surface guard.** Postpone/move silently dropped when target list flips to IN_TRIP mid-flight — `addItemToTarget` catches `ItemChangeNotPermittedException` and drops the item after the source removal already committed → item vanishes from both lists (`ItemMoveProcessManager.java:117-120`). The full fix (reserve-then-remove two-phase compensating saga) reshapes the shared move/postpone PM incl. shipped Story 2.4 move → **carved out** (needs create-story + architect). **In this re-dev the PM's `ItemChangeNotPermittedException` / no-target-stream branches stop silently dropping — they surface a visible sync failure so the item is recoverable.** → dev task (guard only).
+
+**Patch**
+
+- [x] [Review][Patch] `item.notDuringTrip` (409) has no client message — falls to generic fallback; no error ARB string added, against the resolver's "cover every server code" DoD [`error_message_resolver.dart:34`]
+- [x] [Review][Patch] Create-new-list-then-postpone fails silently — catch `return`s with no snackbar/inline error [`postpone_target_sheet.dart:304-313`]
+- [x] [Review][Patch] Stale doc comment promises removed `item.notReroutable` for reroute [`items_api.dart:66`]
+- [x] [Review][Patch] Stale test asserts dead code `item.notReroutable` — passes only via the fake; no longer proves reroute conflict handling [`trip_cubit_test.dart:104,111`]
+- [x] [Review][Patch] Hollow "regression" test does nothing (`moveCallCount == 0`) yet claims to guard the planning-move sheet [`postpone_target_sheet_test.dart` `movingViaThePlanningMoveSheetStillWorks`]
+- [x] [Review][Patch] Doc over-promises "reused idempotency key" on postpone-to-list; dedupe never engages on retry (see W1) [`items_api.dart:119-121`]
+- [x] [Review][Patch] Missing handler tests: `UncheckItemHandlerTest`, `PostponeItemHandlerTest`, `PostponeItemToListHandlerTest` — Tasks 7/8 marked `[x]` but absent (only `CheckOffItemHandlerTest` exists)
+- [x] [Review][Patch] `ItemMoveProcessManagerTest` never extended for `ItemPostponedToList` (incl. the target-not-Open drop path) — Task 9 marked `[x]`, 0 coverage
+- [x] [Review][Patch] `ItemControllerTest` exercises none of the 4 new endpoints / error-advice contract — Tasks 14/22 marked `[x]`, 0 coverage
+- [x] [Review][Patch] Missing projector Cl.4 regression (reroute/update after check preserves `status`) + status-column replay-idempotency test — Task 12
+- [x] [Review][Patch] Missing aggregate test `postponeItemToList_forAnUnknownItem_throwsItemNotFound` (Task 6) + `TripViewTest` DONE-in-trip assertion (Task 13)
+
+**Deferred**
+
+- [x] [Review][Defer] postpone-to-list not idempotent across a lost response (404 on retry) [`PostponeItemToListHandler.java`] — deferred, pre-existing MoveItemHandler pattern (Story 2.4); needs a cross-handler fix, out of scope here
+
+### Review Findings — second pass
+
+_Code review 2026-08-30 (bmad-code-review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor — all at Opus 4.8). This pass covers the full unreviewed Story 3.3 delta (`a1b2a87` → working tree: the committed `db89c71` slice, which never carried a review suffix, plus the correct-course re-dev). Verified: Cl.4 status-preservation holds in fold and projector; the D2 interim `UNRECOVERABLE_TRANSFER` guard is genuinely loud; the previously-absent/hollow tests now exist and assert real behavior; the DONE/POSTPONED row affordances match the correct-course spec. 2 decision-needed, 6 patch, 1 defer (already tracked), 4 dismissed._
+
+**Decision-needed**
+
+- [x] [Review][Decision] **RESOLVED (Timo, 2026-08-30): defer the client UX to story 3-6.** Postpone-to-list reports optimistic success while the transfer can still silently drop the item — the source command returns 200 the moment `ItemPostponedToList` is appended, the target add is async, and if the target leaves OPEN mid-flight the PM logs `UNRECOVERABLE_TRANSFER` and returns (item on neither list) while the cubit already showed success. Backend saga was carved to `3-6`; the client pending/failure UX is deferred to land alongside it (see Defer, below). [`trip_cubit.dart:229`, `ItemMoveProcessManager.java:110,130`]
+- [x] [Review][Decision] **RESOLVED (Timo, 2026-08-30): rename the in-trip action.** "Verschieben" collided with the planning `itemMoveAction`; the in-trip postpone gets its own distinct label (e.g. "Zurückstellen"). → becomes a patch (below).
+
+**Patch**
+
+- [x] [Review][Patch] Cl.5 rename was done add-alongside, not as a rename — the orphaned `ItemNotReroutableException` + `ItemNotReroutableApplicationException` still exist with zero production references (only the now-unused `item.notReroutable` code lives in the dead app-exception ctor); delete both (dead code, Cl.5 / CLAUDE.md §1) [`domain/exception/ItemNotReroutableException.java`, `application/exception/ItemNotReroutableApplicationException.java`]
+- [x] [Review][Patch] Stale test-method name `rerouteItem_onAnOpenList_throwsItemNotReroutable` — body already asserts `ItemNotDuringTripException`; rename the method to match [`ShoppingListTest.java:336`]
+- [x] [Review][Patch] `Item` has no `copyWith`; `TripCubit.reroute` and `_applyStatusChange` hand-rebuild all 7 fields — adding `status` already forced a manual `status: item.status` on the reroute path (a silent-reset trap for the next field). Add `Item.copyWith(...)` and use it in both paths [`trip_cubit.dart:100,206`]
+- [x] [Review][Patch] No Flutter regression test that `reroute` preserves a `DONE`/`POSTPONED` item's status — the backend has both fold + projector tests; the risky client reconstruction (above) has none. Add a cubit test [`trip_cubit_test.dart`]
+- [x] [Review][Patch] `Item.fromJson` accepts any non-null string as `status`; an out-of-set value (server enum drift) is silently stored and rendered as OPEN (unchecked, offers postpone/reroute, omitted from `doneCount`). Validate against {OPEN,DONE,POSTPONED} and fail fast [`item.dart:51`]
+- [x] [Review][Patch] Item status is stringly-typed across ≥5 Flutter files (`'OPEN'`/`'DONE'`/`'POSTPONED'` literals in `item.dart`, `trip_state.dart`, `trip_cubit.dart`, `trip_screen.dart`; `'OPEN'` for lists in `postpone_target_sheet.dart`) — a single typo yields an always-false compare no test catches. Introduce a Dart `enum ItemStatus` with `fromServerName`/`serverName` (mirror the existing `unitFromServerName` pattern). Larger DRY/type-safety cleanup [`item.dart`, `trip_state.dart`, `trip_cubit.dart`, `trip_screen.dart`]
+- [x] [Review][Patch] Rename the in-trip postpone action to a distinct label (e.g. "Zurückstellen") so it no longer collides with the planning "Verschieben" — from the resolved decision above (Timo, 2026-08-30). ARB string + any test expectations [`app_de.arb` `tripItemPostponeAction`]
+
+**Patch resolution (2026-09-04):** all 7 patches applied. `ItemStatus` enum (`fromServerName`/`serverName`, mirroring `unitFromServerName`) added to `item.dart` and threaded through `trip_state.dart`/`trip_cubit.dart`/`trip_screen.dart`; `Item.copyWith` replaces both hand-rebuilds; `Item.fromJson` fails fast on an out-of-set status; the `ItemNotReroutable*` dead classes deleted and the stale `ShoppingListTest` method renamed; the in-trip postpone verb renamed to "Zurückstellen" across its whole string family (`tripItemPostponeAction`, `tripItemUndoPostponeAction`, `tripPostponeSheetTitle`, `tripPostponedLabel`) for ubiquitous-language consistency. **Scope note:** the `list.status == 'OPEN'` literal in `postpone_target_sheet.dart` (and `move_target_sheet.dart`) is a *shopping-list* lifecycle status, a distinct concept — deliberately left out of `ItemStatus`; a separate `ListStatus` enum is a future cleanup, not this patch. Full suites green: `flutter test` (491) + `flutter analyze` clean, backend `./gradlew test` (incl. ArchUnit) BUILD SUCCESSFUL.
+
+**Defer**
+
+- [x] [Review][Defer] Postpone/move transfer data loss when the target list leaves OPEN (or its stream is missing) mid-flight — the reserve-then-remove two-phase saga is already carved to story `3-6-two-phase-transfer-saga`; 3.3 ships only the interim loud `UNRECOVERABLE_TRANSFER` guard. **Client-side false-success UX also deferred to 3-6** (Timo, 2026-08-30): the cubit's optimistic-success on postpone-to-list is left as-is, and the pending/failure affordance lands with the saga rather than as an interim measure. [`ItemMoveProcessManager.java:110,130`, `trip_cubit.dart:229`]
+
+**Dismissed** (recorded, not written as action items)
+
+- The domain permits arbitrary in-trip status transitions (e.g. DONE→POSTPONED) — by-design per Cl.1 symmetric resets; concurrent conflicting transitions are caught by list-stream optimistic concurrency (409); the UI gates deliberate misuse.
+- The "N von M erledigt" bar can't reach 100% while an item is postponed-in-place — by-design per Cl.7 (POSTPONED counts in M, not N). Confirm the denominator with Story 3.4's completion.
+- Error-advice contract coverage is distributed across the four endpoints rather than per-endpoint-exhaustive — the shared `WriteErrorAdvice` mapping is fully covered.
+- Screen-wide `isSubmitting` drops a concurrent tap on a *different* item with no feedback — acceptable MVP; the guard is the spec-required (Cl.9) re-entrancy protection.

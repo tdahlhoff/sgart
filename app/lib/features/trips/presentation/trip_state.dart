@@ -97,8 +97,8 @@ class TripState {
   /// no longer resolves in the active list (Cl. 7).
   StoreSummary? storeFor(String storeId) => stores.firstWhereOrNull((store) => store.storeId == storeId);
 
-  /// Number of items with `status == 'DONE'` (Story 3.3, AC5 progress bar).
-  int get doneCount => items.where((item) => item.status == 'DONE').length;
+  /// Number of items with `status == ItemStatus.done` (Story 3.3, AC5 progress bar).
+  int get doneCount => items.where((item) => item.status == ItemStatus.done).length;
 
   /// Total number of items regardless of status — POSTPONED items count in the total (Cl. 7).
   int get totalCount => items.length;

@@ -502,6 +502,11 @@
     "description": "Localized copy for the item.changeNotPermitted error code — the list is no longer Open (Story 2.3, AC5)."
   },
 
+  "itemNotDuringTripError": "Für diese Liste läuft gerade kein Einkauf mehr.",
+  "@itemNotDuringTripError": {
+    "description": "Localized copy for the item.notDuringTrip error code — an in-trip action (check off / uncheck / postpone / reroute) hit a list whose trip is no longer active (Story 3.3, AC6 / Cl. 5)."
+  },
+
   "itemMoveAction": "Verschieben",
   "@itemMoveAction": {
     "description": "Per-row action/tooltip that opens the move target picker (Story 2.4, AC7)."
@@ -866,12 +871,17 @@
     "description": "Accessibility label for the checkbox when an item is DONE — action returns it to OPEN (Story 3.3, AC2, UX-DR5)."
   },
 
-  "tripItemPostponeAction": "Verschieben",
+  "tripItemPostponeAction": "Zurückstellen",
   "@tripItemPostponeAction": {
-    "description": "Label / accessibility label of the postpone affordance on a trip item row (Story 3.3, AC3/AC4, UX-DR5)."
+    "description": "Label / accessibility label of the postpone affordance on a trip item row — distinct from the planning „Verschieben\" (itemMoveAction) so the two do not collide (Story 3.3, AC3/AC4, UX-DR5)."
   },
 
-  "tripPostponeSheetTitle": "Wohin verschieben?",
+  "tripItemUndoPostponeAction": "Zurückstellen rückgängig machen",
+  "@tripItemUndoPostponeAction": {
+    "description": "Label / accessibility label of the undo affordance on a POSTPONED trip item row — returns it to OPEN (Story 3.3 review fix)."
+  },
+
+  "tripPostponeSheetTitle": "Wohin zurückstellen?",
   "@tripPostponeSheetTitle": {
     "description": "Heading of the postpone target picker sheet (Story 3.3, AC3/AC4)."
   },
@@ -881,9 +891,14 @@
     "description": "The postpone-in-place option in the postpone target sheet — keeps the item on this list with status POSTPONED (Story 3.3, AC3)."
   },
 
-  "tripPostponedLabel": "Verschoben",
+  "tripPostponedLabel": "Zurückgestellt",
   "@tripPostponedLabel": {
     "description": "Set-aside status label shown on a POSTPONED item row in the trip screen (Story 3.3, AC3, Cl. 7)."
+  },
+
+  "tripPostponeCreateFailedError": "Die Liste konnte nicht erstellt werden. Bitte versuche es erneut.",
+  "@tripPostponeCreateFailedError": {
+    "description": "Inline error shown in the postpone target sheet when creating a new list via „＋ Neue Liste\" failed (Story 3.3 review fix)."
   },
 
   "tripPostponeEmptyTargets": "Keine andere offene Liste.",

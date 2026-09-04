@@ -63,7 +63,7 @@ abstract interface class ItemsApi {
 
   /// Re-routes [itemId] to [storeId] during a trip (Story 3.2, AC2). [commandId] is the reused
   /// idempotency key for the reroute intent — rerouting to the item's current store is a
-  /// convergent no-op server-side. Throws `item.notReroutable` when the list is no longer In-Trip.
+  /// convergent no-op server-side. Throws `item.notDuringTrip` when the list is no longer In-Trip.
   Future<void> rerouteItem(
     String householdId,
     String listId,
@@ -100,8 +100,10 @@ abstract interface class ItemsApi {
   });
 
   /// Postpones [itemId] to [targetListId] during a trip (Story 3.3, AC4) — removes the item from
-  /// the source list; the backend's process manager adds it to the target. [commandId] is the reused
-  /// idempotency key.
+  /// the source list; the backend's process manager adds it to the target. [commandId] identifies
+  /// the postpone intent. Note: unlike the in-place status mutations, a retry after a lost response
+  /// is NOT a silent no-op — once the source item is gone the server answers `item.notFound` (404);
+  /// full retry-safety is tracked in story `3-6-two-phase-transfer-saga`.
   Future<void> postponeItemToList(
     String householdId,
     String listId,

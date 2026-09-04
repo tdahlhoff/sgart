@@ -93,6 +93,33 @@ void main() {
       await cubit.close();
     });
 
+    test('reroute_preservesTheItemStatus', () async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka', 'store-netto'],
+        items: [
+          Item(
+              itemId: 'i1',
+              name: 'Milch',
+              note: null,
+              amount: '1',
+              unit: 'PIECE',
+              storeId: 'store-edeka',
+              status: ItemStatus.done),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka, netto];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.reroute('i1', 'store-netto');
+
+      expect(cubit.state.items.first.storeId, 'store-netto');
+      expect(cubit.state.items.first.status, ItemStatus.done);
+      await cubit.close();
+    });
+
     test('reroute_revertsOnFailure_andSurfacesActionError', () async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
@@ -101,14 +128,14 @@ void main() {
         items: [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka')],
       );
       storesApi.storesToReturn = const [edeka, netto];
-      itemsApi.rerouteError = const AppException(AppError(code: 'item.notReroutable', message: 'debug'));
+      itemsApi.rerouteError = const AppException(AppError(code: 'item.notDuringTrip', message: 'debug'));
       final cubit = buildCubit();
       await cubit.bootstrap();
 
       await cubit.reroute('i1', 'store-netto');
 
       expect(cubit.state.items.first.storeId, 'store-edeka');
-      expect(cubit.state.actionError?.code, 'item.notReroutable');
+      expect(cubit.state.actionError?.code, 'item.notDuringTrip');
       await cubit.close();
     });
 
@@ -190,8 +217,8 @@ void main() {
         listId: 'list-1',
         storeIds: ['store-edeka'],
         items: [
-          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: 'OPEN'),
-          Item(itemId: 'i2', name: 'Brot', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: 'DONE'),
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.open),
+          Item(itemId: 'i2', name: 'Brot', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.done),
           Item(
               itemId: 'i3',
               name: 'Käse',
@@ -199,7 +226,7 @@ void main() {
               amount: '1',
               unit: 'PIECE',
               storeId: 'store-edeka',
-              status: 'POSTPONED'),
+              status: ItemStatus.postponed),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -225,7 +252,7 @@ void main() {
 
       await cubit.checkOff('i1');
 
-      expect(cubit.state.items.first.status, 'DONE');
+      expect(cubit.state.items.first.status, ItemStatus.done);
       expect(itemsApi.lastCheckedOffItemId, 'i1');
       expect(itemsApi.checkOffCallCount, 1);
       await cubit.close();
@@ -245,7 +272,7 @@ void main() {
 
       await cubit.checkOff('i1');
 
-      expect(cubit.state.items.first.status, 'OPEN');
+      expect(cubit.state.items.first.status, ItemStatus.open);
       expect(cubit.state.actionError?.code, 'item.notDuringTrip');
       await cubit.close();
     });
@@ -282,7 +309,7 @@ void main() {
               amount: '1',
               unit: 'PIECE',
               storeId: 'store-edeka',
-              status: 'DONE'),
+              status: ItemStatus.done),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -291,7 +318,7 @@ void main() {
 
       await cubit.uncheck('i1');
 
-      expect(cubit.state.items.first.status, 'OPEN');
+      expect(cubit.state.items.first.status, ItemStatus.open);
       expect(itemsApi.lastUncheckedItemId, 'i1');
       await cubit.close();
     });
@@ -309,7 +336,7 @@ void main() {
 
       await cubit.postponeInPlace('i1');
 
-      expect(cubit.state.items.first.status, 'POSTPONED');
+      expect(cubit.state.items.first.status, ItemStatus.postponed);
       expect(itemsApi.lastPostponedItemId, 'i1');
       await cubit.close();
     });

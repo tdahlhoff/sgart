@@ -58,6 +58,10 @@ class _PostponeTargetSheetBody extends StatefulWidget {
 class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
   _LoadStatus _status = _LoadStatus.loading;
 
+  /// True after a „＋ Neue Liste" creation failed — the sheet stays open and shows an inline error
+  /// instead of silently swallowing the failure (Story 3.3 review fix).
+  bool _createFailed = false;
+
   /// The other Open lists — In-Trip lists are excluded (postpone target must be OPEN, server 409).
   /// Ordinals are counted over the full enumeration so fallback names match the overview (mirrors
   /// move_target_sheet.dart's rationale).
@@ -112,6 +116,7 @@ class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
     final navigator = Navigator.of(context);
     final trimmedName = name.trim();
     final listId = const Uuid().v4();
+    setState(() => _createFailed = false);
     try {
       await widget.shoppingListsApi.createList(
         widget.householdId,
@@ -120,7 +125,10 @@ class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
         commandId: const Uuid().v4(),
       );
     } on Object {
-      return; // sheet stays open; the member can retry
+      if (mounted) {
+        setState(() => _createFailed = true); // sheet stays open with a visible error; retry clears it
+      }
+      return;
     }
     if (!mounted) {
       return;
@@ -181,6 +189,15 @@ class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
             label: localizations.listsCreateAction,
             onPressed: _createAndPostponeToNewList,
           ),
+          if (_createFailed)
+            Padding(
+              padding: const EdgeInsets.only(top: SgartShapes.space4),
+              child: Text(
+                localizations.tripPostponeCreateFailedError,
+                key: const Key('postpone-target-create-error'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
         ],
       ),
     );

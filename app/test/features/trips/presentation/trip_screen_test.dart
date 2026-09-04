@@ -167,8 +167,8 @@ void main() {
         listId: 'list-1',
         storeIds: ['store-edeka'],
         items: [
-          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: 'DONE'),
-          Item(itemId: 'i2', name: 'Brot', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: 'OPEN'),
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.done),
+          Item(itemId: 'i2', name: 'Brot', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.open),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -212,7 +212,7 @@ void main() {
               amount: '1',
               unit: 'PIECE',
               storeId: 'store-edeka',
-              status: 'DONE'),
+              status: ItemStatus.done),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -240,7 +240,7 @@ void main() {
               amount: '1',
               unit: 'PIECE',
               storeId: 'store-edeka',
-              status: 'DONE'),
+              status: ItemStatus.done),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -267,6 +267,86 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('postpone-target-sheet')), findsOneWidget);
+    });
+
+    testWidgets('aDoneItemHidesPostponeAndReroute', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.done),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka];
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('trip-item-checkbox-i1')), findsOneWidget);
+      expect(find.byKey(const Key('trip-item-postpone-i1')), findsNothing);
+      expect(find.byKey(const Key('trip-item-reroute-i1')), findsNothing);
+    });
+
+    testWidgets('aPostponedItemShowsUndo_andHidesPostponeAndReroute', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka];
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('trip-item-undo-postpone-i1')), findsOneWidget);
+      expect(find.byKey(const Key('trip-item-postpone-i1')), findsNothing);
+      expect(find.byKey(const Key('trip-item-reroute-i1')), findsNothing);
+    });
+
+    testWidgets('tappingUndoOnAPostponedItemReopensIt', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka];
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('trip-item-undo-postpone-i1')));
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.uncheckCallCount, 1);
+      expect(itemsApi.lastUncheckedItemId, 'i1');
+    });
+
+    testWidgets('tappingCheckboxOnAPostponedItemChecksItOff', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka];
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('trip-item-checkbox-i1')));
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.checkOffCallCount, 1);
+      expect(itemsApi.lastCheckedOffItemId, 'i1');
     });
   });
 }
