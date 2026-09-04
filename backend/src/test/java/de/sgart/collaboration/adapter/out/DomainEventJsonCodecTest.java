@@ -11,8 +11,8 @@ import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponed;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
@@ -293,10 +293,10 @@ class DomainEventJsonCodecTest {
     }
 
     @Test
-    void itemPostponedRoundTripsThroughJsonUnderItsStableTypeTag() {
-        ItemPostponed event = new ItemPostponed(EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate());
+    void itemDiscardedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemDiscarded event = new ItemDiscarded(EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate());
 
-        assertThat(codec.typeTagFor(event)).isEqualTo("ItemPostponed");
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemDiscarded");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 
@@ -321,6 +321,26 @@ class DomainEventJsonCodecTest {
                         EventId.generate(), TripId.generate(), householdId, StoreId.generate());
 
         assertThat(codec.typeTagFor(event)).isEqualTo("StoreAddedToTrip");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void tripCompletedForListRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.TripCompletedForList event =
+                new de.sgart.collaboration.domain.event.TripCompletedForList(
+                        EventId.generate(), householdId, ShoppingListId.generate(), TripId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("TripCompletedForList");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void tripCompletedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.TripCompleted event =
+                new de.sgart.collaboration.domain.event.TripCompleted(
+                        EventId.generate(), TripId.generate(), householdId, ShoppingListId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("TripCompleted");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

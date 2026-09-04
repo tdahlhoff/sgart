@@ -23,13 +23,14 @@ class TripStoreGroup {
   int get hashCode => Object.hash(storeId, const ListEquality<Item>().hash(items));
 }
 
-/// State of [TripCubit] (Story 3.2, AC1, AC2, AC3, AC5, Cl. 2/5/7/9). [loading]/[failure] cover the
-/// initial load of the trip's grouped view; once [ready] it carries `tripId`/`listId`, `storeIds`
-/// (the trip's stores in add order — the client's grouping key, Cl. 7), the flat `items` the server
-/// returned, `stores` (the household's active stores, for name resolution and the Cl. 7 archived/
-/// non-trip fallback), `isSubmitting` for an in-flight reroute/add-store, and `actionError` for a
-/// rejection shown inline. [groups]/[unassignedItems] derive the actual grouped view — computed,
-/// never stored, so there is exactly one source of truth for the bucketing rule.
+/// State of [TripCubit] (Stories 3.2/3.3/3.4, AC1, AC2, AC3, AC5, Cl. 2/5/7/9). [loading]/[failure]
+/// cover the initial load of the trip's grouped view; once [ready] it carries `tripId`/`listId`,
+/// `storeIds` (the trip's stores in add order — the client's grouping key, Cl. 7), the flat `items`
+/// the server returned, `stores` (the household's active stores, for name resolution and the Cl. 7
+/// archived/non-trip fallback), `isSubmitting` for an in-flight command, `actionError` for a
+/// rejection shown inline, and `completed` (set to `true` once [TripCubit.completeTrip] succeeds —
+/// signals the trip screen to pop). [groups]/[unassignedItems]/[remainingOpenCount] derive the
+/// actual grouped view — computed, never stored, so there is exactly one source of truth.
 class TripState {
   const TripState._(
     this.status, {
@@ -39,6 +40,7 @@ class TripState {
     this.items = const [],
     this.stores = const [],
     this.isSubmitting = false,
+    this.completed = false,
     this.loadError,
     this.actionError,
   });
@@ -54,6 +56,7 @@ class TripState {
     required List<Item> items,
     List<StoreSummary> stores = const [],
     bool isSubmitting = false,
+    bool completed = false,
     AppError? actionError,
   }) : this._(
           TripStatus.ready,
@@ -63,6 +66,7 @@ class TripState {
           items: items,
           stores: stores,
           isSubmitting: isSubmitting,
+          completed: completed,
           actionError: actionError,
         );
 
@@ -73,6 +77,7 @@ class TripState {
   final List<Item> items;
   final List<StoreSummary> stores;
   final bool isSubmitting;
+  final bool completed;
   final AppError? loadError;
   final AppError? actionError;
 
@@ -100,14 +105,21 @@ class TripState {
   /// Number of items with `status == ItemStatus.done` (Story 3.3, AC5 progress bar).
   int get doneCount => items.where((item) => item.status == ItemStatus.done).length;
 
-  /// Total number of items regardless of status — POSTPONED items count in the total (Cl. 7).
+  /// Total number of items regardless of status — DISCARDED items count in the total (Story 3.4).
   int get totalCount => items.length;
+
+  /// Items still `OPEN` — the leftover set for the completion dialog (Story 3.4, AC3/AC6).
+  List<Item> get openItems => items.where((item) => item.status == ItemStatus.open).toList();
+
+  /// Number of still-`OPEN` items — zero means the E4 straight-complete path applies (Story 3.4, AC6).
+  int get remainingOpenCount => openItems.length;
 
   TripState copyWith({
     List<String>? storeIds,
     List<Item>? items,
     List<StoreSummary>? stores,
     bool? isSubmitting,
+    bool? completed,
     AppError? actionError,
     bool clearActionError = false,
   }) {
@@ -118,6 +130,7 @@ class TripState {
       items: items ?? this.items,
       stores: stores ?? this.stores,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      completed: completed ?? this.completed,
       actionError: clearActionError ? null : (actionError ?? this.actionError),
     );
   }
@@ -132,6 +145,7 @@ class TripState {
       const ListEquality<Item>().equals(other.items, items) &&
       const ListEquality<StoreSummary>().equals(other.stores, stores) &&
       other.isSubmitting == isSubmitting &&
+      other.completed == completed &&
       other.loadError == loadError &&
       other.actionError == actionError;
 
@@ -144,6 +158,7 @@ class TripState {
         const ListEquality<Item>().hash(items),
         const ListEquality<StoreSummary>().hash(stores),
         isSubmitting,
+        completed,
         loadError,
         actionError,
       );

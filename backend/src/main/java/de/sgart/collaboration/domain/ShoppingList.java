@@ -3,8 +3,8 @@ package de.sgart.collaboration.domain;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponed;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
@@ -12,12 +12,14 @@ import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.TripNotCompletableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
@@ -55,6 +57,7 @@ public final class ShoppingList extends EventSourcedAggregate {
     private ShoppingListId listId;
     private ShoppingListName name;
     private ListStatus status;
+    private TripId activeTripId;
     private final Map<ItemId, ItemState> itemsById = new LinkedHashMap<>();
 
     private ShoppingList(StreamId streamId) {
@@ -338,11 +341,11 @@ public final class ShoppingList extends EventSourcedAggregate {
     }
 
     /**
-     * Unchecks an item during a trip (Story 3.3, AC2/AC3, Cl. 1) — the item's status returns to
-     * {@link ItemStatus#OPEN}. Permitted only while {@link ListStatus#IN_TRIP}. An unknown item
-     * raises {@link ItemNotFoundException}; an already-{@code OPEN} item is a convergent no-op
-     * (raises nothing, AD-8). This is the undo affordance for both {@code DONE} and {@code
-     * POSTPONED} — unchecking returns a {@code POSTPONED} item to {@code OPEN} as well.
+     * Unchecks an item during a trip (Story 3.3, AC2/AC3, Cl. 1; Story 3.4, Cl. 1) — the item's
+     * status returns to {@link ItemStatus#OPEN}. Permitted only while {@link ListStatus#IN_TRIP}. An
+     * unknown item raises {@link ItemNotFoundException}; an already-{@code OPEN} item is a
+     * convergent no-op (raises nothing, AD-8). This is the undo affordance for both {@code DONE} and
+     * {@code DISCARDED} — unchecking returns any non-{@code OPEN} item to {@code OPEN}.
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -362,16 +365,17 @@ public final class ShoppingList extends EventSourcedAggregate {
     }
 
     /**
-     * Postpones an item in place during a trip (Story 3.3, AC3, Cl. 1) — the item's status
-     * becomes {@link ItemStatus#POSTPONED}. The item stays on this list (not moved). Permitted
-     * only while {@link ListStatus#IN_TRIP}. An unknown item raises {@link ItemNotFoundException};
-     * an already-{@code POSTPONED} item is a convergent no-op (raises nothing, AD-8). {@link
-     * #uncheckItem} returns a {@code POSTPONED} item to {@code OPEN}; {@link #checkOffItem} may
-     * still move a {@code POSTPONED} item to {@code DONE}.
+     * Discards an item during a trip (Story 3.4, AC2, Cl. 12) — the item's status becomes the
+     * terminal {@link ItemStatus#DISCARDED}. The item stays on the list, dimmed ("Verworfen") — it
+     * is <strong>not</strong> removed. Permitted only while {@link ListStatus#IN_TRIP}. An unknown
+     * item raises {@link ItemNotFoundException}; an already-{@code DISCARDED} item is a convergent
+     * no-op (raises nothing, AD-8). {@link #uncheckItem} returns a {@code DISCARDED} item to
+     * {@code OPEN}; {@link #checkOffItem} may still move a {@code DISCARDED} item to {@code DONE}
+     * ("found it after all").
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
-    public void postponeItemInPlace(ItemId itemId, CommandId commandId) {
+    public void discardItem(ItemId itemId, CommandId commandId) {
         Objects.requireNonNull(itemId, "itemId must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
         requireInTrip();
@@ -380,10 +384,43 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
-        if (existing.status() == ItemStatus.POSTPONED) {
-            return; // convergent no-op — already POSTPONED (AD-8)
+        if (existing.status() == ItemStatus.DISCARDED) {
+            return; // convergent no-op — already DISCARDED (AD-8)
         }
-        raise(new ItemPostponed(EventId.generate(), householdId, listId, itemId));
+        raise(new ItemDiscarded(EventId.generate(), householdId, listId, itemId));
+    }
+
+    /**
+     * Completes the trip against this list (Story 3.4, AC4, AC6, Cl. 2) — the only place a list
+     * reaches {@link ListStatus#DONE} and becomes immutable. Permitted only while {@link
+     * ListStatus#IN_TRIP} — an {@code OPEN} or {@code DONE} list raises {@link
+     * TripNotCompletableException}.
+     *
+     * <p><strong>Sweep-then-complete (Cl. 2):</strong> raises one {@link ItemDiscarded} for
+     * <em>every item still {@code OPEN}</em> (a quality-of-life safety net over the first-class
+     * explicit {@link #discardItem}; a {@code DONE} or {@code DISCARDED} item is untouched), then
+     * raises {@link TripCompletedForList} (folding the list {@code IN_TRIP → DONE}). All in one
+     * command / one append / one aggregate while still {@code IN_TRIP}, so the sweep discards are
+     * valid before immutability lands in the same append. The sweep never force-completes — only an
+     * explicit confirm from the member triggers this command; "Doch noch weiter einkaufen" (AC5)
+     * closes the dialog without calling this.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void completeTrip(CommandId commandId) {
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        if (status != ListStatus.IN_TRIP) {
+            throw new TripNotCompletableException(
+                    "A trip may only be completed from an In-Trip list, list is " + status);
+        }
+        // Sweep: discard every still-OPEN item (QoL safety net, Cl. 2)
+        for (Map.Entry<ItemId, ItemState> entry : itemsById.entrySet()) {
+            if (entry.getValue().status() == ItemStatus.OPEN) {
+                raise(new ItemDiscarded(EventId.generate(), householdId, listId, entry.getKey()));
+            }
+        }
+        raise(new TripCompletedForList(EventId.generate(), householdId, listId, activeTripId));
     }
 
     /**
@@ -468,7 +505,7 @@ public final class ShoppingList extends EventSourcedAggregate {
                 itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity(), null, ItemStatus.OPEN));
             case ItemUpdated updated -> {
                 // Cl. 4/7 regression trap: an edit must carry the existing assignment and status
-                // forward — only ItemAssignedToStore may change assignedStore; only the three status
+                // forward — only ItemAssignedToStore may change assignedStore; only the status
                 // events may change status.
                 ItemState existing = itemsById.get(updated.itemId());
                 StoreId assignedStore = existing == null ? null : existing.assignedStore();
@@ -481,11 +518,15 @@ public final class ShoppingList extends EventSourcedAggregate {
             case ItemMovedToList moved -> itemsById.remove(moved.itemId());
             case ItemAssignedToStore assigned -> assignStore(assigned.itemId(), assigned.storeId());
             case ItemRerouted rerouted -> assignStore(rerouted.itemId(), rerouted.storeId());
-            case TripStartedForList started -> this.status = ListStatus.IN_TRIP;
+            case TripStartedForList started -> {
+                this.status = ListStatus.IN_TRIP;
+                this.activeTripId = started.tripId();
+            }
             case ItemCheckedOff checkedOff -> setStatus(checkedOff.itemId(), ItemStatus.DONE);
             case ItemUnchecked unchecked -> setStatus(unchecked.itemId(), ItemStatus.OPEN);
-            case ItemPostponed postponed -> setStatus(postponed.itemId(), ItemStatus.POSTPONED);
+            case ItemDiscarded discarded -> setStatus(discarded.itemId(), ItemStatus.DISCARDED);
             case ItemPostponedToList postponedToList -> itemsById.remove(postponedToList.itemId());
+            case TripCompletedForList completed -> this.status = ListStatus.DONE;
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }
@@ -508,8 +549,8 @@ public final class ShoppingList extends EventSourcedAggregate {
 
     /**
      * Folds an item's status — shared by {@link ItemCheckedOff}, {@link ItemUnchecked}, and {@link
-     * ItemPostponed} (Story 3.3, Cl. 1/4). The command guards item existence before raising, so
-     * {@code existing} is non-null for any well-formed stream; skip defensively on a
+     * ItemDiscarded} (Stories 3.3/3.4, Cl. 1/4). The command guards item existence before raising,
+     * so {@code existing} is non-null for any well-formed stream; skip defensively on a
      * reordered/repaired stream rather than NPE (mirrors {@link #assignStore}). Preserves all other
      * fields — only this fold may write {@code status}.
      */
@@ -526,7 +567,7 @@ public final class ShoppingList extends EventSourcedAggregate {
      * is projected separately (AD-4). {@code assignedStore} is a bare reference into the separate
      * {@code Household} aggregate (AD-3) — {@code null} means unassigned. {@code status} is the
      * item's in-trip lifecycle ({@link ItemStatus}), {@code OPEN} at birth, changed only by the
-     * three status events (Story 3.3, Cl. 4).
+     * status events (Stories 3.3/3.4, Cl. 4).
      */
     private record ItemState(ItemName name, ItemNote note, Quantity quantity, StoreId assignedStore, ItemStatus status) {}
 }

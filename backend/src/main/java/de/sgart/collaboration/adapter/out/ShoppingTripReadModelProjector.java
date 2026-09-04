@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.event.StoreAddedToTrip;
+import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.StreamId;
@@ -67,9 +68,9 @@ public final class ShoppingTripReadModelProjector implements SmartLifecycle {
             case TripStarted started ->
                 started.storeIds().forEach(storeId -> tripStoreReadModel.addStore(started.tripId(), storeId));
             case StoreAddedToTrip added -> tripStoreReadModel.addStore(added.tripId(), added.storeId());
+            case TripCompleted completed -> tripStoreReadModel.deleteForTrip(completed.tripId());
             default -> {
-                // The subscription filter (see subscribe()) only ever delivers trip-stream events;
-                // no other trip event exists in 3.2.
+                // The subscription filter (see subscribe()) only ever delivers trip-stream events.
             }
         }
     }

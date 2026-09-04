@@ -12,32 +12,29 @@ import '../../lists/data/item.dart';
 import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
-import '../../stores/data/store_summary.dart';
 import '../../stores/data/stores_api.dart';
-import '../../stores/presentation/store_picker_sheet.dart';
 import '../data/trips_api.dart';
+import '../../stores/presentation/store_picker_sheet.dart';
 import 'postpone_target_sheet.dart';
 import 'trip_cubit.dart';
+import 'trip_item_actions_sheet.dart';
 import 'trip_state.dart';
 
-/// The trip screen (Story 3.2, AC1, AC2, AC3, AC5, Cl. 2/5/7/9; Story 3.3, AC2/AC3/AC4/AC5;
-/// UX-DR7, `screen-active-trip.html`): SGART's trip screen — one section per trip store
-/// (name · chain, item count, item rows with checkboxes + postpone affordances) plus a „Noch nicht
-/// zugeordnet" section. Story 3.3 adds the „N von M erledigt" progress bar in the header, a
-/// checkbox per row (check-off/uncheck), a done treatment for DONE rows, and the postpone target
-/// picker (in-place or to another list). No „Einkauf abschließen" (Cl. 2 — Story 3.4). Reads its
-/// [TripCubit] from the enclosing provider (scoped to the list by the caller).
+/// The trip screen (Stories 3.2/3.3/3.4, AC1, AC2, AC3, AC5, Cl. 2/5/7/9/12;
+/// `screen-active-trip.html`): one section per trip store (name · chain, item count, item rows
+/// with checkboxes + ⋯ actions sheet) plus a „Noch nicht zugeordnet" section and the
+/// „Einkauf abschließen" tonal action at the list end (Story 3.4, AC1). Reads its [TripCubit]
+/// from the enclosing provider (scoped to the list by the caller).
 class TripScreen extends StatelessWidget {
   const TripScreen({super.key, required this.listTitle});
 
-  /// Already-derived display title (the list's name, or the „Liste N" fallback) — this screen never
-  /// re-derives it.
+  /// Already-derived display title (the list's name, or the „Liste N" fallback) — this screen
+  /// never re-derives it.
   final String listTitle;
 
-  /// Pushes this screen, re-providing [TripsApi] + [ItemsApi] + [StoresApi] + [ShoppingListsApi] +
-  /// [StoreChainReferenceCache] (needed by the reroute/add-store picker) + a household/list-scoped
-  /// [TripCubit] (mirrors `ListDetailPage.push`'s re-providing pattern, Story 3.2, AC4).
-  static Future<void> push(
+  /// Pushes this screen, re-providing the APIs + a household/list-scoped [TripCubit]. Returns
+  /// `true` when the trip was completed, `false`/`null` when it was dismissed without completing.
+  static Future<bool?> push(
     BuildContext context, {
     required String householdId,
     required String listId,
@@ -48,7 +45,7 @@ class TripScreen extends StatelessWidget {
     final storesApi = context.read<StoresApi>();
     final shoppingListsApi = context.read<ShoppingListsApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
-    return Navigator.of(context).push(MaterialPageRoute<void>(
+    return Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
       builder: (_) => RepositoryProvider<TripsApi>.value(
         value: tripsApi,
         child: RepositoryProvider<ItemsApi>.value(
@@ -79,17 +76,21 @@ class TripScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: const Key('trip-screen'),
-      appBar: SgartAppBar(title: listTitle),
-      body: BlocBuilder<TripCubit, TripState>(
-        builder: (context, state) {
-          return switch (state.status) {
-            TripStatus.loading => const Center(child: CircularProgressIndicator(key: Key('trip-loading'))),
-            TripStatus.failure => const _FailureBody(),
-            TripStatus.ready => _ReadyBody(state: state),
-          };
-        },
+    return BlocListener<TripCubit, TripState>(
+      listenWhen: (previous, current) => !previous.completed && current.completed,
+      listener: (context, state) => Navigator.of(context).pop(true),
+      child: Scaffold(
+        key: const Key('trip-screen'),
+        appBar: SgartAppBar(title: listTitle),
+        body: BlocBuilder<TripCubit, TripState>(
+          builder: (context, state) {
+            return switch (state.status) {
+              TripStatus.loading => const Center(child: CircularProgressIndicator(key: Key('trip-loading'))),
+              TripStatus.failure => const _FailureBody(),
+              TripStatus.ready => _ReadyBody(state: state),
+            };
+          },
+        ),
       ),
     );
   }
@@ -118,13 +119,11 @@ class _ReadyBody extends StatelessWidget {
             _StoreGroupSection(
               group: group,
               storeName: cubit.state.storeFor(group.storeId)?.name ?? group.storeId,
-              onReroute: (itemId) => _openReroutePicker(context, itemId),
-              onPostpone: (itemId) => _openPostponeSheet(context, itemId),
+              onActions: (itemId) => _openItemActionsSheet(context, itemId),
             ),
           _UnassignedSection(
             items: state.unassignedItems,
-            onAssign: (itemId) => _openReroutePicker(context, itemId),
-            onPostpone: (itemId) => _openPostponeSheet(context, itemId),
+            onActions: (itemId) => _openItemActionsSheet(context, itemId),
           ),
           if (state.actionError != null) ...[
             const SizedBox(height: SgartShapes.space4),
@@ -140,55 +139,64 @@ class _ReadyBody extends StatelessWidget {
             variant: SgartButtonVariant.tonal,
             onPressed: state.isSubmitting ? null : () => _openAddStorePicker(context),
           ),
+          const SizedBox(height: SgartShapes.space2),
+          Semantics(
+            button: true,
+            label: localizations.tripCompleteAction,
+            child: SgartButton(
+              key: const Key('trip-complete-action'),
+              label: localizations.tripCompleteAction,
+              variant: SgartButtonVariant.tonal,
+              onPressed: state.isSubmitting ? null : () => _openCompletionDialog(context),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _openReroutePicker(BuildContext context, String itemId) async {
+  void _openItemActionsSheet(BuildContext context, String itemId) {
     final cubit = context.read<TripCubit>();
-    final tripStores = cubit.state.storeIds.map(cubit.state.storeFor).whereType<StoreSummary>().toList();
-    final selected = await showStorePickerSheet(
-      context,
-      stores: tripStores,
-      storesApi: context.read<StoresApi>(),
-      referenceCache: context.read<StoreChainReferenceCache>(),
-      householdId: _householdIdOf(context),
-      onInlineStoreCreated: (created) => cubit.addStoreToTrip(created),
-    );
-    if (selected != null && cubit.state.storeIds.contains(selected.storeId)) {
-      cubit.reroute(itemId, selected.storeId);
-    }
-  }
-
-  void _openPostponeSheet(BuildContext context, String itemId) {
-    final cubit = context.read<TripCubit>();
-    showPostponeTargetSheet(
+    showTripItemActionsSheet(
       context,
       cubit: cubit,
-      shoppingListsApi: context.read<ShoppingListsApi>(),
       itemId: itemId,
-      householdId: cubit.householdId,
-      sourceListId: cubit.listId,
+      shoppingListsApi: context.read<ShoppingListsApi>(),
+      storesApi: context.read<StoresApi>(),
+      referenceCache: context.read<StoreChainReferenceCache>(),
     );
   }
 
   Future<void> _openAddStorePicker(BuildContext context) async {
     final cubit = context.read<TripCubit>();
     final offeredStores = cubit.state.stores.where((store) => !cubit.state.storeIds.contains(store.storeId)).toList();
+    // No onInlineStoreCreated hook here — the post-picker `addStoreToTrip(selected)` already
+    // handles both the existing-store and the inline-created-store cases. Hooking both would
+    // call AddStoreToTrip twice for an inline-created store.
     final selected = await showStorePickerSheet(
       context,
       stores: offeredStores,
       storesApi: context.read<StoresApi>(),
       referenceCache: context.read<StoreChainReferenceCache>(),
-      householdId: _householdIdOf(context),
+      householdId: cubit.householdId,
     );
     if (selected != null) {
       cubit.addStoreToTrip(selected);
     }
   }
 
-  String _householdIdOf(BuildContext context) => context.read<TripCubit>().householdId;
+  Future<void> _openCompletionDialog(BuildContext context) async {
+    final cubit = context.read<TripCubit>();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _CompletionSheetBody(
+        cubit: cubit,
+        shoppingListsApi: context.read<ShoppingListsApi>(),
+        parentContext: context,
+      ),
+    );
+  }
 }
 
 class _ProgressHeader extends StatelessWidget {
@@ -220,14 +228,12 @@ class _StoreGroupSection extends StatelessWidget {
   const _StoreGroupSection({
     required this.group,
     required this.storeName,
-    required this.onReroute,
-    required this.onPostpone,
+    required this.onActions,
   });
 
   final TripStoreGroup group;
   final String storeName;
-  final ValueChanged<String> onReroute;
-  final ValueChanged<String> onPostpone;
+  final ValueChanged<String> onActions;
 
   @override
   Widget build(BuildContext context) {
@@ -252,9 +258,7 @@ class _StoreGroupSection extends StatelessWidget {
           for (final item in group.items)
             _TripItemRow(
               item: item,
-              actionLabel: localizations.tripItemRerouteAction,
-              onTap: () => onReroute(item.itemId),
-              onPostpone: () => onPostpone(item.itemId),
+              onActions: () => onActions(item.itemId),
             ),
         ],
       ),
@@ -263,11 +267,10 @@ class _StoreGroupSection extends StatelessWidget {
 }
 
 class _UnassignedSection extends StatelessWidget {
-  const _UnassignedSection({required this.items, required this.onAssign, required this.onPostpone});
+  const _UnassignedSection({required this.items, required this.onActions});
 
   final List<Item> items;
-  final ValueChanged<String> onAssign;
-  final ValueChanged<String> onPostpone;
+  final ValueChanged<String> onActions;
 
   @override
   Widget build(BuildContext context) {
@@ -289,9 +292,7 @@ class _UnassignedSection extends StatelessWidget {
             for (final item in items)
               _TripItemRow(
                 item: item,
-                actionLabel: localizations.tripItemAssignAction,
-                onTap: () => onAssign(item.itemId),
-                onPostpone: () => onPostpone(item.itemId),
+                onActions: () => onActions(item.itemId),
               ),
         ],
       ),
@@ -300,15 +301,13 @@ class _UnassignedSection extends StatelessWidget {
 }
 
 class _TripItemRow extends StatelessWidget {
-  const _TripItemRow({required this.item, required this.actionLabel, required this.onTap, required this.onPostpone});
+  const _TripItemRow({required this.item, required this.onActions});
 
   final Item item;
-  final String actionLabel;
-  final VoidCallback onTap;
-  final VoidCallback onPostpone;
+  final VoidCallback onActions;
 
   bool get _isDone => item.status == ItemStatus.done;
-  bool get _isPostponed => item.status == ItemStatus.postponed;
+  bool get _isDiscarded => item.status == ItemStatus.discarded;
 
   @override
   Widget build(BuildContext context) {
@@ -321,8 +320,10 @@ class _TripItemRow extends StatelessWidget {
     final checkboxSemantic = _isDone ? localizations.tripItemUncheckSemantic : localizations.tripItemCheckOffSemantic;
 
     return ColoredBox(
-      key: _isDone ? Key('trip-item-done-${item.itemId}') : null,
-      color: _isDone ? colors.success.withValues(alpha: 0.12) : Colors.transparent,
+      key: _isDone ? Key('trip-item-done-${item.itemId}') : (_isDiscarded ? Key('trip-item-discarded-${item.itemId}') : null),
+      color: _isDone
+          ? colors.success.withValues(alpha: 0.12)
+          : (_isDiscarded ? colors.textSecondary.withValues(alpha: 0.08) : Colors.transparent),
       child: ListTile(
         key: Key('trip-item-${item.itemId}'),
         contentPadding: EdgeInsets.zero,
@@ -342,15 +343,17 @@ class _TripItemRow extends StatelessWidget {
         ),
         title: Text(
           item.name,
-          style: _isDone ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary) : null,
+          style: (_isDone || _isDiscarded)
+              ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
+              : null,
         ),
-        subtitle: _isPostponed
-            ? Text(localizations.tripPostponedLabel, style: TextStyle(color: colors.textSecondary))
+        subtitle: _isDiscarded
+            ? Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary))
             : Text(subtitle),
-        // Affordances depend on status (Story 3.3 review fix): a DONE row offers only its
-        // checkbox (uncheck → OPEN) — postponing or rerouting a bought item made no sense and
-        // silently un-checked it; a POSTPONED row offers an UNDO (→ OPEN) beside its checkbox
-        // („doch bekommen" → DONE); only an OPEN row carries postpone + reroute/assign.
+        // Status-dependent trailing (Story 3.4, Cl. 12):
+        //   OPEN  → ⋯ actions sheet (reroute / transfer / discard)
+        //   DONE  → no trailing (uncheck via checkbox only)
+        //   DISCARDED → UNDO button (→ OPEN) only, no ⋯
         trailing: _buildTrailing(localizations, cubit),
       ),
     );
@@ -360,49 +363,35 @@ class _TripItemRow extends StatelessWidget {
     if (_isDone) {
       return null;
     }
-    if (_isPostponed) {
+    if (_isDiscarded) {
       return Semantics(
         button: true,
-        label: localizations.tripItemUndoPostponeAction,
+        label: localizations.tripItemUndoDiscardAction,
         child: SizedBox(
           width: 48,
           height: 48,
           child: IconButton(
-            key: Key('trip-item-undo-postpone-${item.itemId}'),
+            key: Key('trip-item-undo-discard-${item.itemId}'),
             icon: const Icon(Icons.undo),
-            tooltip: localizations.tripItemUndoPostponeAction,
+            tooltip: localizations.tripItemUndoDiscardAction,
             onPressed: () => cubit.uncheck(item.itemId),
           ),
         ),
       );
     }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Semantics(
-          button: true,
-          label: localizations.tripItemPostponeAction,
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              key: Key('trip-item-postpone-${item.itemId}'),
-              icon: const Icon(Icons.more_time),
-              tooltip: localizations.tripItemPostponeAction,
-              onPressed: onPostpone,
-            ),
-          ),
+    return Semantics(
+      button: true,
+      label: localizations.tripItemActionsSheetTitle,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: IconButton(
+          key: Key('trip-item-actions-${item.itemId}'),
+          icon: const Icon(Icons.more_horiz),
+          tooltip: localizations.tripItemActionsSheetTitle,
+          onPressed: onActions,
         ),
-        Semantics(
-          button: true,
-          label: actionLabel,
-          child: TextButton(
-            key: Key('trip-item-reroute-${item.itemId}'),
-            onPressed: onTap,
-            child: Text(actionLabel),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -410,6 +399,147 @@ class _TripItemRow extends StatelessWidget {
     final amount = double.tryParse(item.amount) ?? 0;
     final unit = formatting.unitFromServerName(item.unit) ?? formatting.Unit.piece;
     return const formatting.QuantityFormatter().format(amount, unit, localizations);
+  }
+}
+
+/// The guided completion sheet (Story 3.4, AC1/AC3/AC4/AC5/AC6): "Fertig?" summary → per-open-item
+/// Übernehmen/Verwerfen choices → "Einkauf abschließen" confirm / "Doch noch weiter einkaufen"
+/// cancel. E4: no open items → skips straight to confirm.
+class _CompletionSheetBody extends StatelessWidget {
+  const _CompletionSheetBody({
+    required this.cubit,
+    required this.shoppingListsApi,
+    required this.parentContext,
+  });
+
+  final TripCubit cubit;
+  final ShoppingListsApi shoppingListsApi;
+  final BuildContext parentContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final state = cubit.state;
+    final doneCount = state.doneCount;
+    final totalCount = state.totalCount;
+    final openItems = state.openItems;
+
+    return Padding(
+      key: const Key('trip-completion-sheet'),
+      padding: EdgeInsets.only(
+        left: SgartShapes.cardPadding,
+        right: SgartShapes.cardPadding,
+        top: SgartShapes.cardPadding,
+        bottom: MediaQuery.of(context).viewInsets.bottom + SgartShapes.cardPadding,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(localizations.tripCompleteDialogTitle, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: SgartShapes.space2),
+          Text(localizations.tripProgressLabel(doneCount, totalCount)),
+          if (openItems.isNotEmpty) ...[
+            const SizedBox(height: SgartShapes.space4),
+            Text(localizations.tripCompleteLeftoverPrompt),
+            const SizedBox(height: SgartShapes.space2),
+            for (final item in openItems)
+              _LeftoverItemRow(
+                item: item,
+                cubit: cubit,
+                shoppingListsApi: shoppingListsApi,
+                parentContext: parentContext,
+                sheetContext: context,
+              ),
+          ],
+          const SizedBox(height: SgartShapes.space4),
+          Semantics(
+            button: true,
+            label: localizations.tripCompleteAction,
+            child: SgartButton(
+              key: const Key('trip-completion-confirm'),
+              label: localizations.tripCompleteAction,
+              onPressed: () {
+                Navigator.of(context).pop();
+                cubit.completeTrip();
+              },
+            ),
+          ),
+          const SizedBox(height: SgartShapes.space2),
+          SgartButton(
+            key: const Key('trip-completion-cancel'),
+            label: localizations.tripKeepShoppingAction,
+            variant: SgartButtonVariant.tonal,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeftoverItemRow extends StatelessWidget {
+  const _LeftoverItemRow({
+    required this.item,
+    required this.cubit,
+    required this.shoppingListsApi,
+    required this.parentContext,
+    required this.sheetContext,
+  });
+
+  final Item item;
+  final TripCubit cubit;
+  final ShoppingListsApi shoppingListsApi;
+  final BuildContext parentContext;
+  final BuildContext sheetContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: SgartShapes.spaceHalfUnit),
+      child: Row(
+        children: [
+          Expanded(child: Text(item.name)),
+          Semantics(
+            button: true,
+            label: localizations.tripLeftoverTransferAction,
+            child: SizedBox(
+              height: 48,
+              child: TextButton(
+                key: Key('trip-leftover-transfer-${item.itemId}'),
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  showPostponeTargetSheet(
+                    parentContext,
+                    cubit: cubit,
+                    shoppingListsApi: shoppingListsApi,
+                    itemId: item.itemId,
+                    householdId: cubit.householdId,
+                    sourceListId: cubit.listId,
+                  );
+                },
+                child: Text(localizations.tripLeftoverTransferAction),
+              ),
+            ),
+          ),
+          const SizedBox(width: SgartShapes.spaceHalfUnit),
+          Semantics(
+            button: true,
+            label: localizations.tripItemDiscardAction,
+            child: SizedBox(
+              height: 48,
+              child: TextButton(
+                key: Key('trip-leftover-discard-${item.itemId}'),
+                onPressed: () => cubit.discard(item.itemId),
+                child: Text(localizations.tripItemDiscardAction),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

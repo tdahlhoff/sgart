@@ -12,6 +12,7 @@ import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.ShoppingTrip;
+import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
@@ -23,6 +24,7 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
@@ -144,6 +146,11 @@ class TripControllerTest {
         public List<StoreId> storesOf(TripId tripId) {
             return storesByTrip.getOrDefault(tripId, List.of());
         }
+
+        @Override
+        public void deleteForTrip(TripId tripId) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
+        }
     }
 
     /** A read model whose items a test presets per list, so the trip view never touches PostgreSQL. */
@@ -210,6 +217,21 @@ class TripControllerTest {
 
     private static String addStoreRequestBody(String storeId) {
         return "{\"storeId\":\"%s\",\"commandId\":\"%s\"}".formatted(storeId, UUID.randomUUID());
+    }
+
+    private static String completeRequestBody() {
+        return "{\"commandId\":\"%s\"}".formatted(UUID.randomUUID());
+    }
+
+    /** Seeds a trip start event on the list stream so {@code CompleteTripHandler} sees IN_TRIP status. */
+    private TripId seedTripStartOnList(HouseholdId householdId, ShoppingListId listId) {
+        TripId tripId = TripId.generate();
+        StoreId storeId = StoreId.generate();
+        TripStartedForList started = new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(storeId));
+        // Append to the list stream (version after ShoppingListCreated = 1)
+        eventStore.append(AggregateVersion.of(StreamId.forList(listId), 1), List.of(started), CommandId.generate());
+        tripStoreReadModel.put(tripId, List.of(storeId));
+        return tripId;
     }
 
     @Test
@@ -432,6 +454,53 @@ class TripControllerTest {
                         .content(startRequestBody(TripId.generate().toString(), StoreId.generate().toString())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    // ── complete ──────────────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void complete_returns200ForAnInTripList() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        TripId tripId = seedTripStartOnList(householdId, listId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/trips/{tripId}/complete",
+                        householdId.toString(), listId.toString(), tripId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeRequestBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void complete_returns409ForAnOpenList() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/trips/{tripId}/complete",
+                        householdId.toString(), listId.toString(), TripId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeRequestBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("trip.notCompletable"));
+    }
+
+    @Test
+    void complete_returns403ForANonMember() throws Exception {
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/trips/{tripId}/complete",
+                        householdId.toString(), listId.toString(), TripId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeRequestBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
     }
 
     @Test

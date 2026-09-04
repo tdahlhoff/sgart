@@ -107,7 +107,7 @@ class _OpenListsBody extends StatelessWidget {
                 listId: list.listId,
                 currentName: list.name ?? localizations.listsDefaultName(index + 1),
               ),
-              onOpen: () {
+              onOpen: () async {
                 final displayName = list.name ?? localizations.listsDefaultName(index + 1);
                 // An „Im Einkauf" row opens the trip screen directly (Story 3.2, AC4) — the
                 // list-detail's own item edits are off-trip only (Story 3.1, AC6). A still-Open row
@@ -115,7 +115,13 @@ class _OpenListsBody extends StatelessWidget {
                 // starten") and navigate on from there (Story 3.2, Cl. 3).
                 final activeTripId = list.activeTripId;
                 if (list.status == 'IN_TRIP' && activeTripId != null) {
-                  TripScreen.push(context, householdId: cubit.householdId, listId: list.listId, listTitle: displayName);
+                  final completed = await TripScreen.push(context, householdId: cubit.householdId, listId: list.listId, listTitle: displayName);
+                  // Story 3.4, AC7 — invalidate the Done archive so the completed list appears
+                  // immediately in the "Erledigt" tab without the user needing to select it twice.
+                  if (completed == true && context.mounted) {
+                    cubit.invalidateArchive();
+                    cubit.refresh();
+                  }
                   return;
                 }
                 ListDetailPage.push(
@@ -128,7 +134,12 @@ class _OpenListsBody extends StatelessWidget {
                   // itemCount reflects any add/remove the user just made (the count is a server-side
                   // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
                   // just-started trip's In-Trip label appears (Story 3.1, AC5).
-                  onEditableReturn: cubit.refresh,
+                  // Also invalidate the Done archive: if the list went to In-Trip and the trip was
+                  // completed inside list-detail, the archive needs a refetch (Story 3.4, AC7).
+                  onEditableReturn: () {
+                    cubit.refresh();
+                    cubit.invalidateArchive();
+                  },
                 );
               },
             ),

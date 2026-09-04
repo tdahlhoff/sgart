@@ -3,6 +3,7 @@ package de.sgart.collaboration.adapter.out;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.domain.event.StoreAddedToTrip;
+import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -106,6 +107,18 @@ class ShoppingTripReadModelProjectorTest {
         projector.project(started);
 
         assertThat(tripStoreReadModel.storesOf(tripId)).containsExactly(edeka);
+    }
+
+    @Test
+    void projectingTripCompletedDeletesTheTripStoreRows() {
+        TripId tripId = TripId.generate();
+        StoreId edeka = StoreId.generate();
+        projector.project(new TripStarted(
+                EventId.generate(), tripId, HouseholdId.generate(), ShoppingListId.generate(), List.of(edeka)));
+
+        projector.project(new TripCompleted(EventId.generate(), tripId, HouseholdId.generate(), ShoppingListId.generate()));
+
+        assertThat(tripStoreReadModel.storesOf(tripId)).isEmpty();
     }
 
     @Test

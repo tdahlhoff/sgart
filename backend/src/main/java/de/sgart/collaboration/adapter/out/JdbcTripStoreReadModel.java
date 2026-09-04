@@ -47,4 +47,13 @@ public final class JdbcTripStoreReadModel implements TripStoreReadModel {
                 .query((resultSet, rowNumber) -> StoreId.fromString(resultSet.getString("store_id")))
                 .list();
     }
+
+    /** Idempotent delete — re-projecting the same {@code TripCompleted} is a safe no-op. */
+    @Override
+    public void deleteForTrip(TripId tripId) {
+        jdbcClient
+                .sql("DELETE FROM trip_store_read_model WHERE trip_id = :tripId")
+                .param("tripId", tripId.value())
+                .update();
+    }
 }

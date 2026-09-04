@@ -219,12 +219,18 @@ class _ReadyBody extends StatelessWidget {
                             .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
                         // Story 3.2, AC4, Cl. 3 — a started trip now navigates straight to the trip
                         // screen (3.1 deferred this; it used to end at the toast alone).
-                        await TripScreen.push(
+                        // Story 3.4: if the trip was completed, pop list-detail too (the list is now
+                        // Done and can no longer be edited; the lists-view onEditableReturn callback
+                        // handles the archive invalidation + overview refresh).
+                        final completed = await TripScreen.push(
                           context,
                           householdId: cubit.householdId,
                           listId: cubit.listId,
                           listTitle: title,
                         );
+                        if (completed == true && context.mounted) {
+                          Navigator.of(context).pop();
+                        }
                       }
                     },
             ),

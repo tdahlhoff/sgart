@@ -1,6 +1,7 @@
 package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.StoreAddedToTrip;
+import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.collaboration.domain.exception.TripNotActiveException;
 import de.sgart.shared.CommandId;
@@ -95,9 +96,27 @@ public final class ShoppingTrip extends EventSourcedAggregate {
     }
 
     /**
+     * Completes the trip (Story 3.4, AC4, Cl. 3) — driven by the {@code
+     * TripLifecycleProcessManager} reacting to {@code TripCompletedForList} (AD-10), never a
+     * handler directly. Folds the trip {@code ACTIVE → DONE}. An already-{@code DONE} trip is a
+     * convergent no-op (raises nothing) — idempotent re-delivery of the same {@code
+     * TripCompletedForList} must not double-complete (mirrors {@link #addStore}'s ACTIVE guard).
+     *
+     * @param commandId deterministically derived from the triggering event id (AD-8)
+     */
+    public void complete(CommandId commandId) {
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        if (status == TripStatus.DONE) {
+            return; // convergent no-op — already DONE (AD-8)
+        }
+        raise(new TripCompleted(EventId.generate(), tripId, householdId, listId));
+    }
+
+    /**
      * Adds a store to the trip spontaneously (Story 3.2, AC3) — the trip's <strong>first in-trip
      * mutation</strong>. Permitted only while {@link TripStatus#ACTIVE} ({@code DONE} is
-     * unreachable until Story 3.4, so this guard is defensive). A store already in the trip is a
+     * reachable since Story 3.4, so this guard is enforced). A store already in the trip is a
      * convergent no-op (raises nothing, AD-8). Does <strong>not</strong> validate that {@code
      * storeId} exists in the household — {@code Store} is an entity inside the separate {@code
      * Household} aggregate this root never loads or mutates (AD-3, mirrors {@link
@@ -133,6 +152,7 @@ public final class ShoppingTrip extends EventSourcedAggregate {
                 updated.add(added.storeId());
                 this.storeIds = List.copyOf(updated);
             }
+            case TripCompleted ignored -> this.status = TripStatus.DONE;
             default -> throw new IllegalArgumentException(
                     "ShoppingTrip cannot apply unknown event type: " + event.getClass());
         }

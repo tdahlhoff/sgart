@@ -6,8 +6,9 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
+import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
@@ -143,10 +144,11 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
                 }
             }
             case TripStartedForList started -> readModel.markInTrip(started.listId(), started.tripId());
+            case TripCompletedForList completed -> readModel.markDone(completed.listId());
             case ItemRerouted rerouted -> itemReadModel.assignStore(rerouted.itemId(), rerouted.storeId());
             case ItemCheckedOff checkedOff -> itemReadModel.setStatus(checkedOff.itemId(), ItemStatus.DONE);
             case ItemUnchecked unchecked -> itemReadModel.setStatus(unchecked.itemId(), ItemStatus.OPEN);
-            case ItemPostponed postponed -> itemReadModel.setStatus(postponed.itemId(), ItemStatus.POSTPONED);
+            case ItemDiscarded discarded -> itemReadModel.setStatus(discarded.itemId(), ItemStatus.DISCARDED);
             case ItemPostponedToList postponedToList -> itemReadModel.removeItem(postponedToList.itemId());
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events. The

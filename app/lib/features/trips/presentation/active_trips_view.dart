@@ -5,6 +5,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../lists/data/shopping_list_summary.dart';
+import '../../lists/presentation/list_overview/shopping_lists_cubit.dart';
 import 'active_trips_cubit.dart';
 import 'active_trips_state.dart';
 import 'trip_screen.dart';
@@ -66,12 +67,20 @@ class _ReadyBody extends StatelessWidget {
               // The „Liste N" ordinal derived from the full open-lists sequence (Cl. 3) — matches the
               // overview so an unnamed In-Trip list carries the same number on both surfaces.
               displayName: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
-              onTap: () => TripScreen.push(
-                context,
-                householdId: householdId,
-                listId: entry.summary.listId,
-                listTitle: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
-              ),
+              onTap: () async {
+                final completed = await TripScreen.push(
+                  context,
+                  householdId: householdId,
+                  listId: entry.summary.listId,
+                  listTitle: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
+                );
+                if (completed == true && context.mounted) {
+                  // Story 3.4, AC7 — completed trip removes the row from the Einkauf tab and
+                  // invalidates the Done archive so the "Erledigt" tab shows the completed list.
+                  context.read<ActiveTripsCubit>().refresh();
+                  context.read<ShoppingListsCubit>().invalidateArchive();
+                }
+              },
             ),
         ],
       ),

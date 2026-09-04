@@ -3,8 +3,8 @@ package de.sgart.collaboration.adapter.in;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
 import de.sgart.collaboration.application.command.CheckOffItemHandler;
+import de.sgart.collaboration.application.command.DiscardItemHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
-import de.sgart.collaboration.application.command.PostponeItemHandler;
 import de.sgart.collaboration.application.command.PostponeItemToListHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RerouteItemHandler;
@@ -48,7 +48,7 @@ class ItemController {
     private final RerouteItemHandler rerouteItemHandler;
     private final CheckOffItemHandler checkOffItemHandler;
     private final UncheckItemHandler uncheckItemHandler;
-    private final PostponeItemHandler postponeItemHandler;
+    private final DiscardItemHandler discardItemHandler;
     private final PostponeItemToListHandler postponeItemToListHandler;
     private final ListItems listItems;
 
@@ -61,7 +61,7 @@ class ItemController {
             RerouteItemHandler rerouteItemHandler,
             CheckOffItemHandler checkOffItemHandler,
             UncheckItemHandler uncheckItemHandler,
-            PostponeItemHandler postponeItemHandler,
+            DiscardItemHandler discardItemHandler,
             PostponeItemToListHandler postponeItemToListHandler,
             ListItems listItems) {
         this.addItemHandler = addItemHandler;
@@ -72,7 +72,7 @@ class ItemController {
         this.rerouteItemHandler = rerouteItemHandler;
         this.checkOffItemHandler = checkOffItemHandler;
         this.uncheckItemHandler = uncheckItemHandler;
-        this.postponeItemHandler = postponeItemHandler;
+        this.discardItemHandler = discardItemHandler;
         this.postponeItemToListHandler = postponeItemToListHandler;
         this.listItems = listItems;
     }
@@ -217,16 +217,16 @@ class ItemController {
         uncheckItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
     }
 
-    @PostMapping("/{itemId}/postpone")
+    @PostMapping("/{itemId}/discard")
     @ResponseStatus(HttpStatus.OK)
-    void postpone(
+    void discard(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String householdId,
             @PathVariable String listId,
             @PathVariable String itemId,
             @RequestBody StatusCommandRequest request) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
-        postponeItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
+        discardItemHandler.handle(caller.keycloakUserId(), householdId, listId, itemId, request.commandId());
     }
 
     @PostMapping("/{itemId}/postpone-to-list")
@@ -268,7 +268,7 @@ class ItemController {
     /** Transport DTO for {@code POST .../reroute} — the reroute-item command envelope (Story 3.2). */
     record RerouteItemRequest(String storeId, String commandId) {}
 
-    /** Transport DTO for {@code POST .../check-off}, {@code .../uncheck}, {@code .../postpone} (Story 3.3). */
+    /** Transport DTO for {@code POST .../check-off}, {@code .../uncheck}, {@code .../discard} (Story 3.3/3.4). */
     record StatusCommandRequest(String commandId) {}
 
     /** Transport DTO for {@code POST .../postpone-to-list} (Story 3.3, AC4/AC5). */

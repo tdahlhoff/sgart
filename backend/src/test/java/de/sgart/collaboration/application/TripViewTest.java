@@ -79,6 +79,11 @@ class TripViewTest {
         public List<StoreId> storesOf(TripId tripId) {
             return storesByTrip.getOrDefault(tripId, List.of());
         }
+
+        @Override
+        public void deleteForTrip(TripId tripId) {
+            throw new UnsupportedOperationException("the projector's write, never a query's");
+        }
     }
 
     private record FakeItemReadModel(List<ItemView> items) implements ItemReadModel {

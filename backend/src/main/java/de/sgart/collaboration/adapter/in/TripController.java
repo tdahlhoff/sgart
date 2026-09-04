@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.command.AddStoreToTripHandler;
+import de.sgart.collaboration.application.command.CompleteTripHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.TripView;
@@ -33,11 +34,17 @@ import org.springframework.web.bind.annotation.RestController;
 class TripController {
 
     private final StartTripHandler startTripHandler;
+    private final CompleteTripHandler completeTripHandler;
     private final AddStoreToTripHandler addStoreToTripHandler;
     private final TripView tripView;
 
-    TripController(StartTripHandler startTripHandler, AddStoreToTripHandler addStoreToTripHandler, TripView tripView) {
+    TripController(
+            StartTripHandler startTripHandler,
+            CompleteTripHandler completeTripHandler,
+            AddStoreToTripHandler addStoreToTripHandler,
+            TripView tripView) {
         this.startTripHandler = startTripHandler;
+        this.completeTripHandler = completeTripHandler;
         this.addStoreToTripHandler = addStoreToTripHandler;
         this.tripView = tripView;
     }
@@ -77,6 +84,20 @@ class TripController {
                         .toList());
     }
 
+    /** Completes the trip (Story 3.4, AC4): sweeps leftover OPEN items to DISCARDED and closes the list. */
+    @PostMapping("/{tripId}/complete")
+    @ResponseStatus(HttpStatus.OK)
+    void complete(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String listId,
+            @PathVariable String tripId,
+            @RequestBody CompleteTripRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        completeTripHandler.handle(caller.keycloakUserId(), householdId, listId, tripId, request.commandId());
+    }
+
     /** Adds a store to the trip spontaneously (Story 3.2, AC3) — the trip's first in-trip mutation. */
     @PostMapping("/{tripId}/stores")
     @ResponseStatus(HttpStatus.CREATED)
@@ -98,6 +119,9 @@ class TripController {
      * imports {@code ..domain..} (ArchUnit).
      */
     record StartTripRequest(String tripId, List<String> storeIds, String commandId) {}
+
+    /** Transport DTO for {@code POST .../{tripId}/complete} — the complete-trip command envelope (AR10, Story 3.4). */
+    record CompleteTripRequest(String commandId) {}
 
     /** Transport DTO for {@code POST .../stores} — the add-store-to-trip command envelope (AR10). */
     record AddStoreToTripRequest(String storeId, String commandId) {}

@@ -5,6 +5,7 @@ class FakeTripsApi implements TripsApi {
   Object? startError;
   Object? activeTripError;
   Object? addStoreToTripError;
+  Object? completeTripError;
 
   String? lastListId;
   String? lastTripId;
@@ -20,6 +21,11 @@ class FakeTripsApi implements TripsApi {
   String? lastAddedStoreId;
   final List<String> addStoreToTripCommandIds = [];
   int addStoreToTripCallCount = 0;
+
+  String? lastCompletedListId;
+  String? lastCompletedTripId;
+  final List<String> completeTripCommandIds = [];
+  int completeTripCallCount = 0;
 
   @override
   Future<void> startTrip(
@@ -61,5 +67,19 @@ class FakeTripsApi implements TripsApi {
     addStoreToTripCommandIds.add(commandId);
     addStoreToTripCallCount++;
     if (addStoreToTripError != null) throw addStoreToTripError!;
+  }
+
+  @override
+  Future<void> completeTrip(
+    String householdId,
+    String listId,
+    String tripId, {
+    required String commandId,
+  }) async {
+    lastCompletedListId = listId;
+    lastCompletedTripId = tripId;
+    completeTripCommandIds.add(commandId);
+    completeTripCallCount++;
+    if (completeTripError != null) throw completeTripError!;
   }
 }

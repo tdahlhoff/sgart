@@ -1,17 +1,18 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ItemMoveProcessManager;
-import de.sgart.collaboration.application.TripStartProcessManager;
+import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.AddStoreToTripHandler;
 import de.sgart.collaboration.application.command.ArchiveStoreHandler;
 import de.sgart.collaboration.application.command.AssignItemToStoreHandler;
+import de.sgart.collaboration.application.command.CheckOffItemHandler;
+import de.sgart.collaboration.application.command.CompleteTripHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
-import de.sgart.collaboration.application.command.CheckOffItemHandler;
+import de.sgart.collaboration.application.command.DiscardItemHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
-import de.sgart.collaboration.application.command.PostponeItemHandler;
 import de.sgart.collaboration.application.command.PostponeItemToListHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
@@ -152,8 +153,8 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    TripStartProcessManager tripStartProcessManager(EventStore eventStore) {
-        return new TripStartProcessManager(eventStore);
+    TripLifecycleProcessManager tripLifecycleProcessManager(EventStore eventStore) {
+        return new TripLifecycleProcessManager(eventStore);
     }
 
     @Bean
@@ -172,8 +173,13 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    PostponeItemHandler postponeItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
-        return new PostponeItemHandler(eventStore, resolveMemberIdentity);
+    DiscardItemHandler discardItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new DiscardItemHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    CompleteTripHandler completeTripHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new CompleteTripHandler(eventStore, resolveMemberIdentity);
     }
 
     @Bean

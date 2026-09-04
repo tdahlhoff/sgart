@@ -871,29 +871,64 @@
     "description": "Accessibility label for the checkbox when an item is DONE — action returns it to OPEN (Story 3.3, AC2, UX-DR5)."
   },
 
-  "tripItemPostponeAction": "Zurückstellen",
-  "@tripItemPostponeAction": {
-    "description": "Label / accessibility label of the postpone affordance on a trip item row — distinct from the planning „Verschieben\" (itemMoveAction) so the two do not collide (Story 3.3, AC3/AC4, UX-DR5)."
+  "tripItemActionsSheetTitle": "Was tun mit diesem Artikel?",
+  "@tripItemActionsSheetTitle": {
+    "description": "Heading / accessibility label of the per-row ⋯ item actions sheet — consolidates reroute, transfer, and discard into one entry point (Story 3.4, Cl. 12)."
   },
 
-  "tripItemUndoPostponeAction": "Zurückstellen rückgängig machen",
-  "@tripItemUndoPostponeAction": {
-    "description": "Label / accessibility label of the undo affordance on a POSTPONED trip item row — returns it to OPEN (Story 3.3 review fix)."
+  "tripItemRerouteInSheet": "Anderes Geschäft",
+  "@tripItemRerouteInSheet": {
+    "description": "Action row in the trip item actions sheet — lets the user reroute an item to a different trip store (Story 3.4, Cl. 12)."
   },
 
-  "tripPostponeSheetTitle": "Wohin zurückstellen?",
-  "@tripPostponeSheetTitle": {
-    "description": "Heading of the postpone target picker sheet (Story 3.3, AC3/AC4)."
+  "tripItemTransferAction": "Auf andere Liste",
+  "@tripItemTransferAction": {
+    "description": "Action row in the trip item actions sheet — transfers the item to another shopping list (Story 3.4, Cl. 12)."
   },
 
-  "tripPostponeInPlace": "Hier vormerken",
-  "@tripPostponeInPlace": {
-    "description": "The postpone-in-place option in the postpone target sheet — keeps the item on this list with status POSTPONED (Story 3.3, AC3)."
+  "tripItemDiscardAction": "Verwerfen",
+  "@tripItemDiscardAction": {
+    "description": "Action row in the trip item actions sheet and leftover-review dialog — marks the item DISCARDED so it does not carry over (Story 3.4, AC2, Cl. 12)."
   },
 
-  "tripPostponedLabel": "Zurückgestellt",
-  "@tripPostponedLabel": {
-    "description": "Set-aside status label shown on a POSTPONED item row in the trip screen (Story 3.3, AC3, Cl. 7)."
+  "tripItemUndoDiscardAction": "Verwerfen rückgängig machen",
+  "@tripItemUndoDiscardAction": {
+    "description": "Accessibility label of the undo trailing button on a DISCARDED trip item row — returns it to OPEN (Story 3.4, AC2)."
+  },
+
+  "itemDiscardedLabel": "Verworfen",
+  "@itemDiscardedLabel": {
+    "description": "Status subtitle shown on a DISCARDED item row in the trip screen (Story 3.4, AC2, Cl. 12)."
+  },
+
+  "tripTransferSheetTitle": "Auf welche Liste?",
+  "@tripTransferSheetTitle": {
+    "description": "Heading of the transfer target picker sheet — replaces tripPostponeSheetTitle, since the in-place postpone row was removed in Story 3.4 (Cl. 13)."
+  },
+
+  "tripCompleteAction": "Einkauf abschließen",
+  "@tripCompleteAction": {
+    "description": "Label of the tonal completion button at the bottom of the trip screen and the confirm button inside the completion sheet (Story 3.4, AC1/AC4)."
+  },
+
+  "tripCompleteDialogTitle": "Fertig?",
+  "@tripCompleteDialogTitle": {
+    "description": "Heading of the completion confirmation sheet (Story 3.4, AC1)."
+  },
+
+  "tripCompleteLeftoverPrompt": "Was soll mit den restlichen Artikeln passieren?",
+  "@tripCompleteLeftoverPrompt": {
+    "description": "Subheading shown in the completion sheet when there are still OPEN items — prompts the user to transfer or discard each one (Story 3.4, AC3/AC6)."
+  },
+
+  "tripLeftoverTransferAction": "Übernehmen",
+  "@tripLeftoverTransferAction": {
+    "description": "Per-leftover-item action in the completion sheet that transfers the item to another list (Story 3.4, AC3)."
+  },
+
+  "tripKeepShoppingAction": "Doch noch weiter einkaufen",
+  "@tripKeepShoppingAction": {
+    "description": "Cancel button in the completion sheet — dismisses the sheet and returns the user to the trip (Story 3.4, AC5)."
   },
 
   "tripPostponeCreateFailedError": "Die Liste konnte nicht erstellt werden. Bitte versuche es erneut.",

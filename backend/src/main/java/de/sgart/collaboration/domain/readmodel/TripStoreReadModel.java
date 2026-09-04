@@ -21,4 +21,12 @@ public interface TripStoreReadModel {
 
     /** @return the trip's stores in add order (oldest first). */
     List<StoreId> storesOf(TripId tripId);
+
+    /**
+     * Removes all store rows for a completed trip (Story 3.4, Cl. 6) — written only by the
+     * projector on {@code TripCompleted}. The trip is done; its store rows are no longer needed and
+     * would prevent a clean read model. Idempotent: re-projecting the same {@code TripCompleted} is
+     * a safe no-op (DELETE WHERE on a missing set). Mirrors {@link #addStore}.
+     */
+    void deleteForTrip(TripId tripId);
 }

@@ -4,15 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.application.command.AddItemHandler;
-import de.sgart.collaboration.application.command.PostponeItemHandler;
+import de.sgart.collaboration.application.command.DiscardItemHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
-import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
-import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -35,12 +35,12 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL, no framework or
- * persistence (CLAUDE.md §6). Proves the postpone-in-place command path (Story 3.3, AC3): a
- * postpone appends {@code ItemPostponed}, a re-postpone is a convergent no-op, an unknown item is
+ * persistence (CLAUDE.md §6). Proves the discard-item command path (Story 3.4, AC3): a member's
+ * discard appends {@code ItemDiscarded}, a re-discard is a convergent no-op, an unknown item is
  * 404, an unknown list is 404, a non-member is rejected (403), a malformed id is 400, and a
- * not-IN_TRIP list is 409.
+ * not-IN_TRIP list is 409. Mirrors {@link CheckOffItemHandlerTest}.
  */
-class PostponeItemHandlerTest {
+class DiscardItemHandlerTest {
 
     private static final String MEMBER_SUB = "anna-sub";
 
@@ -48,7 +48,7 @@ class PostponeItemHandlerTest {
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
     private final AddItemHandler addItemHandler = new AddItemHandler(eventStore, new ResolveMemberIdentity(mappingRepository));
     private final StartTripHandler startTripHandler = new StartTripHandler(eventStore, new ResolveMemberIdentity(mappingRepository));
-    private final PostponeItemHandler handler = new PostponeItemHandler(eventStore, new ResolveMemberIdentity(mappingRepository));
+    private final DiscardItemHandler handler = new DiscardItemHandler(eventStore, new ResolveMemberIdentity(mappingRepository));
 
     private final HouseholdId householdId = HouseholdId.generate();
     private final ShoppingListId listId = ShoppingListId.generate();
@@ -72,7 +72,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void postponingAnItemAppendsItemPostponed() {
+    void discardingAnItemAppendsItemDiscarded() {
         seedListAndMembership();
         ItemId itemId = seedItem("Milch");
         startTrip();
@@ -81,12 +81,12 @@ class PostponeItemHandlerTest {
 
         List<DomainEvent> events = eventStore.readStream(streamId);
         assertThat(events).hasSize(4);
-        assertThat(events.get(3)).isInstanceOf(ItemPostponed.class);
-        assertThat(((ItemPostponed) events.get(3)).itemId()).isEqualTo(itemId);
+        assertThat(events.get(3)).isInstanceOf(ItemDiscarded.class);
+        assertThat(((ItemDiscarded) events.get(3)).itemId()).isEqualTo(itemId);
     }
 
     @Test
-    void postponingAnAlreadyPostponedItemIsAConvergentNoOp() {
+    void discardingAnAlreadyDiscardedItemIsAConvergentNoOp() {
         seedListAndMembership();
         ItemId itemId = seedItem("Milch");
         startTrip();
@@ -99,7 +99,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void postponingAnUnknownItemIsNotFound() {
+    void discardingAnUnknownItemIsNotFound() {
         seedListAndMembership();
         startTrip();
 
@@ -108,7 +108,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void postponingOnAnUnknownListIsNotFound() {
+    void discardingOnAnUnknownListIsNotFound() {
         mappingRepository.save(new MemberMapping(householdId, MemberId.generate(), new KeycloakUserId(MEMBER_SUB)));
 
         assertThatThrownBy(() -> handler.handle(MEMBER_SUB, householdId.toString(), ShoppingListId.generate().toString(), ItemId.generate().toString(), UUID.randomUUID().toString()))
@@ -116,7 +116,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void rejectsAPostponeFromANonMemberWith403() {
+    void rejectsADiscardFromANonMemberWith403() {
         seedListAndMembership();
         ItemId itemId = seedItem("Milch");
         startTrip();
@@ -126,7 +126,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void mapsAMalformedItemIdToItemIdInvalid() {
+    void mapsAMalformedItemIdToInvalidCommandEnvelope() {
         seedListAndMembership();
         startTrip();
 
@@ -135,7 +135,7 @@ class PostponeItemHandlerTest {
     }
 
     @Test
-    void postponingOnAnOpenListIsRefusedWith409() {
+    void discardingOnAnOpenListIsRefusedWith409() {
         seedListAndMembership();
         ItemId itemId = seedItem("Milch");
 

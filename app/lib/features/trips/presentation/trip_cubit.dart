@@ -11,13 +11,11 @@ import '../../stores/data/stores_api.dart';
 import '../data/trips_api.dart';
 import 'trip_state.dart';
 
-/// Drives the trip screen (Story 3.2, AC1, AC2, AC3, AC5, Cl. 2/5/7/9): loads the store-grouped
-/// active-trip view + the household's active stores (for name resolution, mirroring
-/// `ListDetailCubit._loadStores`), reroutes an item between trip stores, and adds a store to the
-/// trip spontaneously (existing or inline-created). Depends only on
-/// [TripsApi]/[ItemsApi]/[StoresApi] so tests never touch the network (CLAUDE.md §6); guards every
-/// `emit` with `isClosed`. Status/progress/completion are deliberately out of scope (Cl. 2 — Stories
-/// 3.3/3.4).
+/// Drives the trip screen (Stories 3.2/3.3/3.4, AC1, AC2, AC3, AC5, Cl. 2/5/7/9): loads the
+/// store-grouped active-trip view + the household's active stores (for name resolution), reroutes an
+/// item between trip stores, adds a store to the trip, checks/unchecks items, discards items, and
+/// completes the trip. Depends only on [TripsApi]/[ItemsApi]/[StoresApi] so tests never touch the
+/// network (CLAUDE.md §6); guards every `emit` with `isClosed`.
 class TripCubit extends Cubit<TripState> {
   TripCubit({
     required this.tripsApi,
@@ -42,14 +40,16 @@ class TripCubit extends Cubit<TripState> {
   /// reused for an inline-created store (created inside the picker, then added to the trip here).
   final CommandIntent _addStoreIntent = CommandIntent();
 
-  /// Per-item status intents, each keyed on `itemId` — check-off, uncheck, postpone-in-place (Story
-  /// 3.3, AC2/AC3).
+  /// Per-item status intents, each keyed on `itemId` — check-off, uncheck, discard (Stories 3.3/3.4).
   final CommandIntent _checkOffIntent = CommandIntent();
   final CommandIntent _uncheckIntent = CommandIntent();
-  final CommandIntent _postponeInPlaceIntent = CommandIntent();
+  final CommandIntent _discardIntent = CommandIntent();
 
   /// Postpone-to-list intent, keyed on `(itemId, targetListId)` (Story 3.3, AC4).
   final CommandIntent _postponeToListIntent = CommandIntent();
+
+  /// Complete-trip intent, keyed on `tripId` (Story 3.4, AC4).
+  final CommandIntent _completeTripIntent = CommandIntent();
 
   /// Loads the trip's grouped view, then the household's active stores (best-effort — a store-load
   /// failure never fails the whole screen, mirroring `ListDetailCubit.bootstrap`). Called once,
@@ -165,15 +165,34 @@ class TripCubit extends Cubit<TripState> {
     );
   }
 
-  /// Postpones [itemId] in place (Story 3.3, AC3) — optimistically sets status to
-  /// [ItemStatus.postponed]; reverts on failure.
-  Future<void> postponeInPlace(String itemId) async {
+  /// Discards [itemId] (Story 3.4, AC2) — optimistically sets status to [ItemStatus.discarded];
+  /// reverts on failure. A re-entrant call while a submit is in flight is ignored.
+  Future<void> discard(String itemId) async {
     await _applyStatusChange(
       itemId: itemId,
-      newStatus: ItemStatus.postponed,
-      intent: _postponeInPlaceIntent,
-      send: (commandId) => itemsApi.postponeItem(householdId, listId, itemId, commandId: commandId),
+      newStatus: ItemStatus.discarded,
+      intent: _discardIntent,
+      send: (commandId) => itemsApi.discardItem(householdId, listId, itemId, commandId: commandId),
     );
+  }
+
+  /// Completes the trip (Story 3.4, AC4) — calls [TripsApi.completeTrip] and on success emits
+  /// [TripState.completed] = `true` so the trip screen can pop. A re-entrant call while a submit is
+  /// in flight is ignored; reverts and surfaces an `actionError` on failure.
+  Future<void> completeTrip() async {
+    if (state.status != TripStatus.ready || state.isSubmitting) {
+      return;
+    }
+    _completeTripIntent.beginAttempt(state.tripId);
+    final commandId = _completeTripIntent.commandId;
+    _safeEmit(state.copyWith(isSubmitting: true, clearActionError: true));
+    try {
+      await tripsApi.completeTrip(householdId, listId, state.tripId, commandId: commandId);
+      _safeEmit(state.copyWith(isSubmitting: false, completed: true));
+      _completeTripIntent.complete();
+    } on Object catch (error) {
+      _safeEmit(state.copyWith(isSubmitting: false, actionError: _toAppError(error)));
+    }
   }
 
   Future<void> _applyStatusChange({

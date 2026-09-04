@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.StoreAddedToTrip;
+import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.collaboration.domain.exception.TripNotActiveException;
 import de.sgart.shared.AggregateVersion;
@@ -168,6 +169,39 @@ class ShoppingTripTest {
 
         assertThatThrownBy(() -> trip.addStore(StoreId.generate(), CommandId.generate()))
                 .isInstanceOf(TripNotActiveException.class);
+    }
+
+    // ── complete ──────────────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void complete_onAnActiveTrip_raisesTripCompleted_andFoldsToDone() {
+        ShoppingTrip trip = ShoppingTrip.start(tripId, householdId, listId, List.of(StoreId.generate()), commandId);
+        trip.markEventsCommitted();
+
+        trip.complete(CommandId.generate());
+
+        List<DomainEvent> events = trip.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(TripCompleted.class);
+        TripCompleted completed = (TripCompleted) events.get(0);
+        assertThat(completed.tripId()).isEqualTo(tripId);
+        assertThat(completed.householdId()).isEqualTo(householdId);
+        assertThat(completed.listId()).isEqualTo(listId);
+        assertThat(trip.status()).isEqualTo(TripStatus.DONE);
+    }
+
+    @Test
+    void complete_onAnAlreadyDoneTrip_isAConvergentNoOp() {
+        ShoppingTrip trip = ShoppingTrip.rehydrate(
+                StreamId.forTrip(tripId),
+                List.of(
+                        new TripStarted(EventId.generate(), tripId, householdId, listId, List.of(StoreId.generate())),
+                        new TripCompleted(EventId.generate(), tripId, householdId, listId)));
+
+        trip.complete(CommandId.generate());
+
+        assertThat(trip.uncommittedEvents()).isEmpty();
+        assertThat(trip.status()).isEqualTo(TripStatus.DONE);
     }
 
     private void setStatus(ShoppingTrip trip, TripStatus status) {

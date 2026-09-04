@@ -86,7 +86,7 @@ void main() {
       expect(find.text('Brot'), findsOneWidget);
     });
 
-    testWidgets('tappingRerouteOpensThePickerScopedToTheTripsStores', (tester) async {
+    testWidgets('tappingRerouteInActionsSheetOpensThePickerScopedToTheTripsStores', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -97,7 +97,9 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('trip-item-reroute-i1')));
+      await tester.tap(find.byKey(const Key('trip-item-actions-i1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('trip-item-reroute-action-i1')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('store-picker-sheet')), findsOneWidget);
@@ -146,7 +148,8 @@ void main() {
       expect(tripsApi.addStoreToTripCallCount, 1);
     });
 
-    testWidgets('showsNoCompleteAction', (tester) async {
+    testWidgets('showsCompleteAction_whenTripIsReady', (tester) async {
+      // Story 3.4, AC1: the „Einkauf abschließen" button is always visible while the trip is ready.
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -158,7 +161,7 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('trip-complete-action')), findsNothing);
+      expect(find.byKey(const Key('trip-complete-action')), findsOneWidget);
     });
 
     testWidgets('rendersProgressBarWithCorrectCounts', (tester) async {
@@ -251,7 +254,7 @@ void main() {
       expect(find.byKey(const Key('trip-item-done-i1')), findsOneWidget);
     });
 
-    testWidgets('tappingPostponeOpensThePostponeSheet', (tester) async {
+    testWidgets('tappingActionsButtonOpensItemActionsSheet', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -263,13 +266,13 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('trip-item-postpone-i1')));
+      await tester.tap(find.byKey(const Key('trip-item-actions-i1')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('postpone-target-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('trip-item-actions-sheet-i1')), findsOneWidget);
     });
 
-    testWidgets('aDoneItemHidesPostponeAndReroute', (tester) async {
+    testWidgets('aDoneItemHidesActionsButton', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -284,17 +287,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('trip-item-checkbox-i1')), findsOneWidget);
-      expect(find.byKey(const Key('trip-item-postpone-i1')), findsNothing);
-      expect(find.byKey(const Key('trip-item-reroute-i1')), findsNothing);
+      expect(find.byKey(const Key('trip-item-actions-i1')), findsNothing);
     });
 
-    testWidgets('aPostponedItemShowsUndo_andHidesPostponeAndReroute', (tester) async {
+    testWidgets('aDiscardedItemShowsUndoButton_andHidesActionsButton', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
         storeIds: ['store-edeka'],
         items: [
-          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.discarded),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -302,18 +304,17 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('trip-item-undo-postpone-i1')), findsOneWidget);
-      expect(find.byKey(const Key('trip-item-postpone-i1')), findsNothing);
-      expect(find.byKey(const Key('trip-item-reroute-i1')), findsNothing);
+      expect(find.byKey(const Key('trip-item-undo-discard-i1')), findsOneWidget);
+      expect(find.byKey(const Key('trip-item-actions-i1')), findsNothing);
     });
 
-    testWidgets('tappingUndoOnAPostponedItemReopensIt', (tester) async {
+    testWidgets('tappingUndoOnADiscardedItemReopensIt', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
         storeIds: ['store-edeka'],
         items: [
-          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.discarded),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -321,20 +322,20 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('trip-item-undo-postpone-i1')));
+      await tester.tap(find.byKey(const Key('trip-item-undo-discard-i1')));
       await tester.pumpAndSettle();
 
       expect(itemsApi.uncheckCallCount, 1);
       expect(itemsApi.lastUncheckedItemId, 'i1');
     });
 
-    testWidgets('tappingCheckboxOnAPostponedItemChecksItOff', (tester) async {
+    testWidgets('tappingCheckboxOnADiscardedItemChecksItOff', (tester) async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
         storeIds: ['store-edeka'],
         items: [
-          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.postponed),
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.discarded),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -348,5 +349,6 @@ void main() {
       expect(itemsApi.checkOffCallCount, 1);
       expect(itemsApi.lastCheckedOffItemId, 'i1');
     });
+
   });
 }

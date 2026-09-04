@@ -56,7 +56,7 @@ class FakeItemsApi implements ItemsApi {
 
   Object? checkOffError;
   Object? uncheckError;
-  Object? postponeError;
+  Object? discardError;
   Object? postponeToListError;
 
   String? lastCheckedOffItemId;
@@ -67,9 +67,9 @@ class FakeItemsApi implements ItemsApi {
   final List<String> uncheckCommandIds = [];
   int uncheckCallCount = 0;
 
-  String? lastPostponedItemId;
-  final List<String> postponeCommandIds = [];
-  int postponeCallCount = 0;
+  String? lastDiscardedItemId;
+  final List<String> discardCommandIds = [];
+  int discardCallCount = 0;
 
   String? lastPostponedToListItemId;
   String? lastPostponedTargetListId;
@@ -194,11 +194,11 @@ class FakeItemsApi implements ItemsApi {
   }
 
   @override
-  Future<void> postponeItem(String householdId, String listId, String itemId, {required String commandId}) async {
-    lastPostponedItemId = itemId;
-    postponeCommandIds.add(commandId);
-    postponeCallCount++;
-    if (postponeError != null) throw postponeError!;
+  Future<void> discardItem(String householdId, String listId, String itemId, {required String commandId}) async {
+    lastDiscardedItemId = itemId;
+    discardCommandIds.add(commandId);
+    discardCallCount++;
+    if (discardError != null) throw discardError!;
   }
 
   @override

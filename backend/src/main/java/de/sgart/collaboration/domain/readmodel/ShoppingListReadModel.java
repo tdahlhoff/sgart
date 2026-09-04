@@ -30,4 +30,15 @@ public interface ShoppingListReadModel {
     default void markInTrip(ShoppingListId listId, TripId tripId) {
         throw new UnsupportedOperationException("markInTrip is not implemented by this read model");
     }
+
+    /**
+     * Flips a list's status to {@code DONE} and clears its {@code active_trip_id} (Story 3.4, AC7,
+     * Cl. 5) — written only by the projector on {@code TripCompletedForList}. The list leaves the
+     * Open/In-Trip set and the {@code ListDoneLists} archive picks it up. Defaulted so read-only
+     * query tests that supply this port as a {@code listsOf}-only lambda keep compiling; a real
+     * implementation always overrides it. Mirrors {@link #markInTrip}.
+     */
+    default void markDone(ShoppingListId listId) {
+        throw new UnsupportedOperationException("markDone is not implemented by this read model");
+    }
 }

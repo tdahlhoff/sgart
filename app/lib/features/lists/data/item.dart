@@ -1,16 +1,17 @@
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 
-/// An item's in-trip lifecycle (Story 3.3) — mirrors the backend `ItemStatus` enum. `open` is the
-/// default / birth state, `done` once checked off during a trip, `postponed` when set aside in
-/// place. Mirrors the `unitFromServerName`/`serverName` mapping pattern so the wire vocabulary
-/// (`"OPEN"`, `"DONE"`, `"POSTPONED"`) has a single, type-safe representation on the client.
+/// An item's in-trip lifecycle (Stories 3.3/3.4) — mirrors the backend `ItemStatus` enum. `open` is
+/// the default / birth state, `done` once checked off during a trip, `discarded` when thrown away
+/// (a terminal "not bought, stays dimmed" status). Mirrors the `unitFromServerName`/`serverName`
+/// mapping pattern so the wire vocabulary (`"OPEN"`, `"DONE"`, `"DISCARDED"`) has a single,
+/// type-safe representation on the client.
 enum ItemStatus {
   open,
   done,
-  postponed;
+  discarded;
 
-  /// The backend enum name (`"OPEN"`, `"DONE"`, `"POSTPONED"`) — the wire representation.
+  /// The backend enum name (`"OPEN"`, `"DONE"`, `"DISCARDED"`) — the wire representation.
   String get serverName => name.toUpperCase();
 
   /// Maps a backend status name onto its [ItemStatus], or `null` when the two vocabularies disagree
@@ -55,9 +56,9 @@ class Item {
   /// Fails fast with a mapped [AppException] rather than a raw `TypeError` when the response is
   /// missing a field or has an unexpected shape, so callers resolve it through [AppError.code]. A
   /// missing/null `note`/`storeId` is valid (no note / unassigned) — only a non-string, non-null
-  /// value is malformed. A missing `status` defaults to [ItemStatus.open] for forward-compat with
-  /// older server versions; a non-string value, or a string outside the known set (server enum
-  /// drift), is malformed.
+  /// value is malformed. A missing `status` defaults to [ItemStatus.open]; a non-string value, or a
+  /// string outside the known set (`"OPEN"`, `"DONE"`, `"DISCARDED"`, server enum drift), is
+  /// malformed.
   factory Item.fromJson(Map<String, dynamic> json) {
     final itemId = json['itemId'];
     final name = json['name'];

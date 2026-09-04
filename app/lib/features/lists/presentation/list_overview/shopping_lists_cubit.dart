@@ -55,6 +55,15 @@ class ShoppingListsCubit extends Cubit<ShoppingListsState> {
     }
   }
 
+  /// Resets the Done archive to `idle` so the next "Erledigt" selection refetches it (Story 3.4,
+  /// AC7 — called after a trip completes so the newly Done list appears immediately).
+  void invalidateArchive() {
+    if (state.status != ShoppingListsStatus.ready) {
+      return;
+    }
+    _safeEmit(state.copyWith(archiveStatus: ArchiveStatus.idle, clearArchiveError: true));
+  }
+
   /// Retries a failed archive load from the archive's failure affordance — the archive is cached
   /// once loaded, so this is its only in-place reload path (Story 2.2, AC2).
   Future<void> retryArchive() async {

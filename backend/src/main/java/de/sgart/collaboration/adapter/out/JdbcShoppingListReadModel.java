@@ -96,4 +96,19 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
                 .param("tripId", tripId.value())
                 .update();
     }
+
+    /**
+     * Idempotent update — re-projecting the same {@code TripCompletedForList} is a safe no-op
+     * (Story 3.4, AC7, Cl. 5). Clears {@code active_trip_id} and transitions the list to {@code
+     * DONE} so it moves from the Open/In-Trip view to the Erledigt archive. Mirrors {@link
+     * #markInTrip} symmetrically.
+     */
+    @Override
+    public void markDone(ShoppingListId listId) {
+        jdbcClient
+                .sql("UPDATE shopping_list_read_model SET status = :status, active_trip_id = NULL WHERE list_id = :listId")
+                .param("listId", listId.value())
+                .param("status", ListStatus.DONE.name())
+                .update();
+    }
 }

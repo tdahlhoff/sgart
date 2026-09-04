@@ -226,7 +226,7 @@ void main() {
               amount: '1',
               unit: 'PIECE',
               storeId: 'store-edeka',
-              status: ItemStatus.postponed),
+              status: ItemStatus.discarded),
         ],
       );
       storesApi.storesToReturn = const [edeka];
@@ -323,7 +323,7 @@ void main() {
       await cubit.close();
     });
 
-    test('postponeInPlace_optimisticallyFlipsToPostponed_andSendsTheCommand', () async {
+    test('discard_optimisticallyFlipsToDiscarded_andSendsTheCommand', () async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -334,10 +334,29 @@ void main() {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.postponeInPlace('i1');
+      await cubit.discard('i1');
 
-      expect(cubit.state.items.first.status, ItemStatus.postponed);
-      expect(itemsApi.lastPostponedItemId, 'i1');
+      expect(cubit.state.items.first.status, ItemStatus.discarded);
+      expect(itemsApi.lastDiscardedItemId, 'i1');
+      await cubit.close();
+    });
+
+    test('completeTrip_emitsCompletedTrue_andSendsTheCommand', () async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka', status: ItemStatus.done)],
+      );
+      storesApi.storesToReturn = const [edeka];
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.completeTrip();
+
+      expect(cubit.state.completed, isTrue);
+      expect(tripsApi.lastCompletedTripId, 'trip-1');
+      expect(tripsApi.completeTripCallCount, 1);
       await cubit.close();
     });
 

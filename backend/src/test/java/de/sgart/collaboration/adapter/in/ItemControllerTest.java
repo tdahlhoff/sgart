@@ -804,14 +804,14 @@ class ItemControllerTest {
     }
 
     @Test
-    void postpone_returns200ForAMember() throws Exception {
+    void discard_returns200ForAMember() throws Exception {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = seedListIn(householdId);
         ItemId itemId = seedItemIn(listId, "Milch");
         startTripOn(listId, StoreId.generate());
 
         mockMvc.perform(post(
-                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone",
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/discard",
                         householdId.toString(), listId.toString(), itemId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -820,13 +820,13 @@ class ItemControllerTest {
     }
 
     @Test
-    void postpone_returns404ForAnUnknownItem() throws Exception {
+    void discard_returns404ForAnUnknownItem() throws Exception {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = seedListIn(householdId);
         startTripOn(listId, StoreId.generate());
 
         mockMvc.perform(post(
-                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/postpone",
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/discard",
                         householdId.toString(), listId.toString(), ItemId.generate().toString())
                         .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)

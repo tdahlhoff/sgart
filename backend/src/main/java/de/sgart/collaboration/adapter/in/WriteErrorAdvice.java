@@ -21,6 +21,7 @@ import de.sgart.collaboration.application.exception.RenameNotPermittedApplicatio
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.application.exception.TripNotActiveApplicationException;
 import de.sgart.collaboration.application.exception.TripNotFoundException;
+import de.sgart.collaboration.application.exception.TripNotCompletableApplicationException;
 import de.sgart.collaboration.application.exception.TripNotStartableApplicationException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
@@ -146,6 +147,11 @@ class WriteErrorAdvice {
 
     @ExceptionHandler(TripNotStartableApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleTripNotStartable(TripNotStartableApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(TripNotCompletableApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleTripNotCompletable(TripNotCompletableApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 

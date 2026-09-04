@@ -1,9 +1,10 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ItemMoveProcessManager;
-import de.sgart.collaboration.application.TripStartProcessManager;
+import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
+import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.StreamId;
@@ -24,16 +25,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * The transport for {@link ItemMoveProcessManager} and {@link TripStartProcessManager} (Stories
- * 2.4/3.1, AD-10): a <strong>second, independent</strong> subscription over the {@code list-}
+ * The transport for {@link ItemMoveProcessManager} and {@link TripLifecycleProcessManager} (Stories
+ * 2.4/3.1/3.4, AD-10): a <strong>second, independent</strong> subscription over the {@code list-}
  * stream prefix, alongside {@link ShoppingListReadModelProjector}'s — same prefix, two distinct
- * consumers reacting to two distinct event types, no interaction between the three (the projector
- * only projects; this only reacts to {@code ItemMovedToList} and {@code TripStartedForList}).
- * Structurally mirrors {@link ShoppingListReadModelProjector} exactly: a {@link SmartLifecycle}
- * bean, auto-start gated by the same flag pattern (default off; construction does no I/O so {@code
- * contextLoads()} survives KurrentDB down), catch-up-from-start on every (re)subscribe (which is
- * what makes each process manager's derived-command-id idempotency the exactly-once mechanism), and
- * per-event log-and-skip so one bad event never tears the subscription down.
+ * consumers reacting to distinct event types, no interaction between the three (the projector only
+ * projects; this only reacts to {@code ItemMovedToList}, {@code ItemPostponedToList},
+ * {@code TripStartedForList}, and {@code TripCompletedForList}). Structurally mirrors {@link
+ * ShoppingListReadModelProjector} exactly: a {@link SmartLifecycle} bean, auto-start gated by the
+ * same flag pattern (default off; construction does no I/O so {@code contextLoads()} survives
+ * KurrentDB down), catch-up-from-start on every (re)subscribe, and per-event log-and-skip so one
+ * bad event never tears the subscription down.
  */
 public final class CollaborationProcessManagerSubscription implements SmartLifecycle {
 
@@ -42,7 +43,7 @@ public final class CollaborationProcessManagerSubscription implements SmartLifec
 
     private final KurrentDBClient client;
     private final ItemMoveProcessManager itemMoveProcessManager;
-    private final TripStartProcessManager tripStartProcessManager;
+    private final TripLifecycleProcessManager tripLifecycleProcessManager;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
@@ -52,31 +53,38 @@ public final class CollaborationProcessManagerSubscription implements SmartLifec
     public CollaborationProcessManagerSubscription(
             KurrentDBClient client,
             ItemMoveProcessManager itemMoveProcessManager,
-            TripStartProcessManager tripStartProcessManager) {
-        this(client, itemMoveProcessManager, tripStartProcessManager, false);
+            TripLifecycleProcessManager tripLifecycleProcessManager) {
+        this(client, itemMoveProcessManager, tripLifecycleProcessManager, false);
     }
 
     public CollaborationProcessManagerSubscription(
             KurrentDBClient client,
             ItemMoveProcessManager itemMoveProcessManager,
-            TripStartProcessManager tripStartProcessManager,
+            TripLifecycleProcessManager tripLifecycleProcessManager,
             boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.itemMoveProcessManager =
                 Objects.requireNonNull(itemMoveProcessManager, "itemMoveProcessManager must not be null");
-        this.tripStartProcessManager =
-                Objects.requireNonNull(tripStartProcessManager, "tripStartProcessManager must not be null");
+        this.tripLifecycleProcessManager =
+                Objects.requireNonNull(tripLifecycleProcessManager, "tripLifecycleProcessManager must not be null");
         this.autoStart = autoStart;
     }
 
-    /** Reacts to one event, routing it to the process manager it belongs to (if any). */
+    /**
+     * Reacts to one event, routing it to the process manager it belongs to (if any). Reacts to
+     * {@link TripStartedForList} (trip start) and {@link TripCompletedForList} (trip completion) for
+     * the {@link TripLifecycleProcessManager}; {@link ItemMovedToList} and {@link ItemPostponedToList}
+     * for the {@link ItemMoveProcessManager}.
+     */
     void react(DomainEvent event) {
         if (event instanceof ItemMovedToList moved) {
             itemMoveProcessManager.onItemMovedToList(moved);
         } else if (event instanceof ItemPostponedToList postponed) {
             itemMoveProcessManager.onItemPostponedToList(postponed);
         } else if (event instanceof TripStartedForList started) {
-            tripStartProcessManager.onTripStartedForList(started);
+            tripLifecycleProcessManager.onTripStartedForList(started);
+        } else if (event instanceof TripCompletedForList completed) {
+            tripLifecycleProcessManager.onTripCompletedForList(completed);
         }
     }
 

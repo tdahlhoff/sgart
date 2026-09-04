@@ -90,9 +90,10 @@ abstract interface class ItemsApi {
     required String commandId,
   });
 
-  /// Postpones [itemId] in place during a trip (Story 3.3, AC3) — marks it `POSTPONED`. Already-
-  /// POSTPONED is a convergent no-op server-side.
-  Future<void> postponeItem(
+  /// Discards [itemId] during a trip (Story 3.4, AC2) — marks it `DISCARDED` (terminal "not bought,
+  /// stays dimmed"). Already-DISCARDED is a convergent no-op server-side. Throws
+  /// `item.notDuringTrip` when the list is no longer In-Trip.
+  Future<void> discardItem(
     String householdId,
     String listId,
     String itemId, {
@@ -240,14 +241,14 @@ class HttpItemsApi implements ItemsApi {
   }
 
   @override
-  Future<void> postponeItem(
+  Future<void> discardItem(
     String householdId,
     String listId,
     String itemId, {
     required String commandId,
   }) async {
     await _client.postJson(
-        '/api/v1/households/$householdId/lists/$listId/items/$itemId/postpone', {'commandId': commandId});
+        '/api/v1/households/$householdId/lists/$listId/items/$itemId/discard', {'commandId': commandId});
   }
 
   @override

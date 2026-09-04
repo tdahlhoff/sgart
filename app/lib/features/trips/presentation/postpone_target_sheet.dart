@@ -8,11 +8,10 @@ import '../../lists/data/shopping_list_summary.dart';
 import '../../lists/data/shopping_lists_api.dart';
 import 'trip_cubit.dart';
 
-/// Opens the postpone target picker (Story 3.3, AC3/AC4): offers „Hier vormerken" (postpone in
-/// place), the household's Open lists (the current list excluded), and „＋ Neue Liste" (create then
-/// postpone). The sheet mirrors [showMoveTargetSheet] but is scoped to in-trip postpone — it calls
-/// [TripCubit.postponeInPlace] or [TripCubit.postponeToList] instead of the planning-move paths,
-/// so the two sheets are separate rather than shared (DRY would obscure their distinct semantics).
+/// Opens the transfer-target picker (Stories 3.3/3.4): offers the household's Open lists (the
+/// current list excluded) and „＋ Neue Liste" (create then transfer to a new list). The in-place
+/// „Hier vormerken" row was removed in Story 3.4 (Cl. 13 — discard replaces it). The sheet calls
+/// [TripCubit.postponeToList] for all transfer actions.
 void showPostponeTargetSheet(
   BuildContext context, {
   required TripCubit cubit,
@@ -94,11 +93,6 @@ class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
     }
   }
 
-  Future<void> _postponeInPlace() async {
-    Navigator.of(context).pop();
-    widget.cubit.postponeInPlace(widget.itemId);
-  }
-
   Future<void> _postponeToList(String targetListId) async {
     Navigator.of(context).pop();
     widget.cubit.postponeToList(widget.itemId, targetListId);
@@ -153,14 +147,8 @@ class _PostponeTargetSheetBodyState extends State<_PostponeTargetSheetBody> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(localizations.tripPostponeSheetTitle, style: Theme.of(context).textTheme.titleMedium),
+          Text(localizations.tripTransferSheetTitle, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: SgartShapes.space4),
-          ListTile(
-            key: const Key('postpone-target-in-place'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(localizations.tripPostponeInPlace),
-            onTap: _postponeInPlace,
-          ),
           switch (_status) {
             _LoadStatus.loading => const Padding(
                 padding: EdgeInsets.all(SgartShapes.cardPadding),

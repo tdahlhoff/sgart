@@ -5,16 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
-import de.sgart.collaboration.domain.event.ItemPostponed;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.TripNotCompletableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
@@ -459,22 +461,22 @@ class ShoppingListTest {
                 .isInstanceOf(ItemNotDuringTripException.class);
     }
 
-    // ── postponeItemInPlace ───────────────────────────────────────────────────────────────────────
+    // ── discardItem ───────────────────────────────────────────────────────────────────────────────
 
     @Test
-    void postponeItemInPlace_onAnInTripList_raisesItemPostponed_andFoldsToPostponed() {
+    void discardItem_onAnInTripList_raisesItemDiscarded_andFoldsToDiscarded() {
         ItemId itemId = ItemId.generate();
         ShoppingList list = inTripListWithItem(itemId);
 
-        list.postponeItemInPlace(itemId, CommandId.generate());
+        list.discardItem(itemId, CommandId.generate());
 
         List<DomainEvent> events = list.uncommittedEvents();
         assertThat(events).hasSize(1);
-        assertThat(events.get(0)).isInstanceOf(ItemPostponed.class);
+        assertThat(events.get(0)).isInstanceOf(ItemDiscarded.class);
     }
 
     @Test
-    void postponeItemInPlace_whenAlreadyPostponed_isAConvergentNoOp() {
+    void discardItem_whenAlreadyDiscarded_isAConvergentNoOp() {
         ItemId itemId = ItemId.generate();
         ShoppingList list = ShoppingList.rehydrate(
                 StreamId.forList(listId),
@@ -482,20 +484,63 @@ class ShoppingListTest {
                         new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
                         new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
                         new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
-                        new ItemPostponed(EventId.generate(), householdId, listId, itemId)));
+                        new ItemDiscarded(EventId.generate(), householdId, listId, itemId)));
 
-        list.postponeItemInPlace(itemId, CommandId.generate());
+        list.discardItem(itemId, CommandId.generate());
 
         assertThat(list.uncommittedEvents()).isEmpty();
     }
 
     @Test
-    void postponeItemInPlace_onAnOpenList_throwsItemNotDuringTrip() {
+    void discardItem_onAnOpenList_throwsItemNotDuringTrip() {
         ItemId itemId = ItemId.generate();
         ShoppingList list = openListWithItem(itemId);
 
-        assertThatThrownBy(() -> list.postponeItemInPlace(itemId, CommandId.generate()))
+        assertThatThrownBy(() -> list.discardItem(itemId, CommandId.generate()))
                 .isInstanceOf(ItemNotDuringTripException.class);
+    }
+
+    // ── completeTrip ──────────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void completeTrip_onAnInTripListWithOpenItems_discardsThemAndRaisesTripCompletedForList() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = inTripListWithItem(itemId);
+
+        list.completeTrip(CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0)).isInstanceOf(ItemDiscarded.class);
+        assertThat(events.get(1)).isInstanceOf(TripCompletedForList.class);
+        ItemDiscarded discarded = (ItemDiscarded) events.get(0);
+        assertThat(discarded.itemId()).isEqualTo(itemId);
+    }
+
+    @Test
+    void completeTrip_onAnInTripListWithNoOpenItems_raisesOnlyTripCompletedForList() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
+                        new ItemCheckedOff(EventId.generate(), householdId, listId, itemId)));
+
+        list.completeTrip(CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(TripCompletedForList.class);
+    }
+
+    @Test
+    void completeTrip_onAnOpenList_throwsTripNotCompletable() {
+        ShoppingList list = openListWithItem(ItemId.generate());
+
+        assertThatThrownBy(() -> list.completeTrip(CommandId.generate()))
+                .isInstanceOf(TripNotCompletableException.class);
     }
 
     // ── postponeItemToList ────────────────────────────────────────────────────────────────────────

@@ -71,6 +71,16 @@ abstract interface class TripsApi {
     required String storeId,
     required String commandId,
   });
+
+  /// Completes the trip against [listId]/[tripId] (Story 3.4, AC4). Sweeps any remaining OPEN items
+  /// to DISCARDED server-side, then transitions the list `IN_TRIP → DONE`. [commandId] is the
+  /// reused idempotency key. Throws `trip.notCompletable` when the list is not In-Trip.
+  Future<void> completeTrip(
+    String householdId,
+    String listId,
+    String tripId, {
+    required String commandId,
+  });
 }
 
 class HttpTripsApi implements TripsApi {
@@ -109,6 +119,18 @@ class HttpTripsApi implements TripsApi {
   }) async {
     await _client.postJson('/api/v1/households/$householdId/lists/$listId/trips/$tripId/stores', {
       'storeId': storeId,
+      'commandId': commandId,
+    });
+  }
+
+  @override
+  Future<void> completeTrip(
+    String householdId,
+    String listId,
+    String tripId, {
+    required String commandId,
+  }) async {
+    await _client.postJson('/api/v1/households/$householdId/lists/$listId/trips/$tripId/complete', {
       'commandId': commandId,
     });
   }

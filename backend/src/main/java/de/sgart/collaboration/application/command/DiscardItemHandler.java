@@ -22,17 +22,17 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Orchestrates {@link PostponeItem} (Story 3.3, AC3): resolve the caller's household-scoped
- * {@code MemberId} (AD-2), load the {@link ShoppingList} aggregate, and let it enforce the
- * {@code IN_TRIP}-only and unknown-item invariants. The item stays on the list but transitions to
- * {@code POSTPONED}. A convergent no-op (already POSTPONED) raises nothing; the append is skipped.
+ * Orchestrates {@link DiscardItem} (Story 3.4, AC2, Cl. 12): resolve the caller's
+ * household-scoped {@code MemberId} (AD-2), load the {@link ShoppingList} aggregate, and let it
+ * enforce the {@code IN_TRIP}-only and unknown-item invariants. A convergent no-op (already
+ * DISCARDED) raises nothing; the append is skipped in that case. Mirrors {@link CheckOffItemHandler}.
  */
-public final class PostponeItemHandler {
+public final class DiscardItemHandler {
 
     private final EventStore eventStore;
     private final ResolveMemberIdentity resolveMemberIdentity;
 
-    public PostponeItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+    public DiscardItemHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.resolveMemberIdentity =
                 Objects.requireNonNull(resolveMemberIdentity, "resolveMemberIdentity must not be null");
@@ -71,10 +71,10 @@ public final class PostponeItemHandler {
             throw new ShoppingListNotFoundException("No shopping list found for id " + listId);
         }
         AggregateVersion loadedVersion = list.version();
-        PostponeItem command = new PostponeItem(listId, itemId, commandId, loadedVersion);
+        DiscardItem command = new DiscardItem(listId, itemId, commandId, loadedVersion);
 
         try {
-            list.postponeItemInPlace(command.itemId(), command.commandId());
+            list.discardItem(command.itemId(), command.commandId());
         } catch (ItemNotFoundException notFound) {
             throw new ItemNotFoundApplicationException(notFound.getMessage());
         } catch (ItemNotDuringTripException notDuringTrip) {

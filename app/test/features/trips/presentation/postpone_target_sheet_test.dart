@@ -70,20 +70,22 @@ void main() {
           ),
         );
 
+    // Opens the transfer sheet via the ⋯ item actions sheet (Story 3.4, Cl. 12).
     Future<void> openSheet(WidgetTester tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('trip-item-postpone-i1')));
+      await tester.tap(find.byKey(const Key('trip-item-actions-i1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('trip-item-transfer-action-i1')));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('showsHierVormerken_andOpenLists_andNeueListeButton', (tester) async {
+    testWidgets('showsOpenLists_andNeueListeButton', (tester) async {
       shoppingListsApi.listsToReturn = const [otherList];
 
       await openSheet(tester);
 
       expect(find.byKey(const Key('postpone-target-sheet')), findsOneWidget);
-      expect(find.byKey(const Key('postpone-target-in-place')), findsOneWidget);
       expect(find.byKey(const Key('postpone-target-row-list-other')), findsOneWidget);
       expect(find.byKey(const Key('postpone-target-new-list-button')), findsOneWidget);
     });
@@ -97,15 +99,6 @@ void main() {
 
       expect(itemsApi.lastPostponedToListItemId, 'i1');
       expect(itemsApi.lastPostponedTargetListId, 'list-other');
-    });
-
-    testWidgets('pickingHierVormerken_postponesInPlace', (tester) async {
-      await openSheet(tester);
-      await tester.tap(find.byKey(const Key('postpone-target-in-place')));
-      await tester.pumpAndSettle();
-
-      expect(itemsApi.lastPostponedItemId, 'i1');
-      expect(itemsApi.postponeCallCount, 1);
     });
 
     testWidgets('excludesInTripListsAndTheSourceList_fromTargets', (tester) async {

@@ -3,6 +3,7 @@ package de.sgart.collaboration.adapter.in;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.application.exception.TripNotActiveApplicationException;
+import de.sgart.collaboration.application.exception.TripNotCompletableApplicationException;
 import de.sgart.shared.ErrorDescriptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -27,5 +28,15 @@ class WriteErrorAdviceTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("trip.notActive");
+    }
+
+    @Test
+    void mapsTripNotCompletableToConflictWithTheStableCode() {
+        ResponseEntity<ErrorDescriptor> response =
+                new WriteErrorAdvice().handleTripNotCompletable(new TripNotCompletableApplicationException("list is OPEN"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("trip.notCompletable");
     }
 }

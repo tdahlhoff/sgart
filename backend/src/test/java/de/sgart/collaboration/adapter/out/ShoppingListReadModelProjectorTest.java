@@ -11,14 +11,15 @@ import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
+import de.sgart.collaboration.domain.event.ItemDiscarded;
 import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponed;
 import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
+import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.readmodel.ItemSuggestionView;
 import de.sgart.collaboration.domain.readmodel.ItemView;
@@ -698,16 +699,16 @@ class ShoppingListReadModelProjectorTest {
     }
 
     @Test
-    void projectingItemPostponedSetsStatusToPostponed() {
+    void projectingItemDiscardedSetsStatusToDiscarded() {
         HouseholdId householdId = HouseholdId.generate();
         ShoppingListId listId = ShoppingListId.generate();
         ItemId itemId = ItemId.generate();
         projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
         projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
 
-        projector.project(new ItemPostponed(EventId.generate(), householdId, listId, itemId));
+        projector.project(new ItemDiscarded(EventId.generate(), householdId, listId, itemId));
 
-        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.POSTPONED);
+        assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DISCARDED);
     }
 
     @Test
@@ -784,6 +785,22 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DONE);
         assertThat(itemReadModel.itemsOf(householdId, listId).get(0).storeId()).isEqualTo(storeId);
+    }
+
+    @Test
+    void projectingTripCompletedForListFlipsTheListStatusToDone() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        TripId tripId = TripId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())));
+
+        projector.project(new TripCompletedForList(EventId.generate(), householdId, listId, tripId));
+
+        List<ShoppingListView> lists = readModel.listsOf(householdId);
+        assertThat(lists).hasSize(1);
+        assertThat(lists.get(0).status()).isEqualTo(ListStatus.DONE);
+        assertThat(lists.get(0).activeTripId()).isNull();
     }
 
     @Test
