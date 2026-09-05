@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../l10n/formatting/quantity_formatter.dart' as formatting;
+import '../../item_display_text.dart';
 import '../../../../l10n/gen/app_localizations.dart';
 import '../../../../shared/errors/error_message_resolver.dart';
 import '../../../../shared/widgets/sgart_app_bar.dart';
@@ -17,6 +17,7 @@ import '../../data/item.dart';
 import '../../data/item_suggestions_api.dart';
 import '../../data/items_api.dart';
 import '../../data/shopping_lists_api.dart';
+import '../../print/print_share_sheet.dart';
 import 'fast_add_field.dart';
 import 'item_form_sheet.dart';
 import 'list_detail_cubit.dart';
@@ -235,6 +236,20 @@ class _ReadyBody extends StatelessWidget {
                       }
                     },
             ),
+            const SizedBox(height: SgartShapes.space2),
+            SgartButton(
+              key: const Key('list-detail-print-share'),
+              label: localizations.printShareAction,
+              variant: SgartButtonVariant.tonal,
+              onPressed: () => showPrintShareSheet(
+                context,
+                title: title,
+                items: state.items,
+                stores: state.stores,
+                storesApi: context.read<StoresApi>(),
+                referenceCache: context.read<StoreChainReferenceCache>(),
+              ),
+            ),
           ],
         ],
       ),
@@ -268,8 +283,7 @@ class _ItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final colors = context.sgartColors;
-    final quantityText = _formatQuantity(item, localizations);
-    final subtitle = item.note == null ? quantityText : '$quantityText · ${item.note}';
+    final subtitle = formatItemSubtitle(item, localizations);
     final isDone = item.status == ItemStatus.done;
     final isDiscarded = item.status == ItemStatus.discarded;
     final isTerminal = isReadOnly && (isDone || isDiscarded);
@@ -334,12 +348,6 @@ class _ItemRow extends StatelessWidget {
           : colors.textSecondary.withValues(alpha: 0.08),
       child: tile,
     );
-  }
-
-  String _formatQuantity(Item item, AppLocalizations localizations) {
-    final amount = double.tryParse(item.amount) ?? 0;
-    final unit = formatting.unitFromServerName(item.unit) ?? formatting.Unit.piece;
-    return const formatting.QuantityFormatter().format(amount, unit, localizations);
   }
 }
 

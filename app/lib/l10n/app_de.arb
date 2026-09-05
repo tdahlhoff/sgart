@@ -964,5 +964,40 @@
   "profileAccountSectionLabel": "Konto",
   "@profileAccountSectionLabel": {
     "description": "Section heading on the Profil screen above the Abmelden action (Story 1.11, AC2)."
+  },
+
+  "printShareAction": "Drucken / Teilen",
+  "@printShareAction": {
+    "description": "The list-detail tonal action that opens the print/share bottom sheet on an Open list (Story 3.5, AC1, AC2, AC5)."
+  },
+
+  "printOptionLabel": "Drucken",
+  "@printOptionLabel": {
+    "description": "Label of the print/share sheet's print option row (Story 3.5, AC1)."
+  },
+
+  "printOptionSubtitle": "Nach Geschäft gruppiert",
+  "@printOptionSubtitle": {
+    "description": "Subtitle of the print/share sheet's print option row (Story 3.5, AC1)."
+  },
+
+  "shareOptionLabel": "Als PDF teilen",
+  "@shareOptionLabel": {
+    "description": "Label of the print/share sheet's share option row (Story 3.5, AC2)."
+  },
+
+  "shareOptionSubtitle": "z. B. an WhatsApp senden",
+  "@shareOptionSubtitle": {
+    "description": "Subtitle of the print/share sheet's share option row (Story 3.5, AC2)."
+  },
+
+  "printShareNoFileSaved": "Es wird keine Datei dauerhaft gespeichert.",
+  "@printShareNoFileSaved": {
+    "description": "Reassurance banner on the print/share sheet — no PDF is written to persistent device storage (Story 3.5, AC3)."
+  },
+
+  "printShareFilename": "Einkaufsliste",
+  "@printShareFilename": {
+    "description": "Fallback base filename (without extension) offered to the OS share sheet when the list has a blank title (Story 3.5, AC2, fail-fast client guard)."
   }
 }

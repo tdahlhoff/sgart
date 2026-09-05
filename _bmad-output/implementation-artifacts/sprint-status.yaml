@@ -41,7 +41,22 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-05 (Story 3.4 second-pass review → done; 1 decision + 6 patches resolved, 2 deferred, 5 dismissed. Backend BUILD SUCCESSFUL / Flutter 491 green)
+last_updated: 2026-09-05 (Story 3.5 code review + 2 low patches applied, Opus 4.8 — 509 Flutter tests green, 0 analyze; status → done)
+# Story 3.5 ready-for-dev (create-story, Opus 4.8) 2026-09-05 — Epic 3's fifth & FINAL story: print
+# & share (FR11/CAP-11). CLIENT-ONLY Flutter slice — NO backend at all (no event/command/aggregate/
+# read model/projector/migration/endpoint/commandId/optimistic state). Adds a grouped-by-store PDF
+# projection of an OPEN list → native OS print (Printing.layoutPdf) or in-memory PDF share
+# (Printing.sharePdf), from a „Drucken / Teilen" tonal button peer to „Einkauf starten" opening the
+# mockup bottom sheet. Reuses trip grouping rule + QuantityFormatter/DateFormatter + store-picker
+# sheet pattern + StoreChainReferenceCache (chain labels). New deps printing ^5.15.0 (+ pdf ^3.13.0).
+# Timo decided (2026-09-05): (1) Open lists ONLY (same !isReadOnly gate — all items OPEN, empty tick
+# boxes, no read-only store-load change); (2) tonal button + bottom sheet (NOT the not-yet-existing
+# app-bar ⋯ menu); (3) group header = store name + chain label. "No persisted file" = our code only
+# hands over doc.save() bytes, never path_provider/File (native share's OS temp/cache file isn't an
+# app write) — enforced via a fake ListPrintService + confining package:printing to one seam. Many
+# standing retro/DoD items N/A (no endpoint/read model/commandId); a11y + no-dead-code + fail-fast
+# apply. New code under app/lib/features/lists/print/. Baseline last-green ≈ Flutter 491 (bd8fa8e).
+# Story 3.4 second-pass review → done 2026-09-05 (1 decision + 6 patches resolved, 2 deferred, 5 dismissed. Backend BUILD SUCCESSFUL / Flutter 491 green)
 # Story 3.4 ready-for-dev (create-story, Opus 4.8) 2026-09-04 — Epic 3's fourth story: SGART's first
 # Active→Done trip completion. ItemStatus becomes {OPEN,DONE,DISCARDED} — NEW terminal DISCARDED + ItemDiscarded
 # (item STAYS on the list, dimmed, not a removal), with TWO writers: first-class in-trip discardItem (mirrors 3.3
@@ -128,7 +143,7 @@ development_status:
   3-2-store-grouped-trip-view-with-assignment-rerouting: done
   3-3-check-off-uncheck-and-postpone-during-a-trip: done
   3-4-complete-a-trip-with-leftover-review: done
-  3-5-print-and-share-the-list: backlog
+  3-5-print-and-share-the-list: done
   # 3-6 carved out of the 3-3 code review (2026-08-29, D2): the cross-aggregate transfer flow
   # (shared by 2.4 move + 3.3 postpone-to-list) silently drops the item if the target leaves OPEN
   # between the handler's check and the async PM add. Full fix = reserve-then-remove two-phase

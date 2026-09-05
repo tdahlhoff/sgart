@@ -451,6 +451,27 @@ void main() {
       });
     });
 
+    group('printShare (Story 3.5)', () {
+      testWidgets('anOpenListShowsThePrintShareActionWhichOpensTheSheet', (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('list-detail-print-share')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('list-detail-print-share')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('print-share-sheet')), findsOneWidget);
+      });
+
+      testWidgets('aDoneListNeverShowsThePrintShareAction', (tester) async {
+        await tester.pumpWidget(buildSubject(isReadOnly: true));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('list-detail-print-share')), findsNothing);
+      });
+    });
+
     group('push', () {
       // Drives push from a launcher button that has the three re-provided APIs in scope, then pops
       // back, so the on-return guarantee is exercised through the real navigation path.
