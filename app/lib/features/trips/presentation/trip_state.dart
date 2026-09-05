@@ -29,7 +29,7 @@ class TripStoreGroup {
 /// the server returned, `stores` (the household's active stores, for name resolution and the Cl. 7
 /// archived/non-trip fallback), `isSubmitting` for an in-flight command, `actionError` for a
 /// rejection shown inline, and `completed` (set to `true` once [TripCubit.completeTrip] succeeds —
-/// signals the trip screen to pop). [groups]/[unassignedItems]/[remainingOpenCount] derive the
+/// signals the trip screen to pop). [groups]/[unassignedItems]/[openItems] derive the
 /// actual grouped view — computed, never stored, so there is exactly one source of truth.
 class TripState {
   const TripState._(
@@ -110,9 +110,6 @@ class TripState {
 
   /// Items still `OPEN` — the leftover set for the completion dialog (Story 3.4, AC3/AC6).
   List<Item> get openItems => items.where((item) => item.status == ItemStatus.open).toList();
-
-  /// Number of still-`OPEN` items — zero means the E4 straight-complete path applies (Story 3.4, AC6).
-  int get remainingOpenCount => openItems.length;
 
   TripState copyWith({
     List<String>? storeIds,

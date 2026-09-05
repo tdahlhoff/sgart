@@ -410,15 +410,23 @@ public final class ShoppingList extends EventSourcedAggregate {
     public void completeTrip(CommandId commandId) {
         Objects.requireNonNull(commandId, "commandId must not be null");
 
+        // Convergent no-op: re-delivery of a lost-ack completion pops cleanly (AD-8).
+        if (status == ListStatus.DONE) {
+            return;
+        }
         if (status != ListStatus.IN_TRIP) {
             throw new TripNotCompletableException(
                     "A trip may only be completed from an In-Trip list, list is " + status);
         }
+        // Snapshot open item ids before raising so the fold (put on existing key) cannot cause
+        // a ConcurrentModificationException if the map implementation changes.
+        List<ItemId> openItemIds = itemsById.entrySet().stream()
+                .filter(e -> e.getValue().status() == ItemStatus.OPEN)
+                .map(Map.Entry::getKey)
+                .toList();
         // Sweep: discard every still-OPEN item (QoL safety net, Cl. 2)
-        for (Map.Entry<ItemId, ItemState> entry : itemsById.entrySet()) {
-            if (entry.getValue().status() == ItemStatus.OPEN) {
-                raise(new ItemDiscarded(EventId.generate(), householdId, listId, entry.getKey()));
-            }
+        for (ItemId openItemId : openItemIds) {
+            raise(new ItemDiscarded(EventId.generate(), householdId, listId, openItemId));
         }
         raise(new TripCompletedForList(EventId.generate(), householdId, listId, activeTripId));
     }

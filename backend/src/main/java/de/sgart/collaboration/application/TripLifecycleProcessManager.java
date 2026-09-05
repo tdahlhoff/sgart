@@ -76,21 +76,39 @@ public final class TripLifecycleProcessManager {
         CommandId derivedCommandId = CommandId.deterministicFrom(completed.eventId());
         StreamId tripStreamId = StreamId.forTrip(completed.tripId());
 
-        List<de.sgart.shared.DomainEvent> history = eventStore.readStream(tripStreamId);
-        ShoppingTrip trip = ShoppingTrip.rehydrate(tripStreamId, history);
-        AggregateVersion expectedVersion = trip.version();
-        trip.complete(derivedCommandId);
+        for (int attempt = 0; attempt < MAX_CONCURRENCY_RETRIES; attempt++) {
+            List<de.sgart.shared.DomainEvent> history = eventStore.readStream(tripStreamId);
+            if (history.isEmpty()) {
+                // The trip stream has no events: the start reaction may have been lost (log-and-skip).
+                // Guard before rehydrate so null fields don't cause an NPE in complete().
+                log.warn(
+                        "TripLifecycleProcessManager: trip {} has no history — start reaction may have been lost; skipping completion",
+                        completed.tripId());
+                return;
+            }
+            ShoppingTrip trip = ShoppingTrip.rehydrate(tripStreamId, history);
+            AggregateVersion expectedVersion = trip.version();
+            trip.complete(derivedCommandId);
 
-        if (!trip.uncommittedEvents().isEmpty()) {
+            if (trip.uncommittedEvents().isEmpty()) {
+                // Already DONE — convergent no-op (trip.complete returned without raising).
+                return;
+            }
             try {
                 eventStore.append(expectedVersion, trip.uncommittedEvents(), derivedCommandId);
-            } catch (ConcurrencyConflictException alreadyCompleted) {
-                // Redelivery racing itself — the trip was already completed on an earlier pass
-                // (exactly-once via the deterministic command id). Convergent success, not an error.
+                return; // succeeded
+            } catch (ConcurrencyConflictException conflict) {
                 log.debug(
-                        "TripLifecycleProcessManager: trip {} already completed, treating as converged",
-                        completed.tripId());
+                        "TripLifecycleProcessManager: concurrency conflict completing trip {} (attempt {}), retrying",
+                        completed.tripId(),
+                        attempt + 1);
             }
         }
+        log.warn(
+                "TripLifecycleProcessManager: trip {} completion not confirmed after {} retries; will retry on re-delivery",
+                completed.tripId(),
+                MAX_CONCURRENCY_RETRIES);
     }
+
+    private static final int MAX_CONCURRENCY_RETRIES = 5;
 }

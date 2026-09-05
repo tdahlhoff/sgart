@@ -16,6 +16,7 @@ import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.TripNotCompletableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
 import de.sgart.shared.AggregateVersion;
@@ -245,6 +246,21 @@ class ShoppingListTest {
     }
 
     @Test
+    void renameADoneList_throwsListNameChangeNotPermitted() {
+        // Cl. 9(b) — deferred since Story 2.1, now reachable via real events (Story 3.4).
+        // Rehydrate with [Created, TripStartedForList, TripCompletedForList] to reach DONE.
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
+                        new TripCompletedForList(EventId.generate(), householdId, listId, TripId.generate())));
+
+        assertThatThrownBy(() -> list.rename(new ShoppingListName("Anderer Name"), CommandId.generate()))
+                .isInstanceOf(ListNameChangeNotPermittedException.class);
+    }
+
+    @Test
     void itemCommands_onAnInTripList_areRefused() {
         ShoppingList list = ShoppingList.rehydrate(
                 StreamId.forList(listId),
@@ -461,6 +477,25 @@ class ShoppingListTest {
                 .isInstanceOf(ItemNotDuringTripException.class);
     }
 
+    @Test
+    void uncheckItem_returnsADiscardedItemToOpen() {
+        // Cl. 1/Task 5 — symmetric reset: uncheck brings any non-OPEN status back to OPEN.
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
+                        new ItemDiscarded(EventId.generate(), householdId, listId, itemId)));
+
+        list.uncheckItem(itemId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemUnchecked.class);
+    }
+
     // ── discardItem ───────────────────────────────────────────────────────────────────────────────
 
     @Test
@@ -498,6 +533,15 @@ class ShoppingListTest {
 
         assertThatThrownBy(() -> list.discardItem(itemId, CommandId.generate()))
                 .isInstanceOf(ItemNotDuringTripException.class);
+    }
+
+    @Test
+    void discardItem_forAnUnknownItem_throwsItemNotFound() {
+        // Task 5 — mirrors checkOffItem_forAnUnknownItem_throwsItemNotFound.
+        ShoppingList list = inTripListWithItem(ItemId.generate());
+
+        assertThatThrownBy(() -> list.discardItem(ItemId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemNotFoundException.class);
     }
 
     // ── completeTrip ──────────────────────────────────────────────────────────────────────────────
@@ -541,6 +585,24 @@ class ShoppingListTest {
 
         assertThatThrownBy(() -> list.completeTrip(CommandId.generate()))
                 .isInstanceOf(TripNotCompletableException.class);
+    }
+
+    @Test
+    void completeTrip_onADoneList_isAConvergentNoOp() {
+        // Fix 1 (review patch) — re-delivery of a lost-ack completion on an already-DONE list
+        // must converge silently (AD-8) rather than throwing TripNotCompletableException.
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
+                        new TripCompletedForList(EventId.generate(), householdId, listId, TripId.generate())));
+
+        list.completeTrip(CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
     }
 
     // ── postponeItemToList ────────────────────────────────────────────────────────────────────────

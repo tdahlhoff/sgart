@@ -6,6 +6,7 @@ import '../../../../l10n/gen/app_localizations.dart';
 import '../../../../shared/errors/error_message_resolver.dart';
 import '../../../../shared/widgets/sgart_app_bar.dart';
 import '../../../../shared/widgets/sgart_button.dart';
+import '../../../../theme/sgart_theme_access.dart';
 import '../../../../theme/tokens/sgart_shapes.dart';
 import '../../../stores/data/store_chain_reference_cache.dart';
 import '../../../stores/data/stores_api.dart';
@@ -266,17 +267,28 @@ class _ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final colors = context.sgartColors;
     final quantityText = _formatQuantity(item, localizations);
     final subtitle = item.note == null ? quantityText : '$quantityText · ${item.note}';
+    final isDone = item.status == ItemStatus.done;
+    final isDiscarded = item.status == ItemStatus.discarded;
+    final isTerminal = isReadOnly && (isDone || isDiscarded);
 
-    return ListTile(
+    final tile = ListTile(
       key: Key('item-row-${item.itemId}'),
       contentPadding: EdgeInsets.zero,
-      title: Text(item.name),
+      title: Text(
+        item.name,
+        style: isTerminal
+            ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
+            : null,
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (isDiscarded)
+            Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary)),
           Text(subtitle, key: Key('item-quantity-${item.itemId}')),
           const SizedBox(height: SgartShapes.spaceHalfUnit),
           _StoreChip(
@@ -313,6 +325,14 @@ class _ItemRow extends StatelessWidget {
                 ),
               ],
             ),
+    );
+
+    if (!isTerminal) return tile;
+    return ColoredBox(
+      color: isDone
+          ? colors.success.withValues(alpha: 0.12)
+          : colors.textSecondary.withValues(alpha: 0.08),
+      child: tile,
     );
   }
 

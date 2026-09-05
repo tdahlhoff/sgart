@@ -804,6 +804,61 @@ class ShoppingListReadModelProjectorTest {
     }
 
     @Test
+    void aCompletedListAppearsInDoneStatusAndNotInOpenOrInTrip() {
+        // Cl. 9(a)/Action 10 — the completed list lands in the DONE set and leaves the Open/In-Trip
+        // set (proxy for ListDoneLists ⊃ DONE / ListOpenLists ⊃ OPEN|IN_TRIP filters).
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        TripId tripId = TripId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Einkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())));
+        projector.project(new TripCompletedForList(EventId.generate(), householdId, listId, tripId));
+
+        List<ShoppingListView> all = readModel.listsOf(householdId);
+        long doneCount = all.stream().filter(l -> l.status() == ListStatus.DONE).count();
+        long openOrInTripCount = all.stream().filter(l -> l.status() == ListStatus.OPEN || l.status() == ListStatus.IN_TRIP).count();
+        assertThat(doneCount).isEqualTo(1);
+        assertThat(openOrInTripCount).isEqualTo(0);
+    }
+
+    @Test
+    void completionSequenceDoesNotLeakStatusToAnotherHousehold() {
+        // Action 10 — two-household isolation: completing householdA's list must not touch householdB's.
+        HouseholdId householdA = HouseholdId.generate();
+        HouseholdId householdB = HouseholdId.generate();
+        ShoppingListId listAId = ShoppingListId.generate();
+        ShoppingListId listBId = ShoppingListId.generate();
+        TripId tripId = TripId.generate();
+        projector.project(ShoppingList.create(listAId, householdA, new ShoppingListName("A"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(ShoppingList.create(listBId, householdB, new ShoppingListName("B"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new TripStartedForList(EventId.generate(), householdA, listAId, tripId, List.of(StoreId.generate())));
+
+        projector.project(new TripCompletedForList(EventId.generate(), householdA, listAId, tripId));
+
+        assertThat(readModel.listsOf(householdA).get(0).status()).isEqualTo(ListStatus.DONE);
+        assertThat(readModel.listsOf(householdB).get(0).status()).isEqualTo(ListStatus.OPEN);
+    }
+
+    @Test
+    void reProjectingTripCompletedForListIsIdempotent() {
+        // Action 10 — replay idempotency for the completion sequence.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        TripId tripId = TripId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
+        projector.project(new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())));
+        TripCompletedForList completedEvent = new TripCompletedForList(EventId.generate(), householdId, listId, tripId);
+
+        projector.project(completedEvent);
+        projector.project(completedEvent);
+
+        List<ShoppingListView> lists = readModel.listsOf(householdId);
+        assertThat(lists).hasSize(1);
+        assertThat(lists.get(0).status()).isEqualTo(ListStatus.DONE);
+        assertThat(lists.get(0).activeTripId()).isNull();
+    }
+
+    @Test
     void reProjectingItemCheckedOffIsIdempotent() {
         // Replay idempotency for the status column: a redelivered ItemCheckedOff leaves status DONE.
         HouseholdId householdId = HouseholdId.generate();

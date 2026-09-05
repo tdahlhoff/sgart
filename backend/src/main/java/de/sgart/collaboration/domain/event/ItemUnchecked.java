@@ -13,7 +13,7 @@ import java.util.Objects;
  * An item was unchecked — its status returns to {@link ItemStatus#OPEN} (Story 3.3, AC2/AC3,
  * Cl. 1) — raised on the list's own {@code list-{id}} stream by {@link
  * ShoppingList#uncheckItem}, gated on the list being {@code IN_TRIP}. This is the undo affordance
- * for both {@code DONE} and {@code POSTPONED}: an unchecked item returns to {@code OPEN} from any
+ * for both {@code DONE} and {@code DISCARDED}: an unchecked item returns to {@code OPEN} from any
  * non-{@code OPEN} status. Unchecking an already-{@code OPEN} item is a convergent no-op (raises
  * nothing, AD-8).
  *

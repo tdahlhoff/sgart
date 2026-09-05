@@ -418,62 +418,68 @@ class _CompletionSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-    final state = cubit.state;
-    final doneCount = state.doneCount;
-    final totalCount = state.totalCount;
-    final openItems = state.openItems;
+    return BlocBuilder<TripCubit, TripState>(
+      bloc: cubit,
+      builder: (context, state) {
+        final localizations = AppLocalizations.of(context);
+        final doneCount = state.doneCount;
+        final totalCount = state.totalCount;
+        final openItems = state.openItems;
 
-    return Padding(
-      key: const Key('trip-completion-sheet'),
-      padding: EdgeInsets.only(
-        left: SgartShapes.cardPadding,
-        right: SgartShapes.cardPadding,
-        top: SgartShapes.cardPadding,
-        bottom: MediaQuery.of(context).viewInsets.bottom + SgartShapes.cardPadding,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(localizations.tripCompleteDialogTitle, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: SgartShapes.space2),
-          Text(localizations.tripProgressLabel(doneCount, totalCount)),
-          if (openItems.isNotEmpty) ...[
-            const SizedBox(height: SgartShapes.space4),
-            Text(localizations.tripCompleteLeftoverPrompt),
-            const SizedBox(height: SgartShapes.space2),
-            for (final item in openItems)
-              _LeftoverItemRow(
-                item: item,
-                cubit: cubit,
-                shoppingListsApi: shoppingListsApi,
-                parentContext: parentContext,
-                sheetContext: context,
+        return Padding(
+          key: const Key('trip-completion-sheet'),
+          padding: EdgeInsets.only(
+            left: SgartShapes.cardPadding,
+            right: SgartShapes.cardPadding,
+            top: SgartShapes.cardPadding,
+            bottom: MediaQuery.of(context).viewInsets.bottom + SgartShapes.cardPadding,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(localizations.tripCompleteDialogTitle, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: SgartShapes.space2),
+              Text(localizations.tripProgressLabel(doneCount, totalCount)),
+              if (openItems.isNotEmpty) ...[
+                const SizedBox(height: SgartShapes.space4),
+                Text(localizations.tripCompleteLeftoverPrompt),
+                const SizedBox(height: SgartShapes.space2),
+                for (final item in openItems)
+                  _LeftoverItemRow(
+                    item: item,
+                    cubit: cubit,
+                    shoppingListsApi: shoppingListsApi,
+                    parentContext: parentContext,
+                    sheetContext: context,
+                  ),
+              ],
+              const SizedBox(height: SgartShapes.space4),
+              Semantics(
+                button: true,
+                label: localizations.tripCompleteAction,
+                child: SgartButton(
+                  key: const Key('trip-completion-confirm'),
+                  label: localizations.tripCompleteAction,
+                  onPressed: state.isSubmitting
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          cubit.completeTrip();
+                        },
+                ),
               ),
-          ],
-          const SizedBox(height: SgartShapes.space4),
-          Semantics(
-            button: true,
-            label: localizations.tripCompleteAction,
-            child: SgartButton(
-              key: const Key('trip-completion-confirm'),
-              label: localizations.tripCompleteAction,
-              onPressed: () {
-                Navigator.of(context).pop();
-                cubit.completeTrip();
-              },
-            ),
+              const SizedBox(height: SgartShapes.space2),
+              SgartButton(
+                key: const Key('trip-completion-cancel'),
+                label: localizations.tripKeepShoppingAction,
+                variant: SgartButtonVariant.tonal,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
-          const SizedBox(height: SgartShapes.space2),
-          SgartButton(
-            key: const Key('trip-completion-cancel'),
-            label: localizations.tripKeepShoppingAction,
-            variant: SgartButtonVariant.tonal,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

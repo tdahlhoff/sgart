@@ -820,6 +820,59 @@ class ItemControllerTest {
     }
 
     @Test
+    void discard_returns400ForAMalformedCommandId() throws Exception {
+        // Action 2 error-advice contract: malformed input → 400.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/discard",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commandId\":\"not-a-uuid\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void discard_returns403ForANonMember() throws Exception {
+        // Action 2 error-advice contract: non-member → 403.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        startTripOn(listId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/discard",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void discard_returns409WhenTheListIsNotInTrip() throws Exception {
+        // Action 2 error-advice contract: item not during trip → 409.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = seedItemIn(listId, "Milch");
+        // No startTripOn(...) — the list is still Open.
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/discard",
+                        householdId.toString(), listId.toString(), itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(commandBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("item.notDuringTrip"));
+    }
+
+    @Test
     void discard_returns404ForAnUnknownItem() throws Exception {
         HouseholdId householdId = seedMembership();
         ShoppingListId listId = seedListIn(householdId);

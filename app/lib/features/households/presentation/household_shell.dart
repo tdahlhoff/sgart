@@ -54,31 +54,32 @@ class _HouseholdShellState extends State<HouseholdShell> {
         ],
       ),
       // Built eagerly for all three tabs so state is preserved when switching (and the Profil
-      // identity header can read the ancestor AuthCubit at build time, not just on tap). The Listen
-      // tab's cubit is keyed on the active household's id so the provider is torn down and rebuilt
-      // on a household switch — the shell itself keeps this state across tab switches via the
-      // IndexedStack, so a stale cubit would otherwise linger.
-      body: IndexedStack(
-        index: _selectedTabIndex,
-        children: [
-          BlocProvider<ShoppingListsCubit>(
-            key: ValueKey(widget.activeHousehold.householdId),
-            create: (context) => ShoppingListsCubit(
-              shoppingListsApi: context.read<ShoppingListsApi>(),
-              householdId: widget.activeHousehold.householdId,
-            )..bootstrap(),
-            child: const ListsView(),
-          ),
-          BlocProvider<ActiveTripsCubit>(
-            key: ValueKey(widget.activeHousehold.householdId),
-            create: (context) => ActiveTripsCubit(
-              shoppingListsApi: context.read<ShoppingListsApi>(),
-              householdId: widget.activeHousehold.householdId,
-            )..bootstrap(),
-            child: const ActiveTripsView(),
-          ),
-          const ProfileScreen(),
-        ],
+      // identity header can read the ancestor AuthCubit at build time, not just on tap). The
+      // ShoppingListsCubit is hoisted above the IndexedStack so the Einkauf tab (ActiveTripsView)
+      // can call invalidateArchive() after completion without a ProviderNotFoundException (Story 3.4
+      // AC7 fix). Keyed on the active household's id so the provider is torn down and rebuilt on a
+      // household switch — a stale cubit would otherwise linger across tab switches.
+      body: BlocProvider<ShoppingListsCubit>(
+        key: ValueKey(widget.activeHousehold.householdId),
+        create: (context) => ShoppingListsCubit(
+          shoppingListsApi: context.read<ShoppingListsApi>(),
+          householdId: widget.activeHousehold.householdId,
+        )..bootstrap(),
+        child: IndexedStack(
+          index: _selectedTabIndex,
+          children: [
+            const ListsView(),
+            BlocProvider<ActiveTripsCubit>(
+              key: ValueKey(widget.activeHousehold.householdId),
+              create: (context) => ActiveTripsCubit(
+                shoppingListsApi: context.read<ShoppingListsApi>(),
+                householdId: widget.activeHousehold.householdId,
+              )..bootstrap(),
+              child: const ActiveTripsView(),
+            ),
+            const ProfileScreen(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTabIndex,

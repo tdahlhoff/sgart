@@ -2,10 +2,13 @@ package de.sgart.collaboration.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.collaboration.domain.ShoppingTrip;
 import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.event.TripCompletedForList;
+import de.sgart.shared.AggregateVersion;
+import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -96,5 +99,27 @@ class TripLifecycleProcessManagerTest {
         processManager.onTripCompletedForList(completed);
 
         assertThat(eventStore.readStream(tripStreamId)).hasSize(2);
+    }
+
+    @Test
+    void aLostRaceOnCompletionConvergesOnRetry() {
+        // Fix 2 (review patch) — bounded retry: if another event is appended to the trip stream
+        // between the PM's read and its append, the PM retries and still lands TripCompleted.
+        processManager.onTripStartedForList(startedTrigger());
+
+        // Simulate a concurrent StoreAddedToTrip append racing the completion reaction:
+        // reload the trip, derive a store-add event, and append it to advance the stream version.
+        ShoppingTrip trip = ShoppingTrip.rehydrate(tripStreamId, eventStore.readStream(tripStreamId));
+        // Append a synthetic extra event at the current (post-start) version to force a conflict.
+        ShoppingTrip concurrentStore = ShoppingTrip.rehydrate(tripStreamId, eventStore.readStream(tripStreamId));
+        concurrentStore.addStore(StoreId.generate(), CommandId.generate());
+        eventStore.append(trip.version(), concurrentStore.uncommittedEvents(), CommandId.generate());
+
+        TripCompletedForList completedForList = new TripCompletedForList(
+                EventId.generate(), householdId, listId, tripId);
+        processManager.onTripCompletedForList(completedForList);
+
+        List<DomainEvent> tripEvents = eventStore.readStream(tripStreamId);
+        assertThat(tripEvents.stream().filter(e -> e instanceof TripCompleted).count()).isEqualTo(1);
     }
 }

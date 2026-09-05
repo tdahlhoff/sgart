@@ -178,7 +178,7 @@ class TripCubit extends Cubit<TripState> {
 
   /// Completes the trip (Story 3.4, AC4) — calls [TripsApi.completeTrip] and on success emits
   /// [TripState.completed] = `true` so the trip screen can pop. A re-entrant call while a submit is
-  /// in flight is ignored; reverts and surfaces an `actionError` on failure.
+  /// in flight is ignored; surfaces an `actionError` on failure.
   Future<void> completeTrip() async {
     if (state.status != TripStatus.ready || state.isSubmitting) {
       return;

@@ -4,7 +4,7 @@ baseline_commit: de675a3
 
 # Story 3.4: Complete a trip with leftover review
 
-Status: done
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -568,6 +568,94 @@ patterns, `deferred-work.md`, the Epic-2 retro action items, and **Timo's decisi
       **in full** (not per-file), per CLAUDE.md §6. State which suite ran and the counts (report the delta
       from the branch-start baseline; note that Task 0/15a *remove* some 3.3 POSTPONED tests, so the delta
       is not purely additive).
+
+### Review Findings
+
+Code review 2026-09-05 (bmad-code-review, Opus 4.8, three layers: Blind Hunter · Edge Case Hunter ·
+Acceptance Auditor). 2 decision-needed, 9 patch, 0 defer, 3 dismissed. Severity in brackets.
+
+**Decision-needed** (RESOLVED 2026-09-05 by Timo → now patches):
+
+- [x] [Review][Patch] [MEDIUM] Make `completeTrip` converge on an already-`DONE` list. **Decision:
+      converge if already DONE.** Add `if (status == ListStatus.DONE) return;` (convergent no-op, AD-8)
+      before the `status != IN_TRIP` guard, so a lost-ack re-delivery of the same completion pops
+      cleanly; an `OPEN` (never-in-trip) list still throws `TripNotCompletableException` → 409 (AC8
+      preserved for a genuine conflict). Add the matching test. [`ShoppingList.java:410`]
+- [x] [Review][Patch] [MEDIUM] Give the trip-completion PM a bounded concurrency-retry. **Decision: add
+      bounded retry.** Replace the single-shot converge-on-conflict in `onTripCompletedForList` with a
+      bounded reload→re-apply→append retry loop so a genuine concurrent trip-stream append is retried
+      rather than swallowed (list `DONE` but trip stuck `ACTIVE`); retrofit `onTripStartedForList` to the
+      same loop for consistency, delivering the Cl.3/AD-8 "bounded concurrency-retry". Add the
+      "lost-race converges" test. [`TripLifecycleProcessManager.java:73`]
+
+**Patch** (unambiguous fixes):
+
+- [x] [Review][Patch] [HIGH] Completing a trip from the "Einkauf" tab crashes — `ShoppingListsCubit` is
+      not an ancestor there. `active_trips_view.dart:81` calls `context.read<ShoppingListsCubit>()`, but
+      `HouseholdShell` provides `ShoppingListsCubit` only inside the *Listen* tab subtree and
+      `ActiveTripsCubit` only inside the *Einkauf* tab subtree — siblings in the `IndexedStack`, so the
+      lists cubit is out of scope. Completing a trip from the Einkauf tab throws
+      `ProviderNotFoundException` in the async `onTap` after the trip already completed; AC7 archive
+      invalidation never runs from this path. Untested (`active_trips_view_test` only asserts navigation).
+      Fix: hoist `ShoppingListsCubit` to a `MultiBlocProvider` above the `IndexedStack`, or stop reaching
+      across tabs. [`active_trips_view.dart:81`, `household_shell.dart:61`]
+- [x] [Review][Patch] [MEDIUM] Read-only Done-list detail renders no `DONE`/`DISCARDED` terminal
+      treatments (AC7 / Task 17). `_ItemRow` renders `title: Text(item.name)` with no status-dependent
+      style, dim, or "Verworfen" label — a completed list opened from "Erledigt" shows plain rows. AC7
+      requires terminal treatments in the read-only archive detail; the styling exists only in the trip
+      screen's `_TripItemRow`. [`list_detail_page.dart:275`]
+- [x] [Review][Patch] [MEDIUM] Completion sheet is a frozen `cubit.state` snapshot — in-sheet "Verwerfen"
+      gives no feedback and confirm can silently no-op. `_CompletionSheetBody`/`_LeftoverItemRow` are
+      `StatelessWidget`s reading `cubit.state` once (no `BlocBuilder`). Tapping "Verwerfen" on a leftover
+      neither pops nor rebuilds — the row stays with live buttons, "N von M" never updates, re-tap fires
+      redundant commands. Separately, tapping "Einkauf abschließen" while a leftover discard/transfer is
+      still in flight silently no-ops (`completeTrip` early-returns on `isSubmitting`) after the sheet
+      already popped — the member believes it completed. Fix: wrap the sheet in
+      `BlocBuilder<TripCubit, TripState>`; disable/guard confirm while `isSubmitting`.
+      [`trip_screen.dart:408`]
+- [x] [Review][Patch] [MEDIUM] Specified tests for tasks marked `[x]` are absent (CLAUDE.md §6 TDD;
+      the story claims the deferred invariant tests "finally land"). Missing: `renameADoneList_throws…`
+      (Cl.9b/Task5); `uncheckItem_returnsADiscardedItemToOpen` (Cl.1/Task5);
+      `completeTrip_onADoneList_throwsTripNotCompletable` (Task5); `discardItem_forAnUnknownItem_throwsItemNotFound`
+      (Task5); projector `ListDoneLists`/`ListOpenLists` membership + two-household isolation/replay for
+      the completion sequence (Cl.9a/Action10/Task10); read-only-archive e2e with a genuinely-completed
+      list (`ListDoneListsTest` untouched, Cl.9c); `CompleteTripHandlerTest` cross-household-404 +
+      re-delivery dedupe + the fixture seeds no items so the sweep (`ItemDiscarded`×open) is never
+      asserted (Task7b); `TripLifecycleProcessManagerTest` "lost-race converges" (Task8);
+      `ItemControllerTest` discard 400/403/409-not-In-Trip contract (Task11b). Re-verify Task 22's
+      full-suite-green claim and its counts once these land.
+- [x] [Review][Patch] [LOW] Stale/incomplete javadoc references to the retired `POSTPONED`/`ItemPostponed`
+      (Cl.13 Boy-Scout). `ItemUnchecked.java:16` ("undo affordance for both `DONE` and `POSTPONED`" →
+      `DISCARDED`); `DomainEvent.java:9` uses `{@code ItemPostponed}` as its example event (now deleted);
+      `ItemNotDuringTripException.java:11` lists "checked off, unchecked, postponed, or rerouted" but omits
+      the new `discarded` in-trip mutation.
+- [x] [Review][Patch] [LOW] `TripState.remainingOpenCount` is dead code — defined + mentioned in the
+      class doc, never read (the sheet uses `openItems.isNotEmpty`); Task 16 also specified a
+      `remainingOpenCount` cubit test that does not exist. Remove it, or wire + test it. [`trip_state.dart:115`]
+- [x] [Review][Patch] [LOW] `TripCubit.completeTrip` doc claims it "reverts on failure" but there is no
+      optimistic state to revert (only `isSubmitting`/`actionError` are set). Reword. [`trip_cubit.dart:182`]
+- [x] [Review][Patch] [LOW] `completeTrip` sweep iterates `itemsById.entrySet()` while
+      `raise → apply(ItemDiscarded) → setStatus → put` mutates the map. Safe today only because
+      `LinkedHashMap.put` on an existing key is non-structural; fragile if the fold ever adds/removes a
+      key. Snapshot the still-`OPEN` item ids before raising. [`ShoppingList.java:418`]
+- [x] [Review][Patch] [LOW] `onTripCompletedForList` NPEs on an empty/absent trip stream. If the trip's
+      `TripStarted` was never materialized (start reaction log-and-skipped), `rehydrate([])` yields null
+      fields, `complete()` proceeds (null ≠ `DONE`) and raises `TripCompleted` whose `requireNonNull`
+      guards throw — escaping the try (which wraps only the append); the trip never completes and its
+      store rows are never cleaned. Guard for empty history before rehydrating. [`TripLifecycleProcessManager.java:73`]
+
+**Dismissed** (evaluated, not defects):
+
+- Deleting the persisted `ItemPostponed` event type / `POSTPONED` rows breaks replay/migration (raised by
+  Blind Hunter + Edge Case Hunter, who lacked the spec) — dismissed per **Cl.13 (LOCKED)**: nothing has
+  ever been deployed or run against a persistent store, so no such events/rows exist anywhere; clean
+  removal, no migration, Testcontainers use a fresh store per run.
+- `tripId` path param not validated against the list's active trip — dismissed per **Cl.7 (LOCKED)**:
+  `tripId` is informational, the handler resolves via the list, and a list has one active trip, so
+  completion always targets *its* active trip regardless of the URL id ("wrong trip" is unreachable).
+- E4 "skip straight to confirm" allegedly unimplemented — dismissed: AC6 means skip the *per-item
+  leftover step* (which the code does when `openItems.isEmpty`) and show a simple confirm; behavior
+  matches AC6.
 
 ## Dev Notes
 
