@@ -41,7 +41,30 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-05 (Story 3.5 code review + 2 low patches applied, Opus 4.8 — 509 Flutter tests green, 0 analyze; status → done)
+last_updated: 2026-09-05 (Story 3.6 ready-for-dev — create-story, Opus 4.8)
+# Story 3.6 ready-for-dev (create-story, Opus 4.8) 2026-09-05 — Epic 3's carved-out sixth story (from
+# the 3.3 code review D2 + sprint-change-proposal §4.2): reshape the cross-aggregate item transfer
+# (2.4 move + 3.3 postpone-to-list) into a TWO-PHASE reserve-then-remove COMPENSATING SAGA so a
+# transfer can never silently drop an item when the target leaves OPEN between the handler pre-check
+# and the async PM add. Source RESERVES (keeps + marks pending) instead of removing; PM adds to
+# target → on success CONFIRMS (remove) on source, on target-not-OPEN/gone CANCELS (un-reserve) on
+# source. Item on exactly one list at every instant. Timo decided (2026-09-05): (1) UNIFY move +
+# postpone into one ItemTransferInitiated/Confirmed/Cancelled vocabulary (RETIRE ItemMovedToList +
+# ItemPostponedToList; TransferOrigin{PLANNING_MOVE,IN_TRIP_POSTPONE} keeps the phase distinction; the
+# OPEN vs IN_TRIP gate stays in the two aggregate methods; free reshape — nothing deployed, no codec
+# tolerance/event-store reset); (2) FAIL-FAST LOCK on a reserved item (409 item.transferInProgress) —
+# same-target retry is a convergent no-op (closes the lost-response 404 defer); (3) client shows „wird
+# verschoben…" and STOPS optimistically dropping on initiate, reconciling on refresh (NO polling —
+# live-sync is Epic 4); (4) also CLOSE the lost-response 404 idempotency defer + REMOVE the interim
+# UNRECOVERABLE_TRANSFER guard (dead once cancel compensates). Backend-heavy: ItemMoveProcessManager →
+# ItemTransferProcessManager (now writes source confirm/cancel too), 3 new events + 2 enums + 1
+# domain/1 application exception, aggregate ItemState gains a PendingTransfer sub-state + lock +
+# confirm/cancel un-gated saga steps + completeTrip sweep skips pending, codec/projector/subscription
+# rewire, V11 item_read_model.transfer_pending threaded through ListItems/TripView; client marks
+# pending on trip postpone + planning move (preserve the 2.4 merge dialog). NO new endpoints/no
+# identity on confirm-cancel (PM-issued). After 3.6 only the epic-3 retro remains. 3.5 changes still
+# uncommitted on main. Baseline last-green ≈ backend 577 / Flutter 509 (c64de8a).
+# Story 3.5 code review + 2 low patches applied (Opus 4.8) 2026-09-05 — 509 Flutter tests green, 0 analyze; status → done
 # Story 3.5 ready-for-dev (create-story, Opus 4.8) 2026-09-05 — Epic 3's fifth & FINAL story: print
 # & share (FR11/CAP-11). CLIENT-ONLY Flutter slice — NO backend at all (no event/command/aggregate/
 # read model/projector/migration/endpoint/commandId/optimistic state). Adds a grouped-by-store PDF
@@ -149,7 +172,7 @@ development_status:
   # between the handler's check and the async PM add. Full fix = reserve-then-remove two-phase
   # compensating saga (…Initiated/…Confirmed/…Cancelled + pending item sub-state), reshaping shipped
   # 2.4 move too. Needs create-story + architect. 3.3 ships only an interim log-and-surface guard.
-  3-6-two-phase-transfer-saga: backlog
+  3-6-two-phase-transfer-saga: ready-for-dev
   epic-3-retrospective: optional
 
   # Epic 4: Live Collaboration & Membership
