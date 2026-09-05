@@ -393,8 +393,9 @@ public final class ShoppingList extends EventSourcedAggregate {
     /**
      * Completes the trip against this list (Story 3.4, AC4, AC6, Cl. 2) — the only place a list
      * reaches {@link ListStatus#DONE} and becomes immutable. Permitted only while {@link
-     * ListStatus#IN_TRIP} — an {@code OPEN} or {@code DONE} list raises {@link
-     * TripNotCompletableException}.
+     * ListStatus#IN_TRIP}: an {@code OPEN} (never-in-trip) list raises {@link
+     * TripNotCompletableException}, while an already-{@code DONE} list is a convergent no-op (AD-8
+     * re-delivery of a lost-ack completion) rather than an error.
      *
      * <p><strong>Sweep-then-complete (Cl. 2):</strong> raises one {@link ItemDiscarded} for
      * <em>every item still {@code OPEN}</em> (a quality-of-life safety net over the first-class

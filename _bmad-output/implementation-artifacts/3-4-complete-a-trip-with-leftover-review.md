@@ -4,7 +4,7 @@ baseline_commit: de675a3
 
 # Story 3.4: Complete a trip with leftover review
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -100,10 +100,14 @@ Story 2.2). Each AC is independently testable.
 
 8. **Membership, isolation, eventual consistency & no personal data (epic AC5).** The discard + completion
    commands are **membership-gated** (non-member → **403**); a malformed id is **400**; an
-   unknown/other-household list is **404**; discarding on / completing a **not-`IN_TRIP`** list is **409**
+   unknown/other-household list is **404**; discarding on / completing a not-`IN_TRIP` list is **409**
    (a state conflict — the trip may have completed concurrently, mirroring 3.2/3.3's in-trip 409; discard
    reuses 3.3's `ItemNotDuringTripException` → 409, completion uses the new `TripNotCompletableException`
-   → 409, Cl. 8). `ItemDiscarded` / `TripCompletedForList` / `TripCompleted` carry **no personal data and
+   → 409, Cl. 8). **Completion exception (refined in code review, AD-8 re-delivery):** an `OPEN`
+   (never-in-trip) list is the genuine conflict and stays **409**, but a completion re-delivered against an
+   already-**`DONE`** list is a **200 convergent no-op** (a lost-ack of the same completion pops cleanly),
+   not a 409 — so `completeTrip` only throws `TripNotCompletableException` for the `OPEN`/other non-terminal
+   states, after the `DONE` no-op guard. `ItemDiscarded` / `TripCompletedForList` / `TripCompleted` carry **no personal data and
    no *who*** — household/list/item/trip ids only (AD-5/AD-6, mirrors `ItemCheckedOff` /
    `TripStartedForList` / `TripStarted`); `MemberId` is used only at the handler seam. Read models are
    queried **by `household_id`** so one household's lists/items never leak. Tests use synthetic,
@@ -656,6 +660,83 @@ Acceptance Auditor). 2 decision-needed, 9 patch, 0 defer, 3 dismissed. Severity 
 - E4 "skip straight to confirm" allegedly unimplemented — dismissed: AC6 means skip the *per-item
   leftover step* (which the code does when `openItems.isEmpty`) and show a simple confirm; behavior
   matches AC6.
+
+---
+
+Code review 2026-09-05 — **second pass** (bmad-code-review, Opus 4.8, three layers), scoped to the
+patch commit `4462265` ("apply code-review patches, 11/11 resolved"). 1 decision-needed, 6 patch,
+2 defer, 5 dismissed. Severity in brackets.
+
+**Decision-needed:**
+
+- [x] [Review][Decision] [LOW] AC8 / Cl.8 / Task 5 spec text now contradicts shipped behavior.
+      Fix 1 made an already-`DONE` list a **200 convergent no-op** (AD-8 re-delivery, Timo-approved),
+      but AC8 still read literally "completing a not-`IN_TRIP` list is **409**". The code is correct;
+      the *spec of record* was stale. **RESOLVED 2026-09-05 by Timo → option (a):** AC8 (epic-AC5 item 8)
+      reworded — OPEN/never-in-trip stays 409, a re-delivered completion on an already-DONE list is a 200
+      convergent no-op. (Task 5's test name was already superseded by the shipped `…_isAConvergentNoOp`.)
+
+**Patch** (unambiguous fixes):
+
+- [x] [Review][Patch] [MEDIUM] The retry test does not exercise the retry/catch branch.
+      `aLostRaceOnCompletionConvergesOnRetry` appends the synthetic `StoreAddedToTrip` **before**
+      calling `onTripCompletedForList`, so the PM's `readStream` already sees the advanced version and
+      its append succeeds on the *first* attempt — the `catch (ConcurrencyConflictException)` loop (the
+      whole point of Fix 2) is never entered, and the assertion (`TripCompleted count == 1`) passes for
+      a single-shot append too. Inject the conflict *between* the PM's read and its append via a
+      one-shot conflicting event-store spy/decorator so the retry branch is actually covered.
+      [`TripLifecycleProcessManagerTest.java:104`]
+- [x] [Review][Patch] [MEDIUM] Exhausted-retries and empty-history paths log at `warn` and return
+      normally, and the comment "will retry on re-delivery" overstates the guarantee. The subscription
+      (`CollaborationProcessManagerSubscription.react`) has no nack/checkpoint — a normal return advances
+      past the event, and re-drive only happens on the next `fromStart` resubscribe/app restart (not
+      proactively). Net effect: after 5 real conflicts (or a lost start reaction) the list is already
+      `DONE` but the `ShoppingTrip` stays `ACTIVE` until a restart. Escalate both `warn`→`error` (a stuck
+      aggregate deserves an error log) and correct the comment to "converges on the next catch-up replay
+      (resubscribe/restart)". [`TripLifecycleProcessManager.java:84`, `:107`]
+- [x] [Review][Patch] [LOW] Fresh javadoc/code contradiction introduced by the same commit whose Fix 7
+      purges stale javadoc: `completeTrip`'s doc still says "an `OPEN` or `DONE` list raises
+      `TripNotCompletableException`", but Fix 1 made `DONE` a convergent no-op. Move the `DONE` clause out
+      of the "raises" sentence. [`ShoppingList.java:395`]
+- [x] [Review][Patch] [LOW] Test fixtures rehydrate `TripStartedForList` and `TripCompletedForList` with
+      two independent `TripId.generate()` values; the tests pass only because the fold ignores
+      `completed.tripId()`. Use one shared `TripId` so the fixture can't mask a future rule that validates
+      the completed trip id against `activeTripId`. [`ShoppingListTest.java:757`, `:823`]
+- [x] [Review][Patch] [LOW] The "Verworfen" label is gated only on `isDiscarded`, while the
+      strikethrough/dim styling is gated on `isTerminal = isReadOnly && …`. Unreachable today (DISCARDED
+      only occurs during a trip, when list detail is read-only), but gate the label on `isTerminal` too
+      so the presentation can't split. [`list_detail_page.dart:290`]
+- [x] [Review][Patch] [LOW] `MAX_CONCURRENCY_RETRIES` is declared at the bottom of the class, after the
+      method that uses it. Move the constant to the top with the other fields (Boy-Scout).
+      [`TripLifecycleProcessManager.java:113`]
+
+**Defer** (latent, harmless now):
+
+- [x] [Review][Defer] [LOW] The `TripCompletedForList` fold sets `status = DONE` but never clears
+      `activeTripId`, while `ShoppingListReadModelProjectorTest` asserts the read model's `activeTripId`
+      is null after completion — write and read models now disagree. Harmless while DONE lists are
+      immutable. [`ShoppingList.java:537`] — deferred, no current consumer.
+- [x] [Review][Defer] [LOW] `invalidateArchive` early-returns unless the (now-hoisted) `ShoppingListsCubit`
+      has reached `ready`; a trip completing before that cubit finishes bootstrapping leaves the archive
+      un-invalidated until a manual refresh (narrow race; the hoist fixed the actual crash).
+      [`shopping_lists_cubit.dart:60`] — deferred, pre-existing invalidation behavior.
+
+**Dismissed** (evaluated, not defects):
+
+- Confirm button's `isSubmitting` guard is "dead" (Blind Hunter) — dismissed: the button pops before
+  `completeTrip`, but the guard's real job is disabling confirm *while an in-sheet Verwerfen is still in
+  flight* (exactly what Fix 5's `BlocBuilder` rebuild enables), so it is live and meaningful.
+- OPEN item on a read-only DONE list has no terminal styling (Edge Hunter) — dismissed: the sweep
+  discards every OPEN item before `TripCompletedForList`, so a DONE list has no OPEN items; OPEN items on
+  a read-only *IN_TRIP* list correctly render un-styled (they are not terminal).
+- Fix 10 snapshot is speculative hardening vs YAGNI (Blind Hunter) — dismissed: an accepted defensive
+  choice against fold-contract fragility; cost is one stream pass on completion.
+- Retry loop has no backoff (Blind Hunter) — dismissed: 5 synchronous attempts under contention that is
+  already extremely rare; backoff would add complexity for no measured benefit (the real gap is the
+  observability patch above).
+- `TripState.remainingOpenCount` removed vs Task 16's specified getter+test (Acceptance Auditor) —
+  dismissed: sanctioned review resolution ("remove, or wire + test"); AC6 behavior preserved via
+  `openItems.isNotEmpty`.
 
 ## Dev Notes
 

@@ -287,7 +287,7 @@ class _ItemRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isDiscarded)
+          if (isTerminal && isDiscarded)
             Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary)),
           Text(subtitle, key: Key('item-quantity-${item.itemId}')),
           const SizedBox(height: SgartShapes.spaceHalfUnit),

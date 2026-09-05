@@ -249,12 +249,13 @@ class ShoppingListTest {
     void renameADoneList_throwsListNameChangeNotPermitted() {
         // Cl. 9(b) — deferred since Story 2.1, now reachable via real events (Story 3.4).
         // Rehydrate with [Created, TripStartedForList, TripCompletedForList] to reach DONE.
+        TripId tripId = TripId.generate();
         ShoppingList list = ShoppingList.rehydrate(
                 StreamId.forList(listId),
                 List.of(
                         new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
-                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
-                        new TripCompletedForList(EventId.generate(), householdId, listId, TripId.generate())));
+                        new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())),
+                        new TripCompletedForList(EventId.generate(), householdId, listId, tripId)));
 
         assertThatThrownBy(() -> list.rename(new ShoppingListName("Anderer Name"), CommandId.generate()))
                 .isInstanceOf(ListNameChangeNotPermittedException.class);
@@ -592,13 +593,14 @@ class ShoppingListTest {
         // Fix 1 (review patch) — re-delivery of a lost-ack completion on an already-DONE list
         // must converge silently (AD-8) rather than throwing TripNotCompletableException.
         ItemId itemId = ItemId.generate();
+        TripId tripId = TripId.generate();
         ShoppingList list = ShoppingList.rehydrate(
                 StreamId.forList(listId),
                 List.of(
                         new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
                         new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
-                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
-                        new TripCompletedForList(EventId.generate(), householdId, listId, TripId.generate())));
+                        new TripStartedForList(EventId.generate(), householdId, listId, tripId, List.of(StoreId.generate())),
+                        new TripCompletedForList(EventId.generate(), householdId, listId, tripId)));
 
         list.completeTrip(CommandId.generate());
 

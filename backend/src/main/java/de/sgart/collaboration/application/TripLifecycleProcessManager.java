@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 public final class TripLifecycleProcessManager {
 
     private static final Logger log = LoggerFactory.getLogger(TripLifecycleProcessManager.class);
+    private static final int MAX_CONCURRENCY_RETRIES = 5;
 
     private final EventStore eventStore;
 
@@ -80,9 +81,11 @@ public final class TripLifecycleProcessManager {
             List<de.sgart.shared.DomainEvent> history = eventStore.readStream(tripStreamId);
             if (history.isEmpty()) {
                 // The trip stream has no events: the start reaction may have been lost (log-and-skip).
-                // Guard before rehydrate so null fields don't cause an NPE in complete().
-                log.warn(
-                        "TripLifecycleProcessManager: trip {} has no history — start reaction may have been lost; skipping completion",
+                // Guard before rehydrate so null fields don't cause an NPE in complete(). The trip
+                // aggregate stays uncompleted until the next catch-up replay (resubscribe/restart)
+                // re-drives this event — an error, since the list already folded to DONE.
+                log.error(
+                        "TripLifecycleProcessManager: trip {} has no history — start reaction may have been lost; completion skipped until the next catch-up replay",
                         completed.tripId());
                 return;
             }
@@ -104,11 +107,13 @@ public final class TripLifecycleProcessManager {
                         attempt + 1);
             }
         }
-        log.warn(
-                "TripLifecycleProcessManager: trip {} completion not confirmed after {} retries; will retry on re-delivery",
+        // Sustained contention exhausted the bounded retry: the list already folded to DONE but the
+        // trip aggregate is still ACTIVE. The subscription has no nack, so this converges only on the
+        // next catch-up replay (resubscribe/restart, idempotent via the derived command id) — an
+        // error, not a warning, because until then the aggregate is stuck.
+        log.error(
+                "TripLifecycleProcessManager: trip {} completion not confirmed after {} retries; converges on the next catch-up replay (resubscribe/restart)",
                 completed.tripId(),
                 MAX_CONCURRENCY_RETRIES);
     }
-
-    private static final int MAX_CONCURRENCY_RETRIES = 5;
 }
