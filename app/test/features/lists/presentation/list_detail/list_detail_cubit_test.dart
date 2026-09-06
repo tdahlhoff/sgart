@@ -296,7 +296,9 @@ void main() {
       await cubit.close();
     });
 
-    test('moveItem_optimisticallyRemovesTheSourceRowAndCallsTheApi', () async {
+    test('moveItem_optimisticallyMarksTheRowPending_andCallsTheApi', () async {
+      // Story 3.6, AC5: the row stays (reserved on the source saga), not removed — an optimistic
+      // removal would show a false success if the saga later cancels.
       itemsApi.itemsToReturn = const [
         Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
       ];
@@ -307,12 +309,12 @@ void main() {
 
       expect(itemsApi.lastMovedItemId, 'i1');
       expect(itemsApi.lastMovedTargetListId, 'list-2');
-      expect(cubit.state.items, isEmpty);
+      expect(cubit.state.items.single.transferPending, isTrue);
       expect(cubit.state.isSubmitting, isFalse);
       await cubit.close();
     });
 
-    test('moveItem_revertsTheOptimisticRemovalOnFailure', () async {
+    test('moveItem_revertsThePendingFlagOnFailure', () async {
       itemsApi.itemsToReturn = const [
         Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
       ];
@@ -324,6 +326,7 @@ void main() {
 
       expect(cubit.state.items, hasLength(1));
       expect(cubit.state.items.single.itemId, 'i1');
+      expect(cubit.state.items.single.transferPending, isFalse);
       expect(cubit.state.actionError?.code, 'list.moveTargetNotOpen');
       await cubit.close();
     });

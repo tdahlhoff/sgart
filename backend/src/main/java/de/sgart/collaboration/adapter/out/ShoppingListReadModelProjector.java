@@ -5,9 +5,10 @@ import de.sgart.collaboration.domain.ItemStatus;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
@@ -126,8 +127,7 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
                             updated.itemId());
                 }
             }
-            case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId());
-            case ItemMovedToList moved -> itemReadModel.removeItem(moved.itemId());
+            case ItemRemoved removed -> itemReadModel.removeItem(removed.itemId(), removed.listId());
             case ItemAssignedToStore assigned -> {
                 itemReadModel.assignStore(assigned.itemId(), assigned.storeId());
                 // Also record the name's last-used store on the suggestion read model (AC6, Cl. 6) —
@@ -149,7 +149,9 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             case ItemCheckedOff checkedOff -> itemReadModel.setStatus(checkedOff.itemId(), ItemStatus.DONE);
             case ItemUnchecked unchecked -> itemReadModel.setStatus(unchecked.itemId(), ItemStatus.OPEN);
             case ItemDiscarded discarded -> itemReadModel.setStatus(discarded.itemId(), ItemStatus.DISCARDED);
-            case ItemPostponedToList postponedToList -> itemReadModel.removeItem(postponedToList.itemId());
+            case ItemTransferInitiated initiated -> itemReadModel.setTransferPending(initiated.itemId(), true);
+            case ItemTransferConfirmed confirmed -> itemReadModel.removeItem(confirmed.itemId(), confirmed.listId());
+            case ItemTransferCancelled cancelled -> itemReadModel.setTransferPending(cancelled.itemId(), false);
             default -> {
                 // The subscription filter (see start()) only ever delivers list-stream events. The
                 // trip's own TripStarted (on trip-{id}) is not projected in 3.1 (Cl. 2) — it never

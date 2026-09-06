@@ -41,7 +41,16 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-05 (Story 3.6 ready-for-dev — create-story, Opus 4.8)
+last_updated: 2026-09-06 (Story 3.6 review → done — bmad-code-review, Opus 4.8; 1 patch applied, backend 656/0 green)
+# Story 3.6 implemented → review (dev-story, Sonnet 5) 2026-09-05 — all 13 tasks complete, full
+# reserve-then-remove saga reshape landed as planned. Green build: backend 655 tests / 0 failures
+# (incl. ArchUnit + Testcontainers projector/PM suites); Flutter 513 tests / 0 failures, flutter
+# analyze 0 issues. Fixed one read-model relocation bug the new projector Testcontainers coverage
+# caught (item_read_model.item_id briefly exists reserved-on-source + freshly-added-on-target;
+# insertItem's ON CONFLICT now relocates+renumbers instead of no-opping, removeItem is list-scoped) —
+# see the story file's Dev Agent Record → Debug Log. Closed 2 deferred-work.md entries this story was
+# carved out to resolve (lost-response 404 idempotency; client-side false-success on transfer drop).
+# Next: code review, then the epic-3 retrospective (the only item left in Epic 3).
 # Story 3.6 ready-for-dev (create-story, Opus 4.8) 2026-09-05 — Epic 3's carved-out sixth story (from
 # the 3.3 code review D2 + sprint-change-proposal §4.2): reshape the cross-aggregate item transfer
 # (2.4 move + 3.3 postpone-to-list) into a TWO-PHASE reserve-then-remove COMPENSATING SAGA so a
@@ -172,7 +181,7 @@ development_status:
   # between the handler's check and the async PM add. Full fix = reserve-then-remove two-phase
   # compensating saga (…Initiated/…Confirmed/…Cancelled + pending item sub-state), reshaping shipped
   # 2.4 move too. Needs create-story + architect. 3.3 ships only an interim log-and-surface guard.
-  3-6-two-phase-transfer-saga: ready-for-dev
+  3-6-two-phase-transfer-saga: done
   epic-3-retrospective: optional
 
   # Epic 4: Live Collaboration & Membership

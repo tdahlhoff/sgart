@@ -3,6 +3,7 @@ package de.sgart.collaboration.domain.event;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.ShoppingList;
+import de.sgart.collaboration.domain.TransferOrigin;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -12,20 +13,23 @@ import de.sgart.shared.ShoppingListId;
 import java.util.Objects;
 
 /**
- * An item was moved from one shopping list to another while planning (Story 2.4, AC1). Lives on
- * the <em>source</em> list's {@code list-{id}} stream — {@code Item} never gets its own stream
- * (AD-10) — and folds to a removal there, exactly like {@link ItemRemoved}. The target-side add is
- * a separate {@link ItemAdded}, raised on the target's own stream by the {@code
- * ItemMoveProcessManager} reacting to this event (AD-10, SGART's first process manager).
+ * An item transfer to another list was initiated (Story 3.6, AC1) — raised on the <em>source</em>
+ * list's {@code list-{id}} stream by either {@link ShoppingList#moveItem} ({@code
+ * TransferOrigin#PLANNING_MOVE}, {@code OPEN}-gated) or {@link ShoppingList#postponeItemToList}
+ * ({@code TransferOrigin#IN_TRIP_POSTPONE}, {@code IN_TRIP}-gated) — the two phases share one saga
+ * vocabulary (decision 1), unifying the retired {@code ItemMovedToList} and {@code
+ * ItemPostponedToList}. Unlike those, this folds to a <strong>reserved</strong> sub-state on the
+ * source — the item <strong>stays</strong> on the source, it is not removed. The {@code
+ * ItemTransferProcessManager} reacts by adding the item to the target and then issuing either
+ * {@link ItemTransferConfirmed} (success) or {@link ItemTransferCancelled} (target not {@code
+ * OPEN}/gone) back on the source.
  *
  * <p>Carries the full item payload ({@code name}, {@code note}, {@code quantity}) so the process
  * manager never has to read the source aggregate again to know what to add. {@code note} is
- * intentionally nullable — an item may carry no note (AC1/AC9). Carries no personal data — ids and
- * item content only, never a person (AD-5/AD-6; no audit trail in MVP, YAGNI, mirroring {@link
- * ItemAdded}). {@code householdId} is carried so the {@code item_read_model} can denormalise it
- * for Epic-6 erasure locability.
+ * intentionally nullable — an item may carry no note. Carries no personal data — ids and item
+ * content only, never a person (AD-5/AD-6).
  */
-public record ItemMovedToList(
+public record ItemTransferInitiated(
         EventId eventId,
         HouseholdId householdId,
         ShoppingListId sourceListId,
@@ -33,10 +37,11 @@ public record ItemMovedToList(
         ShoppingListId targetListId,
         ItemName name,
         ItemNote note,
-        Quantity quantity)
+        Quantity quantity,
+        TransferOrigin origin)
         implements DomainEvent {
 
-    public ItemMovedToList {
+    public ItemTransferInitiated {
         Objects.requireNonNull(eventId, "eventId must not be null");
         Objects.requireNonNull(householdId, "householdId must not be null");
         Objects.requireNonNull(sourceListId, "sourceListId must not be null");
@@ -44,6 +49,7 @@ public record ItemMovedToList(
         Objects.requireNonNull(targetListId, "targetListId must not be null");
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(quantity, "quantity must not be null");
-        // note is intentionally nullable — an item may carry no note (AC1/AC9).
+        Objects.requireNonNull(origin, "origin must not be null");
+        // note is intentionally nullable — an item may carry no note.
     }
 }

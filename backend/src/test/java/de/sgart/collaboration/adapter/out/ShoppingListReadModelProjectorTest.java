@@ -12,10 +12,11 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -24,6 +25,8 @@ import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.readmodel.ItemSuggestionView;
 import de.sgart.collaboration.domain.readmodel.ItemView;
 import de.sgart.collaboration.domain.readmodel.ShoppingListView;
+import de.sgart.collaboration.domain.TransferCancellationReason;
+import de.sgart.collaboration.domain.TransferOrigin;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -224,7 +227,7 @@ class ShoppingListReadModelProjectorTest {
                 Quantity.of(1, Unit.PIECE)));
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false));
     }
 
     @Test
@@ -242,7 +245,7 @@ class ShoppingListReadModelProjectorTest {
                 EventId.generate(), listId, itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE)));
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), null, ItemStatus.OPEN));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), null, ItemStatus.OPEN, false));
     }
 
     @Test
@@ -262,7 +265,9 @@ class ShoppingListReadModelProjectorTest {
     }
 
     @Test
-    void projectingItemMovedToListDeletesTheSourceRow() {
+    void projectingItemTransferInitiatedSetsTransferPendingAndKeepsTheRow() {
+        // Story 3.6, AC1/AC5 — the reserved sub-state, unlike the retired ItemMovedToList/
+        // ItemPostponedToList, KEEPS the row on the source rather than removing it.
         HouseholdId householdId = HouseholdId.generate();
         ShoppingListId sourceListId = ShoppingListId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
@@ -273,17 +278,63 @@ class ShoppingListReadModelProjectorTest {
         projector.project(new ItemAdded(
                 EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
 
-        projector.project(new ItemMovedToList(
+        projector.project(new ItemTransferInitiated(
                 EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"), null,
-                Quantity.of(1, Unit.PIECE)));
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
 
-        assertThat(itemReadModel.itemsOf(householdId, sourceListId)).isEmpty();
+        List<ItemView> items = itemReadModel.itemsOf(householdId, sourceListId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).transferPending()).isTrue();
     }
 
     @Test
-    void aFullMoveLeavesExactlyOneRowUnderTheTargetListWithTheSameItemId() {
-        // The end-to-end move outcome (AC2): the source ItemMovedToList removal followed by the
-        // process manager's target ItemAdded — the item's identity survives the move.
+    void projectingItemTransferConfirmedRemovesTheRow() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+
+        projector.project(new ItemTransferConfirmed(EventId.generate(), listId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void projectingItemTransferCancelledClearsTheFlagAndKeepsTheItemOnTheSource() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE), TransferOrigin.IN_TRIP_POSTPONE));
+
+        projector.project(new ItemTransferCancelled(
+                EventId.generate(), listId, itemId, TransferCancellationReason.TARGET_NOT_OPEN));
+
+        List<ItemView> items = itemReadModel.itemsOf(householdId, listId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).transferPending()).isFalse();
+    }
+
+    @Test
+    void aFullTransferLeavesExactlyOneRowUnderTheTargetListWithTheSameItemId() {
+        // The end-to-end transfer outcome (AC2): the source reserves (ItemTransferInitiated), the
+        // process manager's target ItemAdded lands, then confirm removes the source row — the
+        // item's identity survives the transfer.
         HouseholdId householdId = HouseholdId.generate();
         ShoppingListId sourceListId = ShoppingListId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
@@ -298,16 +349,142 @@ class ShoppingListReadModelProjectorTest {
                 EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
                 Quantity.of(1, Unit.PIECE)));
 
-        projector.project(new ItemMovedToList(
+        projector.project(new ItemTransferInitiated(
                 EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"),
-                new ItemNote("Bio"), Quantity.of(1, Unit.PIECE)));
+                new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
         projector.project(new ItemAdded(
                 EventId.generate(), householdId, targetListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
                 Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferConfirmed(EventId.generate(), sourceListId, itemId));
 
         assertThat(itemReadModel.itemsOf(householdId, sourceListId)).isEmpty();
         assertThat(itemReadModel.itemsOf(householdId, targetListId))
-                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN));
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false));
+    }
+
+    @Test
+    void aTransferResetsTheTargetRowsStoreAndStatusToTheItemsBirthState() {
+        // Regression (Story 3.6 code review): the target aggregate adds the item with a bare
+        // ItemAdded (assignedStore=null, status=OPEN), so the relocated read-model row must not carry
+        // the source's store assignment or in-trip status forward — the DO UPDATE relocation resets
+        // both, matching the write model and the pre-3.6 delete-then-reinsert behavior.
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId sourceListId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        StoreId storeId = StoreId.generate();
+        projector.project(ShoppingList.create(sourceListId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(ShoppingList.create(targetListId, householdId, new ShoppingListName("Getränke"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE)));
+        // The source item carries a store assignment and a non-OPEN status before it is transferred.
+        projector.project(new ItemAssignedToStore(EventId.generate(), householdId, sourceListId, itemId, storeId));
+        projector.project(new ItemCheckedOff(EventId.generate(), householdId, sourceListId, itemId));
+
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"),
+                new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, targetListId, itemId, new ItemName("Milch"), new ItemNote("Bio"),
+                Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferConfirmed(EventId.generate(), sourceListId, itemId));
+
+        assertThat(itemReadModel.itemsOf(householdId, targetListId))
+                .containsExactly(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false));
+    }
+
+    @Test
+    void anItemTransferInitiatedNeverLeaksAcrossHouseholds() {
+        HouseholdId householdId = HouseholdId.generate();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, ShoppingListId.generate(), new ItemName("Milch"),
+                null, Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+
+        assertThat(itemReadModel.itemsOf(otherHousehold, listId)).isEmpty();
+    }
+
+    @Test
+    void reProjectingItemTransferInitiatedIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        ItemTransferInitiated initiated = new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE);
+
+        projector.project(initiated);
+        projector.project(initiated);
+
+        List<ItemView> items = itemReadModel.itemsOf(householdId, listId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).transferPending()).isTrue();
+    }
+
+    @Test
+    void reProjectingItemTransferConfirmedIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+        ItemTransferConfirmed confirmed = new ItemTransferConfirmed(EventId.generate(), listId, itemId);
+
+        projector.project(confirmed);
+        projector.project(confirmed);
+
+        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+    }
+
+    @Test
+    void reProjectingItemTransferCancelledIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, targetListId, new ItemName("Milch"), null,
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+        ItemTransferCancelled cancelled =
+                new ItemTransferCancelled(EventId.generate(), listId, itemId, TransferCancellationReason.TARGET_GONE);
+
+        projector.project(cancelled);
+        projector.project(cancelled);
+
+        List<ItemView> items = itemReadModel.itemsOf(householdId, listId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).transferPending()).isFalse();
     }
 
     @Test
@@ -399,7 +576,7 @@ class ShoppingListReadModelProjectorTest {
     }
 
     @Test
-    void itemMovedToListLeavesTheSuggestionRowIntact() {
+    void itemTransferConfirmedLeavesTheSuggestionRowIntact() {
         HouseholdId householdId = HouseholdId.generate();
         ShoppingListId sourceListId = ShoppingListId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
@@ -409,10 +586,11 @@ class ShoppingListReadModelProjectorTest {
                 .get(0));
         projector.project(new ItemAdded(
                 EventId.generate(), householdId, sourceListId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
-
-        projector.project(new ItemMovedToList(
+        projector.project(new ItemTransferInitiated(
                 EventId.generate(), householdId, sourceListId, itemId, targetListId, new ItemName("Milch"), null,
-                Quantity.of(1, Unit.PIECE)));
+                Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE));
+
+        projector.project(new ItemTransferConfirmed(EventId.generate(), sourceListId, itemId));
 
         assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
                 .containsExactly(new ItemSuggestionView(new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null));
@@ -471,7 +649,7 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, listId))
                 .containsExactly(
-                        new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN));
+                        new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN, false));
         assertThat(itemSuggestionReadModel.suggestionsOf(householdId))
                 .containsExactly(
                         new ItemSuggestionView(new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId));
@@ -712,17 +890,20 @@ class ShoppingListReadModelProjectorTest {
     }
 
     @Test
-    void projectingItemPostponedToListDeletesTheSourceRow() {
+    void projectingAnInTripPostponeInitiatedSetsTransferPendingAndKeepsTheRow() {
         HouseholdId householdId = HouseholdId.generate();
         ShoppingListId listId = ShoppingListId.generate();
         ItemId itemId = ItemId.generate();
         projector.project(ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), CommandId.generate()).uncommittedEvents().get(0));
         projector.project(new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
 
-        projector.project(new ItemPostponedToList(EventId.generate(), householdId, listId, itemId,
-                ShoppingListId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        projector.project(new ItemTransferInitiated(EventId.generate(), householdId, listId, itemId,
+                ShoppingListId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE),
+                TransferOrigin.IN_TRIP_POSTPONE));
 
-        assertThat(itemReadModel.itemsOf(householdId, listId)).isEmpty();
+        List<ItemView> items = itemReadModel.itemsOf(householdId, listId);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).transferPending()).isTrue();
     }
 
     @Test

@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.TripNotActiveApplicationException;
 import de.sgart.collaboration.application.exception.TripNotCompletableApplicationException;
 import de.sgart.shared.ErrorDescriptor;
@@ -38,5 +39,15 @@ class WriteErrorAdviceTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("trip.notCompletable");
+    }
+
+    @Test
+    void mapsItemTransferInProgressToConflictWithTheStableCode() {
+        ResponseEntity<ErrorDescriptor> response = new WriteErrorAdvice()
+                .handleItemTransferInProgress(new ItemTransferInProgressApplicationException("item is reserved"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("item.transferInProgress");
     }
 }

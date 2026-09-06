@@ -103,5 +103,31 @@ void main() {
         throwsA(isA<AppException>()),
       );
     });
+
+    test('parsesTransferPendingWhenPresent', () {
+      final item = Item.fromJson(const {
+        'itemId': 'i1',
+        'name': 'Milch',
+        'amount': '1',
+        'unit': 'PIECE',
+        'transferPending': true,
+      });
+
+      expect(item.transferPending, isTrue);
+    });
+
+    test('defaultsTransferPendingToFalseWhenAbsent', () {
+      final item = Item.fromJson(const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE'});
+
+      expect(item.transferPending, isFalse);
+    });
+
+    test('throwsWhenTransferPendingIsPresentButNotABool', () {
+      expect(
+        () => Item.fromJson(
+            const {'itemId': 'i1', 'name': 'Milch', 'amount': '1', 'unit': 'PIECE', 'transferPending': 'yes'}),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'items.malformedResponse')),
+      );
+    });
   });
 }

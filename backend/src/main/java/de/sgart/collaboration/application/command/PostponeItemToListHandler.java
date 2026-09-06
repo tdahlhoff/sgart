@@ -5,12 +5,14 @@ import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeExcept
 import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -27,8 +29,8 @@ import java.util.Objects;
 /**
  * Orchestrates {@link PostponeItemToList} (Story 3.3, AC4/AC5) — mirrors {@link MoveItemHandler}
  * but for the {@code IN_TRIP} phase. Loads both the source ({@code IN_TRIP}) and target
- * ({@code OPEN}) aggregates, mutates only the source; the {@code ItemMoveProcessManager} reacts to
- * the raised {@link de.sgart.collaboration.domain.event.ItemPostponedToList} and issues an
+ * ({@code OPEN}) aggregates, mutates only the source; the {@code ItemTransferProcessManager} reacts to
+ * the raised {@link de.sgart.collaboration.domain.event.ItemTransferInitiated} and issues an
  * {@code AddItem} on the target (AD-10, single writer per append). The target list must be OPEN;
  * a new list is created by the client before calling this endpoint (AC5).
  */
@@ -53,6 +55,8 @@ public final class PostponeItemToListHandler {
      * @throws ItemNotFoundApplicationException if {@code rawItemId} is unknown on the source (404)
      * @throws MoveTargetNotOpenException if the target list is not {@code Open} (409)
      * @throws ItemNotDuringTripApplicationException if the source list is not {@code IN_TRIP} (409)
+     * @throws ItemTransferInProgressApplicationException if the item is reserved by a different
+     *     in-flight transfer (409, Story 3.6, AC4)
      */
     public void handle(
             String keycloakUserId,
@@ -90,9 +94,15 @@ public final class PostponeItemToListHandler {
             throw new ItemNotFoundApplicationException(notFound.getMessage());
         } catch (ItemNotDuringTripException notDuringTrip) {
             throw new ItemNotDuringTripApplicationException(notDuringTrip.getMessage());
+        } catch (ItemTransferInProgressException inProgress) {
+            throw new ItemTransferInProgressApplicationException(inProgress.getMessage());
         }
 
-        eventStore.append(command.basedOnVersion(), source.uncommittedEvents(), command.commandId());
+        // A retry of the same in-flight transfer raises nothing (convergent no-op, Story 3.6,
+        // AC4) — skip the append so it does not record a spurious command id.
+        if (!source.uncommittedEvents().isEmpty()) {
+            eventStore.append(command.basedOnVersion(), source.uncommittedEvents(), command.commandId());
+        }
     }
 
     private ShoppingList loadListOwnedBy(HouseholdId householdId, ShoppingListId listId) {

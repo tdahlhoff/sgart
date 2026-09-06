@@ -108,8 +108,11 @@ class TripState {
   /// Total number of items regardless of status — DISCARDED items count in the total (Story 3.4).
   int get totalCount => items.length;
 
-  /// Items still `OPEN` — the leftover set for the completion dialog (Story 3.4, AC3/AC6).
-  List<Item> get openItems => items.where((item) => item.status == ItemStatus.open).toList();
+  /// Items still `OPEN` — the leftover set for the completion dialog (Story 3.4, AC3/AC6). Excludes
+  /// a reserved item (Story 3.6, AC5) — it is mid-transfer, non-interactive, and the server's
+  /// `completeTrip` sweep skips it too, so offering its leftover Transfer/Verwerfen actions here
+  /// would only 409 against the fail-fast lock.
+  List<Item> get openItems => items.where((item) => item.status == ItemStatus.open && !item.transferPending).toList();
 
   TripState copyWith({
     List<String>? storeIds,

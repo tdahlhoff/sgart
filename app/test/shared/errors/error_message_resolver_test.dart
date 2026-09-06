@@ -27,6 +27,13 @@ void main() {
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 
+    test('itemTransferInProgressResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'item.transferInProgress');
+
+      expect(resolved, localizations.itemTransferInProgressError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('householdNameRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'household.nameRequired');
 

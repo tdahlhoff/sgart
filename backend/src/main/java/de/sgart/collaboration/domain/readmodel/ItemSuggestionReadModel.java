@@ -8,7 +8,7 @@ import java.util.List;
  * {@code ShoppingListReadModelProjector} folding {@code ItemAdded}/{@code ItemUpdated}; a command
  * handler never writes it. {@code ListItemSuggestions} (application layer) is the query that reads
  * through this port. Unlike {@link ItemReadModel}, this read model is history-surviving: {@code
- * ItemRemoved}/{@code ItemMovedToList} never remove a row (Cl. 1). {@code recordDefaultStore} (Story
+ * ItemRemoved}/{@code ItemTransferConfirmed} never remove a row (Cl. 1). {@code recordDefaultStore} (Story
  * 2.6, AC6) is the only writer of {@code default_store_id} — {@code recordUsage} never touches it
  * (Cl. 7).
  */

@@ -6,11 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.HouseholdId;
@@ -19,6 +22,7 @@ import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
@@ -42,6 +46,11 @@ import org.junit.jupiter.api.Test;
  * (Story 2.4, AD-10 — the source side of the move) and {@link ShoppingList#assignItemToStore}
  * (Story 2.6, AC5) reuse the identical guard, so their {@code DONE} branches are deferred for the
  * same reason.
+ *
+ * <p>Story 3.6 reshaped {@link ShoppingList#moveItem} into the two-phase reserve-then-remove
+ * transfer saga: it now raises {@code ItemTransferInitiated} and the item stays reserved on this
+ * list (no longer removed here) until {@code confirmItemTransfer}/{@code cancelItemTransfer}
+ * resolves it — also covered below, alongside the fail-fast lock on a reserved item.
  */
 class ShoppingListItemsTest {
 
@@ -230,7 +239,7 @@ class ShoppingListItemsTest {
     }
 
     @Test
-    void movingAnItemRaisesItemMovedToListCarryingTheItemsCurrentFields() {
+    void movingAnItemRaisesItemTransferInitiatedCarryingTheItemsCurrentFields() {
         ShoppingList list = openList();
         ItemId itemId = ItemId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
@@ -241,19 +250,21 @@ class ShoppingListItemsTest {
 
         List<DomainEvent> events = list.uncommittedEvents();
         assertThat(events).hasSize(1);
-        assertThat(events.get(0)).isInstanceOf(ItemMovedToList.class);
-        ItemMovedToList moved = (ItemMovedToList) events.get(0);
-        assertThat(moved.householdId()).isEqualTo(householdId);
-        assertThat(moved.sourceListId()).isEqualTo(listId);
-        assertThat(moved.itemId()).isEqualTo(itemId);
-        assertThat(moved.targetListId()).isEqualTo(targetListId);
-        assertThat(moved.name()).isEqualTo(new ItemName("Milch"));
-        assertThat(moved.note()).isEqualTo(new ItemNote("Bio"));
-        assertThat(moved.quantity()).isEqualTo(Quantity.of(2, Unit.PIECE));
+        assertThat(events.get(0)).isInstanceOf(ItemTransferInitiated.class);
+        ItemTransferInitiated initiated = (ItemTransferInitiated) events.get(0);
+        assertThat(initiated.householdId()).isEqualTo(householdId);
+        assertThat(initiated.sourceListId()).isEqualTo(listId);
+        assertThat(initiated.itemId()).isEqualTo(itemId);
+        assertThat(initiated.targetListId()).isEqualTo(targetListId);
+        assertThat(initiated.name()).isEqualTo(new ItemName("Milch"));
+        assertThat(initiated.note()).isEqualTo(new ItemNote("Bio"));
+        assertThat(initiated.quantity()).isEqualTo(Quantity.of(2, Unit.PIECE));
+        assertThat(initiated.origin()).isEqualTo(TransferOrigin.PLANNING_MOVE);
     }
 
     @Test
-    void movingAnItemRemovesItFromTheSourcesFoldedState() {
+    void movingAnItemKeepsItReservedInTheSourcesFoldedState() {
+        // Story 3.6, AC1 — the reshaped moveItem reserves instead of removing.
         ShoppingList list = openList();
         ItemId itemId = ItemId.generate();
         list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
@@ -261,10 +272,11 @@ class ShoppingListItemsTest {
 
         list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
 
-        // The item is gone from the source's own folded state — re-adding its key must succeed.
-        assertThatCode(() -> list.addItem(
+        // The item is still present in the source's own folded state — re-adding its exact key is
+        // still rejected as a duplicate (it was reserved, not removed).
+        assertThatThrownBy(() -> list.addItem(
                         ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
-                .doesNotThrowAnyException();
+                .isInstanceOf(DuplicateItemException.class);
     }
 
     @Test
@@ -276,12 +288,181 @@ class ShoppingListItemsTest {
     }
 
     @Test
-    void replayingAMoveRebuildsStateWithTheItemGoneFromTheSource() {
+    void movingAReservedItemToADifferentTargetThrowsItemTransferInProgress() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void movingAReservedItemToTheSameTargetIsAConvergentNoOp() {
+        // The lost-response retry (Story 3.6, AC4) — the same target as the in-flight reservation.
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, targetListId, CommandId.generate());
+        list.markEventsCommitted();
+
+        list.moveItem(itemId, targetListId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void updatingAReservedItemThrowsItemTransferInProgress() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.updateItem(
+                        itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void removingAReservedItemThrowsItemTransferInProgress() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.removeItem(itemId, CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void assigningAReservedItemToAStoreThrowsItemTransferInProgress() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.assignItemToStore(itemId, StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    // The IN_TRIP-only mutations (checkOffItem/uncheckItem/discardItem/rerouteItem/postponeItemToList)
+    // and their fail-fast-lock coverage live in ShoppingListTest, which already builds IN_TRIP fixtures.
+
+    @Test
+    void confirmingATransferRaisesItemTransferConfirmedAndRemovesTheItem() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.confirmItemTransfer(itemId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemTransferConfirmed.class);
+        ItemTransferConfirmed confirmed = (ItemTransferConfirmed) events.get(0);
+        assertThat(confirmed.listId()).isEqualTo(listId);
+        assertThat(confirmed.itemId()).isEqualTo(itemId);
+        // Truly gone now — re-adding its key succeeds.
+        assertThatCode(() -> list.addItem(
+                        ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void cancellingATransferRaisesItemTransferCancelledAndUnReservesTheItem() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.cancelItemTransfer(itemId, TransferCancellationReason.TARGET_GONE, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemTransferCancelled.class);
+        ItemTransferCancelled cancelled = (ItemTransferCancelled) events.get(0);
+        assertThat(cancelled.listId()).isEqualTo(listId);
+        assertThat(cancelled.itemId()).isEqualTo(itemId);
+        assertThat(cancelled.reason()).isEqualTo(TransferCancellationReason.TARGET_GONE);
+        list.markEventsCommitted();
+        // Un-reserved — the item is mutable again, the lock is gone.
+        assertThatCode(() -> list.updateItem(
+                        itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(2, Unit.PIECE), CommandId.generate()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void confirmingATransferForAnAbsentItemIsAConvergentNoOp() {
+        ShoppingList list = openList();
+
+        list.confirmItemTransfer(ItemId.generate(), CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void confirmingATransferForAnItemThatIsNotReservedIsAConvergentNoOp() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.confirmItemTransfer(itemId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void cancellingATransferForAnAbsentItemIsAConvergentNoOp() {
+        ShoppingList list = openList();
+
+        list.cancelItemTransfer(ItemId.generate(), TransferCancellationReason.TARGET_GONE, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void cancellingATransferForAnItemThatIsNotReservedIsAConvergentNoOp() {
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.cancelItemTransfer(itemId, TransferCancellationReason.TARGET_NOT_OPEN, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void confirmingATransferIsNotPhaseGatedAndWorksOnAnInTripList() {
+        // Story 3.6, AC2 — a system saga step must resolve regardless of the list's current status.
+        ShoppingList list = openList();
+        ItemId itemId = ItemId.generate();
+        list.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        list.moveItem(itemId, ShoppingListId.generate(), CommandId.generate());
+        list.startTrip(TripId.generate(), List.of(StoreId.generate()), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.confirmItemTransfer(itemId, CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(ItemTransferConfirmed.class);
+    }
+
+    @Test
+    void replayingAConfirmedMoveRebuildsStateWithTheItemTrulyGoneFromTheSource() {
         ItemId itemId = ItemId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
         ShoppingList original = ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
         original.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
         original.moveItem(itemId, targetListId, CommandId.generate());
+        original.confirmItemTransfer(itemId, CommandId.generate());
         List<DomainEvent> history = original.uncommittedEvents();
 
         ShoppingList rehydrated = ShoppingList.rehydrate(StreamId.forList(listId), history);
@@ -289,6 +470,29 @@ class ShoppingListItemsTest {
         assertThat(rehydrated.version()).isEqualTo(original.version());
         rehydrated.addItem(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
         assertThat(rehydrated.uncommittedEvents()).hasSize(1);
+    }
+
+    @Test
+    void replayingACancelledMoveRebuildsStateWithTheItemBackToNormalOnTheSource() {
+        ItemId itemId = ItemId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ShoppingList original = ShoppingList.create(listId, householdId, new ShoppingListName("Wocheneinkauf"), commandId);
+        original.addItem(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate());
+        original.moveItem(itemId, targetListId, CommandId.generate());
+        original.cancelItemTransfer(itemId, TransferCancellationReason.TARGET_NOT_OPEN, CommandId.generate());
+        List<DomainEvent> history = original.uncommittedEvents();
+
+        ShoppingList rehydrated = ShoppingList.rehydrate(StreamId.forList(listId), history);
+
+        assertThat(rehydrated.version()).isEqualTo(original.version());
+        // Still present under its old key (un-reserved, not gone) — re-adding it collides.
+        assertThatThrownBy(() -> rehydrated.addItem(
+                        ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(DuplicateItemException.class);
+        // The lock is lifted — the item can be mutated again.
+        assertThatCode(() -> rehydrated.updateItem(
+                        itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -396,8 +600,10 @@ class ShoppingListItemsTest {
         assertNoPersonalDataComponent(ItemAdded.class);
         assertNoPersonalDataComponent(ItemUpdated.class);
         assertNoPersonalDataComponent(ItemRemoved.class);
-        assertNoPersonalDataComponent(ItemMovedToList.class);
         assertNoPersonalDataComponent(ItemAssignedToStore.class);
+        assertNoPersonalDataComponent(ItemTransferInitiated.class);
+        assertNoPersonalDataComponent(ItemTransferConfirmed.class);
+        assertNoPersonalDataComponent(ItemTransferCancelled.class);
     }
 
     private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {

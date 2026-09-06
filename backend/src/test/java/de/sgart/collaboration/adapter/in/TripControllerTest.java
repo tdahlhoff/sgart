@@ -185,6 +185,11 @@ class TripControllerTest {
         public void setStatus(ItemId itemId, ItemStatus status) {
             // no-op — this test double is preset via put(...), never mutated by the projector.
         }
+
+        @Override
+        public void setTransferPending(ItemId itemId, boolean pending) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
+        }
     }
 
     private HouseholdId seedMembership() {

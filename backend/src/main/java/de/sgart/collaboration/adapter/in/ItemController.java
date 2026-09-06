@@ -111,7 +111,8 @@ class ItemController {
                         summary.amount(),
                         summary.unit(),
                         summary.storeId(),
-                        summary.status()))
+                        summary.status(),
+                        summary.transferPending()))
                 .toList();
     }
 
@@ -274,6 +275,18 @@ class ItemController {
     /** Transport DTO for {@code POST .../postpone-to-list} (Story 3.3, AC4/AC5). */
     record PostponeToListRequest(String targetListId, String commandId) {}
 
-    /** {@code note}/{@code storeId} are {@code null} when absent; {@code amount} a decimal string, {@code unit} and {@code status} enum names. */
-    record ItemResponse(String itemId, String name, String note, String amount, String unit, String storeId, String status) {}
+    /**
+     * {@code note}/{@code storeId} are {@code null} when absent; {@code amount} a decimal string,
+     * {@code unit} and {@code status} enum names; {@code transferPending} is the Story 3.6 two-phase
+     * transfer saga's reserved-sub-state flag (AC5).
+     */
+    record ItemResponse(
+            String itemId,
+            String name,
+            String note,
+            String amount,
+            String unit,
+            String storeId,
+            String status,
+            boolean transferPending) {}
 }

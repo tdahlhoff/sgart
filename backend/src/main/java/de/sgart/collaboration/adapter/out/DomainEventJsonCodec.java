@@ -13,10 +13,11 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -29,6 +30,8 @@ import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripCompletedForList;
 import de.sgart.collaboration.domain.event.TripStarted;
 import de.sgart.collaboration.domain.event.TripStartedForList;
+import de.sgart.collaboration.domain.TransferCancellationReason;
+import de.sgart.collaboration.domain.TransferOrigin;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -62,7 +65,9 @@ final class DomainEventJsonCodec {
     static final String ITEM_ADDED_TYPE = "ItemAdded";
     static final String ITEM_UPDATED_TYPE = "ItemUpdated";
     static final String ITEM_REMOVED_TYPE = "ItemRemoved";
-    static final String ITEM_MOVED_TO_LIST_TYPE = "ItemMovedToList";
+    static final String ITEM_TRANSFER_INITIATED_TYPE = "ItemTransferInitiated";
+    static final String ITEM_TRANSFER_CONFIRMED_TYPE = "ItemTransferConfirmed";
+    static final String ITEM_TRANSFER_CANCELLED_TYPE = "ItemTransferCancelled";
     static final String ITEM_ASSIGNED_TO_STORE_TYPE = "ItemAssignedToStore";
     static final String TRIP_STARTED_FOR_LIST_TYPE = "TripStartedForList";
     static final String TRIP_STARTED_TYPE = "TripStarted";
@@ -71,7 +76,6 @@ final class DomainEventJsonCodec {
     static final String ITEM_CHECKED_OFF_TYPE = "ItemCheckedOff";
     static final String ITEM_UNCHECKED_TYPE = "ItemUnchecked";
     static final String ITEM_DISCARDED_TYPE = "ItemDiscarded";
-    static final String ITEM_POSTPONED_TO_LIST_TYPE = "ItemPostponedToList";
     static final String TRIP_COMPLETED_FOR_LIST_TYPE = "TripCompletedForList";
     static final String TRIP_COMPLETED_TYPE = "TripCompleted";
 
@@ -89,7 +93,9 @@ final class DomainEventJsonCodec {
             case ItemAdded ignored -> ITEM_ADDED_TYPE;
             case ItemUpdated ignored -> ITEM_UPDATED_TYPE;
             case ItemRemoved ignored -> ITEM_REMOVED_TYPE;
-            case ItemMovedToList ignored -> ITEM_MOVED_TO_LIST_TYPE;
+            case ItemTransferInitiated ignored -> ITEM_TRANSFER_INITIATED_TYPE;
+            case ItemTransferConfirmed ignored -> ITEM_TRANSFER_CONFIRMED_TYPE;
+            case ItemTransferCancelled ignored -> ITEM_TRANSFER_CANCELLED_TYPE;
             case ItemAssignedToStore ignored -> ITEM_ASSIGNED_TO_STORE_TYPE;
             case TripStartedForList ignored -> TRIP_STARTED_FOR_LIST_TYPE;
             case TripStarted ignored -> TRIP_STARTED_TYPE;
@@ -98,7 +104,6 @@ final class DomainEventJsonCodec {
             case ItemCheckedOff ignored -> ITEM_CHECKED_OFF_TYPE;
             case ItemUnchecked ignored -> ITEM_UNCHECKED_TYPE;
             case ItemDiscarded ignored -> ITEM_DISCARDED_TYPE;
-            case ItemPostponedToList ignored -> ITEM_POSTPONED_TO_LIST_TYPE;
             case TripCompletedForList ignored -> TRIP_COMPLETED_FOR_LIST_TYPE;
             case TripCompleted ignored -> TRIP_COMPLETED_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
@@ -160,16 +165,26 @@ final class DomainEventJsonCodec {
                     removed.eventId().value().toString(),
                     removed.listId().value().toString(),
                     removed.itemId().value().toString()));
-            case ItemMovedToList moved -> jsonMapper.writeValueAsBytes(new ItemMovedToListPayload(
-                    moved.eventId().value().toString(),
-                    moved.householdId().value().toString(),
-                    moved.sourceListId().value().toString(),
-                    moved.itemId().value().toString(),
-                    moved.targetListId().value().toString(),
-                    moved.name().value(),
-                    moved.note() == null ? null : moved.note().value(),
-                    moved.quantity().amount().toPlainString(),
-                    moved.quantity().unit().name()));
+            case ItemTransferInitiated initiated -> jsonMapper.writeValueAsBytes(new ItemTransferInitiatedPayload(
+                    initiated.eventId().value().toString(),
+                    initiated.householdId().value().toString(),
+                    initiated.sourceListId().value().toString(),
+                    initiated.itemId().value().toString(),
+                    initiated.targetListId().value().toString(),
+                    initiated.name().value(),
+                    initiated.note() == null ? null : initiated.note().value(),
+                    initiated.quantity().amount().toPlainString(),
+                    initiated.quantity().unit().name(),
+                    initiated.origin().name()));
+            case ItemTransferConfirmed confirmed -> jsonMapper.writeValueAsBytes(new ItemTransferConfirmedPayload(
+                    confirmed.eventId().value().toString(),
+                    confirmed.listId().value().toString(),
+                    confirmed.itemId().value().toString()));
+            case ItemTransferCancelled cancelled -> jsonMapper.writeValueAsBytes(new ItemTransferCancelledPayload(
+                    cancelled.eventId().value().toString(),
+                    cancelled.listId().value().toString(),
+                    cancelled.itemId().value().toString(),
+                    cancelled.reason().name()));
             case ItemAssignedToStore assigned -> jsonMapper.writeValueAsBytes(new ItemAssignedToStorePayload(
                     assigned.eventId().value().toString(),
                     assigned.householdId().value().toString(),
@@ -214,16 +229,6 @@ final class DomainEventJsonCodec {
                     discarded.householdId().value().toString(),
                     discarded.listId().value().toString(),
                     discarded.itemId().value().toString()));
-            case ItemPostponedToList postponedToList -> jsonMapper.writeValueAsBytes(new ItemPostponedToListPayload(
-                    postponedToList.eventId().value().toString(),
-                    postponedToList.householdId().value().toString(),
-                    postponedToList.sourceListId().value().toString(),
-                    postponedToList.itemId().value().toString(),
-                    postponedToList.targetListId().value().toString(),
-                    postponedToList.name().value(),
-                    postponedToList.note() == null ? null : postponedToList.note().value(),
-                    postponedToList.quantity().amount().toPlainString(),
-                    postponedToList.quantity().unit().name()));
             case TripCompletedForList completed -> jsonMapper.writeValueAsBytes(new TripCompletedForListPayload(
                     completed.eventId().value().toString(),
                     completed.householdId().value().toString(),
@@ -321,9 +326,9 @@ final class DomainEventJsonCodec {
                         ShoppingListId.fromString(payload.listId()),
                         ItemId.fromString(payload.itemId()));
             }
-            case ITEM_MOVED_TO_LIST_TYPE -> {
-                ItemMovedToListPayload payload = jsonMapper.readValue(json, ItemMovedToListPayload.class);
-                yield new ItemMovedToList(
+            case ITEM_TRANSFER_INITIATED_TYPE -> {
+                ItemTransferInitiatedPayload payload = jsonMapper.readValue(json, ItemTransferInitiatedPayload.class);
+                yield new ItemTransferInitiated(
                         EventId.fromString(payload.eventId()),
                         HouseholdId.fromString(payload.householdId()),
                         ShoppingListId.fromString(payload.sourceListId()),
@@ -331,7 +336,23 @@ final class DomainEventJsonCodec {
                         ShoppingListId.fromString(payload.targetListId()),
                         new ItemName(payload.name()),
                         payload.note() == null ? null : new ItemNote(payload.note()),
-                        new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())));
+                        new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())),
+                        TransferOrigin.valueOf(payload.origin()));
+            }
+            case ITEM_TRANSFER_CONFIRMED_TYPE -> {
+                ItemTransferConfirmedPayload payload = jsonMapper.readValue(json, ItemTransferConfirmedPayload.class);
+                yield new ItemTransferConfirmed(
+                        EventId.fromString(payload.eventId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()));
+            }
+            case ITEM_TRANSFER_CANCELLED_TYPE -> {
+                ItemTransferCancelledPayload payload = jsonMapper.readValue(json, ItemTransferCancelledPayload.class);
+                yield new ItemTransferCancelled(
+                        EventId.fromString(payload.eventId()),
+                        ShoppingListId.fromString(payload.listId()),
+                        ItemId.fromString(payload.itemId()),
+                        TransferCancellationReason.valueOf(payload.reason()));
             }
             case ITEM_ASSIGNED_TO_STORE_TYPE -> {
                 ItemAssignedToStorePayload payload = jsonMapper.readValue(json, ItemAssignedToStorePayload.class);
@@ -401,18 +422,6 @@ final class DomainEventJsonCodec {
                         ShoppingListId.fromString(payload.listId()),
                         ItemId.fromString(payload.itemId()));
             }
-            case ITEM_POSTPONED_TO_LIST_TYPE -> {
-                ItemPostponedToListPayload payload = jsonMapper.readValue(json, ItemPostponedToListPayload.class);
-                yield new ItemPostponedToList(
-                        EventId.fromString(payload.eventId()),
-                        HouseholdId.fromString(payload.householdId()),
-                        ShoppingListId.fromString(payload.sourceListId()),
-                        ItemId.fromString(payload.itemId()),
-                        ShoppingListId.fromString(payload.targetListId()),
-                        new ItemName(payload.name()),
-                        payload.note() == null ? null : new ItemNote(payload.note()),
-                        new Quantity(new BigDecimal(payload.amount()), Unit.valueOf(payload.unit())));
-            }
             case TRIP_COMPLETED_FOR_LIST_TYPE -> {
                 TripCompletedForListPayload payload = jsonMapper.readValue(json, TripCompletedForListPayload.class);
                 yield new TripCompletedForList(
@@ -466,8 +475,8 @@ final class DomainEventJsonCodec {
 
     private record ItemRemovedPayload(String eventId, String listId, String itemId) {}
 
-    /** {@code note} is nullable — a moved item with no note round-trips a JSON {@code null} (AC9). */
-    private record ItemMovedToListPayload(
+    /** {@code note} is nullable — a transferred item with no note round-trips a JSON {@code null}. */
+    private record ItemTransferInitiatedPayload(
             String eventId,
             String householdId,
             String sourceListId,
@@ -476,7 +485,12 @@ final class DomainEventJsonCodec {
             String name,
             String note,
             String amount,
-            String unit) {}
+            String unit,
+            String origin) {}
+
+    private record ItemTransferConfirmedPayload(String eventId, String listId, String itemId) {}
+
+    private record ItemTransferCancelledPayload(String eventId, String listId, String itemId, String reason) {}
 
     private record ItemAssignedToStorePayload(
             String eventId, String householdId, String listId, String itemId, String storeId) {}
@@ -498,16 +512,4 @@ final class DomainEventJsonCodec {
     private record TripCompletedForListPayload(String eventId, String householdId, String listId, String tripId) {}
 
     private record TripCompletedPayload(String eventId, String tripId, String householdId, String listId) {}
-
-    /** {@code note} is nullable — a postponed item with no note round-trips a JSON {@code null}. */
-    private record ItemPostponedToListPayload(
-            String eventId,
-            String householdId,
-            String sourceListId,
-            String itemId,
-            String targetListId,
-            String name,
-            String note,
-            String amount,
-            String unit) {}
 }

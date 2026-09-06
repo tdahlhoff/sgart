@@ -1,6 +1,7 @@
 package de.sgart.collaboration.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.application.command.AddItemHandler;
@@ -10,11 +11,13 @@ import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeExcept
 import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
+import de.sgart.collaboration.domain.TransferOrigin;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -37,10 +40,13 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL, no framework or
- * persistence (CLAUDE.md §6). Proves the postpone-to-list command path (Story 3.3, AC4): an
- * IN_TRIP source and an OPEN target append {@code ItemPostponedToList} on the source; a self-target
- * is 400; a not-OPEN target is 409; a not-IN_TRIP source is 409; an unknown item is 404; an unknown
- * source or target list is 404; a non-member is rejected (403); a malformed id is 400.
+ * persistence (CLAUDE.md §6). Proves the postpone-to-list command path (Story 3.3, AC4; reshaped
+ * Story 3.6, AC1/AC4): an IN_TRIP source and an OPEN target append {@code ItemTransferInitiated} on
+ * the source, reserving the item rather than removing it; a self-target is 400; a not-OPEN target
+ * is 409; a not-IN_TRIP source is 409; an unknown item is 404; an unknown source or target list is
+ * 404; a non-member is rejected (403); a malformed id is 400; an item already reserved to a
+ * different target is 409 {@code item.transferInProgress}; a lost-response retry naming the same
+ * target is a convergent no-op.
  */
 class PostponeItemToListHandlerTest {
 
@@ -88,16 +94,44 @@ class PostponeItemToListHandlerTest {
     }
 
     @Test
-    void postponingToAnOpenTargetAppendsItemPostponedToListOnTheSource() {
+    void postponingToAnOpenTargetAppendsItemTransferInitiatedOnTheSourceAndReservesTheItem() {
         ItemId itemId = seedInTripSourceAndOpenTarget();
 
         handler.handle(MEMBER_SUB, householdId.toString(), sourceListId.toString(), itemId.toString(), targetListId.toString(), UUID.randomUUID().toString());
 
         List<DomainEvent> events = eventStore.readStream(sourceStreamId);
         DomainEvent last = events.get(events.size() - 1);
-        assertThat(last).isInstanceOf(ItemPostponedToList.class);
-        assertThat(((ItemPostponedToList) last).itemId()).isEqualTo(itemId);
-        assertThat(((ItemPostponedToList) last).targetListId()).isEqualTo(targetListId);
+        assertThat(last).isInstanceOf(ItemTransferInitiated.class);
+        ItemTransferInitiated initiated = (ItemTransferInitiated) last;
+        assertThat(initiated.itemId()).isEqualTo(itemId);
+        assertThat(initiated.targetListId()).isEqualTo(targetListId);
+        assertThat(initiated.origin()).isEqualTo(TransferOrigin.IN_TRIP_POSTPONE);
+    }
+
+    @Test
+    void postponingAnItemAlreadyReservedToADifferentTargetIsRejectedWith409() {
+        ItemId itemId = seedInTripSourceAndOpenTarget();
+        ShoppingListId otherTargetListId = ShoppingListId.generate();
+        seedList(otherTargetListId, "Drogerie");
+        handler.handle(MEMBER_SUB, householdId.toString(), sourceListId.toString(), itemId.toString(), targetListId.toString(), UUID.randomUUID().toString());
+
+        assertThatThrownBy(() -> handler.handle(MEMBER_SUB, householdId.toString(), sourceListId.toString(), itemId.toString(), otherTargetListId.toString(), UUID.randomUUID().toString()))
+                .isInstanceOf(ItemTransferInProgressApplicationException.class);
+    }
+
+    @Test
+    void retryingTheSamePostponeWithTheSameCommandIdAndTargetIsAConvergentNoOp() {
+        // Lost-response idempotency (Story 3.6, AC4): a client retry after a lost 200 must succeed
+        // again, not 404 or double-reserve.
+        ItemId itemId = seedInTripSourceAndOpenTarget();
+        String commandId = UUID.randomUUID().toString();
+        handler.handle(MEMBER_SUB, householdId.toString(), sourceListId.toString(), itemId.toString(), targetListId.toString(), commandId);
+        int eventCountAfterFirstCall = eventStore.readStream(sourceStreamId).size();
+
+        assertThatCode(() -> handler.handle(MEMBER_SUB, householdId.toString(), sourceListId.toString(), itemId.toString(), targetListId.toString(), commandId))
+                .doesNotThrowAnyException();
+
+        assertThat(eventStore.readStream(sourceStreamId)).hasSize(eventCountAfterFirstCall);
     }
 
     @Test

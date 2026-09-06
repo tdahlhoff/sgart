@@ -4,10 +4,11 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
@@ -18,6 +19,7 @@ import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.TripNotCompletableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
@@ -155,9 +157,11 @@ public final class ShoppingList extends EventSourcedAggregate {
 
     /**
      * Updates an existing item's name, note, and/or quantity (Story 2.3, AC3). Permitted only while
-     * {@link ListStatus#OPEN} (AC5). An unknown item raises {@link ItemNotFoundException}; a
-     * (name, note) collision with a <em>different</em> item raises {@link DuplicateItemException}; a
-     * fully unchanged update is a convergent no-op (raises nothing, AD-8, mirrors {@link #rename}).
+     * {@link ListStatus#OPEN} (AC5). An unknown item raises {@link ItemNotFoundException}; an item
+     * currently reserved by a pending transfer raises {@link ItemTransferInProgressException}
+     * (Story 3.6, AC4, fail-fast lock); a (name, note) collision with a <em>different</em> item
+     * raises {@link DuplicateItemException}; a fully unchanged update is a convergent no-op (raises
+     * nothing, AD-8, mirrors {@link #rename}).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -172,6 +176,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (existing.name().equals(name) && Objects.equals(existing.note(), note) && quantitiesEqual(existing.quantity(), quantity)) {
             return; // convergent no-op — the item already matches what the caller asked for (AD-8)
         }
@@ -185,7 +190,9 @@ public final class ShoppingList extends EventSourcedAggregate {
     /**
      * Removes an item from the list (Story 2.3, AC4). Permitted only while {@link
      * ListStatus#OPEN} (AC5). Removing an unknown/already-removed item is a convergent no-op — it
-     * raises nothing (idempotent delete, AD-8, mirrors {@code Household.archiveStore}).
+     * raises nothing (idempotent delete, AD-8, mirrors {@code Household.archiveStore}). An item
+     * currently reserved by a pending transfer raises {@link ItemTransferInProgressException}
+     * (Story 3.6, AC4, fail-fast lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -194,18 +201,26 @@ public final class ShoppingList extends EventSourcedAggregate {
         Objects.requireNonNull(commandId, "commandId must not be null");
         requireOpen();
 
-        if (!itemsById.containsKey(itemId)) {
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null) {
             return; // convergent no-op — nothing to remove (AD-8)
         }
+        requireNotTransferPending(existing, itemId);
         raise(new ItemRemoved(EventId.generate(), listId, itemId));
     }
 
     /**
-     * Moves an item to another list while planning (Story 2.4, AC1, AC5, AC9) — the source side of
-     * SGART's first cross-aggregate effect (AD-10). Permitted only while this (source) list is
-     * {@link ListStatus#OPEN} (AC5); an unknown item raises {@link ItemNotFoundException}. Raises
-     * {@link ItemMovedToList} carrying the item's current name/note/quantity so the {@code
-     * ItemMoveProcessManager} can add it to the target without reloading this aggregate. Does
+     * Moves an item to another list while planning (Story 2.4, AC1, AC5, AC9; reshaped Story 3.6,
+     * AC1) — the source side of SGART's first cross-aggregate effect (AD-10). Permitted only while
+     * this (source) list is {@link ListStatus#OPEN} (AC5); an unknown item raises {@link
+     * ItemNotFoundException}. Raises {@link ItemTransferInitiated} (origin {@code PLANNING_MOVE})
+     * carrying the item's current name/note/quantity so the {@code ItemTransferProcessManager} can
+     * add it to the target without reloading this aggregate — the item folds to a
+     * <strong>reserved</strong> sub-state and <strong>stays on the source</strong> (it is no longer
+     * removed here; removal is deferred to {@link #confirmItemTransfer}). A retry naming the
+     * <em>same</em> target while already reserved to it is a convergent no-op (AD-8, closes the
+     * lost-response idempotency defect); naming a <em>different</em> target while reserved raises
+     * {@link ItemTransferInProgressException} (Story 3.6, AC4, fail-fast lock). Does
      * <strong>not</strong> validate {@code targetListId} — this aggregate does not own the target
      * list; that is the handler's job (Cl. 4), since the target is a separate aggregate this root
      * never loads or mutates (AD-10).
@@ -222,7 +237,10 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
-        raise(new ItemMovedToList(
+        if (!initiateTransferOrConverge(existing, itemId, targetListId)) {
+            return;
+        }
+        raise(new ItemTransferInitiated(
                 EventId.generate(),
                 householdId,
                 listId,
@@ -230,7 +248,8 @@ public final class ShoppingList extends EventSourcedAggregate {
                 targetListId,
                 existing.name(),
                 existing.note(),
-                existing.quantity()));
+                existing.quantity(),
+                TransferOrigin.PLANNING_MOVE));
     }
 
     /**
@@ -241,7 +260,9 @@ public final class ShoppingList extends EventSourcedAggregate {
      * mutates (Cl. 1, mirrors {@link #moveItem} not validating {@code targetListId}). Validity is
      * enforced client-side (the picker offers only active household stores) and by the read-side
      * archived-store fallback (AC4). Reassigning to a different store raises a new event
-     * (last-wins); assigning the same store again is a convergent no-op (raises nothing, AD-8).
+     * (last-wins); assigning the same store again is a convergent no-op (raises nothing, AD-8). An
+     * item currently reserved by a pending transfer raises {@link ItemTransferInProgressException}
+     * (Story 3.6, AC4, fail-fast lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -255,6 +276,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (storeId.equals(existing.assignedStore())) {
             return; // convergent no-op — already assigned to this store (AD-8)
         }
@@ -296,7 +318,9 @@ public final class ShoppingList extends EventSourcedAggregate {
      * item's current store is a convergent no-op (raises nothing, AD-8, mirrors {@link
      * #assignItemToStore}). Does <strong>not</strong> validate that {@code storeId} is one of the
      * trip's stores (Cl. 5) — this aggregate does not know the trip's store set (a separate
-     * aggregate, AD-3); the client picker + read-side grouping enforce it.
+     * aggregate, AD-3); the client picker + read-side grouping enforce it. An item currently
+     * reserved by a pending transfer raises {@link ItemTransferInProgressException} (Story 3.6,
+     * AC4, fail-fast lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -310,6 +334,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (storeId.equals(existing.assignedStore())) {
             return; // convergent no-op — already routed to this store (AD-8)
         }
@@ -321,7 +346,9 @@ public final class ShoppingList extends EventSourcedAggregate {
      * {@link ItemStatus#DONE}. Permitted only while {@link ListStatus#IN_TRIP}. An unknown item
      * raises {@link ItemNotFoundException}; an already-{@code DONE} item is a convergent no-op
      * (raises nothing, AD-8). Check-off does not require a store assignment — unassigned items are
-     * checkable. This is the only place an item reaches {@code DONE}.
+     * checkable. This is the only place an item reaches {@code DONE}. An item currently reserved by
+     * a pending transfer raises {@link ItemTransferInProgressException} (Story 3.6, AC4, fail-fast
+     * lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -334,6 +361,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (existing.status() == ItemStatus.DONE) {
             return; // convergent no-op — already DONE (AD-8)
         }
@@ -345,7 +373,9 @@ public final class ShoppingList extends EventSourcedAggregate {
      * status returns to {@link ItemStatus#OPEN}. Permitted only while {@link ListStatus#IN_TRIP}. An
      * unknown item raises {@link ItemNotFoundException}; an already-{@code OPEN} item is a
      * convergent no-op (raises nothing, AD-8). This is the undo affordance for both {@code DONE} and
-     * {@code DISCARDED} — unchecking returns any non-{@code OPEN} item to {@code OPEN}.
+     * {@code DISCARDED} — unchecking returns any non-{@code OPEN} item to {@code OPEN}. An item
+     * currently reserved by a pending transfer raises {@link ItemTransferInProgressException}
+     * (Story 3.6, AC4, fail-fast lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -358,6 +388,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (existing.status() == ItemStatus.OPEN) {
             return; // convergent no-op — already OPEN (AD-8)
         }
@@ -371,7 +402,8 @@ public final class ShoppingList extends EventSourcedAggregate {
      * item raises {@link ItemNotFoundException}; an already-{@code DISCARDED} item is a convergent
      * no-op (raises nothing, AD-8). {@link #uncheckItem} returns a {@code DISCARDED} item to
      * {@code OPEN}; {@link #checkOffItem} may still move a {@code DISCARDED} item to {@code DONE}
-     * ("found it after all").
+     * ("found it after all"). An item currently reserved by a pending transfer raises {@link
+     * ItemTransferInProgressException} (Story 3.6, AC4, fail-fast lock).
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -384,6 +416,7 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
+        requireNotTransferPending(existing, itemId);
         if (existing.status() == ItemStatus.DISCARDED) {
             return; // convergent no-op — already DISCARDED (AD-8)
         }
@@ -406,6 +439,12 @@ public final class ShoppingList extends EventSourcedAggregate {
      * explicit confirm from the member triggers this command; "Doch noch weiter einkaufen" (AC5)
      * closes the dialog without calling this.
      *
+     * <p><strong>Story 3.6:</strong> the sweep <strong>skips a reserved item</strong> — an
+     * in-flight postpone must not be discarded out from under the saga; it stays pending and the
+     * saga resolves independently (confirm removes it from this now-{@code DONE} list, or cancel
+     * un-reserves it here as a preserved leftover — data preservation over strict
+     * display-immutability, an accepted edge given the sub-second window and rare trigger).
+     *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
     public void completeTrip(CommandId commandId) {
@@ -422,10 +461,11 @@ public final class ShoppingList extends EventSourcedAggregate {
         // Snapshot open item ids before raising so the fold (put on existing key) cannot cause
         // a ConcurrentModificationException if the map implementation changes.
         List<ItemId> openItemIds = itemsById.entrySet().stream()
-                .filter(e -> e.getValue().status() == ItemStatus.OPEN)
+                .filter(e -> e.getValue().status() == ItemStatus.OPEN && e.getValue().pendingTransfer() == null)
                 .map(Map.Entry::getKey)
                 .toList();
-        // Sweep: discard every still-OPEN item (QoL safety net, Cl. 2)
+        // Sweep: discard every still-OPEN, non-reserved item (QoL safety net, Cl. 2; Story 3.6 skips
+        // items mid-transfer)
         for (ItemId openItemId : openItemIds) {
             raise(new ItemDiscarded(EventId.generate(), householdId, listId, openItemId));
         }
@@ -433,12 +473,18 @@ public final class ShoppingList extends EventSourcedAggregate {
     }
 
     /**
-     * Postpones an item onto another list during a trip (Story 3.3, AC4, Cl. 3/6) — the source
-     * side of the in-trip cross-aggregate effect (AD-10). The item leaves this list (folds to a
-     * removal). Permitted only while {@link ListStatus#IN_TRIP}. An unknown item raises {@link
-     * ItemNotFoundException}. Does <strong>not</strong> validate {@code targetListId} — this
-     * aggregate does not own the target; that is the handler's job (Cl. 6, mirrors {@link
-     * #moveItem}). The target-side add is the {@code ItemMoveProcessManager}'s job.
+     * Postpones an item onto another list during a trip (Story 3.3, AC4, Cl. 3/6; reshaped Story
+     * 3.6, AC1) — the in-trip-phase counterpart to {@link #moveItem}, sharing the same {@link
+     * ItemTransferInitiated} saga vocabulary (origin {@code IN_TRIP_POSTPONE}). Permitted only while
+     * {@link ListStatus#IN_TRIP}. An unknown item raises {@link ItemNotFoundException}. The item
+     * folds to a <strong>reserved</strong> sub-state and <strong>stays on this list</strong> — it no
+     * longer folds to a removal here; removal is deferred to {@link #confirmItemTransfer}. A retry
+     * naming the <em>same</em> target while already reserved to it is a convergent no-op (AD-8);
+     * naming a <em>different</em> target while reserved raises {@link
+     * ItemTransferInProgressException} (Story 3.6, AC4). Does <strong>not</strong> validate {@code
+     * targetListId} — this aggregate does not own the target; that is the handler's job (Cl. 6,
+     * mirrors {@link #moveItem}). The target-side add is the {@code ItemTransferProcessManager}'s
+     * job.
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
@@ -452,7 +498,10 @@ public final class ShoppingList extends EventSourcedAggregate {
         if (existing == null) {
             throw new ItemNotFoundException("No item found for id " + itemId + " on this list");
         }
-        raise(new ItemPostponedToList(
+        if (!initiateTransferOrConverge(existing, itemId, targetListId)) {
+            return;
+        }
+        raise(new ItemTransferInitiated(
                 EventId.generate(),
                 householdId,
                 listId,
@@ -460,7 +509,53 @@ public final class ShoppingList extends EventSourcedAggregate {
                 targetListId,
                 existing.name(),
                 existing.note(),
-                existing.quantity()));
+                existing.quantity(),
+                TransferOrigin.IN_TRIP_POSTPONE));
+    }
+
+    /**
+     * Completes a pending transfer on the source (Story 3.6, AC2) — issued by the {@code
+     * ItemTransferProcessManager} once the target add has succeeded (or converged on an
+     * already-present duplicate). <strong>Not</strong> phase-gated — it is a system saga step that
+     * must resolve regardless of the list's current {@link ListStatus} (a source may have since gone
+     * {@code IN_TRIP} or {@code DONE}). Raises {@link ItemTransferConfirmed}, which removes the item
+     * from this list. Convergent no-op (raises nothing) if the item is already gone (an earlier pass
+     * already confirmed it — replay-safe) or is present but not currently reserved (defensive
+     * no-op).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void confirmItemTransfer(ItemId itemId, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null || existing.pendingTransfer() == null) {
+            return; // convergent no-op — already confirmed, or nothing was ever reserved (replay-safe)
+        }
+        raise(new ItemTransferConfirmed(EventId.generate(), listId, itemId));
+    }
+
+    /**
+     * Compensates a pending transfer on the source (Story 3.6, AC3 — the bug fix) — issued by the
+     * {@code ItemTransferProcessManager} when the target is not {@code OPEN} or has no stream.
+     * <strong>Not</strong> phase-gated, same reasoning as {@link #confirmItemTransfer}. Raises
+     * {@link ItemTransferCancelled}, which un-reserves the item, returning it to its normal state on
+     * this list — at no instant was it on neither list. Convergent no-op if the item is absent or
+     * not currently reserved.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void cancelItemTransfer(ItemId itemId, TransferCancellationReason reason, CommandId commandId) {
+        Objects.requireNonNull(itemId, "itemId must not be null");
+        Objects.requireNonNull(reason, "reason must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        ItemState existing = itemsById.get(itemId);
+        if (existing == null || existing.pendingTransfer() == null) {
+            return; // convergent no-op — nothing to cancel (replay-safe)
+        }
+        raise(new ItemTransferCancelled(EventId.generate(), listId, itemId, reason));
     }
 
     private void requireOpen() {
@@ -475,6 +570,37 @@ public final class ShoppingList extends EventSourcedAggregate {
             throw new ItemNotDuringTripException(
                     "Items may only be changed during a trip, list is " + status);
         }
+    }
+
+    /**
+     * The fail-fast lock (Story 3.6, AC4): every other item-mutating command rejects a reserved
+     * item outright rather than racing the in-flight transfer saga.
+     */
+    private void requireNotTransferPending(ItemState existing, ItemId itemId) {
+        if (existing.pendingTransfer() != null) {
+            throw new ItemTransferInProgressException(
+                    "Item " + itemId + " is currently being transferred and cannot be changed");
+        }
+    }
+
+    /**
+     * Shared move/postpone entry: applies the fail-fast lock and the same-target convergent no-op
+     * (Story 3.6, AC1/AC4) common to both phases.
+     *
+     * @return {@code true} if the caller should raise a new {@link ItemTransferInitiated}; {@code
+     *     false} if this was a convergent no-op (same target already reserved)
+     * @throws ItemTransferInProgressException if reserved to a <em>different</em> target
+     */
+    private boolean initiateTransferOrConverge(ItemState existing, ItemId itemId, ShoppingListId targetListId) {
+        PendingTransfer pending = existing.pendingTransfer();
+        if (pending == null) {
+            return true;
+        }
+        if (pending.targetListId().equals(targetListId)) {
+            return false; // convergent no-op — retry of the same in-flight transfer (AD-8)
+        }
+        throw new ItemTransferInProgressException(
+                "Item " + itemId + " is currently being transferred and cannot be changed");
     }
 
     /**
@@ -510,8 +636,9 @@ public final class ShoppingList extends EventSourcedAggregate {
                 this.status = ListStatus.OPEN;
             }
             case ShoppingListRenamed renamed -> this.name = renamed.newName();
-            case ItemAdded added ->
-                itemsById.put(added.itemId(), new ItemState(added.name(), added.note(), added.quantity(), null, ItemStatus.OPEN));
+            case ItemAdded added -> itemsById.put(
+                    added.itemId(),
+                    new ItemState(added.name(), added.note(), added.quantity(), null, ItemStatus.OPEN, null));
             case ItemUpdated updated -> {
                 // Cl. 4/7 regression trap: an edit must carry the existing assignment and status
                 // forward — only ItemAssignedToStore may change assignedStore; only the status
@@ -519,12 +646,13 @@ public final class ShoppingList extends EventSourcedAggregate {
                 ItemState existing = itemsById.get(updated.itemId());
                 StoreId assignedStore = existing == null ? null : existing.assignedStore();
                 ItemStatus status = existing == null ? ItemStatus.OPEN : existing.status();
+                PendingTransfer pendingTransfer = existing == null ? null : existing.pendingTransfer();
                 itemsById.put(
                         updated.itemId(),
-                        new ItemState(updated.name(), updated.note(), updated.quantity(), assignedStore, status));
+                        new ItemState(
+                                updated.name(), updated.note(), updated.quantity(), assignedStore, status, pendingTransfer));
             }
             case ItemRemoved removed -> itemsById.remove(removed.itemId());
-            case ItemMovedToList moved -> itemsById.remove(moved.itemId());
             case ItemAssignedToStore assigned -> assignStore(assigned.itemId(), assigned.storeId());
             case ItemRerouted rerouted -> assignStore(rerouted.itemId(), rerouted.storeId());
             case TripStartedForList started -> {
@@ -534,8 +662,11 @@ public final class ShoppingList extends EventSourcedAggregate {
             case ItemCheckedOff checkedOff -> setStatus(checkedOff.itemId(), ItemStatus.DONE);
             case ItemUnchecked unchecked -> setStatus(unchecked.itemId(), ItemStatus.OPEN);
             case ItemDiscarded discarded -> setStatus(discarded.itemId(), ItemStatus.DISCARDED);
-            case ItemPostponedToList postponedToList -> itemsById.remove(postponedToList.itemId());
             case TripCompletedForList completed -> this.status = ListStatus.DONE;
+            case ItemTransferInitiated initiated ->
+                setPendingTransfer(initiated.itemId(), new PendingTransfer(initiated.targetListId()));
+            case ItemTransferConfirmed confirmed -> itemsById.remove(confirmed.itemId());
+            case ItemTransferCancelled cancelled -> setPendingTransfer(cancelled.itemId(), null);
             default -> throw new IllegalArgumentException(
                     "ShoppingList cannot apply unknown event type: " + event.getClass());
         }
@@ -547,12 +678,21 @@ public final class ShoppingList extends EventSourcedAggregate {
      * field (one source of truth for item→store). The command guards item existence before raising,
      * so {@code existing} is non-null for any well-formed stream; skip defensively on a
      * reordered/repaired stream rather than NPE (mirrors the {@code ItemUpdated} case's
-     * null-tolerance). Preserves {@code status} — only the status events may change it (Cl. 4).
+     * null-tolerance). Preserves {@code status} and {@code pendingTransfer} — only the status events
+     * may change status, only the transfer events may change pendingTransfer (Cl. 4).
      */
     private void assignStore(ItemId itemId, StoreId storeId) {
         ItemState existing = itemsById.get(itemId);
         if (existing != null) {
-            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), storeId, existing.status()));
+            itemsById.put(
+                    itemId,
+                    new ItemState(
+                            existing.name(),
+                            existing.note(),
+                            existing.quantity(),
+                            storeId,
+                            existing.status(),
+                            existing.pendingTransfer()));
         }
     }
 
@@ -561,12 +701,43 @@ public final class ShoppingList extends EventSourcedAggregate {
      * ItemDiscarded} (Stories 3.3/3.4, Cl. 1/4). The command guards item existence before raising,
      * so {@code existing} is non-null for any well-formed stream; skip defensively on a
      * reordered/repaired stream rather than NPE (mirrors {@link #assignStore}). Preserves all other
-     * fields — only this fold may write {@code status}.
+     * fields, including {@code pendingTransfer} — only this fold may write {@code status}.
      */
     private void setStatus(ItemId itemId, ItemStatus newStatus) {
         ItemState existing = itemsById.get(itemId);
         if (existing != null) {
-            itemsById.put(itemId, new ItemState(existing.name(), existing.note(), existing.quantity(), existing.assignedStore(), newStatus));
+            itemsById.put(
+                    itemId,
+                    new ItemState(
+                            existing.name(),
+                            existing.note(),
+                            existing.quantity(),
+                            existing.assignedStore(),
+                            newStatus,
+                            existing.pendingTransfer()));
+        }
+    }
+
+    /**
+     * Folds an item's pending-transfer sub-state — shared by {@link ItemTransferInitiated} (sets it)
+     * and {@link ItemTransferCancelled} (clears it, {@code pendingTransfer = null}) (Story 3.6).
+     * {@link ItemTransferConfirmed} does not use this — it removes the item outright. The command
+     * guards item existence before raising, so {@code existing} is non-null for any well-formed
+     * stream; skip defensively rather than NPE (mirrors {@link #assignStore}/{@link #setStatus}).
+     * Preserves all other fields — only this fold may write {@code pendingTransfer}.
+     */
+    private void setPendingTransfer(ItemId itemId, PendingTransfer pendingTransfer) {
+        ItemState existing = itemsById.get(itemId);
+        if (existing != null) {
+            itemsById.put(
+                    itemId,
+                    new ItemState(
+                            existing.name(),
+                            existing.note(),
+                            existing.quantity(),
+                            existing.assignedStore(),
+                            existing.status(),
+                            pendingTransfer));
         }
     }
 
@@ -576,7 +747,23 @@ public final class ShoppingList extends EventSourcedAggregate {
      * is projected separately (AD-4). {@code assignedStore} is a bare reference into the separate
      * {@code Household} aggregate (AD-3) — {@code null} means unassigned. {@code status} is the
      * item's in-trip lifecycle ({@link ItemStatus}), {@code OPEN} at birth, changed only by the
-     * status events (Stories 3.3/3.4, Cl. 4).
+     * status events (Stories 3.3/3.4, Cl. 4). {@code pendingTransfer} is the Story 3.6 two-phase
+     * transfer saga's reserved sub-state — {@code null} means not reserved; non-null means the item
+     * is mid-transfer to {@code pendingTransfer.targetListId()} and every other mutation is locked
+     * out ({@link #requireNotTransferPending}).
      */
-    private record ItemState(ItemName name, ItemNote note, Quantity quantity, StoreId assignedStore, ItemStatus status) {}
+    private record ItemState(
+            ItemName name,
+            ItemNote note,
+            Quantity quantity,
+            StoreId assignedStore,
+            ItemStatus status,
+            PendingTransfer pendingTransfer) {}
+
+    /**
+     * The reserved sub-state of an item mid-transfer (Story 3.6) — holds the target the item is
+     * being transferred to, so a same-target retry can be recognised as a convergent no-op and a
+     * different-target request can be rejected by the fail-fast lock (AC4).
+     */
+    private record PendingTransfer(ShoppingListId targetListId) {}
 }

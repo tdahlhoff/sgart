@@ -4,10 +4,12 @@ import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -48,6 +50,8 @@ public final class RerouteItemHandler {
      * @throws ShoppingListNotFoundException if {@code listId} is unknown or belongs to another household (404)
      * @throws ItemNotFoundApplicationException if {@code itemId} is unknown on the list (404)
      * @throws ItemNotDuringTripApplicationException if the list is not {@code IN_TRIP} (409)
+     * @throws ItemTransferInProgressApplicationException if the item is reserved by a pending
+     *     transfer (409, Story 3.6, AC4)
      */
     public void handle(
             String keycloakUserId,
@@ -84,6 +88,8 @@ public final class RerouteItemHandler {
             throw new ItemNotFoundApplicationException(notFound.getMessage());
         } catch (ItemNotDuringTripException notDuringTrip) {
             throw new ItemNotDuringTripApplicationException(notDuringTrip.getMessage());
+        } catch (ItemTransferInProgressException inProgress) {
+            throw new ItemTransferInProgressApplicationException(inProgress.getMessage());
         }
 
         if (!list.uncommittedEvents().isEmpty()) {

@@ -507,6 +507,16 @@
     "description": "Localized copy for the item.notDuringTrip error code — an in-trip action (check off / uncheck / postpone / reroute) hit a list whose trip is no longer active (Story 3.3, AC6 / Cl. 5)."
   },
 
+  "itemTransferInProgressError": "Dieser Artikel wird gerade auf eine andere Liste verschoben.",
+  "@itemTransferInProgressError": {
+    "description": "Localized copy for the item.transferInProgress error code — the item is reserved by an in-flight move/postpone and cannot be changed until the transfer resolves (Story 3.6, AC4)."
+  },
+
+  "itemTransferPendingLabel": "wird verschoben…",
+  "@itemTransferPendingLabel": {
+    "description": "Quiet label/chip shown on an item reserved by an in-flight move/postpone transfer, replacing its normal row actions until the next refresh reconciles it (Story 3.6, AC5)."
+  },
+
   "itemMoveAction": "Verschieben",
   "@itemMoveAction": {
     "description": "Per-row action/tooltip that opens the move target picker (Story 2.4, AC7)."

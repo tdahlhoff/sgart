@@ -15,7 +15,7 @@ import java.util.Objects;
  * stream — the single guarded append of a trip start (Cl. 1) — and folds {@link ShoppingList} from
  * {@code OPEN} to {@code IN_TRIP} there. Carries {@code tripId}/{@code storeIds} as the payload the
  * {@code TripStartProcessManager} needs to create the {@code ShoppingTrip} aggregate (Cl. 1/5), not
- * because the list reasons over stores — mirrors {@link ItemMovedToList} carrying the target-side
+ * because the list reasons over stores — mirrors {@link ItemTransferInitiated} carrying the target-side
  * payload for its process manager.
  *
  * <p>Carries no personal data and no <em>who</em> (AD-5/AD-6; no audit trail, mirrors {@link

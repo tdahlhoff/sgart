@@ -28,12 +28,15 @@ enum ItemStatus {
 }
 
 /// An item on a shopping list as seen by the caller — id, name, optional note, quantity, assigned
-/// store, and in-trip status (Story 3.3, AC1; Story 2.3, AC1/AC6; Story 2.6, AC1). `note`/`storeId`
-/// are `null` for an item with no note / unassigned. `amount` is carried as the server's decimal
-/// string (never parsed to a `double` here — display formatting owns that, and a round-trip through
-/// `double` could lose precision); `unit` is the server's enum name (e.g. `"PIECE"`). `status` is
-/// the item's in-trip lifecycle — [ItemStatus.open] is the default / birth state; the server always
-/// sends it once Story 3.3 is live.
+/// store, in-trip status, and transfer-pending flag (Story 3.3, AC1; Story 2.3, AC1/AC6; Story 2.6,
+/// AC1; Story 3.6, AC5). `note`/`storeId` are `null` for an item with no note / unassigned. `amount`
+/// is carried as the server's decimal string (never parsed to a `double` here — display formatting
+/// owns that, and a round-trip through `double` could lose precision); `unit` is the server's enum
+/// name (e.g. `"PIECE"`). `status` is the item's in-trip lifecycle — [ItemStatus.open] is the
+/// default / birth state; the server always sends it once Story 3.3 is live. `transferPending` is
+/// `false` by default and becomes `true` while the item is reserved by an in-flight move/postpone
+/// transfer — a reserved item shows „wird verschoben…" and is non-interactive until the next
+/// fetch/refresh reconciles the confirm (row gone) or cancel (flag cleared) outcome.
 class Item {
   const Item({
     required this.itemId,
@@ -43,6 +46,7 @@ class Item {
     required this.unit,
     this.storeId,
     this.status = ItemStatus.open,
+    this.transferPending = false,
   });
 
   final String itemId;
@@ -52,6 +56,7 @@ class Item {
   final String unit;
   final String? storeId;
   final ItemStatus status;
+  final bool transferPending;
 
   /// Fails fast with a mapped [AppException] rather than a raw `TypeError` when the response is
   /// missing a field or has an unexpected shape, so callers resolve it through [AppError.code]. A
@@ -67,13 +72,15 @@ class Item {
     final unit = json['unit'];
     final storeId = json['storeId'];
     final rawStatus = json['status'];
+    final rawTransferPending = json['transferPending'];
     if (itemId is! String ||
         name is! String ||
         (note != null && note is! String) ||
         amount is! String ||
         unit is! String ||
         (storeId != null && storeId is! String) ||
-        (rawStatus != null && rawStatus is! String)) {
+        (rawStatus != null && rawStatus is! String) ||
+        (rawTransferPending != null && rawTransferPending is! bool)) {
       throw const AppException(AppError(
         code: 'items.malformedResponse',
         message: 'GET items returned an unexpected shape',
@@ -94,6 +101,7 @@ class Item {
       unit: unit,
       storeId: storeId as String?,
       status: status,
+      transferPending: rawTransferPending as bool? ?? false,
     );
   }
 
@@ -108,6 +116,7 @@ class Item {
     String? unit,
     Object? storeId = _unchanged,
     ItemStatus? status,
+    bool? transferPending,
   }) {
     return Item(
       itemId: itemId,
@@ -117,6 +126,7 @@ class Item {
       unit: unit ?? this.unit,
       storeId: identical(storeId, _unchanged) ? this.storeId : storeId as String?,
       status: status ?? this.status,
+      transferPending: transferPending ?? this.transferPending,
     );
   }
 
@@ -131,8 +141,9 @@ class Item {
       other.amount == amount &&
       other.unit == unit &&
       other.storeId == storeId &&
-      other.status == status;
+      other.status == status &&
+      other.transferPending == transferPending;
 
   @override
-  int get hashCode => Object.hash(itemId, name, note, amount, unit, storeId, status);
+  int get hashCode => Object.hash(itemId, name, note, amount, unit, storeId, status, transferPending);
 }

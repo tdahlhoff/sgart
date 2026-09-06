@@ -55,7 +55,7 @@ public final class JdbcItemSuggestionReadModel implements ItemSuggestionReadMode
     /**
      * Upsert keyed by {@code (household_id, normalized_name)} — records the name's last-used
      * display casing and attributes (Cl. 6). Called for both {@code ItemAdded} and {@code
-     * ItemUpdated}; never for {@code ItemRemoved}/{@code ItemMovedToList} (history survives, Cl. 1).
+     * ItemUpdated}; never for {@code ItemRemoved}/{@code ItemTransferConfirmed} (history survives, Cl. 1).
      */
     void recordUsage(HouseholdId householdId, ItemName name, ItemNote note, Quantity quantity) {
         String normalizedName = name.value().trim().toLowerCase(Locale.ROOT);

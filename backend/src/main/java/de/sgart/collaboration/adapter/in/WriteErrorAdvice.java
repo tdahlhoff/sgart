@@ -14,6 +14,7 @@ import de.sgart.collaboration.application.exception.InvalidTripStoreSelectionExc
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
@@ -157,6 +158,11 @@ class WriteErrorAdvice {
 
     @ExceptionHandler(ItemNotDuringTripApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleItemNotDuringTrip(ItemNotDuringTripApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ItemTransferInProgressApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleItemTransferInProgress(ItemTransferInProgressApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 

@@ -76,6 +76,11 @@ class ListItemsTest {
         public void setStatus(ItemId itemId, ItemStatus status) {
             throw new UnsupportedOperationException("the projector's write, never a query's");
         }
+
+        @Override
+        public void setTransferPending(ItemId itemId, boolean pending) {
+            throw new UnsupportedOperationException("the projector's write, never a query's");
+        }
     }
 
     private void seedMembership() {
@@ -89,15 +94,37 @@ class ListItemsTest {
         ItemId brotId = ItemId.generate();
         StoreId storeId = StoreId.generate();
         ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of(
-                new ItemView(milchId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN),
-                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK), null, ItemStatus.OPEN))));
+                new ItemView(milchId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), storeId, ItemStatus.OPEN, false),
+                new ItemView(brotId, new ItemName("Brot"), null, Quantity.of(2, Unit.PACK), null, ItemStatus.OPEN, false))));
 
         List<ItemSummary> summaries = listItems.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
         assertThat(summaries)
                 .containsExactly(
-                        new ItemSummary(milchId.toString(), "Milch", "Bio", "1", "PIECE", storeId.toString(), "OPEN"),
-                        new ItemSummary(brotId.toString(), "Brot", null, "2", "PACK", null, "OPEN"));
+                        new ItemSummary(milchId.toString(), "Milch", "Bio", "1", "PIECE", storeId.toString(), "OPEN", false),
+                        new ItemSummary(brotId.toString(), "Brot", null, "2", "PACK", null, "OPEN", false));
+    }
+
+    @Test
+    void forList_surfacesTheTransferPendingFlagWhenTheItemIsReserved() {
+        // Story 3.6, AC5 — a reserved item's read-model marker threads through the query result.
+        seedMembership();
+        ItemId pendingItemId = ItemId.generate();
+        ItemId normalItemId = ItemId.generate();
+        ListItems listItems = listItemsReading(new FakeItemReadModel((household, list) -> List.of(
+                new ItemView(pendingItemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, true),
+                new ItemView(normalItemId, new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false))));
+
+        List<ItemSummary> summaries = listItems.forList(MEMBER_SUB, householdId.toString(), listId.toString());
+
+        assertThat(summaries)
+                .filteredOn(summary -> summary.itemId().equals(pendingItemId.toString()))
+                .extracting(ItemSummary::transferPending)
+                .containsExactly(true);
+        assertThat(summaries)
+                .filteredOn(summary -> summary.itemId().equals(normalItemId.toString()))
+                .extracting(ItemSummary::transferPending)
+                .containsExactly(false);
     }
 
     @Test
@@ -116,7 +143,7 @@ class ListItemsTest {
         // OTHER household, so a member querying THEIR own household for the same list id sees nothing
         // (AC8 no-data-leak: the query threads householdId into itemsOf, mirroring the SQL WHERE).
         ItemReadModel itemReadModel = new FakeItemReadModel((household, list) -> household.equals(otherHousehold)
-                ? List.of(new ItemView(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN))
+                ? List.of(new ItemView(ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false))
                 : List.of());
 
         List<ItemSummary> summaries =

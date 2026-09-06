@@ -77,7 +77,8 @@ public final class TripView {
                         item.quantity().amount().toPlainString(),
                         item.quantity().unit().name(),
                         item.storeId() == null ? null : item.storeId().toString(),
-                        item.status().name()))
+                        item.status().name(),
+                        item.transferPending()))
                 .toList();
 
         return new TripViewResult(tripId.toString(), listId.toString(), storeIds, items);

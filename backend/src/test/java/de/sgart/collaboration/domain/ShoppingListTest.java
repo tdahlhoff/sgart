@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRerouted;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -16,6 +16,7 @@ import de.sgart.collaboration.domain.event.TripStartedForList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
 import de.sgart.collaboration.domain.exception.ItemNotDuringTripException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.collaboration.domain.exception.ListNameChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.TripNotCompletableException;
 import de.sgart.collaboration.domain.exception.TripNotStartableException;
@@ -51,6 +52,13 @@ import org.junit.jupiter.api.Test;
  * <p>The {@code DONE}-rejects-{startTrip,rename} branches are coded but {@code DONE} has no
  * driving event yet (Story 3.4) — {@link #setStatus} forces the enum via reflection purely as a
  * test fixture (Cl. 8: no fabricated completion path in the aggregate itself).
+ *
+ * <p>Story 3.6 reshaped {@code postponeItemToList} the same way as {@code moveItem}: it now raises
+ * {@code ItemTransferInitiated} (origin {@code IN_TRIP_POSTPONE}) and the item stays reserved on
+ * this list instead of being removed. This file also covers the fail-fast lock on the IN_TRIP-only
+ * mutations (checkOffItem/uncheckItem/discardItem/rerouteItem) and the {@code completeTrip} sweep
+ * skipping a reserved item — the OPEN-reachable lock coverage lives in {@code
+ * ShoppingListItemsTest}.
  */
 class ShoppingListTest {
 
@@ -610,7 +618,7 @@ class ShoppingListTest {
     // ── postponeItemToList ────────────────────────────────────────────────────────────────────────
 
     @Test
-    void postponeItemToList_onAnInTripList_raisesItemPostponedToList_andRemovesItem() {
+    void postponeItemToList_onAnInTripList_raisesItemTransferInitiated_andKeepsTheItemReserved() {
         ItemId itemId = ItemId.generate();
         ShoppingListId targetListId = ShoppingListId.generate();
         ShoppingList list = inTripListWithItem(itemId);
@@ -619,11 +627,17 @@ class ShoppingListTest {
 
         List<DomainEvent> events = list.uncommittedEvents();
         assertThat(events).hasSize(1);
-        assertThat(events.get(0)).isInstanceOf(ItemPostponedToList.class);
-        ItemPostponedToList postponed = (ItemPostponedToList) events.get(0);
-        assertThat(postponed.itemId()).isEqualTo(itemId);
-        assertThat(postponed.targetListId()).isEqualTo(targetListId);
-        assertThat(postponed.name()).isEqualTo(new ItemName("Milch"));
+        assertThat(events.get(0)).isInstanceOf(ItemTransferInitiated.class);
+        ItemTransferInitiated initiated = (ItemTransferInitiated) events.get(0);
+        assertThat(initiated.itemId()).isEqualTo(itemId);
+        assertThat(initiated.targetListId()).isEqualTo(targetListId);
+        assertThat(initiated.name()).isEqualTo(new ItemName("Milch"));
+        assertThat(initiated.origin()).isEqualTo(TransferOrigin.IN_TRIP_POSTPONE);
+
+        // Story 3.6, AC1 — the item stays reserved on this list, it is not removed: a second
+        // different-target postpone is locked out rather than "item not found".
+        assertThatThrownBy(() -> list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
     }
 
     @Test
@@ -641,6 +655,89 @@ class ShoppingListTest {
 
         assertThatThrownBy(() -> list.postponeItemToList(ItemId.generate(), ShoppingListId.generate(), CommandId.generate()))
                 .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void postponeItemToList_onAReservedItemWithTheSameTarget_isAConvergentNoOp() {
+        ItemId itemId = ItemId.generate();
+        ShoppingListId targetListId = ShoppingListId.generate();
+        ShoppingList list = inTripListWithItem(itemId);
+        list.postponeItemToList(itemId, targetListId, CommandId.generate());
+        list.markEventsCommitted();
+
+        list.postponeItemToList(itemId, targetListId, CommandId.generate());
+
+        assertThat(list.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void checkOffItem_onAReservedItem_throwsItemTransferInProgress() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = inTripListWithItem(itemId);
+        list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.checkOffItem(itemId, CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void uncheckItem_onAReservedItem_throwsItemTransferInProgress() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(EventId.generate(), householdId, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate())),
+                        new ItemCheckedOff(EventId.generate(), householdId, listId, itemId)));
+        list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.uncheckItem(itemId, CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void discardItem_onAReservedItem_throwsItemTransferInProgress() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = inTripListWithItem(itemId);
+        list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.discardItem(itemId, CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void rerouteItem_onAReservedItem_throwsItemTransferInProgress() {
+        ItemId itemId = ItemId.generate();
+        ShoppingList list = inTripListWithItem(itemId);
+        list.postponeItemToList(itemId, ShoppingListId.generate(), CommandId.generate());
+
+        assertThatThrownBy(() -> list.rerouteItem(itemId, StoreId.generate(), CommandId.generate()))
+                .isInstanceOf(ItemTransferInProgressException.class);
+    }
+
+    @Test
+    void completeTrip_skipsAReservedItem_leavingItPendingWhileDiscardingOnlyNormalOpenItems() {
+        // Story 3.6 — the sweep must not discard a mid-flight postpone out from under the saga.
+        ItemId normalOpenItemId = ItemId.generate();
+        ItemId reservedItemId = ItemId.generate();
+        ShoppingList list = ShoppingList.rehydrate(
+                StreamId.forList(listId),
+                List.of(
+                        new ShoppingListCreated(EventId.generate(), householdId, listId, new ShoppingListName("Wocheneinkauf")),
+                        new ItemAdded(EventId.generate(), householdId, listId, normalOpenItemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)),
+                        new ItemAdded(EventId.generate(), householdId, listId, reservedItemId, new ItemName("Brot"), null, Quantity.of(1, Unit.PIECE)),
+                        new TripStartedForList(EventId.generate(), householdId, listId, TripId.generate(), List.of(StoreId.generate()))));
+        list.postponeItemToList(reservedItemId, ShoppingListId.generate(), CommandId.generate());
+        list.markEventsCommitted();
+
+        list.completeTrip(CommandId.generate());
+
+        List<DomainEvent> events = list.uncommittedEvents();
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0)).isInstanceOf(ItemDiscarded.class);
+        assertThat(((ItemDiscarded) events.get(0)).itemId()).isEqualTo(normalOpenItemId);
+        assertThat(events.get(1)).isInstanceOf(TripCompletedForList.class);
     }
 
     // ── Cl. 4 regression: status events must not reset status ────────────────────────────────────

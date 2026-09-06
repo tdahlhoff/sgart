@@ -111,6 +111,11 @@ class TripViewTest {
         public void setStatus(ItemId itemId, ItemStatus status) {
             throw new UnsupportedOperationException("the projector's write, never a query's");
         }
+
+        @Override
+        public void setTransferPending(ItemId itemId, boolean pending) {
+            throw new UnsupportedOperationException("the projector's write, never a query's");
+        }
     }
 
     @Test
@@ -126,7 +131,7 @@ class TripViewTest {
                 new FakeShoppingListReadModel((household, id) -> household.equals(householdId) ? list : null),
                 new FakeTripStoreReadModel(java.util.Map.of(tripId, List.of(edeka, netto))),
                 new FakeItemReadModel(List.of(
-                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.OPEN))));
+                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.OPEN, false))));
 
         TripView.TripViewResult result = tripView.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
@@ -135,7 +140,29 @@ class TripViewTest {
         assertThat(result.storeIds()).containsExactly(edeka.toString(), netto.toString());
         assertThat(result.items())
                 .containsExactly(new ListItems.ItemSummary(
-                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "OPEN"));
+                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "OPEN", false));
+    }
+
+    @Test
+    void forList_surfacesTheTransferPendingFlagWhenTheItemIsReserved() {
+        // Story 3.6, AC5 — a reserved item's read-model marker threads through the trip view too.
+        seedMembership();
+        TripId tripId = TripId.generate();
+        StoreId edeka = StoreId.generate();
+        ItemId itemId = ItemId.generate();
+        ShoppingListView list = new ShoppingListView(
+                listId, new ShoppingListName("Wocheneinkauf"), ListStatus.IN_TRIP, 1, tripId);
+        TripView tripView = tripView(
+                new FakeShoppingListReadModel((household, id) -> household.equals(householdId) ? list : null),
+                new FakeTripStoreReadModel(java.util.Map.of(tripId, List.of(edeka))),
+                new FakeItemReadModel(List.of(
+                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.OPEN, true))));
+
+        TripView.TripViewResult result = tripView.forList(MEMBER_SUB, householdId.toString(), listId.toString());
+
+        assertThat(result.items())
+                .containsExactly(new ListItems.ItemSummary(
+                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "OPEN", true));
     }
 
     @Test
@@ -150,13 +177,13 @@ class TripViewTest {
                 new FakeShoppingListReadModel((household, id) -> household.equals(householdId) ? list : null),
                 new FakeTripStoreReadModel(java.util.Map.of(tripId, List.of(edeka))),
                 new FakeItemReadModel(List.of(
-                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.DONE))));
+                        new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), edeka, ItemStatus.DONE, false))));
 
         TripView.TripViewResult result = tripView.forList(MEMBER_SUB, householdId.toString(), listId.toString());
 
         assertThat(result.items())
                 .containsExactly(new ListItems.ItemSummary(
-                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "DONE"));
+                        itemId.toString(), "Milch", null, "1", "PIECE", edeka.toString(), "DONE", false));
     }
 
     @Test

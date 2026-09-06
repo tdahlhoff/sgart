@@ -5,12 +5,14 @@ import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeExcept
 import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ListStatus;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -28,8 +30,8 @@ import java.util.Objects;
  * Orchestrates {@link MoveItem} (AC1, AC5, AC8) — the source side of SGART's first cross-aggregate
  * effect (AD-10). Loads <strong>both</strong> the source and target {@link ShoppingList} aggregates
  * to enforce the move's invariants, then mutates only the source: the target is added to by the
- * {@code ItemMoveProcessManager} reacting to the raised {@link
- * de.sgart.collaboration.domain.event.ItemMovedToList}, never by this handler (single writer per
+ * {@code ItemTransferProcessManager} reacting to the raised {@link
+ * de.sgart.collaboration.domain.event.ItemTransferInitiated}, never by this handler (single writer per
  * append). The append uses the <em>loaded source</em> stream version as the expected version
  * (online load-then-append, AD-8); a concurrent write loses with the store's {@code
  * ConcurrencyConflictException} (→ 409). Mirrors {@link AddItemHandler}.
@@ -56,6 +58,8 @@ public final class MoveItemHandler {
      * @throws MoveTargetNotOpenException if the target list is not {@code Open} (409)
      * @throws ItemChangeNotPermittedApplicationException if the source list is not {@code Open} (403)
      * @throws ItemNotFoundApplicationException if {@code rawItemId} is unknown on the source (404)
+     * @throws ItemTransferInProgressApplicationException if the item is reserved by a different
+     *     in-flight transfer (409, Story 3.6, AC4)
      */
     public void handle(
             String keycloakUserId,
@@ -94,9 +98,16 @@ public final class MoveItemHandler {
             throw new ItemChangeNotPermittedApplicationException(notPermitted.getMessage());
         } catch (ItemNotFoundException notFound) {
             throw new ItemNotFoundApplicationException(notFound.getMessage());
+        } catch (ItemTransferInProgressException inProgress) {
+            throw new ItemTransferInProgressApplicationException(inProgress.getMessage());
         }
 
-        eventStore.append(command.basedOnVersion(), source.uncommittedEvents(), command.commandId());
+        // A retry of the same in-flight transfer raises nothing (convergent no-op, Story 3.6,
+        // AC4) — skip the append so it does not record a spurious command id (RenameShoppingListHandler
+        // is the template).
+        if (!source.uncommittedEvents().isEmpty()) {
+            eventStore.append(command.basedOnVersion(), source.uncommittedEvents(), command.commandId());
+        }
     }
 
     private ShoppingList loadListOwnedBy(HouseholdId householdId, ShoppingListId listId) {

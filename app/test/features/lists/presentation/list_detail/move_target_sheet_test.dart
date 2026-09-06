@@ -138,7 +138,12 @@ void main() {
       expect(itemsApi.lastMovedItemId, 'i1');
       expect(itemsApi.lastMovedTargetListId, 'other-list');
       expect(find.byKey(const Key('move-target-row-other-list')), findsNothing); // sheet closed
-      expect(find.text('Milch'), findsNothing); // optimistically removed from the source
+      // Story 3.6, AC5: the row stays (reserved on the source saga), shown non-interactively as
+      // pending rather than optimistically removed.
+      expect(find.text('Milch'), findsOneWidget);
+      expect(find.byKey(const Key('item-row-pending-i1')), findsOneWidget);
+      expect(find.byKey(const Key('item-pending-label-i1')), findsOneWidget);
+      expect(find.byKey(const Key('item-move-button-i1')), findsNothing); // non-interactive
     });
 
     testWidgets('pickingATargetWithACollisionOpensTheMergeSheetInsteadOfMoving', (tester) async {

@@ -8,9 +8,13 @@ import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.exception.DuplicateItemApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
+import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.ShoppingListName;
+import de.sgart.collaboration.domain.TransferOrigin;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
@@ -20,11 +24,14 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
+import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.MemberId;
+import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StreamId;
+import de.sgart.shared.Unit;
 import de.sgart.shared.support.InMemoryEventStore;
 import java.util.List;
 import java.util.UUID;
@@ -64,6 +71,15 @@ class UpdateItemHandlerTest {
                 MEMBER_SUB, householdId.toString(), listId.toString(), itemId.toString(), name, note, "1", "PIECE",
                 UUID.randomUUID().toString());
         return itemId;
+    }
+
+    /** Reserves {@code itemId} by appending {@code ItemTransferInitiated} directly to the stream — the fail-fast lock's precondition (Story 3.6, AC4). */
+    private void reserveItemForTransfer(ItemId itemId) {
+        List<DomainEvent> history = eventStore.readStream(streamId);
+        ItemTransferInitiated initiated = new ItemTransferInitiated(
+                EventId.generate(), householdId, listId, itemId, ShoppingListId.generate(), new ItemName("Milch"),
+                null, Quantity.of(1, Unit.PIECE), TransferOrigin.PLANNING_MOVE);
+        eventStore.append(AggregateVersion.of(streamId, history.size()), List.of(initiated), CommandId.generate());
     }
 
     @Test
@@ -149,6 +165,18 @@ class UpdateItemHandlerTest {
                         "stranger-sub", householdId.toString(), listId.toString(), itemId.toString(), "Milch2", null,
                         "1", "PIECE", UUID.randomUUID().toString()))
                 .isInstanceOf(NotAMemberException.class);
+    }
+
+    @Test
+    void updatingAnItemCurrentlyReservedByATransferIsRejectedWith409() {
+        seedListAndMembership();
+        ItemId itemId = seedItem("Milch", "Bio");
+        reserveItemForTransfer(itemId);
+
+        assertThatThrownBy(() -> handler.handle(
+                        MEMBER_SUB, householdId.toString(), listId.toString(), itemId.toString(), "Milch",
+                        "Bio 1,5%", "2", "PIECE", UUID.randomUUID().toString()))
+                .isInstanceOf(ItemTransferInProgressApplicationException.class);
     }
 
     @Test

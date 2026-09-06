@@ -58,15 +58,25 @@ public final class ListItems {
                 item.quantity().amount().toPlainString(),
                 item.quantity().unit().name(),
                 item.storeId() == null ? null : item.storeId().toString(),
-                item.status().name());
+                item.status().name(),
+                item.transferPending());
     }
 
     /**
      * An item as seen by the caller: id + name + optional note + quantity + assigned store + in-trip
-     * status — the shape the list detail screen and trip screen need. Plain {@code String}s, not
-     * domain types, so {@code adapter.in} can consume this record without reaching into {@code
-     * collaboration.domain}. {@code note}/{@code storeId} are {@code null} when absent; {@code
-     * amount} is a decimal string, {@code unit} and {@code status} are enum names.
+     * status + transfer-pending flag (Story 3.6, AC5) — the shape the list detail screen and trip
+     * screen need. Plain {@code String}s (and one {@code boolean}), not domain types, so {@code
+     * adapter.in} can consume this record without reaching into {@code collaboration.domain}. {@code
+     * note}/{@code storeId} are {@code null} when absent; {@code amount} is a decimal string, {@code
+     * unit} and {@code status} are enum names.
      */
-    public record ItemSummary(String itemId, String name, String note, String amount, String unit, String storeId, String status) {}
+    public record ItemSummary(
+            String itemId,
+            String name,
+            String note,
+            String amount,
+            String unit,
+            String storeId,
+            String status,
+            boolean transferPending) {}
 }

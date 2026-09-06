@@ -80,7 +80,14 @@ class TripController {
                 result.storeIds(),
                 result.items().stream()
                         .map(item -> new ItemController.ItemResponse(
-                                item.itemId(), item.name(), item.note(), item.amount(), item.unit(), item.storeId(), item.status()))
+                                item.itemId(),
+                                item.name(),
+                                item.note(),
+                                item.amount(),
+                                item.unit(),
+                                item.storeId(),
+                                item.status(),
+                                item.transferPending()))
                         .toList());
     }
 

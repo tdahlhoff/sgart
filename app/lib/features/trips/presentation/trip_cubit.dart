@@ -224,8 +224,14 @@ class TripCubit extends Cubit<TripState> {
     }
   }
 
-  /// Postpones [itemId] to [targetListId] (Story 3.3, AC4) — optimistically removes the item from
-  /// the list; reverts on failure. A re-entrant call while a submit is in flight is ignored.
+  /// Postpones [itemId] to [targetListId] (Story 3.3, AC4; reshaped Story 3.6, AC5) —
+  /// optimistically marks the item `transferPending` (it stays in the list, non-interactive,
+  /// showing „wird verschoben…") rather than removing it: the server now reserves the item on a
+  /// two-phase saga instead of eagerly removing it, so an optimistic removal here would show a
+  /// false success if the saga later cancels (the item would already look gone). The confirm
+  /// (item disappears) or cancel (flag clears, item usable again) outcome is picked up on the next
+  /// `bootstrap`/refresh — no client polling (decision 3, Epic-4 live-sync will push it later). A
+  /// re-entrant call while a submit is in flight is ignored.
   Future<void> postponeToList(String itemId, String targetListId) async {
     if (state.status != TripStatus.ready || state.isSubmitting) {
       return;
@@ -237,7 +243,9 @@ class TripCubit extends Cubit<TripState> {
     }
     _postponeToListIntent.beginAttempt((itemId, targetListId));
     final commandId = _postponeToListIntent.commandId;
-    final updatedItems = originalItems.where((item) => item.itemId != itemId).toList();
+    final updatedItems = originalItems
+        .map((item) => item.itemId == itemId ? item.copyWith(transferPending: true) : item)
+        .toList();
     _safeEmit(state.copyWith(items: updatedItems, isSubmitting: true, clearActionError: true));
     try {
       await itemsApi.postponeItemToList(householdId, listId, itemId, targetListId: targetListId, commandId: commandId);

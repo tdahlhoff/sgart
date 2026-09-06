@@ -287,13 +287,18 @@ class _ItemRow extends StatelessWidget {
     final isDone = item.status == ItemStatus.done;
     final isDiscarded = item.status == ItemStatus.discarded;
     final isTerminal = isReadOnly && (isDone || isDiscarded);
+    // Story 3.6, AC5 — reserved by an in-flight move transfer. Independent of isReadOnly: a
+    // pending item can occur on an otherwise-editable Open list, so it needs its own
+    // non-interactive treatment (mirrors the server's fail-fast lock) rather than piggy-backing on
+    // the read-only-list terminal styling above.
+    final isPending = item.transferPending;
 
     final tile = ListTile(
       key: Key('item-row-${item.itemId}'),
       contentPadding: EdgeInsets.zero,
       title: Text(
         item.name,
-        style: isTerminal
+        style: (isTerminal || isPending)
             ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
             : null,
       ),
@@ -301,20 +306,26 @@ class _ItemRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isTerminal && isDiscarded)
+          if (isPending)
+            Text(
+              localizations.itemTransferPendingLabel,
+              key: Key('item-pending-label-${item.itemId}'),
+              style: TextStyle(color: colors.textSecondary),
+            )
+          else if (isTerminal && isDiscarded)
             Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary)),
           Text(subtitle, key: Key('item-quantity-${item.itemId}')),
           const SizedBox(height: SgartShapes.spaceHalfUnit),
           _StoreChip(
             key: Key('item-store-chip-${item.itemId}'),
             storeName: storeName,
-            isReadOnly: isReadOnly,
+            isReadOnly: isReadOnly || isPending,
             onTap: onAssignStore,
           ),
         ],
       ),
       isThreeLine: true,
-      trailing: isReadOnly
+      trailing: (isReadOnly || isPending)
           ? null
           : Row(
               mainAxisSize: MainAxisSize.min,
@@ -341,11 +352,12 @@ class _ItemRow extends StatelessWidget {
             ),
     );
 
-    if (!isTerminal) return tile;
+    if (!isTerminal && !isPending) return tile;
     return ColoredBox(
-      color: isDone
-          ? colors.success.withValues(alpha: 0.12)
-          : colors.textSecondary.withValues(alpha: 0.08),
+      key: isPending ? Key('item-row-pending-${item.itemId}') : null,
+      color: isPending
+          ? colors.textSecondary.withValues(alpha: 0.08)
+          : (isDone ? colors.success.withValues(alpha: 0.12) : colors.textSecondary.withValues(alpha: 0.08)),
       child: tile,
     );
   }

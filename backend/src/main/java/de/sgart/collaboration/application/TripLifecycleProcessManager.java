@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * ConcurrencyConflictException} is caught and treated as converged. Never call {@link
  * CommandId#generate()} here — that would double-create/double-complete on replay.
  *
- * <p>Infra-free and {@code InMemoryEventStore}-testable, mirroring {@link ItemMoveProcessManager}.
+ * <p>Infra-free and {@code InMemoryEventStore}-testable, mirroring {@link ItemTransferProcessManager}.
  */
 public final class TripLifecycleProcessManager {
 

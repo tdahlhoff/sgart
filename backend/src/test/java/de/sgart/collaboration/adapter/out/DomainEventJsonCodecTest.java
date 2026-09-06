@@ -12,12 +12,15 @@ import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
 import de.sgart.collaboration.domain.event.ItemDiscarded;
-import de.sgart.collaboration.domain.event.ItemMovedToList;
-import de.sgart.collaboration.domain.event.ItemPostponedToList;
 import de.sgart.collaboration.domain.event.ItemRemoved;
+import de.sgart.collaboration.domain.event.ItemTransferCancelled;
+import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
+import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.TransferCancellationReason;
+import de.sgart.collaboration.domain.TransferOrigin;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
@@ -200,8 +203,8 @@ class DomainEventJsonCodecTest {
     }
 
     @Test
-    void itemMovedToListWithANoteRoundTripsThroughJsonUnderItsStableTypeTag() {
-        ItemMovedToList event = new ItemMovedToList(
+    void itemTransferInitiatedForAPlanningMoveWithANoteRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemTransferInitiated event = new ItemTransferInitiated(
                 EventId.generate(),
                 householdId,
                 ShoppingListId.generate(),
@@ -209,15 +212,16 @@ class DomainEventJsonCodecTest {
                 ShoppingListId.generate(),
                 new ItemName("Milch"),
                 new ItemNote("Bio"),
-                Quantity.of(2, Unit.PIECE));
+                Quantity.of(2, Unit.PIECE),
+                TransferOrigin.PLANNING_MOVE);
 
-        assertThat(codec.typeTagFor(event)).isEqualTo("ItemMovedToList");
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemTransferInitiated");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 
     @Test
-    void itemMovedToListWithNoNoteRoundTripsThroughJsonPreservingTheNullNote() {
-        ItemMovedToList event = new ItemMovedToList(
+    void itemTransferInitiatedForAnInTripPostponeWithNoNoteRoundTripsThroughJsonPreservingTheNullNote() {
+        ItemTransferInitiated event = new ItemTransferInitiated(
                 EventId.generate(),
                 householdId,
                 ShoppingListId.generate(),
@@ -225,11 +229,36 @@ class DomainEventJsonCodecTest {
                 ShoppingListId.generate(),
                 new ItemName("Milch"),
                 null,
-                Quantity.of(1, Unit.PIECE));
+                Quantity.of(1, Unit.PIECE),
+                TransferOrigin.IN_TRIP_POSTPONE);
 
-        ItemMovedToList decoded = (ItemMovedToList) roundTrip(event);
+        ItemTransferInitiated decoded = (ItemTransferInitiated) roundTrip(event);
         assertThat(decoded).isEqualTo(event);
         assertThat(decoded.note()).isNull();
+        assertThat(decoded.origin()).isEqualTo(TransferOrigin.IN_TRIP_POSTPONE);
+    }
+
+    @Test
+    void itemTransferConfirmedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        ItemTransferConfirmed event =
+                new ItemTransferConfirmed(EventId.generate(), ShoppingListId.generate(), ItemId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("ItemTransferConfirmed");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void itemTransferCancelledRoundTripsThroughJsonForEachCancellationReason() {
+        ItemTransferCancelled targetNotOpen = new ItemTransferCancelled(
+                EventId.generate(), ShoppingListId.generate(), ItemId.generate(), TransferCancellationReason.TARGET_NOT_OPEN);
+        ItemTransferCancelled targetGone = new ItemTransferCancelled(
+                EventId.generate(), ShoppingListId.generate(), ItemId.generate(), TransferCancellationReason.TARGET_GONE);
+
+        assertThat(codec.typeTagFor(targetNotOpen)).isEqualTo("ItemTransferCancelled");
+        assertThat(roundTrip(targetNotOpen)).isEqualTo(targetNotOpen);
+        ItemTransferCancelled decodedGone = (ItemTransferCancelled) roundTrip(targetGone);
+        assertThat(decodedGone).isEqualTo(targetGone);
+        assertThat(decodedGone.reason()).isEqualTo(TransferCancellationReason.TARGET_GONE);
     }
 
     @Test
@@ -298,20 +327,6 @@ class DomainEventJsonCodecTest {
 
         assertThat(codec.typeTagFor(event)).isEqualTo("ItemDiscarded");
         assertThat(roundTrip(event)).isEqualTo(event);
-    }
-
-    @Test
-    void itemPostponedToListRoundTripsThroughJsonWithNullableNote() {
-        ItemPostponedToList withNote = new ItemPostponedToList(
-                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(),
-                ShoppingListId.generate(), new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE));
-        ItemPostponedToList withoutNote = new ItemPostponedToList(
-                EventId.generate(), householdId, ShoppingListId.generate(), ItemId.generate(),
-                ShoppingListId.generate(), new ItemName("Brot"), null, Quantity.of(2, Unit.PACK));
-
-        assertThat(codec.typeTagFor(withNote)).isEqualTo("ItemPostponedToList");
-        assertThat(roundTrip(withNote)).isEqualTo(withNote);
-        assertThat(roundTrip(withoutNote)).isEqualTo(withoutNote);
     }
 
     @Test

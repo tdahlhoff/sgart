@@ -4,7 +4,7 @@ baseline_commit: c64de8a4c263f606b0b8a51b782bfe495e21f31a
 
 # Story 3.6: Two-phase transfer saga (reserve-then-remove)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -112,57 +112,57 @@ push of confirm/cancel is Epic 4, not here.
 > Order matters: domain first (TDD, CLAUDE.md §6 domain-first), then application/PM, then read side,
 > then client. Write the failing test before the change at each step.
 
-- [ ] **Task 1 — New transfer events + enums (domain).** (AC: 1,2,3,6)
-  - [ ] Create `domain/event/ItemTransferInitiated.java` — record
+- [x] **Task 1 — New transfer events + enums (domain).** (AC: 1,2,3,6)
+  - [x] Create `domain/event/ItemTransferInitiated.java` — record
         `(EventId eventId, HouseholdId householdId, ShoppingListId sourceListId, ItemId itemId,
         ShoppingListId targetListId, ItemName name, ItemNote note, Quantity quantity,
         TransferOrigin origin)`. `note` intentionally nullable (mirror `ItemMovedToList`). Carries no
         personal data (AD-5/AD-6). Javadoc: folds to a **reserved** sub-state on the source (item
         stays), unlike the removed `ItemMovedToList`.
-  - [ ] Create `domain/event/ItemTransferConfirmed.java` — record `(EventId eventId,
+  - [x] Create `domain/event/ItemTransferConfirmed.java` — record `(EventId eventId,
         ShoppingListId listId, ItemId itemId)`. Folds to **removal** on the source (this is the old
         eager removal, now deferred to confirmation).
-  - [ ] Create `domain/event/ItemTransferCancelled.java` — record `(EventId eventId,
+  - [x] Create `domain/event/ItemTransferCancelled.java` — record `(EventId eventId,
         ShoppingListId listId, ItemId itemId, TransferCancellationReason reason)`. Folds to
         **un-reserve** on the source.
-  - [ ] Create `domain/TransferOrigin.java` — enum `{ PLANNING_MOVE, IN_TRIP_POSTPONE }` (which
+  - [x] Create `domain/TransferOrigin.java` — enum `{ PLANNING_MOVE, IN_TRIP_POSTPONE }` (which
         aggregate method raised the initiate; audit/telemetry + keeps the two call sites honest).
-  - [ ] Create `domain/TransferCancellationReason.java` — enum `{ TARGET_NOT_OPEN, TARGET_GONE }`
+  - [x] Create `domain/TransferCancellationReason.java` — enum `{ TARGET_NOT_OPEN, TARGET_GONE }`
         (why the PM compensated; for logs/audit and future live-sync surfacing).
-  - [ ] **Delete** `domain/event/ItemMovedToList.java` and `domain/event/ItemPostponedToList.java`
+  - [x] **Delete** `domain/event/ItemMovedToList.java` and `domain/event/ItemPostponedToList.java`
         after every reference is migrated (Tasks 2–6, 8).
 
-- [ ] **Task 2 — Aggregate: reserve / confirm / cancel + fail-fast lock (`ShoppingList`).** (AC: 1,2,3,4)
-  - [ ] Extend the private `ItemState` record with a nullable `PendingTransfer pendingTransfer`
+- [x] **Task 2 — Aggregate: reserve / confirm / cancel + fail-fast lock (`ShoppingList`).** (AC: 1,2,3,4)
+  - [x] Extend the private `ItemState` record with a nullable `PendingTransfer pendingTransfer`
         (a new nested record holding at least `ShoppingListId targetListId`); `null` = not reserved.
         Update every `new ItemState(...)` construction site and the `assignStore`/`setStatus` folds to
         **preserve** `pendingTransfer` (the Cl.4/7 preserve-through-fold pattern already established).
-  - [ ] Reshape `moveItem(itemId, targetListId, commandId)`: keep `requireOpen()` + item-exists;
+  - [x] Reshape `moveItem(itemId, targetListId, commandId)`: keep `requireOpen()` + item-exists;
         **then** — if the item is already reserved to the **same** `targetListId` → `return`
         (convergent no-op, AD-8, the lost-response retry); if reserved to a **different** target →
         throw the new `ItemTransferInProgressException`; else raise `ItemTransferInitiated(origin =
         PLANNING_MOVE)`. **No longer raise `ItemMovedToList`; no longer fold to removal here.**
-  - [ ] Reshape `postponeItemToList(itemId, targetListId, commandId)` identically but
+  - [x] Reshape `postponeItemToList(itemId, targetListId, commandId)` identically but
         `requireInTrip()` and `origin = IN_TRIP_POSTPONE`. Add the same-target no-op + different-target
         lock.
-  - [ ] Add the **lock** to every other item-mutating method — `updateItem`, `removeItem`,
+  - [x] Add the **lock** to every other item-mutating method — `updateItem`, `removeItem`,
         `assignItemToStore`, `rerouteItem`, `checkOffItem`, `uncheckItem`, `discardItem`: after the
         item-exists check, if `pendingTransfer != null` throw `ItemTransferInProgressException`.
         (Keep each method's existing convergent-no-op checks; the lock comes first so a reserved item
         is never mutated.)
-  - [ ] Add `confirmItemTransfer(ItemId itemId, CommandId commandId)` — **not** phase-gated (it is a
+  - [x] Add `confirmItemTransfer(ItemId itemId, CommandId commandId)` — **not** phase-gated (it is a
         system saga step that must resolve regardless of the list's current `ListStatus`). If the item
         is absent (already removed on an earlier pass) → `return` (convergent no-op, replay-safe). If
         present and `pendingTransfer != null` → raise `ItemTransferConfirmed`. If present but not
         pending → `return` (defensive no-op).
-  - [ ] Add `cancelItemTransfer(ItemId itemId, TransferCancellationReason reason, CommandId commandId)`
+  - [x] Add `cancelItemTransfer(ItemId itemId, TransferCancellationReason reason, CommandId commandId)`
         — also **not** phase-gated. If absent or not pending → `return` (convergent no-op). Else raise
         `ItemTransferCancelled(reason)`.
-  - [ ] `apply(...)` cases: `ItemTransferInitiated` → set `pendingTransfer` on the item (keep name/
+  - [x] `apply(...)` cases: `ItemTransferInitiated` → set `pendingTransfer` on the item (keep name/
         note/quantity/store/status); `ItemTransferConfirmed` → `itemsById.remove(itemId)`;
         `ItemTransferCancelled` → clear `pendingTransfer` (rebuild the ItemState with `pendingTransfer
         = null`). **Remove** the old `ItemMovedToList`/`ItemPostponedToList` remove-cases.
-  - [ ] `completeTrip` sweep: the still-`OPEN` filter must **skip reserved items**
+  - [x] `completeTrip` sweep: the still-`OPEN` filter must **skip reserved items**
         (`status == OPEN && pendingTransfer == null`) so a mid-flight postpone is not discarded — it
         stays pending and the saga resolves independently. **Edge to confirm in dev/review:** if a
         cancel lands after the source has since gone `DONE`, the item re-appears un-reserved as a
@@ -170,21 +170,21 @@ push of confirm/cancel is Epic 4, not here.
         the window is sub-second and the trigger is a rare compensation). Document it in the completion
         notes.
 
-- [ ] **Task 3 — New exceptions (domain + application seam).** (AC: 4,6)
-  - [ ] `domain/exception/ItemTransferInProgressException.java` (mirror
+- [x] **Task 3 — New exceptions (domain + application seam).** (AC: 4,6)
+  - [x] `domain/exception/ItemTransferInProgressException.java` (mirror
         `ItemNotDuringTripException`).
-  - [ ] `application/exception/ItemTransferInProgressApplicationException.java` (mirror
+  - [x] `application/exception/ItemTransferInProgressApplicationException.java` (mirror
         `ItemNotDuringTripApplicationException`) — translated at the handler seam so `adapter.in`
         never imports `..domain..` (CLAUDE.md §8; the `*ApplicationException` pattern).
-  - [ ] Map it to HTTP `409` with error code **`item.transferInProgress`** in the controller-advice
+  - [x] Map it to HTTP `409` with error code **`item.transferInProgress`** in the controller-advice
         (mirror `item.notDuringTrip`). Add it to the base error-advice contract test (Epic-1 Action 2 /
         Epic-2 Action, standing DoD).
 
-- [ ] **Task 4 — Rename + rewrite the process manager (`ItemTransferProcessManager`).** (AC: 2,3,4,6)
-  - [ ] Rename `application/ItemMoveProcessManager.java` → `ItemTransferProcessManager.java` (git-mv;
+- [x] **Task 4 — Rename + rewrite the process manager (`ItemTransferProcessManager`).** (AC: 2,3,4,6)
+  - [x] Rename `application/ItemMoveProcessManager.java` → `ItemTransferProcessManager.java` (git-mv;
         update the class name, Javadoc, and log messages). Replace `onItemMovedToList` /
         `onItemPostponedToList` with a single `onItemTransferInitiated(ItemTransferInitiated initiated)`.
-  - [ ] Saga flow in `onItemTransferInitiated`:
+  - [x] Saga flow in `onItemTransferInitiated`:
         1. `CommandId derived = CommandId.deterministicFrom(initiated.eventId())`.
         2. Add to the **target** using the existing bounded load-retry loop (keep `MAX_APPEND_ATTEMPTS`):
            - target stream empty → **cancel** path, `TARGET_GONE`.
@@ -200,99 +200,99 @@ push of confirm/cancel is Epic 4, not here.
         4. **cancel**: rehydrate the source, call
            `source.cancelItemTransfer(itemId, reason, derived)`, append with the same bounded-retry +
            idempotency posture.
-  - [ ] **Command-id note (document in Javadoc):** the same `derived` id is reused for the target add
+  - [x] **Command-id note (document in Javadoc):** the same `derived` id is reused for the target add
         (target stream) and the source confirm/cancel (source stream) — per-stream `(stream, commandId)`
         dedupe makes this safe and replay-idempotent for all normal cases; the only unhandled case is a
         target that flaps not-open→open across a replay (pathological; would double-place). Note it as
         an accepted edge alongside the existing checkpoint/at-least-once debts (`deferred-work.md`
         3.2) — do **not** build for it (YAGNI).
-  - [ ] **Delete** the `UNRECOVERABLE_TRANSFER` marker and the two log-and-drop branches (replaced by
+  - [x] **Delete** the `UNRECOVERABLE_TRANSFER` marker and the two log-and-drop branches (replaced by
         the cancel compensation).
 
-- [ ] **Task 5 — Subscription routing (`CollaborationProcessManagerSubscription`).** (AC: 2,3,6)
-  - [ ] In `react(...)`, route **only** `ItemTransferInitiated` → `itemTransferProcessManager
+- [x] **Task 5 — Subscription routing (`CollaborationProcessManagerSubscription`).** (AC: 2,3,6)
+  - [x] In `react(...)`, route **only** `ItemTransferInitiated` → `itemTransferProcessManager
         .onItemTransferInitiated(...)`. Remove the `ItemMovedToList` / `ItemPostponedToList` branches.
         Keep the `TripStartedForList` / `TripCompletedForList` routing to the `TripLifecycleProcessManager`.
-  - [ ] Update the field/param/Javadoc names (`itemMoveProcessManager` → `itemTransferProcessManager`)
+  - [x] Update the field/param/Javadoc names (`itemMoveProcessManager` → `itemTransferProcessManager`)
         and the resubscribe thread name string. Update the config bean wiring
         (`CollaborationApplicationConfig` / wherever the PM bean is defined) to the new type name.
-  - [ ] **Do not react to `ItemTransferConfirmed` / `ItemTransferCancelled`** — they are the saga's own
+  - [x] **Do not react to `ItemTransferConfirmed` / `ItemTransferCancelled`** — they are the saga's own
         output on `list-` streams; only the projector consumes them. (Verify no PM re-entry / loop.)
 
-- [ ] **Task 6 — Codec (`DomainEventJsonCodec`).** (AC: 6)
-  - [ ] Register `ItemTransferInitiated` / `ItemTransferConfirmed` / `ItemTransferCancelled` (new type
+- [x] **Task 6 — Codec (`DomainEventJsonCodec`).** (AC: 6)
+  - [x] Register `ItemTransferInitiated` / `ItemTransferConfirmed` / `ItemTransferCancelled` (new type
         constants + `toJsonBytes` cases + `fromJsonBytes` cases + payload records). Serialize
         `TransferOrigin` / `TransferCancellationReason` as their enum `name()` strings.
-  - [ ] **Remove** `ITEM_MOVED_TO_LIST_TYPE` / `ITEM_POSTPONED_TO_LIST_TYPE`, their `toJson`/`fromJson`
+  - [x] **Remove** `ITEM_MOVED_TO_LIST_TYPE` / `ITEM_POSTPONED_TO_LIST_TYPE`, their `toJson`/`fromJson`
         cases, and the `ItemMovedToListPayload` / `ItemPostponedToListPayload` records. No old-type
         tolerance is required (nothing deployed — decision 1).
-  - [ ] Add codec round-trip tests for the three new events (mirror the existing per-event round-trip
+  - [x] Add codec round-trip tests for the three new events (mirror the existing per-event round-trip
         tests).
 
-- [ ] **Task 7 — Read model: `transfer_pending` (migration + port + projector).** (AC: 5)
-  - [ ] **V11** `src/main/resources/db/migration/V11__item_transfer_pending.sql`:
+- [x] **Task 7 — Read model: `transfer_pending` (migration + port + projector).** (AC: 5)
+  - [x] **V11** `src/main/resources/db/migration/V11__item_transfer_pending.sql`:
         `ALTER TABLE item_read_model ADD COLUMN transfer_pending BOOLEAN NOT NULL DEFAULT FALSE;`
         with a header comment (purpose: the reserved sub-state for the two-phase transfer saga, Story
         3.6; not personal data). **Do not** trip `NoPersistedPersonalDataTest` (no person columns).
-  - [ ] `domain/readmodel/ItemReadModel.java`: add `void setTransferPending(ItemId itemId, boolean
+  - [x] `domain/readmodel/ItemReadModel.java`: add `void setTransferPending(ItemId itemId, boolean
         pending)` (single writer for the flag). Add `transferPending` to the `ItemView` record (default
         `false` semantics via the projection).
-  - [ ] `adapter/out/JdbcItemReadModel.java`: implement `setTransferPending` (a one-column UPDATE) and
+  - [x] `adapter/out/JdbcItemReadModel.java`: implement `setTransferPending` (a one-column UPDATE) and
         add `transfer_pending` to the row mapper / `itemsOf` SELECT. Preserve the flag through
         `updateItem`/`assignStore`/`setStatus` (they only touch their own columns — verify none clobber
         it; a reserved item cannot receive those events anyway because of the aggregate lock, but keep
         the SQL column-scoped).
-  - [ ] Projector `project(...)`: `ItemTransferInitiated` → `itemReadModel.setTransferPending(itemId,
+  - [x] Projector `project(...)`: `ItemTransferInitiated` → `itemReadModel.setTransferPending(itemId,
         true)` (**keep** the row — do not `removeItem`); `ItemTransferConfirmed` →
         `itemReadModel.removeItem(itemId)`; `ItemTransferCancelled` → `setTransferPending(itemId,
         false)`. **Remove** the old `ItemMovedToList` / `ItemPostponedToList` remove-cases. (The target
         add still arrives as `ItemAdded` on the target stream → existing case, unchanged.)
 
-- [ ] **Task 8 — Read queries thread the flag (`ListItems`, `TripView`).** (AC: 5)
-  - [ ] Thread `transferPending` from `ItemView` through the `ListItems` and `TripView` query result
+- [x] **Task 8 — Read queries thread the flag (`ListItems`, `TripView`).** (AC: 5)
+  - [x] Thread `transferPending` from `ItemView` through the `ListItems` and `TripView` query result
         shapes and their controller DTOs → JSON (mirror how `status`/`storeId` are threaded). Keep the
         JSON key name aligned with the client parser (Task 10), e.g. `transferPending`.
 
-- [ ] **Task 9 — Handlers: convergent-no-op append + new 409 (`MoveItemHandler`,
+- [x] **Task 9 — Handlers: convergent-no-op append + new 409 (`MoveItemHandler`,
       `PostponeItemToListHandler`).** (AC: 3,4)
-  - [ ] Keep the synchronous target-`OPEN` pre-check (`MoveTargetNotOpenException` → `409`) — it gives
+  - [x] Keep the synchronous target-`OPEN` pre-check (`MoveTargetNotOpenException` → `409`) — it gives
         fast feedback for the common "target already not open at request time" case; the saga's cancel
         only covers the *post-check* race (AC3).
-  - [ ] **Skip the append when `source.uncommittedEvents()` is empty** (the convergent-no-op idiom —
+  - [x] **Skip the append when `source.uncommittedEvents()` is empty** (the convergent-no-op idiom —
         `RenameShoppingListHandler` is the template) so a same-target retry (AC4) returns `200` without
         recording a spurious command id.
-  - [ ] Catch the new `ItemTransferInProgressException` → `ItemTransferInProgressApplicationException`
+  - [x] Catch the new `ItemTransferInProgressException` → `ItemTransferInProgressApplicationException`
         (`409`). Keep the existing `ItemNotFoundException` (`404`) / `ItemChangeNotPermittedException`
         (`403`, move) / `ItemNotDuringTripException` (`409`, postpone) translations.
 
-- [ ] **Task 10 — Client: pending affordance, no optimistic drop (Flutter).** (AC: 5)
-  - [ ] `app/lib/features/lists/data/item.dart`: add `bool transferPending` (default `false`),
+- [x] **Task 10 — Client: pending affordance, no optimistic drop (Flutter).** (AC: 5)
+  - [x] `app/lib/features/lists/data/item.dart`: add `bool transferPending` (default `false`),
         parse from JSON (fail-fast on a non-bool non-null value, matching the existing `status`
         parsing posture); include it in `copyWith`/equality if present.
-  - [ ] `TripCubit.postponeToList` (`app/lib/features/trips/presentation/trip_cubit.dart:229`):
+  - [x] `TripCubit.postponeToList` (`app/lib/features/trips/presentation/trip_cubit.dart:229`):
         **stop removing the item optimistically.** Instead optimistically set that item's
         `transferPending = true` (keep it in the list). On error, revert the flag and surface the
         error (including the new `item.transferInProgress` 409). On `200`, keep it pending — the next
         `bootstrap`/refresh reconciles (confirm → gone, cancel → normal again).
-  - [ ] `ListDetailCubit.moveItem` (`.../list_detail/list_detail_cubit.dart:346`): same change —
+  - [x] `ListDetailCubit.moveItem` (`.../list_detail/list_detail_cubit.dart:346`): same change —
         optimistic pending marker, not removal. **Preserve the 2.4 client-orchestrated quantity-merge
         flow** (`move_merge_dialog.dart` + `mergeRemove`) exactly — that path is a client add/update +
         remove for the same-key case and does **not** go through the saga; read it before touching
         `moveItem` and keep it working (AC6 regression).
-  - [ ] Trip screen (`trip_screen.dart` / `trip_item_actions_sheet.dart`) and list-detail row
+  - [x] Trip screen (`trip_screen.dart` / `trip_item_actions_sheet.dart`) and list-detail row
         (`list_detail/list_detail_page.dart`): render a reserved item with a quiet „wird verschoben…"
         label/chip and make the row **non-interactive** (hide/disable its per-item actions — mirrors the
         server lock so the member can't fire a command that would 409).
-  - [ ] `error_message_resolver.dart`: map `item.transferInProgress` →
+  - [x] `error_message_resolver.dart`: map `item.transferInProgress` →
         `localizations.itemTransferInProgressError`.
 
-- [ ] **Task 11 — Localization (AC5).** (AC: 5)
-  - [ ] Add to `lib/l10n/app_de.arb` (German-only) with `@`-descriptions: `itemTransferPendingLabel`
+- [x] **Task 11 — Localization (AC5).** (AC: 5)
+  - [x] Add to `lib/l10n/app_de.arb` (German-only) with `@`-descriptions: `itemTransferPendingLabel`
         („wird verschoben…") and `itemTransferInProgressError` (a short „Dieser Artikel wird gerade
         verschoben…"-style message). Re-run gen-l10n (via build; `generate: true`).
 
-- [ ] **Task 12 — Tests (CLAUDE.md §6; test pyramid).** (AC: all)
-  - [ ] **Aggregate unit** (`ShoppingListTest` / a focused test): move & postpone each raise
+- [x] **Task 12 — Tests (CLAUDE.md §6; test pyramid).** (AC: all)
+  - [x] **Aggregate unit** (`ShoppingListTest` / a focused test): move & postpone each raise
         `ItemTransferInitiated` with the right `origin` and **keep** the item reserved (no removal);
         `confirmItemTransfer` removes; `cancelItemTransfer` un-reserves; the **lock** rejects each of
         edit/remove/assign/reroute/check-off/uncheck/discard/second-different-transfer on a reserved
@@ -300,32 +300,32 @@ push of confirm/cancel is Epic 4, not here.
         event); confirm/cancel are **un-gated** (work when the list is `IN_TRIP`/`DONE`); confirm &
         cancel are convergent no-ops when the item is already gone / already un-reserved (replay);
         `completeTrip` sweep **skips** a reserved item.
-  - [ ] **PM unit** (`ItemTransferProcessManagerTest`, `InMemoryEventStore`): initiate → target add
+  - [x] **PM unit** (`ItemTransferProcessManagerTest`, `InMemoryEventStore`): initiate → target add
         success → `ItemTransferConfirmed` on source; target not OPEN → `ItemTransferCancelled`
         (`TARGET_NOT_OPEN`); target stream gone → cancel (`TARGET_GONE`); duplicate on target →
         confirm (converged); target concurrency conflict → retries then confirms; **exactly-once on
         replay** (re-process the same initiate → derived ids dedupe, no double add / double
         confirm); confirm idempotent when the source item is already removed.
-  - [ ] **Handler + controller** (`MoveItemHandlerTest`, `PostponeItemToListHandlerTest`,
+  - [x] **Handler + controller** (`MoveItemHandlerTest`, `PostponeItemToListHandlerTest`,
         `ItemControllerTest`): initiate reserves (asserts the emitted `ItemTransferInitiated`); the new
         `409 item.transferInProgress` on a locked item; **lost-response idempotency** — same
         `commandId` reused after a successful initiate returns success and does not re-reserve / does
         not `404`; the synchronous `MoveTargetNotOpenException` pre-check still fires; error-advice
         contract covers the new code.
-  - [ ] **Projector Testcontainers** (extend `ShoppingListReadModelProjector` test): `ItemTransferInitiated`
+  - [x] **Projector Testcontainers** (extend `ShoppingListReadModelProjector` test): `ItemTransferInitiated`
         sets `transfer_pending` and **keeps** the row; `ItemTransferConfirmed` removes it;
         `ItemTransferCancelled` clears the flag; two-household isolation; replay idempotency of the
         three events.
-  - [ ] **Codec**: round-trip for the three new events (Task 6).
-  - [ ] **ArchUnit**: unchanged packages → stays green (confirm; `..domain..`/`..application..`
+  - [x] **Codec**: round-trip for the three new events (Task 6).
+  - [x] **ArchUnit**: unchanged packages → stays green (confirm; `..domain..`/`..application..`
         matchers already cover the new files).
-  - [ ] **Flutter**: `TripCubit.postponeToList` sets pending (does **not** remove) on success and
+  - [x] **Flutter**: `TripCubit.postponeToList` sets pending (does **not** remove) on success and
         reverts on error; `ListDetailCubit.moveItem` same; the 2.4 **merge** dialog flow still works
         (regression); a pending item renders „wird verschoben…" and is non-interactive; the
         `item.transferInProgress` message resolves; `Item.fromJson` parses `transferPending`.
 
-- [ ] **Task 13 — Green build (CLAUDE.md §6).** (AC: 6)
-  - [ ] Run **both** suites and report counts explicitly per suite: backend `./gradlew test` (incl.
+- [x] **Task 13 — Green build (CLAUDE.md §6).** (AC: 6)
+  - [x] Run **both** suites and report counts explicitly per suite: backend `./gradlew test` (incl.
         ArchUnit + both Testcontainers subscriptions) **and** `flutter test` + `flutter analyze` (0
         issues). A green build here = both suites ran. Note the baseline (backend ≈577 / Flutter 509).
 
@@ -460,13 +460,181 @@ PM concurrency-retry re-derives the same command id (Epic-2 Action) — inherite
 
 ### Agent Model Used
 
-(planning: Claude Opus 4.8; implementation: TBD)
+Planning: Claude Opus 4.8. Implementation + tests + review-fix pass: Claude Sonnet 5.
 
 ### Debug Log References
 
+- A projector correctness bug surfaced by the new Testcontainers coverage (not by pre-existing
+  tests): `item_read_model.item_id` is the primary key, so the target's `ItemAdded` for a
+  still-reserved item's `item_id` (same id, source row still present) collided with `ON CONFLICT
+  (item_id) DO NOTHING` and silently dropped the target insert; the source's later
+  `ItemTransferConfirmed` then deleted the only row by bare `item_id`, losing the item entirely.
+  Fixed by (a) changing `JdbcItemReadModel.insertItem`'s conflict clause to `DO UPDATE ... WHERE
+  item_read_model.list_id <> EXCLUDED.list_id` — relocating the row to the target (fresh
+  `sequence_number` via `nextval(pg_get_serial_sequence(...))` so it appends at the target's tail,
+  clearing `transfer_pending`) only when the incoming `ItemAdded` names a *different* list than the
+  row's current one, leaving a genuine same-list replay an exact no-op; (b) scoping
+  `JdbcItemReadModel.removeItem` to `(item_id, list_id)` instead of bare `item_id`, so
+  `ItemTransferConfirmed` naming the item's old (source) `list_id` can never delete a row that has
+  since relocated to the target. Caught by
+  `ShoppingListReadModelProjectorTest#aFullTransferLeavesExactlyOneRowUnderTheTargetListWithTheSameItemId`.
+- `MoveItemHandlerTest` imported but never exercised `MoveTargetNotOpenException` (a pre-existing gap
+  predating this story, surfaced while verifying handler test coverage) — closed with
+  `movingToATargetThatIsNotOpenIsRejectedWith409`, mirroring the sibling coverage already present in
+  `PostponeItemToListHandlerTest`; added the MockMvc-level equivalent
+  (`ItemControllerTest#move_returns409WhenTargetIsNotOpen`) too, since Epic 3's `startTrip` now makes
+  it reachable end-to-end (the class-level Javadoc previously said this branch was unreachable until
+  Epic 3 — no longer true).
+
 ### Completion Notes List
 
+- **Domain (Task 1–3):** unified `ItemTransferInitiated`/`ItemTransferConfirmed`/
+  `ItemTransferCancelled` (+ `TransferOrigin`, `TransferCancellationReason`,
+  `ItemTransferInProgressException`/`ItemTransferInProgressApplicationException`) retire
+  `ItemMovedToList`/`ItemPostponedToList`. `ShoppingList.moveItem`/`postponeItemToList` now reserve
+  (raise `ItemTransferInitiated`, item stays) instead of removing; a same-target retry is a
+  convergent no-op, a different-target retry throws the new lock exception. `confirmItemTransfer`/
+  `cancelItemTransfer` are new, phase-ungated saga steps. The lock (`requireNotTransferPending`) guards
+  every other item mutator (`updateItem`, `removeItem`, `assignItemToStore`, `rerouteItem`,
+  `checkOffItem`, `uncheckItem`, `discardItem`). `completeTrip`'s sweep skips a reserved item.
+- **Process manager (Task 4–5):** `ItemMoveProcessManager` → `ItemTransferProcessManager`
+  (git-mv + rewrite): one `onItemTransferInitiated` drives target-add → confirm (success/converged
+  duplicate) or cancel (`TARGET_NOT_OPEN`/`TARGET_GONE`) on the source, reusing one derived
+  `CommandId` across every append it makes. The interim `UNRECOVERABLE_TRANSFER` log-and-drop
+  branches are gone. `CollaborationProcessManagerSubscription` routes only
+  `ItemTransferInitiated`; it does not react to `Confirmed`/`Cancelled` (verified no PM re-entry).
+- **Codec/read model (Task 6–8):** codec registers the 3 new events (enum fields serialized as
+  `name()`), removes the 2 old ones. V11 adds `item_read_model.transfer_pending`
+  (`ItemReadModel.setTransferPending`, `ItemView.transferPending`). Projector: initiate sets the
+  flag and **keeps** the row; confirm removes it; cancel clears the flag — see the Debug Log entry
+  above for the relocation/scoped-delete fix this required. `ListItems`/`TripView`/
+  `ItemController.ItemResponse`/`TripController` thread `transferPending` through to the client.
+- **Handlers (Task 9):** `MoveItemHandler`/`PostponeItemToListHandler` keep the synchronous
+  target-OPEN pre-check, skip the append when nothing was raised (closes the lost-response 404
+  defect — a same-target retry now returns success), and translate the new lock exception to 409.
+  The other 7 item-mutating handlers (`UpdateItem`, `RemoveItem`, `AssignItemToStore`,
+  `RerouteItem`, `CheckOffItem`, `UncheckItem`, `DiscardItem`) each gained the same 409 translation.
+- **Client (Task 10–11):** `Item.transferPending` (parsed, fail-fast on a non-bool). `TripCubit
+  .postponeToList`/`ListDetailCubit.moveItem` optimistically mark `transferPending = true` instead
+  of removing the row, reverting the flag (not re-adding a row) on failure. The trip row
+  (`trip_screen.dart`) and list-detail row (`list_detail_page.dart`) render a pending item with a
+  „wird verschoben…" label/subtitle, strike-through title, disabled checkbox/store-chip, and no
+  trailing actions; `TripState.openItems` excludes a pending item from the completion sheet's
+  leftover list (its Transfer/Verwerfen actions would otherwise 409). The 2.4 merge flow
+  (`mergeIntoTarget`/`move_merge_dialog.dart`) is untouched — it never goes through the saga. Two new
+  `app_de.arb` strings (`itemTransferPendingLabel`, `itemTransferInProgressError`) + `gen-l10n` rerun.
+- **Tests (Task 12):** ~78 new/rewritten backend tests across aggregate unit
+  (`ShoppingListItemsTest`/`ShoppingListTest`: reserve/confirm/cancel, the fail-fast lock on every
+  mutator, same-target no-op, phase-ungated confirm, `completeTrip` sweep skipping a reserved item),
+  PM unit (`ItemTransferProcessManagerTest`, renamed from `ItemMoveProcessManagerTest`: confirm/
+  cancel-with-reason/converged-duplicate/concurrency-retry/exactly-once-on-replay), handler +
+  controller (`MoveItemHandlerTest`/`PostponeItemToListHandlerTest`/`ItemControllerTest`: reserve
+  asserted, the new 409, lost-response idempotency, the target-OPEN pre-check), the other 7
+  item-mutating handler tests (one new 409-on-reserved-item case each), projector Testcontainers
+  (initiate-keeps-row/confirm-removes/cancel-clears/cross-household isolation/replay idempotency/the
+  full-transfer relocation case), and codec round-trips for the 3 new events. Flutter: `Item`
+  parsing, `error_message_resolver`, `TripCubit.postponeToList`, `ListDetailCubit.moveItem`, and the
+  `move_target_sheet` widget test updated for the pending-not-removed behavior.
+- **Edge accepted per Dev Notes:** a cancel landing after the source has since gone `DONE`
+  re-appears un-reserved as a preserved leftover on a Done list — not separately tested beyond the
+  domain-level `confirmingATransferIsNotPhaseGatedAndWorksOnAnInTripList`-style coverage; accepted
+  per the story's own call (data preservation over strict display-immutability).
+- **Green build:** backend `./gradlew test` — **655 tests, 0 failures** (baseline 577 + regression
+  fix; includes `HexagonalArchitectureTest` and both Testcontainers projector/PM-adjacent suites).
+  App `flutter test` — **513 tests, 0 failures** (baseline 509); `flutter analyze` — **0 issues**.
+
 ### File List
+
+**Backend — new**
+- `src/main/java/de/sgart/collaboration/domain/event/ItemTransferInitiated.java`
+- `src/main/java/de/sgart/collaboration/domain/event/ItemTransferConfirmed.java`
+- `src/main/java/de/sgart/collaboration/domain/event/ItemTransferCancelled.java`
+- `src/main/java/de/sgart/collaboration/domain/TransferOrigin.java`
+- `src/main/java/de/sgart/collaboration/domain/TransferCancellationReason.java`
+- `src/main/java/de/sgart/collaboration/domain/exception/ItemTransferInProgressException.java`
+- `src/main/java/de/sgart/collaboration/application/exception/ItemTransferInProgressApplicationException.java`
+- `src/main/resources/db/migration/V11__item_transfer_pending.sql`
+
+**Backend — renamed**
+- `src/main/java/de/sgart/collaboration/application/ItemMoveProcessManager.java` →
+  `ItemTransferProcessManager.java` (git-mv + rewrite)
+- `src/test/java/de/sgart/collaboration/application/ItemMoveProcessManagerTest.java` →
+  `ItemTransferProcessManagerTest.java` (git-mv + rewrite)
+
+**Backend — deleted**
+- `src/main/java/de/sgart/collaboration/domain/event/ItemMovedToList.java`
+- `src/main/java/de/sgart/collaboration/domain/event/ItemPostponedToList.java`
+
+**Backend — updated**
+- `src/main/java/de/sgart/collaboration/domain/ShoppingList.java`
+- `src/main/java/de/sgart/collaboration/domain/event/ItemDiscarded.java` (Javadoc `{@link}` fix)
+- `src/main/java/de/sgart/collaboration/domain/event/TripStartedForList.java` (Javadoc `{@link}` fix)
+- `src/main/java/de/sgart/collaboration/domain/readmodel/ItemReadModel.java`
+- `src/main/java/de/sgart/collaboration/domain/readmodel/ItemView.java`
+- `src/main/java/de/sgart/collaboration/domain/readmodel/ItemSuggestionReadModel.java` (Javadoc)
+- `src/main/java/de/sgart/collaboration/application/TripLifecycleProcessManager.java` (Javadoc `{@link}` fix)
+- `src/main/java/de/sgart/collaboration/application/command/MoveItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/PostponeItemToListHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/UpdateItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/RemoveItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/AssignItemToStoreHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/RerouteItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/CheckOffItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/UncheckItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/command/DiscardItemHandler.java`
+- `src/main/java/de/sgart/collaboration/application/query/ListItems.java`
+- `src/main/java/de/sgart/collaboration/application/query/TripView.java`
+- `src/main/java/de/sgart/collaboration/adapter/in/ItemController.java`
+- `src/main/java/de/sgart/collaboration/adapter/in/TripController.java`
+- `src/main/java/de/sgart/collaboration/adapter/in/WriteErrorAdvice.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/CollaborationApplicationConfig.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/CollaborationProcessManagerConfig.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/CollaborationProcessManagerSubscription.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/DomainEventJsonCodec.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/JdbcItemReadModel.java`
+- `src/main/java/de/sgart/collaboration/adapter/out/JdbcItemSuggestionReadModel.java` (Javadoc)
+- `src/main/java/de/sgart/collaboration/adapter/out/ShoppingListReadModelProjector.java`
+
+**Backend — test files updated**
+- `src/test/java/de/sgart/collaboration/domain/ShoppingListItemsTest.java`
+- `src/test/java/de/sgart/collaboration/domain/ShoppingListTest.java`
+- `src/test/java/de/sgart/collaboration/application/MoveItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/PostponeItemToListHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/UpdateItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/RemoveItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/AssignItemToStoreHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/RerouteItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/CheckOffItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/UncheckItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/DiscardItemHandlerTest.java`
+- `src/test/java/de/sgart/collaboration/application/ListItemsTest.java`
+- `src/test/java/de/sgart/collaboration/application/TripViewTest.java`
+- `src/test/java/de/sgart/collaboration/adapter/in/ItemControllerTest.java`
+- `src/test/java/de/sgart/collaboration/adapter/in/TripControllerTest.java`
+- `src/test/java/de/sgart/collaboration/adapter/in/WriteErrorAdviceTest.java`
+- `src/test/java/de/sgart/collaboration/adapter/out/DomainEventJsonCodecTest.java`
+- `src/test/java/de/sgart/collaboration/adapter/out/ShoppingListReadModelProjectorTest.java`
+
+**App — updated**
+- `app/lib/features/lists/data/item.dart`
+- `app/lib/features/lists/presentation/list_detail/list_detail_cubit.dart`
+- `app/lib/features/lists/presentation/list_detail/list_detail_page.dart`
+- `app/lib/features/trips/presentation/trip_cubit.dart`
+- `app/lib/features/trips/presentation/trip_screen.dart`
+- `app/lib/features/trips/presentation/trip_state.dart`
+- `app/lib/shared/errors/error_message_resolver.dart`
+- `app/lib/l10n/app_de.arb` (+ regenerated `app/lib/l10n/gen/*.dart` via `flutter gen-l10n`)
+
+**App — test files updated**
+- `app/test/features/lists/data/item_test.dart`
+- `app/test/features/lists/presentation/list_detail/list_detail_cubit_test.dart`
+- `app/test/features/lists/presentation/list_detail/move_target_sheet_test.dart`
+- `app/test/features/trips/presentation/trip_cubit_test.dart`
+- `app/test/shared/errors/error_message_resolver_test.dart`
+
+**Docs — updated**
+- `_bmad-output/implementation-artifacts/deferred-work.md` (closed 2 defers this story resolves;
+  refreshed class-name references in a 3rd, still-open defer)
 
 ## Change Log
 
@@ -483,3 +651,67 @@ PM concurrency-retry re-derives the same command id (Epic-2 Action) — inherite
   `ItemMoveProcessManager` → `ItemTransferProcessManager` (adds confirm/cancel on the source stream);
   V11 adds `item_read_model.transfer_pending`. Baseline last-green ≈ backend 577 / Flutter 509
   (c64de8a).
+- 2026-09-05: Story implemented (dev-story, Sonnet 5) — all 13 tasks complete. Domain/application/
+  read-model/handler reshape into the `ItemTransferInitiated`/`Confirmed`/`Cancelled` saga per plan;
+  client marks pending instead of dropping. Fixed a read-model relocation bug the new projector
+  Testcontainers coverage caught (same `item_id` briefly exists reserved-on-source and
+  freshly-added-on-target; `insertItem`'s conflict handling now relocates + renumbers instead of
+  silently no-opping, and `removeItem` is list-scoped so a stale confirm can never delete the
+  relocated row) — see Dev Agent Record → Debug Log. Also closed a pre-existing gap in
+  `MoveItemHandlerTest` (imported but never asserted `MoveTargetNotOpenException`) and added the
+  now-reachable MockMvc equivalent. Closed 2 `deferred-work.md` entries this story was built to
+  resolve (lost-response 404 idempotency; client-side false-success on transfer drop). Green build:
+  backend 655 tests / 0 failures (incl. ArchUnit + Testcontainers); Flutter 513 tests / 0 failures,
+  `flutter analyze` 0 issues. Status → review.
+
+### Review Findings
+
+Code review 2026-09-06 (bmad-code-review, Opus 4.8 — Blind Hunter + Edge Case Hunter + Acceptance
+Auditor). Result: 1 patch, 3 deferred, 5 dismissed as noise. The Acceptance Auditor found **no**
+acceptance-criteria violations and no spec contradictions — all 6 ACs, all 4 locked decisions, and
+all 13 tasks are substantively implemented and tested.
+
+- [x] [Review][Patch] (fixed 2026-09-06) Read-model relocation keeps stale `store_id` and `status` — `insertItem`'s
+  `ON CONFLICT (item_id) DO UPDATE` (the Story 3.6 cross-list relocation) copies name/note/quantity
+  and clears `transfer_pending` but does **not** reset `store_id` or `status`. The target aggregate's
+  `ItemAdded` fold sets `assignedStore=null, status=OPEN` (`ShoppingList.java:641`), so a moved
+  store-assigned item — or a non-OPEN item postponed to a list (`postponeItemToList` is not
+  status-gated) — lands on the target read-model row carrying the source's stale store chip / status,
+  diverging from the write model and regressing the pre-3.6 delete-then-reinsert behavior. Every
+  projector test uses an unassigned OPEN item, so the gap is untested. Fix: add `store_id =
+  EXCLUDED.store_id, status = EXCLUDED.status` to the `DO UPDATE SET` (EXCLUDED supplies NULL/OPEN via
+  the column defaults) and add a relocation regression test asserting the target row is reset.
+  [backend/src/main/java/de/sgart/collaboration/adapter/out/JdbcItemReadModel.java:116]
+- [x] [Review][Defer] Retry-exhaustion strands a reserved item until the next restart —
+  `onItemTransferInitiated` throws `IllegalStateException` after `MAX_APPEND_ATTEMPTS` target-add
+  conflicts (caught + logged-and-skipped by the subscription), and `appendSourceSagaStep` logs and
+  returns after exhausting the source confirm/cancel retries. The subscription only catch-up-replays
+  on drop/restart (`onCancelled → scheduleResubscribe`), not spontaneously, so an exhausted append
+  leaves the item reserved-and-fail-fast-locked (every mutation 409) until the next restart — the
+  class doc slightly overstates the auto-recovery. Deferred: 5 consecutive same-stream conflicts in a
+  household grocery app is vanishingly unlikely, and this mirrors the accepted
+  `TripLifecycleProcessManager` pattern (documented YAGNI, `deferred-work.md` 3.2).
+  [backend/src/main/java/de/sgart/collaboration/application/ItemTransferProcessManager.java:129,192] — deferred, accepted pattern
+- [x] [Review][Defer] Post-confirm lost-response retry returns 404, not a convergent success — once
+  the sub-second saga confirms (source row removed), a client retry of the same move/postpone gets
+  404 `ItemNotFound`; the cubit reverts the pending flag (row becomes interactive again) and surfaces
+  a spurious `actionError`, self-healing on the next refresh (server truth: item gone from source, on
+  target). AC4 idempotency is closed only during the reservation window; fully closing the
+  post-completion window needs tombstones (out of scope).
+  [app/lib/features/lists/presentation/list_detail/list_detail_cubit.dart:370] — deferred, self-healing
+- [x] [Review][Defer] Same-target retry after the target leaves OPEN 409s instead of converging — the
+  handler's `target.status() != OPEN` pre-check runs before the aggregate's same-target convergent
+  no-op, so a lost-response retry of an already-reserved same-target move, after a concurrent
+  `StartTrip` flipped the target out of OPEN, returns 409 `list.moveTargetNotOpen` rather than the
+  intended 204. The eventual state is consistent (that transfer is being cancelled anyway), so the
+  client's revert-to-interactive matches the server.
+  [backend/src/main/java/de/sgart/collaboration/application/command/MoveItemHandler.java:88] — deferred, consistent eventual outcome
+
+Dismissed (5): removed codec decode arms for the retired `ItemMovedToList`/`ItemPostponedToList`
+(explicit locked decision 1 — pre-beta, event store reset, no codec version tolerance); the
+converged-duplicate path leaving the moved `itemId` on neither list (documented rare-race safety net;
+content survives as the pre-existing target item, interactive merge is the real path); double-place
+on a target that flaps not-open→open across a replay (documented YAGNI, `deferred-work.md` 3.2);
+`trip_item_actions_sheet.dart` named in Task 10 but unmodified (functionally correct — a pending
+item's ⋯ trailing is unreachable); stale `ItemMovedToList` comment in the shipped `V7` migration
+(correct to leave — shipped migrations are immutable).

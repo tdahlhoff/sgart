@@ -7,6 +7,7 @@ import de.sgart.collaboration.application.exception.InvalidItemNameException;
 import de.sgart.collaboration.application.exception.InvalidItemQuantityException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
@@ -14,6 +15,7 @@ import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.exception.DuplicateItemException;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
 import de.sgart.collaboration.domain.exception.ItemNotFoundException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -57,6 +59,8 @@ public final class UpdateItemHandler {
      * @throws ItemChangeNotPermittedApplicationException if the list is not {@code Open} (403)
      * @throws ItemNotFoundApplicationException if {@code itemId} is unknown on the list (404)
      * @throws DuplicateItemApplicationException if the new (name, note) key collides with a different item (409)
+     * @throws ItemTransferInProgressApplicationException if the item is reserved by a pending
+     *     transfer (409, Story 3.6, AC4)
      */
     public void handle(
             String keycloakUserId,
@@ -100,6 +104,8 @@ public final class UpdateItemHandler {
             throw new DuplicateItemApplicationException(duplicate.getMessage());
         } catch (ItemChangeNotPermittedException notPermitted) {
             throw new ItemChangeNotPermittedApplicationException(notPermitted.getMessage());
+        } catch (ItemTransferInProgressException inProgress) {
+            throw new ItemTransferInProgressApplicationException(inProgress.getMessage());
         }
 
         if (!list.uncommittedEvents().isEmpty()) {

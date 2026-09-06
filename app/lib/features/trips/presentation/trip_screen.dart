@@ -309,6 +309,11 @@ class _TripItemRow extends StatelessWidget {
   bool get _isDone => item.status == ItemStatus.done;
   bool get _isDiscarded => item.status == ItemStatus.discarded;
 
+  /// Story 3.6, AC5 — reserved by an in-flight move/postpone transfer. Takes precedence over the
+  /// status-based rendering below: a pending item is always non-interactive (mirroring the server's
+  /// fail-fast lock) and shows „wird verschoben…" until the next fetch/refresh reconciles it.
+  bool get _isPending => item.transferPending;
+
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
@@ -320,10 +325,14 @@ class _TripItemRow extends StatelessWidget {
     final checkboxSemantic = _isDone ? localizations.tripItemUncheckSemantic : localizations.tripItemCheckOffSemantic;
 
     return ColoredBox(
-      key: _isDone ? Key('trip-item-done-${item.itemId}') : (_isDiscarded ? Key('trip-item-discarded-${item.itemId}') : null),
-      color: _isDone
-          ? colors.success.withValues(alpha: 0.12)
-          : (_isDiscarded ? colors.textSecondary.withValues(alpha: 0.08) : Colors.transparent),
+      key: _isPending
+          ? Key('trip-item-pending-${item.itemId}')
+          : (_isDone ? Key('trip-item-done-${item.itemId}') : (_isDiscarded ? Key('trip-item-discarded-${item.itemId}') : null)),
+      color: _isPending
+          ? colors.textSecondary.withValues(alpha: 0.08)
+          : (_isDone
+              ? colors.success.withValues(alpha: 0.12)
+              : (_isDiscarded ? colors.textSecondary.withValues(alpha: 0.08) : Colors.transparent)),
       child: ListTile(
         key: Key('trip-item-${item.itemId}'),
         contentPadding: EdgeInsets.zero,
@@ -332,27 +341,36 @@ class _TripItemRow extends StatelessWidget {
           child: Checkbox(
             key: Key('trip-item-checkbox-${item.itemId}'),
             value: _isDone,
-            onChanged: (_) {
-              if (_isDone) {
-                cubit.uncheck(item.itemId);
-              } else {
-                cubit.checkOff(item.itemId);
-              }
-            },
+            onChanged: _isPending
+                ? null
+                : (_) {
+                    if (_isDone) {
+                      cubit.uncheck(item.itemId);
+                    } else {
+                      cubit.checkOff(item.itemId);
+                    }
+                  },
           ),
         ),
         title: Text(
           item.name,
-          style: (_isDone || _isDiscarded)
+          style: (_isDone || _isDiscarded || _isPending)
               ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
               : null,
         ),
-        subtitle: _isDiscarded
-            ? Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary))
-            : Text(subtitle),
-        // Status-dependent trailing (Story 3.4, Cl. 12):
-        //   OPEN  → ⋯ actions sheet (reroute / transfer / discard)
-        //   DONE  → no trailing (uncheck via checkbox only)
+        subtitle: _isPending
+            ? Text(
+                localizations.itemTransferPendingLabel,
+                key: Key('trip-item-pending-label-${item.itemId}'),
+                style: TextStyle(color: colors.textSecondary),
+              )
+            : (_isDiscarded
+                ? Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary))
+                : Text(subtitle)),
+        // Status-dependent trailing (Story 3.4, Cl. 12; Story 3.6, AC5):
+        //   pending   → no trailing, non-interactive (mirrors the server's fail-fast lock)
+        //   OPEN      → ⋯ actions sheet (reroute / transfer / discard)
+        //   DONE      → no trailing (uncheck via checkbox only)
         //   DISCARDED → UNDO button (→ OPEN) only, no ⋯
         trailing: _buildTrailing(localizations, cubit),
       ),
@@ -360,6 +378,9 @@ class _TripItemRow extends StatelessWidget {
   }
 
   Widget? _buildTrailing(AppLocalizations localizations, TripCubit cubit) {
+    if (_isPending) {
+      return null;
+    }
     if (_isDone) {
       return null;
     }

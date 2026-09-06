@@ -339,10 +339,16 @@ class ListDetailCubit extends Cubit<ListDetailState> {
     return null;
   }
 
-  /// Moves [itemId] to [targetListId] (Story 2.4, AC1) — the clean (non-collision) move path.
-  /// Optimistically removes the row from this (source) detail view; a rejection reverts it and
-  /// surfaces an inline `actionError`. A re-entrant call while a submit is already in flight, or on a
-  /// read-only (Done) list, is ignored.
+  /// Moves [itemId] to [targetListId] (Story 2.4, AC1; reshaped Story 3.6, AC5) — the clean
+  /// (non-collision) move path. Optimistically marks the row `transferPending` (it stays in this
+  /// source detail view, non-interactive, showing „wird verschoben…") rather than removing it: the
+  /// server now reserves the item on a two-phase saga instead of eagerly removing it, so an
+  /// optimistic removal here would show a false success if the saga later cancels. The confirm
+  /// (row disappears) or cancel (flag clears, row usable again) outcome is picked up on the next
+  /// load/refresh — no client polling (decision 3). [mergeIntoTarget] is the separate,
+  /// client-orchestrated collision path (Clarification 3) and is unaffected — it never goes through
+  /// this saga. A re-entrant call while a submit is already in flight, or on a read-only (Done)
+  /// list, is ignored.
   Future<void> moveItem(String itemId, String targetListId) async {
     if (state.status != ListDetailStatus.ready || state.isSubmitting || state.isReadOnly) {
       return;
@@ -351,7 +357,9 @@ class ListDetailCubit extends Cubit<ListDetailState> {
     final commandId = _moveIntent.commandId;
     final originalItems = state.items;
     _safeEmit(state.copyWith(
-      items: originalItems.where((item) => item.itemId != itemId).toList(),
+      items: originalItems
+          .map((item) => item.itemId == itemId ? item.copyWith(transferPending: true) : item)
+          .toList(),
       isSubmitting: true,
       clearActionError: true,
     ));

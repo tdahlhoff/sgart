@@ -42,6 +42,15 @@ public interface ItemReadModel {
     void setStatus(ItemId itemId, ItemStatus status);
 
     /**
+     * The projector's transfer-saga write (Story 3.6) — sets or clears the item's {@code
+     * transfer_pending} flag. {@code ItemTransferInitiated} sets it {@code true} (the row is kept,
+     * not removed); {@code ItemTransferCancelled} sets it {@code false}. {@code
+     * ItemTransferConfirmed} does not use this — it removes the row via the existing {@code
+     * removeItem}.
+     */
+    void setTransferPending(ItemId itemId, boolean pending);
+
+    /**
      * @return the item's name, if its row has been projected yet (Story 2.6, Cl. 6) — used by the
      *     projector to resolve the name {@code ItemAssignedToStore} does not carry, so it can record
      *     the suggestion's default store. Empty on an out-of-order/replay edge; the caller skips

@@ -360,7 +360,9 @@ void main() {
       await cubit.close();
     });
 
-    test('postponeToList_optimisticallyRemovesTheItem_andSendsTheCommand', () async {
+    test('postponeToList_optimisticallyMarksTheItemPending_andSendsTheCommand', () async {
+      // Story 3.6, AC5: the item stays in the list (reserved on the source saga), not removed —
+      // an optimistic removal would show a false success if the saga later cancels.
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -373,13 +375,14 @@ void main() {
 
       await cubit.postponeToList('i1', 'list-target');
 
-      expect(cubit.state.items.where((i) => i.itemId == 'i1'), isEmpty);
+      final item = cubit.state.items.singleWhere((i) => i.itemId == 'i1');
+      expect(item.transferPending, isTrue);
       expect(itemsApi.lastPostponedToListItemId, 'i1');
       expect(itemsApi.lastPostponedTargetListId, 'list-target');
       await cubit.close();
     });
 
-    test('postponeToList_revertsOnFailure_andSurfacesActionError', () async {
+    test('postponeToList_revertsThePendingFlagOnFailure_andSurfacesActionError', () async {
       tripsApi.tripViewToReturn = const TripView(
         tripId: 'trip-1',
         listId: 'list-1',
@@ -393,7 +396,8 @@ void main() {
 
       await cubit.postponeToList('i1', 'list-target');
 
-      expect(cubit.state.items.where((i) => i.itemId == 'i1'), isNotEmpty);
+      final item = cubit.state.items.singleWhere((i) => i.itemId == 'i1');
+      expect(item.transferPending, isFalse);
       expect(cubit.state.actionError?.code, 'list.moveTargetNotOpen');
       await cubit.close();
     });

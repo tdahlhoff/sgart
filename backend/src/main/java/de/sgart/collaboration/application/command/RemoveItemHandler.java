@@ -3,9 +3,11 @@ package de.sgart.collaboration.application.command;
 import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
+import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.ShoppingListNotFoundException;
 import de.sgart.collaboration.domain.ShoppingList;
 import de.sgart.collaboration.domain.exception.ItemChangeNotPermittedException;
+import de.sgart.collaboration.domain.exception.ItemTransferInProgressException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.AggregateVersion;
@@ -43,6 +45,8 @@ public final class RemoveItemHandler {
      * @throws NotAMemberException if the caller is not a member of the household (403)
      * @throws ShoppingListNotFoundException if {@code listId} is unknown or belongs to another household (404)
      * @throws ItemChangeNotPermittedApplicationException if the list is not {@code Open} (403)
+     * @throws ItemTransferInProgressApplicationException if the item is reserved by a pending
+     *     transfer (409, Story 3.6, AC4)
      */
     public void handle(
             String keycloakUserId, String rawHouseholdId, String rawListId, String rawItemId, String rawCommandId) {
@@ -71,6 +75,8 @@ public final class RemoveItemHandler {
             list.removeItem(command.itemId(), command.commandId());
         } catch (ItemChangeNotPermittedException notPermitted) {
             throw new ItemChangeNotPermittedApplicationException(notPermitted.getMessage());
+        } catch (ItemTransferInProgressException inProgress) {
+            throw new ItemTransferInProgressApplicationException(inProgress.getMessage());
         }
 
         if (!list.uncommittedEvents().isEmpty()) {

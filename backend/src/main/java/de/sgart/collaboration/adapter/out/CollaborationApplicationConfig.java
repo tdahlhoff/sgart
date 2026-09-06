@@ -1,6 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
-import de.sgart.collaboration.application.ItemMoveProcessManager;
+import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
@@ -143,8 +143,8 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    ItemMoveProcessManager itemMoveProcessManager(EventStore eventStore) {
-        return new ItemMoveProcessManager(eventStore);
+    ItemTransferProcessManager itemTransferProcessManager(EventStore eventStore) {
+        return new ItemTransferProcessManager(eventStore);
     }
 
     @Bean

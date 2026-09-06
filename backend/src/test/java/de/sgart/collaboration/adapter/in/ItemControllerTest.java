@@ -54,11 +54,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * InMemoryMemberMappingRepository}, and an in-memory {@link ItemReadModel}) — no live
  * KurrentDB/PostgreSQL. Proves Story 2.3 AC1–AC8 end-to-end through REST: add ({@code 201}), list
  * ({@code 200}), update ({@code 204}), remove ({@code 204}), and the 400/403/404/409 error surface;
- * Story 2.4 adds move ({@code 204}) and its 400/403/404 surface. The move's {@code 409
- * list.moveTargetNotOpen} branch is coded ({@code MoveItemHandler}) but, like the sibling DONE
- * branches elsewhere in this suite (see {@code ShoppingListItemsTest}), only reachable end-to-end
- * once Epic 3 introduces a status-changing transition — no synthetic Epic-3 event exists to drive a
- * list into a non-Open status, so it is not exercised here; see {@code deferred-work.md}.
+ * Story 2.4 adds move ({@code 204}) and its full 400/403/404/409 surface (the {@code 409
+ * list.moveTargetNotOpen} branch uses {@code startTripOn} to drive the target out of {@code Open}).
+ * Story 3.6 reshapes move/postpone into the two-phase transfer saga: initiate reserves rather than
+ * removes, a different-target retry on a reserved item is {@code 409 item.transferInProgress}, and a
+ * same-target retry (lost-response idempotency) is a convergent no-op.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -134,6 +134,12 @@ class ItemControllerTest {
         /** The projector's status write (Story 3.3) — never reached through this slice's command endpoints. */
         @Override
         public void setStatus(ItemId itemId, ItemStatus status) {
+            // no-op — this test double is preset via put(...), never mutated by the projector.
+        }
+
+        /** The projector's transfer-saga write (Story 3.6) — never reached through this slice's command endpoints. */
+        @Override
+        public void setTransferPending(ItemId itemId, boolean pending) {
             // no-op — this test double is preset via put(...), never mutated by the projector.
         }
     }
@@ -396,7 +402,7 @@ class ItemControllerTest {
         ItemId itemId = ItemId.generate();
         itemReadModel.put(
                 listId,
-                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN)));
+                List.of(new ItemView(itemId, new ItemName("Milch"), new ItemNote("Bio"), Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, false)));
 
         mockMvc.perform(get(
                         "/api/v1/households/{householdId}/lists/{listId}/items",
@@ -408,7 +414,27 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Milch"))
                 .andExpect(jsonPath("$[0].note").value("Bio"))
                 .andExpect(jsonPath("$[0].amount").value("1"))
-                .andExpect(jsonPath("$[0].unit").value("PIECE"));
+                .andExpect(jsonPath("$[0].unit").value("PIECE"))
+                .andExpect(jsonPath("$[0].transferPending").value(false));
+    }
+
+    @Test
+    void list_returns200WithTheTransferPendingFlagWhenTheItemIsReserved() throws Exception {
+        // Story 3.6, AC5 — the read-model marker surfaces through the item list response.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId listId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        itemReadModel.put(
+                listId,
+                List.of(new ItemView(itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), null, ItemStatus.OPEN, true)));
+
+        mockMvc.perform(get(
+                        "/api/v1/households/{householdId}/lists/{listId}/items",
+                        householdId.toString(),
+                        listId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].transferPending").value(true));
     }
 
     @Test
@@ -592,6 +618,143 @@ class ItemControllerTest {
                                 .formatted(ShoppingListId.generate(), UUID.randomUUID())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("list.notFound"));
+    }
+
+    @Test
+    void move_returns409WhenTargetIsNotOpen() throws Exception {
+        // The synchronous target-OPEN pre-check (Task 9) — now reachable end-to-end since Epic 3's
+        // startTrip exists (previously deferred — see the retired class-level note).
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+        startTripOn(targetListId, StoreId.generate());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(targetListId, UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("list.moveTargetNotOpen"));
+    }
+
+    @Test
+    void move_initiateReservesTheItemWithoutRemovingIt() throws Exception {
+        // Story 3.6, AC1 — the source raises ItemTransferInitiated and keeps the item (it is not
+        // removed here; that used to be ItemMovedToList's eager removal).
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(targetListId, UUID.randomUUID())))
+                .andExpect(status().isNoContent());
+
+        ShoppingList source = ShoppingList.rehydrate(
+                StreamId.forList(sourceListId), eventStore.readStream(StreamId.forList(sourceListId)));
+        // Re-adding the same key must be rejected as a duplicate: the item is still present
+        // (reserved), not removed, proving the reserve-then-remove reshape (Story 3.6, AC1).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> source.addItem(
+                        ItemId.generate(), new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE), CommandId.generate()))
+                .isInstanceOf(de.sgart.collaboration.domain.exception.DuplicateItemException.class);
+    }
+
+    @Test
+    void move_returns409WhenTheItemIsAlreadyReservedToADifferentTarget() throws Exception {
+        // Story 3.6, AC4 — the fail-fast lock: a second, different-target transfer on an item
+        // already reserved is rejected, not raced.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId firstTargetListId = seedListIn(householdId);
+        ShoppingListId secondTargetListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(firstTargetListId, UUID.randomUUID())))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetListId\":\"%s\",\"commandId\":\"%s\"}"
+                                .formatted(secondTargetListId, UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("item.transferInProgress"));
+    }
+
+    @Test
+    void move_retryingTheSameCommandIdAndTargetAfterASuccessfulInitiateReturns204Again() throws Exception {
+        // Story 3.6, AC4 — closes the lost-response 404 idempotency defect: a same-target retry
+        // (e.g. a client re-POSTing after a lost response) is a convergent no-op success, not 404.
+        HouseholdId householdId = seedMembership();
+        ShoppingListId sourceListId = seedListIn(householdId);
+        ShoppingListId targetListId = seedListIn(householdId);
+        ItemId itemId = ItemId.generate();
+        mockMvc.perform(post(
+                "/api/v1/households/{householdId}/lists/{listId}/items", householdId.toString(), sourceListId.toString())
+                .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(addRequestBody(itemId.toString(), "Milch")));
+        String commandId = UUID.randomUUID().toString();
+        String moveBody = "{\"targetListId\":\"%s\",\"commandId\":\"%s\"}".formatted(targetListId, commandId);
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(moveBody))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post(
+                        "/api/v1/households/{householdId}/lists/{listId}/items/{itemId}/move",
+                        householdId.toString(),
+                        sourceListId.toString(),
+                        itemId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(MEMBER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(moveBody))
+                .andExpect(status().isNoContent());
     }
 
     @Test

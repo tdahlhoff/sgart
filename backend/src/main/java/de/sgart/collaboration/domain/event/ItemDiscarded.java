@@ -16,7 +16,7 @@ import java.util.Objects;
  * ShoppingList#completeTrip} sweep (the quality-of-life safety net that discards any item still
  * {@code OPEN} when the trip is completed, Cl. 2). Gated on the list being {@code IN_TRIP}. The
  * item <strong>stays on the list</strong>, dimmed with a "Verworfen" treatment — this is
- * <strong>not</strong> a removal (distinct from {@link ItemPostponedToList} or {@link ItemRemoved}).
+ * <strong>not</strong> a removal (distinct from {@link ItemTransferInitiated} or {@link ItemRemoved}).
  * A {@code DISCARDED} item is excluded from the "remaining open" set and the progress count N, but
  * counted in the total M. Already-{@code DISCARDED} is a convergent no-op (raises nothing, AD-8).
  * {@link ItemUnchecked} returns a {@code DISCARDED} item to {@code OPEN}.
