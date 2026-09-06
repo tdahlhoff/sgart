@@ -4,15 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/households/presentation/households_state.dart';
+import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/onboarding/presentation/onboarding_wizard_page.dart';
 import 'package:sgart/features/stores/data/store_chain.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
-import 'package:sgart/shared/widgets/sgart_button.dart';
 
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -22,6 +23,7 @@ void main() {
     late HouseholdsCubit householdsCubit;
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
+    late FakeInvitesApi invitesApi;
 
     const chains = [StoreChain(chainId: 'id-edeka', name: 'Edeka')];
 
@@ -31,6 +33,7 @@ void main() {
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
       storesApi = FakeStoresApi()..chainsToReturn = chains;
       referenceCache = FakeStoreChainReferenceCache(chains: chains);
+      invitesApi = FakeInvitesApi();
     });
 
     tearDown(() => householdsCubit.close());
@@ -41,6 +44,7 @@ void main() {
               RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+              RepositoryProvider<InvitesApi>.value(value: invitesApi),
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,
@@ -128,7 +132,7 @@ void main() {
       expect(find.byKey(const Key('onboarding-stores-next-button')), findsNothing);
     });
 
-    testWidgets('theInviteStepIsPresentButItsSendIsDeferredAndStatesPrivacy', (tester) async {
+    testWidgets('theInviteStepStatesPrivacyUpFront', (tester) async {
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester);
       await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
@@ -137,16 +141,83 @@ void main() {
       // Privacy stated up front on the invite step (AC3), including the actual copy.
       expect(find.byKey(const Key('onboarding-invite-privacy')), findsOneWidget);
       expect(find.text('Nur du und Eingeladene sehen euren Haushalt.'), findsOneWidget);
-      // The send affordance is present but non-functional — deferred to Epic 4 (AC4).
-      expect(find.byKey(const Key('onboarding-invite-deferred-note')), findsOneWidget);
-      final sendButton =
-          tester.widget<SgartButton>(find.byKey(const Key('onboarding-invite-send-button')));
-      expect(sendButton.onPressed, isNull);
+      // No stale "deferred to Epic 4" note remains now that the send is real (Story 4.1, fix-rigor).
+      expect(find.byKey(const Key('onboarding-invite-deferred-note')), findsNothing);
+    });
 
-      // Tapping the disabled send does nothing — no landing, no invite mechanism exists here.
+    testWidgets('sendingAnInviteFromTheWizardCallsTheRealInviteBackend', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await nameAndAdvance(tester);
+      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('onboarding-invite-email-field')), 'anna@example.com');
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('onboarding-invite-send-button')));
       await tester.pumpAndSettle();
-      expect(householdsCubit.state.status, isNot(HouseholdsStatus.shell));
+
+      expect(invitesApi.lastSentEmail, 'anna@example.com');
+      expect(find.byKey(const Key('onboarding-invite-action-error')), findsNothing);
+    });
+
+    testWidgets('aRejectedInviteFromTheWizardShowsInlineWithoutLeavingTheStep', (tester) async {
+      invitesApi.sendInviteError =
+          const AppException(AppError(code: 'invite.duplicatePending', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await nameAndAdvance(tester);
+      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('onboarding-invite-email-field')), 'anna@example.com');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onboarding-invite-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-invite-action-error')), findsOneWidget);
+      expect(find.text('Schritt 3 von 3'), findsOneWidget);
+    });
+
+    testWidgets('finishStillWorksAfterAFailedInviteAttempt', (tester) async {
+      invitesApi.sendInviteError =
+          const AppException(AppError(code: 'invite.duplicatePending', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await nameAndAdvance(tester);
+      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('onboarding-invite-email-field')), 'anna@example.com');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onboarding-invite-send-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('onboarding-invite-finish-button')));
+      await tester.pumpAndSettle();
+
+      expect(householdsCubit.state.status, HouseholdsStatus.shell);
+    });
+
+    testWidgets(
+        'aFailedInviteBootstrapShowsAnErrorWithRetryInsteadOfASilentlyDeadSendButton',
+        (tester) async {
+      invitesApi.listPendingInvitesError =
+          const AppException(AppError(code: 'invites.unknown', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await nameAndAdvance(tester);
+      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
+      await tester.pumpAndSettle();
+
+      // The send button must not stay silently enabled-but-inert while bootstrap() has failed.
+      expect(find.byKey(const Key('onboarding-invite-load-error')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('onboarding-invite-email-field')), 'anna@example.com');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onboarding-invite-send-button')));
+      await tester.pumpAndSettle();
+      expect(invitesApi.sendCallCount, 0);
+
+      invitesApi.listPendingInvitesError = null;
+      await tester.tap(find.byKey(const Key('onboarding-invite-retry-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-invite-load-error')), findsNothing);
     });
 
     testWidgets('goingBackFromTheStoresStepReturnsToTheNameStepWithoutCreatingASecondHousehold',

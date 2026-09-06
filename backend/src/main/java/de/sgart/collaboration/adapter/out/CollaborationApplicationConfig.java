@@ -1,5 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.InviteEmailHasher;
+import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.application.command.AddItemHandler;
@@ -12,6 +14,7 @@ import de.sgart.collaboration.application.command.CompleteTripHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.DiscardItemHandler;
+import de.sgart.collaboration.application.command.InvitePersonHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.PostponeItemToListHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
@@ -25,19 +28,24 @@ import de.sgart.collaboration.application.query.ListItemSuggestions;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.query.ListOpenLists;
+import de.sgart.collaboration.application.query.ListPendingInvites;
 import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.application.query.TripView;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
+import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemSuggestionReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
+import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.EventStore;
+import java.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -190,6 +198,39 @@ public class CollaborationApplicationConfig {
     @Bean
     AddStoreToTripHandler addStoreToTripHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
         return new AddStoreToTripHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    InviteEmailHasher inviteEmailHasher(
+            @Value("${sgart.invite.email-hmac-secret}") String emailHmacSecret) {
+        return new HmacSha256InviteEmailHasher(emailHmacSecret);
+    }
+
+    @Bean
+    InviteEmailSideStore inviteEmailSideStore(org.springframework.jdbc.core.simple.JdbcClient jdbcClient) {
+        return new JdbcInviteEmailSideStore(jdbcClient);
+    }
+
+    @Bean
+    InvitePersonHandler invitePersonHandler(
+            EventStore eventStore,
+            ResolveMemberIdentity resolveMemberIdentity,
+            FindHouseholdMemberByEmail findHouseholdMemberByEmail,
+            InviteEmailHasher inviteEmailHasher,
+            InviteEmailSideStore inviteEmailSideStore,
+            Clock clock) {
+        return new InvitePersonHandler(
+                eventStore, resolveMemberIdentity, findHouseholdMemberByEmail, inviteEmailHasher, inviteEmailSideStore, clock);
+    }
+
+    @Bean
+    ListPendingInvites listPendingInvites(ResolveMemberIdentity resolveMemberIdentity, InviteReadModel inviteReadModel) {
+        return new ListPendingInvites(resolveMemberIdentity, inviteReadModel);
     }
 
     @Bean

@@ -17,6 +17,7 @@ import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -99,7 +100,8 @@ class HouseholdReadModelSubscriptionTest {
         readModel = new JdbcHouseholdReadModel(jdbcClient);
         mappingRepository = new JdbcMemberMappingRepository(jdbcClient);
         eventStore = new KurrentDbEventStore(client);
-        projector = new HouseholdReadModelProjector(client, readModel, new JdbcStoreReadModel(jdbcClient));
+        projector = new HouseholdReadModelProjector(
+                client, readModel, new JdbcStoreReadModel(jdbcClient), new JdbcInviteReadModel(jdbcClient, Clock.systemUTC()));
         projector.start();
     }
 

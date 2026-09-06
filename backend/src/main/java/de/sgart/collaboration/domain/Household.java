@@ -2,9 +2,12 @@ package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
@@ -13,10 +16,12 @@ import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.EventSourcedAggregate;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -35,6 +40,7 @@ public final class Household extends EventSourcedAggregate {
     private HouseholdName name;
     private final Map<MemberId, HouseholdRole> rolesByMember = new HashMap<>();
     private final Map<StoreId, StoreState> storesById = new HashMap<>();
+    private final Map<InviteId, InviteState> pendingInvitesById = new HashMap<>();
 
     private Household(StreamId streamId) {
         super(streamId);
@@ -152,6 +158,47 @@ public final class Household extends EventSourcedAggregate {
         raise(new StoreArchived(EventId.generate(), householdId, storeId));
     }
 
+    /**
+     * Invites a person by email (Story 4.1, AC1/AC2/AC4/AC5) — membership-gated, not role-gated, like
+     * {@link #addStore}: any member may invite ({@code requireMember}), never Admin-only. The
+     * invitee's already-a-member check (AC3, E5) happens at the application/ACL seam <em>before</em>
+     * this is called — the aggregate has no way to see an email (AD-6) and so cannot enforce it.
+     *
+     * <p>A <strong>non-expired</strong> pending invite to the same {@code emailHmac} is rejected
+     * ({@link DuplicatePendingInviteException}, AC2) — deliberately not a convergent no-op (AD-8,
+     * §3.4). A <strong>past-TTL</strong> pending invite to the same email is the one blocker lazy
+     * housekeeping clears: {@link InviteExpired} is raised for it first (AC5), then the new invite
+     * proceeds. {@code now} is caller-injected (never {@code Instant.now()} here) so expiry stays
+     * deterministic and testable.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void invitePerson(
+            MemberId requestedBy, InviteId inviteId, EmailHmac emailHmac, Instant now, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(inviteId, "inviteId must not be null");
+        Objects.requireNonNull(emailHmac, "emailHmac must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireMember(requestedBy);
+
+        for (Map.Entry<InviteId, InviteState> entry : pendingInvitesById.entrySet()) {
+            InviteState invite = entry.getValue();
+            if (invite.status() != InviteStatus.PENDING || !invite.emailHmac().equals(emailHmac)) {
+                continue;
+            }
+            if (invite.isExpiredAt(now)) {
+                raise(new InviteExpired(EventId.generate(), householdId, entry.getKey()));
+            } else {
+                throw new DuplicatePendingInviteException(
+                        "A pending invite to this email already exists in this household");
+            }
+        }
+
+        raise(new MemberInvited(
+                EventId.generate(), householdId, inviteId, emailHmac, requestedBy, HouseholdRole.PARTICIPANT, now));
+    }
+
     private void requireMember(MemberId requestedBy) {
         if (!rolesByMember.containsKey(requestedBy)) {
             throw new NotAHouseholdMemberException(
@@ -188,6 +235,16 @@ public final class Household extends EventSourcedAggregate {
                     storesById.put(archived.storeId(), existing.archived(true));
                 }
             }
+            case MemberInvited invited ->
+                pendingInvitesById.put(
+                        invited.inviteId(),
+                        new InviteState(invited.emailHmac(), invited.invitedAt(), InviteStatus.PENDING));
+            case InviteExpired expired -> {
+                InviteState existing = pendingInvitesById.get(expired.inviteId());
+                if (existing != null) {
+                    pendingInvitesById.put(expired.inviteId(), existing.withStatus(InviteStatus.EXPIRED));
+                }
+            }
             default -> throw new IllegalArgumentException(
                     "Household cannot apply unknown event type: " + event.getClass());
         }
@@ -202,6 +259,29 @@ public final class Household extends EventSourcedAggregate {
 
         StoreState archived(boolean archived) {
             return new StoreState(name, chainId, archived);
+        }
+    }
+
+    /** Status a folded invite carries — kept foldable/out of the active-blocker set once expired. */
+    private enum InviteStatus {
+        PENDING,
+        EXPIRED
+    }
+
+    /**
+     * A pending (or lazily expired) invite as held inside the {@link Household} aggregate (AD-10):
+     * the folded state {@link #invitePerson} reads for the duplicate-pending / past-TTL invariants
+     * (AC2, AC5). Mirrors {@link StoreState}. {@code invitedAt} plus {@link Invite#TIME_TO_LIVE}
+     * decides expiry deterministically — never wall-clock time read here.
+     */
+    private record InviteState(EmailHmac emailHmac, Instant invitedAt, InviteStatus status) {
+
+        boolean isExpiredAt(Instant now) {
+            return invitedAt.plus(Invite.TIME_TO_LIVE).isBefore(now) || invitedAt.plus(Invite.TIME_TO_LIVE).equals(now);
+        }
+
+        InviteState withStatus(InviteStatus status) {
+            return new InviteState(emailHmac, invitedAt, status);
         }
     }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
+import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
@@ -11,6 +12,9 @@ import '../../households/presentation/create_household_cubit.dart';
 import '../../households/presentation/create_household_name_field.dart';
 import '../../households/presentation/create_household_state.dart';
 import '../../households/presentation/households_cubit.dart';
+import '../../invites/data/invites_api.dart';
+import '../../invites/presentation/invites_cubit.dart';
+import '../../invites/presentation/invites_state.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
 import '../../stores/presentation/stores_cubit.dart';
@@ -28,9 +32,9 @@ enum _OnboardingStep { name, stores, invite }
 /// finishing lands in the created household via [HouseholdsCubit.selectHousehold] (read-your-writes,
 /// AC2), the same transition the minimal create page performs.
 ///
-/// The invite step is **present but non-sending** (AC4, Clarification 1 Option A): „Einladung senden"
-/// is disabled („folgt später") and only „Später einladen — fertig" is functional — invite creation
-/// is Epic 4 (Story 4.1). The typed email is never stored, logged, or transmitted here.
+/// The invite step now sends a real invite (Story 4.1): „Einladung senden" calls the invite backend
+/// via [InvitesCubit], surfacing a rejection inline; „Später einladen — fertig" still finishes
+/// onboarding regardless — solo remains first-class (AC7, unchanged from AC4/Clarification 1).
 ///
 /// Reached as a pushed route above the `FirstRunRouter` providers, so its dependencies
 /// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache]) are re-provided by
@@ -133,6 +137,7 @@ class _OnboardingWizardViewState extends State<_OnboardingWizardView> {
                   onBack: () => _goToStep(_OnboardingStep.name),
                 ),
               _OnboardingStep.invite => _InviteStep(
+                  household: _createdHousehold!,
                   onFinish: _finish,
                   onBack: () => _goToStep(_OnboardingStep.stores),
                 ),
@@ -324,73 +329,142 @@ class _StoresStep extends StatelessWidget {
   }
 }
 
-/// Step 3 — invite (optional). The send is **deferred to Epic 4** (AC4, Clarification 1 Option A):
-/// „Einladung senden" is disabled with a „folgt später" note, and only „Später einladen — fertig"
-/// finishes onboarding. The email field is inert here — its text is never stored, logged, or sent
-/// (there is no invite backend until Story 4.1), so no controller is wired to it.
+/// Step 3 — invite (optional, Story 4.1). „Einladung senden" now sends a real invite via
+/// [InvitesCubit]; a rejection (duplicate-pending, already-a-member, invalid email) shows inline
+/// without leaving the step. „Später einladen — fertig" still finishes onboarding regardless —
+/// solo remains first-class (AC7, unchanged).
 class _InviteStep extends StatelessWidget {
-  const _InviteStep({required this.onFinish, required this.onBack});
+  const _InviteStep({required this.household, required this.onFinish, required this.onBack});
 
+  final HouseholdSummary household;
   final VoidCallback onFinish;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) =>
+          InvitesCubit(invitesApi: context.read<InvitesApi>(), householdId: household.householdId)..bootstrap(),
+      child: _InviteStepBody(onFinish: onFinish, onBack: onBack),
+    );
+  }
+}
+
+class _InviteStepBody extends StatefulWidget {
+  const _InviteStepBody({required this.onFinish, required this.onBack});
+
+  final VoidCallback onFinish;
+  final VoidCallback onBack;
+
+  @override
+  State<_InviteStepBody> createState() => _InviteStepBodyState();
+}
+
+class _InviteStepBodyState extends State<_InviteStepBody> {
+  final TextEditingController _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final cubit = context.read<InvitesCubit>();
+    await cubit.sendInvite(_emailController.text);
+    if (!mounted) {
+      return;
+    }
+    if (cubit.state.actionError == null && !cubit.state.isSubmitting) {
+      _emailController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _OnboardingStepHeader(
-          step: _OnboardingStep.invite,
-          title: localizations.onboardingInviteStepTitle,
-          help: localizations.onboardingInviteStepHelp,
-          onBack: onBack,
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(SgartShapes.cardPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  key: const Key('onboarding-invite-email-field'),
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(labelText: localizations.onboardingInviteEmailFieldLabel),
-                ),
-                const SizedBox(height: SgartShapes.space2),
-                Text(
-                  localizations.onboardingInvitePrivacyNote,
-                  key: const Key('onboarding-invite-privacy'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: SgartShapes.space4),
-                // Send is disabled — invite creation ships in Epic 4 (Story 4.1). The null callback
-                // renders SgartButton in its disabled treatment.
-                SgartButton(
-                  key: const Key('onboarding-invite-send-button'),
-                  label: localizations.onboardingInviteSendButtonLabel,
-                  onPressed: null,
-                ),
-                const SizedBox(height: SgartShapes.space2),
-                Text(
-                  localizations.onboardingInviteDeferredNote,
-                  key: const Key('onboarding-invite-deferred-note'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+    return BlocBuilder<InvitesCubit, InvitesState>(
+      builder: (context, state) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _OnboardingStepHeader(
+              step: _OnboardingStep.invite,
+              title: localizations.onboardingInviteStepTitle,
+              help: localizations.onboardingInviteStepHelp,
+              onBack: widget.onBack,
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(SgartShapes.cardPadding),
-          child: SgartButton(
-            key: const Key('onboarding-invite-finish-button'),
-            label: localizations.onboardingInviteFinishButtonLabel,
-            onPressed: onFinish,
-          ),
-        ),
-      ],
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      key: const Key('onboarding-invite-email-field'),
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(labelText: localizations.onboardingInviteEmailFieldLabel),
+                    ),
+                    const SizedBox(height: SgartShapes.space2),
+                    Text(
+                      localizations.onboardingInvitePrivacyNote,
+                      key: const Key('onboarding-invite-privacy'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (state.status == InvitesStatus.ready && state.actionError != null) ...[
+                      const SizedBox(height: SgartShapes.space2),
+                      Text(
+                        localizedMessageForErrorCode(localizations, state.actionError!.code),
+                        key: const Key('onboarding-invite-action-error'),
+                      ),
+                    ],
+                    // A failed bootstrap() must not leave a silent dead-end: without this, the send
+                    // button stayed enabled while sendInvite() early-returned on every tap (status
+                    // != ready) — this makes the failure visible with a retry, mirroring InvitesView.
+                    if (state.status == InvitesStatus.failure) ...[
+                      const SizedBox(height: SgartShapes.space2),
+                      Text(
+                        localizations.errorGenericFallback,
+                        key: const Key('onboarding-invite-load-error'),
+                      ),
+                      const SizedBox(height: SgartShapes.space2),
+                      SgartButton(
+                        key: const Key('onboarding-invite-retry-button'),
+                        label: localizations.householdsRetryButtonLabel,
+                        onPressed: () => context.read<InvitesCubit>().bootstrap(),
+                      ),
+                    ],
+                    const SizedBox(height: SgartShapes.space4),
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _emailController,
+                      builder: (context, value, _) {
+                        final isBlank = value.text.trim().isEmpty;
+                        final isSubmitting = state.status == InvitesStatus.ready && state.isSubmitting;
+                        final isReady = state.status == InvitesStatus.ready;
+                        return SgartButton(
+                          key: const Key('onboarding-invite-send-button'),
+                          label: localizations.onboardingInviteSendButtonLabel,
+                          onPressed: !isReady || isSubmitting || isBlank ? null : () => _submit(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(SgartShapes.cardPadding),
+              child: SgartButton(
+                key: const Key('onboarding-invite-finish-button'),
+                label: localizations.onboardingInviteFinishButtonLabel,
+                onPressed: widget.onFinish,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
 import io.kurrent.dbclient.KurrentDBClient;
+import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,13 +50,19 @@ public class CollaborationReadModelConfig {
     }
 
     @Bean
+    JdbcInviteReadModel jdbcInviteReadModel(JdbcClient jdbcClient, Clock clock) {
+        return new JdbcInviteReadModel(jdbcClient, clock);
+    }
+
+    @Bean
     HouseholdReadModelProjector householdReadModelProjector(
             KurrentDBClient kurrentDbClient,
             JdbcHouseholdReadModel jdbcHouseholdReadModel,
             JdbcStoreReadModel jdbcStoreReadModel,
+            JdbcInviteReadModel jdbcInviteReadModel,
             @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
         return new HouseholdReadModelProjector(
-                kurrentDbClient, jdbcHouseholdReadModel, jdbcStoreReadModel, autoStart);
+                kurrentDbClient, jdbcHouseholdReadModel, jdbcStoreReadModel, jdbcInviteReadModel, autoStart);
     }
 
     @Bean

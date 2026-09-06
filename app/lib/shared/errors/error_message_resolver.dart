@@ -34,6 +34,10 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'list.moveTargetNotOpen' => localizations.listsMoveTargetNotOpenError,
     'list.moveTargetSameAsSource' => localizations.listsMoveTargetSameAsSourceError,
     'list.moveMergeRemoveFailed' => localizations.listsMoveMergeRemoveFailedError,
+    'invite.emailRequired' => localizations.invitesEmailRequiredError,
+    'invite.emailInvalid' => localizations.invitesEmailInvalidError,
+    'invite.duplicatePending' => localizations.invitesDuplicatePendingError,
+    'invite.alreadyAMember' => localizations.invitesAlreadyAMemberError,
     _ => localizations.errorGenericFallback,
   };
 }

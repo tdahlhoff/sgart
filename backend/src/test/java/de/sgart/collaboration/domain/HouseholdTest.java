@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
+import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
@@ -16,11 +19,13 @@ import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.StreamId;
 import java.lang.reflect.RecordComponent;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -282,6 +287,111 @@ class HouseholdTest {
         assertNoPersonalDataComponent(HouseholdRenamed.class);
         assertNoPersonalDataComponent(StoreAdded.class);
         assertNoPersonalDataComponent(StoreArchived.class);
+        assertNoPersonalDataComponent(InviteExpired.class);
+    }
+
+    @Test
+    void invitePerson_raisesMemberInvitedCarryingTheEmailHmacNotTheEmail() {
+        Household household = createdHousehold();
+        household.markEventsCommitted();
+        InviteId inviteId = InviteId.generate();
+        EmailHmac emailHmac = new EmailHmac("hmac-of-anna-example-com");
+        Instant now = Instant.parse("2026-09-06T10:00:00Z");
+
+        household.invitePerson(adminMemberId, inviteId, emailHmac, now, CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(1);
+        MemberInvited invited = (MemberInvited) household.uncommittedEvents().get(0);
+        assertThat(invited.inviteId()).isEqualTo(inviteId);
+        assertThat(invited.emailHmac()).isEqualTo(emailHmac);
+        assertThat(invited.invitedBy()).isEqualTo(adminMemberId);
+        assertThat(invited.role()).isEqualTo(HouseholdRole.PARTICIPANT);
+        assertThat(invited.invitedAt()).isEqualTo(now);
+        assertNoRawEmailComponent(MemberInvited.class);
+    }
+
+    @Test
+    void invitePerson_byAnyMember_isAllowed() {
+        MemberId participantId = MemberId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId),
+                List.of(
+                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
+                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
+                        new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
+
+        household.invitePerson(
+                participantId,
+                InviteId.generate(),
+                new EmailHmac("hmac-1"),
+                Instant.parse("2026-09-06T10:00:00Z"),
+                CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(1);
+        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
+    }
+
+    @Test
+    void invitePerson_byNonMember_throwsNotAHouseholdMember() {
+        Household household = createdHousehold();
+        MemberId strangerId = MemberId.generate();
+
+        assertThatThrownBy(() -> household.invitePerson(
+                        strangerId,
+                        InviteId.generate(),
+                        new EmailHmac("hmac-1"),
+                        Instant.parse("2026-09-06T10:00:00Z"),
+                        CommandId.generate()))
+                .isInstanceOf(NotAHouseholdMemberException.class);
+    }
+
+    @Test
+    void invitePerson_withANonExpiredPendingInviteToTheSameEmail_throwsDuplicatePendingInvite() {
+        Household household = createdHousehold();
+        EmailHmac emailHmac = new EmailHmac("hmac-1");
+        Instant firstInviteAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, InviteId.generate(), emailHmac, firstInviteAt, CommandId.generate());
+
+        assertThatThrownBy(() -> household.invitePerson(
+                        adminMemberId,
+                        InviteId.generate(),
+                        emailHmac,
+                        firstInviteAt.plusSeconds(60),
+                        CommandId.generate()))
+                .isInstanceOf(DuplicatePendingInviteException.class);
+    }
+
+    @Test
+    void invitePerson_withAPastTtlPendingInviteToTheSameEmail_raisesInviteExpiredThenMemberInvited() {
+        Household household = createdHousehold();
+        EmailHmac emailHmac = new EmailHmac("hmac-1");
+        InviteId staleInviteId = InviteId.generate();
+        Instant firstInviteAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, staleInviteId, emailHmac, firstInviteAt, CommandId.generate());
+        household.markEventsCommitted();
+
+        Instant pastTtl = firstInviteAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
+        InviteId newInviteId = InviteId.generate();
+        household.invitePerson(adminMemberId, newInviteId, emailHmac, pastTtl, CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(2);
+        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteExpired.class);
+        assertThat(((InviteExpired) household.uncommittedEvents().get(0)).inviteId()).isEqualTo(staleInviteId);
+        assertThat(household.uncommittedEvents().get(1)).isInstanceOf(MemberInvited.class);
+        assertThat(((MemberInvited) household.uncommittedEvents().get(1)).inviteId()).isEqualTo(newInviteId);
+    }
+
+    @Test
+    void invitePerson_toADifferentEmail_isAllowedAlongsideAnExistingPendingInvite() {
+        Household household = createdHousehold();
+        Instant now = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, InviteId.generate(), new EmailHmac("hmac-1"), now, CommandId.generate());
+        household.markEventsCommitted();
+
+        household.invitePerson(adminMemberId, InviteId.generate(), new EmailHmac("hmac-2"), now, CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(1);
+        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
     }
 
     private Household createdHousehold() {
@@ -298,5 +408,21 @@ class HouseholdTest {
                 .noneMatch(name -> name.contains("displayname")
                         || name.contains("email")
                         || name.contains("keycloak"));
+    }
+
+    /**
+     * {@code MemberInvited} is the one event allowed to carry an email-*named* component — but only
+     * the {@code emailHmac} digest, never the raw address (AD-6). Distinct from {@link
+     * #assertNoPersonalDataComponent}, which bans the substring "email" outright: here a component
+     * literally named/containing "email" is only acceptable if it is exactly {@code emailHmac}.
+     */
+    private void assertNoRawEmailComponent(Class<? extends DomainEvent> eventType) {
+        List<String> componentNames = Arrays.stream(eventType.getRecordComponents())
+                .map(RecordComponent::getName)
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .toList();
+
+        assertThat(componentNames).noneMatch(name -> name.contains("email") && !name.equals("emailhmac"));
+        assertThat(componentNames).contains("emailHmac".toLowerCase(Locale.ROOT));
     }
 }

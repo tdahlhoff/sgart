@@ -9,6 +9,7 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../invites/data/invites_api.dart';
 import '../../lists/data/item_suggestions_api.dart';
 import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
@@ -41,6 +42,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final HouseholdsApi _householdsApi;
   late final StoresApi _storesApi;
+  late final InvitesApi _invitesApi;
   late final ShoppingListsApi _shoppingListsApi;
   late final ItemsApi _itemsApi;
   late final ItemSuggestionsApi _itemSuggestionsApi;
@@ -60,6 +62,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     );
     _householdsApi = HttpHouseholdsApi(httpClient);
     _storesApi = HttpStoresApi(httpClient);
+    _invitesApi = HttpInvitesApi(httpClient);
     _shoppingListsApi = HttpShoppingListsApi(httpClient);
     _itemsApi = HttpItemsApi(httpClient);
     _itemSuggestionsApi = HttpItemSuggestionsApi(httpClient);
@@ -81,6 +84,9 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         // HouseholdsApi is) so the manage screen and pickers can `context.read` them (Story 1.8).
         RepositoryProvider<StoresApi>.value(value: _storesApi),
         RepositoryProvider<StoreChainReferenceCache>.value(value: _storeChainReferenceCache),
+        // The onboarding wizard's invite step + the manage-household hub's invite page read this
+        // (Story 4.1).
+        RepositoryProvider<InvitesApi>.value(value: _invitesApi),
         // The Listen tab reads this to build its household-scoped ShoppingListsCubit (Story 2.1).
         RepositoryProvider<ShoppingListsApi>.value(value: _shoppingListsApi),
         // The list detail screen reads this to build its list-scoped ListDetailCubit (Story 2.3).

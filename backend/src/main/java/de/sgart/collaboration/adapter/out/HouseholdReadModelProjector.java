@@ -3,6 +3,8 @@ package de.sgart.collaboration.adapter.out;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
@@ -49,6 +51,7 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
     private final KurrentDBClient client;
     private final JdbcHouseholdReadModel readModel;
     private final JdbcStoreReadModel storeReadModel;
+    private final JdbcInviteReadModel inviteReadModel;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
@@ -56,18 +59,23 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
     private ScheduledExecutorService resubscribeScheduler;
 
     public HouseholdReadModelProjector(
-            KurrentDBClient client, JdbcHouseholdReadModel readModel, JdbcStoreReadModel storeReadModel) {
-        this(client, readModel, storeReadModel, false);
+            KurrentDBClient client,
+            JdbcHouseholdReadModel readModel,
+            JdbcStoreReadModel storeReadModel,
+            JdbcInviteReadModel inviteReadModel) {
+        this(client, readModel, storeReadModel, inviteReadModel, false);
     }
 
     public HouseholdReadModelProjector(
             KurrentDBClient client,
             JdbcHouseholdReadModel readModel,
             JdbcStoreReadModel storeReadModel,
+            JdbcInviteReadModel inviteReadModel,
             boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.readModel = Objects.requireNonNull(readModel, "readModel must not be null");
         this.storeReadModel = Objects.requireNonNull(storeReadModel, "storeReadModel must not be null");
+        this.inviteReadModel = Objects.requireNonNull(inviteReadModel, "inviteReadModel must not be null");
         this.autoStart = autoStart;
     }
 
@@ -85,6 +93,9 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
             case StoreAdded added ->
                 storeReadModel.upsertStore(added.householdId(), added.storeId(), added.name(), added.chainId());
             case StoreArchived archived -> storeReadModel.markArchived(archived.householdId(), archived.storeId());
+            case MemberInvited invited -> inviteReadModel.upsertInvite(
+                    invited.householdId(), invited.inviteId(), invited.invitedBy(), invited.invitedAt());
+            case InviteExpired expired -> inviteReadModel.markExpired(expired.householdId(), expired.inviteId());
             default -> {
                 // The subscription filter (see start()) only ever delivers household-stream events.
             }

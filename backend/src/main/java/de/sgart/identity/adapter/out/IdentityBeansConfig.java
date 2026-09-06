@@ -1,5 +1,6 @@
 package de.sgart.identity.adapter.out;
 
+import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.MintMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -35,5 +36,10 @@ public class IdentityBeansConfig {
     @Bean
     ResolveMemberIdentity resolveMemberIdentity(MemberMappingRepository memberMappingRepository) {
         return new ResolveMemberIdentity(memberMappingRepository);
+    }
+
+    @Bean
+    FindHouseholdMemberByEmail findHouseholdMemberByEmail() {
+        return new DeferredFindHouseholdMemberByEmail();
     }
 }

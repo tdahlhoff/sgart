@@ -2,10 +2,12 @@ package de.sgart.collaboration.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
+import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.event.ItemAdded;
@@ -18,6 +20,7 @@ import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
 import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
+import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.TransferCancellationReason;
 import de.sgart.collaboration.domain.TransferOrigin;
@@ -32,6 +35,7 @@ import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
@@ -41,6 +45,7 @@ import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import de.sgart.shared.Unit;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -356,6 +361,50 @@ class DomainEventJsonCodecTest {
                         EventId.generate(), TripId.generate(), householdId, ShoppingListId.generate());
 
         assertThat(codec.typeTagFor(event)).isEqualTo("TripCompleted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberInvitedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        MemberInvited event = new MemberInvited(
+                EventId.generate(),
+                householdId,
+                InviteId.generate(),
+                new EmailHmac("hmac-of-anna-example-com"),
+                MemberId.generate(),
+                HouseholdRole.PARTICIPANT,
+                Instant.parse("2026-09-06T10:00:00Z"));
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("MemberInvited");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberInvitedJsonPayloadNeverCarriesTheRawEmail() {
+        String hexDigest = "9f2b7a3c4e5d6a1b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7081920a1b2c3";
+        MemberInvited event = new MemberInvited(
+                EventId.generate(),
+                householdId,
+                InviteId.generate(),
+                new EmailHmac(hexDigest),
+                MemberId.generate(),
+                HouseholdRole.PARTICIPANT,
+                Instant.parse("2026-09-06T10:00:00Z"));
+
+        String json = new String(codec.toJsonBytes(event), java.nio.charset.StandardCharsets.UTF_8);
+
+        // Privacy round-trip guard (AD-6): the wire payload carries only the emailHmac digest —
+        // never an "@"-shaped raw address, and no field named plain "email".
+        assertThat(json).doesNotContain("@");
+        assertThat(json).contains("emailHmac").contains(hexDigest);
+        assertThat(json).doesNotContain("\"email\"");
+    }
+
+    @Test
+    void inviteExpiredRoundTripsThroughJsonUnderItsStableTypeTag() {
+        InviteExpired event = new InviteExpired(EventId.generate(), householdId, InviteId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("InviteExpired");
         assertThat(roundTrip(event)).isEqualTo(event);
     }
 

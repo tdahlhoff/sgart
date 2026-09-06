@@ -6,6 +6,11 @@ server:
 spring:
   application:
     name: sgart
+  # No profile is active by default in local dev, CI, or this test suite — all of them should behave
+  # like "dev". A real deployment sets the standard SPRING_PROFILES_ACTIVE env var (e.g. to "prod")
+  # to opt out of dev-only defaults such as the invite HMAC secret below.
+  profiles:
+    default: dev
   # The JWK set is fetched lazily on first token verification, never at context startup — unlike
   # `issuer-uri`, `jwk-set-uri` triggers no eager OIDC-discovery call, so the context loads cleanly
   # even when Keycloak is unreachable (see SgartApplicationTest and Story 1.4 Dev Notes).
@@ -48,3 +53,22 @@ sgart:
   # the household read model that first-run routing reads (AC2).
   projector:
     auto-start: ${SGART_PROJECTOR_AUTOSTART:false}
+  # Invite email HMAC secret (Story 4.1, AD-6): a stable per-deployment secret, never a per-invite
+  # salt — the same email must always hash to the same digest for the AC2 duplicate-pending check
+  # to hold. No default here: outside the "dev" profile (see the profile document below), a missing
+  # SGART_INVITE_EMAIL_HMAC_SECRET fails context startup rather than silently falling back to a
+  # known, committed secret in production.
+  invite:
+    email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET}
+---
+# Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
+# Local runs, CI, and this test suite all get a working default HMAC secret without configuration;
+# a real deployment activates a non-"dev" profile and must supply the real secret explicitly.
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+sgart:
+  invite:
+    email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET:local-dev-only-invite-hmac-secret-change-me}

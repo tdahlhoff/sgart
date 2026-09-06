@@ -17,6 +17,7 @@ import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.ItemId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
@@ -108,6 +109,17 @@ public final class CommandFieldTranslations {
             throw new InvalidCommandEnvelopeException("command.storeIdsRequired", "storeIds must be provided");
         }
         return rawStoreIds.stream().map(CommandFieldTranslations::toStoreId).toList();
+    }
+
+    public static InviteId toInviteId(String rawInviteId) {
+        if (rawInviteId == null || rawInviteId.isBlank()) {
+            throw new InvalidCommandEnvelopeException("command.inviteIdRequired", "inviteId must be provided");
+        }
+        try {
+            return InviteId.fromString(rawInviteId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new InvalidCommandEnvelopeException("command.inviteIdInvalid", "inviteId must be a valid UUID");
+        }
     }
 
     public static TripId toTripId(String rawTripId) {

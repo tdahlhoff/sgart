@@ -211,6 +211,76 @@
     "description": "Label of the row in the household-management hub that opens the manage-stores screen."
   },
 
+  "invitesManageRowLabel": "Einladen",
+  "@invitesManageRowLabel": {
+    "description": "Label of the row in the household-management hub that opens the invite screen (Story 4.1)."
+  },
+
+  "invitesHeading": "Einladen",
+  "@invitesHeading": {
+    "description": "Heading of the invite screen opened from the household-management hub (Story 4.1)."
+  },
+
+  "invitesEmailFieldLabel": "E-Mail-Adresse",
+  "@invitesEmailFieldLabel": {
+    "description": "Label of the invite email field on the invite screen (Story 4.1, AC7)."
+  },
+
+  "invitesSendButtonLabel": "Einladung senden",
+  "@invitesSendButtonLabel": {
+    "description": "Sends the invite (Story 4.1, AC1)."
+  },
+
+  "invitesPendingHeading": "Ausstehende Einladungen",
+  "@invitesPendingHeading": {
+    "description": "Heading above the pending-invites list (Story 4.1, AC6/AC7)."
+  },
+
+  "invitesPendingEmptyStateLabel": "Noch keine ausstehenden Einladungen.",
+  "@invitesPendingEmptyStateLabel": {
+    "description": "Shown when the household has no pending invites."
+  },
+
+  "invitesPendingRowLabel": "Eingeladen am {invitedAt}",
+  "@invitesPendingRowLabel": {
+    "description": "One pending-invite row — date only, no email (AD-6, privacy-first).",
+    "placeholders": {
+      "invitedAt": {
+        "type": "String"
+      }
+    }
+  },
+
+  "invitesEmailRequiredError": "Bitte eine E-Mail-Adresse eingeben.",
+  "@invitesEmailRequiredError": {
+    "description": "Localized copy for the invite.emailRequired error code."
+  },
+
+  "invitesEmailInvalidError": "Bitte eine gültige E-Mail-Adresse eingeben.",
+  "@invitesEmailInvalidError": {
+    "description": "Localized copy for the invite.emailInvalid error code — used for both the client-side fail-fast check and the server's 400 (Story 4.1, AC7)."
+  },
+
+  "invitesDuplicatePendingError": "Für diese E-Mail-Adresse besteht bereits eine offene Einladung.",
+  "@invitesDuplicatePendingError": {
+    "description": "Localized copy for the invite.duplicatePending error code (Story 4.1, AC2)."
+  },
+
+  "invitesAlreadyAMemberError": "Diese Person ist bereits Mitglied des Haushalts.",
+  "@invitesAlreadyAMemberError": {
+    "description": "Localized copy for the invite.alreadyAMember error code (Story 4.1, AC3)."
+  },
+
+  "invitesStatusPending": "Ausstehend",
+  "@invitesStatusPending": {
+    "description": "Localized label for a pending invite's PENDING status (Story 4.1, AC6/AC7)."
+  },
+
+  "invitesStatusExpired": "Abgelaufen",
+  "@invitesStatusExpired": {
+    "description": "Localized label for a pending invite's EXPIRED status (Story 4.1, AC5/AC6/AC7)."
+  },
+
   "storesHeading": "Geschäfte",
   "@storesHeading": {
     "description": "Heading of the manage-stores screen (frame 3 Geschäfte)."
@@ -716,17 +786,12 @@
 
   "onboardingInviteEmailFieldLabel": "E-Mail-Adresse",
   "@onboardingInviteEmailFieldLabel": {
-    "description": "Label of the (non-sending) invite email field on the onboarding invite step."
+    "description": "Label of the invite email field on the onboarding invite step, which sends a real invite (Story 4.1)."
   },
 
   "onboardingInviteSendButtonLabel": "Einladung senden",
   "@onboardingInviteSendButtonLabel": {
-    "description": "The invite-send action — disabled in this story; the send lands in Epic 4 (Story 4.1)."
-  },
-
-  "onboardingInviteDeferredNote": "Einladungen folgen in einem späteren Update.",
-  "@onboardingInviteDeferredNote": {
-    "description": "Explains that the invite send is not available yet (deferred to Epic 4, AC4)."
+    "description": "The invite-send action, wired to the real invite endpoint (Story 4.1)."
   },
 
   "onboardingInvitePrivacyNote": "Nur du und Eingeladene sehen euren Haushalt.",

@@ -41,7 +41,31 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-06 (Story 3.6 review → done — bmad-code-review, Opus 4.8; 1 patch applied, backend 656/0 green)
+last_updated: 2026-09-06 (Story 4.1 code review → in-progress; 3 decisions resolved, 13 patches + 1 follow-up as action items, 4 deferred)
+# Story 4.1 ready-for-dev (create-story, Opus 4.8) 2026-09-06 — Epic 4's first story + SGART's FIRST
+# GDPR/PII-touching feature: invite a person by email. Builds on the up-front epic-4 membership state
+# model (retro Action 1). Invite is an ENTITY of the Household aggregate (household-{id} stream,
+# mirrors Store): new MemberInvited (carries emailHmac + invitedBy + role=PARTICIPANT + invitedAt,
+# NEVER raw email, AD-6) + InviteExpired (lazy housekeeping, no command); Household.invitePerson
+# (membership-gated like addStore) + no-duplicate-pending invariant (DuplicatePendingInviteException
+# →409) + lazy on-access expiry (TTL=7d). Application: NormalizedEmail VO, InviteEmailHasher port
+# (HMAC-SHA256, STABLE per-deployment secret — stability is load-bearing for the dup check) +
+# InviteEmailSideStore port (the ONE raw-email location, purgeable by inviteId) + InvitePerson
+# cmd/handler (append-before-side-store ordering; Clock injected) + ListPendingInvites query + 3 app
+# exceptions wired in WriteErrorAdvice. E5 already-member = APPLICATION/ACL seam (new identity port
+# FindHouseholdMemberByEmail), tested via a fake. Adapters: codec + projector (existing household
+# subscription) + JdbcInviteReadModel (V12, NO email/hmac column) + JdbcInviteEmailSideStore (V13,
+# the AD-6 exception) + InviteController (POST/GET /invites). Client: new invites feature (Api/Cubit),
+# light up the onboarding wizard's disabled „Einladung senden" step + a manage-household invite entry
+# (Epic-1 Action 5). Timo decided (2026-09-06): (1) FULL vertical slice; (2) domain now, real Keycloak
+# email-lookup + delivery DEFERRED to 4.2/4.6 (stub the ACL seam); (3) dedicated invite_email_side_store
+# table + UPDATE NoPersistedPersonalDataTest to whitelist it while still banning email cols in read
+# models; (4) TTL = 7 days. First-class privacy tests (§6): no-raw-email-in-event/codec/API, HMAC
+# stability, side-store purge, invite_read_model isolation+replay (Epic-2 Action 4). Test-manifest
+# embedded (Epic-3 Action 2). 3 non-blocking questions for Timo (error-advice contract test decide-or-
+# retire = retro Action 5; show invitee email in pending list?; RevokeInvite→4.3). Not committed yet
+# (pre-beta commit-to-main; branch+PR switch is a beta/process item). Baseline last-green ≈ backend
+# 656 / Flutter 513 (a58357f).
 # Story 3.6 implemented → review (dev-story, Sonnet 5) 2026-09-05 — all 13 tasks complete, full
 # reserve-then-remove saga reshape landed as planned. Green build: backend 655 tests / 0 failures
 # (incl. ArchUnit + Testcontainers projector/PM suites); Flutter 513 tests / 0 failures, flutter
@@ -182,11 +206,11 @@ development_status:
   # compensating saga (…Initiated/…Confirmed/…Cancelled + pending item sub-state), reshaping shipped
   # 2.4 move too. Needs create-story + architect. 3.3 ships only an interim log-and-surface guard.
   3-6-two-phase-transfer-saga: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Live Collaboration & Membership
-  epic-4: backlog
-  4-1-invite-a-person-by-email: backlog
+  epic-4: in-progress
+  4-1-invite-a-person-by-email: in-progress
   4-2-accept-an-invite-and-join: backlog
   4-3-membership-roles-governance: backlog
   4-4-real-time-live-sync: backlog
@@ -236,15 +260,15 @@ action_items:
   - epic: 2
     action: "Add an explicit optimistic-state DoD check: any client action with a side effect beyond the edited item (inline-created objects, fields preserved through an unrelated update, focus/keyboard state across a submit) must have its optimistic rebuild verified in dev, not caught in review"
     owner: "Dev"
-    status: open
+    status: in-progress
   - epic: 2
     action: "Re-commit to Epic 1 Actions 2 and 3 (base error-advice contract test; extended DoD covering a11y labels/no dead code/fail-fast guards), explicitly scoped to Epic 3's first story"
     owner: "Dev"
-    status: open
+    status: in-progress
   - epic: 2
     action: "Apply the isSubmitting/re-entrancy command guard pattern uniformly on first pass for every new client command handler, not as a per-story review rediscovery"
     owner: "Dev"
-    status: open
+    status: done
   - epic: 2
     action: "Give every new read model an isolation (two-household) + replay/idempotency test in the same PR that introduces it, not added in review"
     owner: "Dev"
@@ -252,8 +276,32 @@ action_items:
   - epic: 2
     action: "Fix the cached Done-archive invalidation gap (deferred from 2.2) when Story 3.4 introduces the first real Done transition, rather than waiting for review to rediscover it"
     owner: "Dev"
-    status: open
+    status: done
   - epic: 2
     action: "Apply the Story 2.4 process-manager concurrency-conflict-retry fix (retry on ConcurrencyConflictException, re-derive the same commandId) from the start in Epic 3's new process managers (postpone-to-list, leftover-transfer)"
     owner: "Dev"
+    status: in-progress
+  - epic: 3
+    action: "Model-first planning for shared state: when an epic touches a shared state model or cross-aggregate vocabulary, draft the state machine + single ubiquitous transfer vocabulary as an explicit up-front artifact during epic/first-story planning, before the first story that mutates it (targets the item-transfer/status churn across 3.3/3.4/3.6)"
+    owner: "PM+Architect"
+    status: open
+  - epic: 3
+    action: "Automated task-to-test cross-check: create-story emits an expected-tests manifest (task -> named test); a check script or code-review pre-step diffs claimed-done [x] tasks against tests that exist and fails the story if a [x] task has no matching test (structural, not a per-story reminder)"
+    owner: "Dev+Process"
+    status: open
+  - epic: 3
+    action: "Prefer structural/code-once enforcement over per-story reminders for recurring DoD items: fold the optimistic-state check and read-model isolation+replay into create-story scaffolding / the Action-2 manifest instead of re-committing them as memory items a fourth time"
+    owner: "Process"
+    status: open
+  - epic: 3
+    action: "Fix commits get first-pass rigor: a fix's test must exercise the exact branch it claims (no hollow retry tests) and a fix must not leave contradicting javadoc/docs behind; treat every second-pass fix commit as reviewable code"
+    owner: "Dev"
+    status: open
+  - epic: 3
+    action: "Build the base error-advice contract test OR formally retire the action (3rd epic carrying Epic 1 Action 2 unbuilt while distributed per-endpoint coverage has held up); decide in Epic 4's first endpoint story"
+    owner: "Dev"
+    status: open
+  - epic: 3
+    action: "Address the checkpointed-subscription debt before/early in live sync (Story 4.4): the fromStart-replay-on-every-reconnect projectors and the cross-projector empty-store-set transient both become multi-user-visible under SSE; evaluate checkpointed subscriptions + a client trip-still-loading affordance during 4.4 planning"
+    owner: "Architect+Dev"
     status: open
