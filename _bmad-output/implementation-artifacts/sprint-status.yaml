@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-06 (Story 4.1 code review → in-progress; 3 decisions resolved, 13 patches + 1 follow-up as action items, 4 deferred)
+last_updated: 2026-09-06 (Story 4.1 done → committed to main c5b84c0; all 13 patches applied + re-reviewed, 1 AC7 follow-up + 3 findings deferred; backend 713/0, flutter 532/0, analyze clean)
 # Story 4.1 ready-for-dev (create-story, Opus 4.8) 2026-09-06 — Epic 4's first story + SGART's FIRST
 # GDPR/PII-touching feature: invite a person by email. Builds on the up-front epic-4 membership state
 # model (retro Action 1). Invite is an ENTITY of the Household aggregate (household-{id} stream,
@@ -210,7 +210,7 @@ development_status:
 
   # Epic 4: Live Collaboration & Membership
   epic-4: in-progress
-  4-1-invite-a-person-by-email: in-progress
+  4-1-invite-a-person-by-email: done
   4-2-accept-an-invite-and-join: backlog
   4-3-membership-roles-governance: backlog
   4-4-real-time-live-sync: backlog

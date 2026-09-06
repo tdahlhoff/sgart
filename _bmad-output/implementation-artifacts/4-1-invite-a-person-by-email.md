@@ -4,7 +4,7 @@ baseline_commit: a58357f0ddb388c3af504238cc00d16821e8c40c
 
 # Story 4.1: Invite a person by email
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -580,6 +580,7 @@ before asserting equality (`TIMESTAMPTZ` is microsecond-precision).
 |---|---|
 | 2026-09-06 | Story implemented end-to-end (backend T1–T21, client T22–T26); backend `./gradlew test` 710/0, `flutter test` 531/0, `flutter analyze` clean; Status → review. |
 | 2026-09-06 | Applied all 13 code-review patches (D1/D2 + 11 more). The AC7 inviter-name follow-up remains open (scheduled alongside 4.2/4.3); 3 findings stay deferred (see `deferred-work.md`). |
+| 2026-09-06 | Re-reviewed patches (all 13 verified in-code); committed to `main` (c5b84c0) + pushed. Status → done. |
 
 ## Review Findings (code review 2026-09-06)
 
