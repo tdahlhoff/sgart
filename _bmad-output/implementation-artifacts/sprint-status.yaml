@@ -1,5 +1,5 @@
 # generated: 2026-08-22
-# last_updated: 2026-09-07
+# last_updated: 2026-09-07 (Story 4.4 — story created, ready-for-dev)
 # project: sgart
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-07 (Story 4.3 — done; re-review passed, 7 code-review patches fixed)
+last_updated: 2026-09-07
 # Backend 847/0 (incl. ArchUnit + Testcontainers) after the review-findings pass; Flutter untouched
 # by this pass (592/0 as of the code review, not re-run). Crux: ACL de-link
 # after append verified end-to-end with recorded call-order tests. Unplanned fix: list/trip
@@ -236,7 +236,7 @@ development_status:
   4-1-invite-a-person-by-email: done
   4-2-accept-an-invite-and-join: done
   4-3-membership-roles-governance: done
-  4-4-real-time-live-sync: backlog
+  4-4-real-time-live-sync: ready-for-dev
   4-5-content-free-notifications: backlog
   4-6-invite-acceptance-web-fallback: backlog
   epic-4-retrospective: optional
