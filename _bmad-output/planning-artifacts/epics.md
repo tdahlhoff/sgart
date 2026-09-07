@@ -95,7 +95,7 @@ NFR10: **Accessibility for a genuinely mixed cohort.** 48px minimum interactive 
 - **AR1 (AD-1):** Every state change is a command handled by an aggregate that emits domain events; domain code imports no framework/infrastructure/transport type; infrastructure is reached only through domain-owned ports.
 - **AR2 (AD-2, AD-3):** Four contexts are packages in one deployable; a context touches another only via its published application-layer port or an async domain event — never another context's domain or DB tables. `Household`, `ShoppingList`, `ShoppingTrip` live in the Collaboration context as distinct aggregates referencing each other by id only.
 - **AR3 (AD-4):** Writes append events to **KurrentDB** under an expected-version check; **PostgreSQL** read models are built by projectors subscribed to the streams and are never written directly by command handlers; projections are eventually consistent.
-- **AR4 (AD-5):** All events/read models reference a person only by a per-membership opaque `MemberId`; the **Identity ACL is the sole minter** (on invite acceptance) and owns the sole mapping `{householdId, memberId → keycloakUserId}`, resolving `(keycloakUserId, householdId) → memberId` per request; a person in two households has two unrelated `MemberId`s.
+- **AR4 (AD-5):** All events/read models reference a person only by a per-membership opaque `MemberId`; the **Identity ACL is the sole issuer** (on invite acceptance) and owns the sole mapping `{householdId, memberId → keycloakUserId}`, resolving `(keycloakUserId, householdId) → memberId` per request; a person in two households has two unrelated `MemberId`s.
 - **AR5 (AD-6):** Never persist display name/email — resolved live from Keycloak/JWT for display only. `MemberInvited` carries `inviteId` + `HMAC(stable per-deployment secret, normalizedEmail)` (for the no-duplicate-pending-invite check); the raw email lives only in a mutable side-store, purged on accept/expiry/erasure; delivery is Keycloak's.
 - **AR6 (AD-7):** Erasure = destroy the Identity-ACL mapping rows + scrub PostgreSQL read models + purge device/offline caches + delete the Keycloak account; the event log is never rewritten (orphaned `MemberId`s are unlinkable → anonymized). Crypto-shredding for PII-in-events is reserved (Post-MVP only).
 - **AR7 (AD-8):** Each queued command carries the target aggregate root's stream version + a client `commandId`; on replay a stale expected-version is rejected → coarse keep/discard (FR8); the `commandId` makes replay idempotent.
@@ -351,14 +351,14 @@ So that I have a private container for my lists and stores.
 
 **Given** an authenticated person with zero households
 **When** the app launches
-**Then** they are shown the create-household / await-invite choice; creating one names it and makes them a Member with `HouseholdRole = Admin` (FR1); the Identity ACL mints their `MemberId` and the `Household` aggregate emits `HouseholdCreated` + `MemberJoined` carrying that same `MemberId` (AR4, AD-5).
+**Then** they are shown the create-household / await-invite choice; creating one names it and makes them a Member with `HouseholdRole = Admin` (FR1); the Identity ACL issues their `MemberId` and the `Household` aggregate emits `HouseholdCreated` + `MemberJoined` carrying that same `MemberId` (AR4, AD-5).
 
 **Given** an authenticated person
 **When** the app launches with exactly one household → they go straight in; with several → they see a selection screen (FR1).
 
 **Given** a person who already belongs to ≥ 1 household
 **When** they choose to create another
-**Then** creation is allowed and a second, unrelated `MemberId` is minted for them in the new household.
+**Then** creation is allowed and a second, unrelated `MemberId` is issued for them in the new household.
 
 ### Story 1.7: Switch, select & rename households
 
@@ -740,7 +740,7 @@ So that I become a member of the household.
 
 **Given** a successful join
 **When** membership is created
-**Then** the Identity ACL **mints the invitee's `MemberId`** and `MemberJoined` carries that id (AD-5), and the invite's raw-email side-store entry is **purged**.
+**Then** the Identity ACL **issues the invitee's `MemberId`** and `MemberJoined` carries that id (AD-5), and the invite's raw-email side-store entry is **purged**.
 
 **Given** an **expired** invite
 **When** it is opened

@@ -405,7 +405,7 @@
           <!-- Identity ACL with mapping -->
           <rect x="330" y="30" width="286" height="170" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect>
           <text x="473" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">Identity ACL</text>
-          <text x="473" y="76" text-anchor="middle" font-size="11" fill="var(--muted)">mints &amp; owns the only mapping</text>
+          <text x="473" y="76" text-anchor="middle" font-size="11" fill="var(--muted)">issues &amp; owns the only mapping</text>
           <rect x="352" y="92" width="242" height="90" rx="8" fill="var(--surface)" stroke="var(--line-strong)"></rect>
           <text x="366" y="112" font-size="11" fill="var(--muted)">householdId</text>
           <text x="366" y="134" font-size="11" fill="var(--muted)">memberId</text>
@@ -512,7 +512,7 @@
           <tr><td class="id">AD-2</td><td>Modular monolith; contexts are modules</td><td>Cross-context contact only via a published port or async event.<span class="prevents">Prevents two owners of one entity; avoids premature microservices.</span></td></tr>
           <tr><td class="id">AD-3</td><td>Household + Shopping stay one context (MVP)</td><td>Aggregates reference each other by id, never by object graph.<span class="prevents">Prevents boundary overhead an MVP doesn't need.</span></td></tr>
           <tr><td class="id">AD-4</td><td>Single source of truth + optimistic concurrency</td><td>Append events under expected-version; read models are projection-only.<span class="prevents">Prevents lost updates and a second write path.</span></td></tr>
-          <tr><td class="id">AD-5</td><td>People referenced only by household-scoped pseudonym</td><td>Events carry <code>MemberId</code>; the ACL is its sole minter &amp; the only mapping owner.<span class="prevents">Prevents PII in the log and cross-household correlation.</span></td></tr>
+          <tr><td class="id">AD-5</td><td>People referenced only by household-scoped pseudonym</td><td>Events carry <code>MemberId</code>; the ACL is its sole issuer &amp; the only mapping owner.<span class="prevents">Prevents PII in the log and cross-household correlation.</span></td></tr>
           <tr><td class="id">AD-6</td><td>No persisted PII; identity read live</td><td>Name/email never stored; invite email only as a stable-secret HMAC.<span class="prevents">Prevents stale PII copies each needing erasure.</span></td></tr>
           <tr><td class="id">AD-7</td><td>Erasure by de-linking, never rewriting history</td><td>Destroy mapping + scrub read models/caches + delete Keycloak account.<span class="prevents">Prevents non-compliant retention and event rewriting.</span></td></tr>
           <tr><td class="id">AD-8</td><td>Offline queue rides the concurrency check</td><td>Command carries target root's version + command-id; stale → keep/discard.<span class="prevents">Prevents silent LWW and double-apply on retry.</span></td></tr>

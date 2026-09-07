@@ -30,13 +30,13 @@ concretizes them (AD-3, AD-5, AD-6, AD-11).
 ## 1. Vocabulary (the single ubiquitous set — fix now, don't churn)
 
 **Aggregate:** `Household` (existing, `household-{id}` stream). Gains a `pendingInvitesById` map and
-membership lifecycle beyond join. Identity ACL stays the sole minter of `MemberId` (AD-5).
+membership lifecycle beyond join. Identity ACL stays the sole issuer of `MemberId` (AD-5).
 
 ### Invite lifecycle events (on `household-{id}`)
 | Event | Payload (ids/HMAC only — no PII, AD-5/AD-6) |
 |---|---|
 | `MemberInvited` | `inviteId, householdId, emailHmac, invitedBy(MemberId), role=PARTICIPANT, invitedAt` |
-| `InviteAccepted` | `inviteId, householdId, memberId` *(the ACL-minted joiner)* |
+| `InviteAccepted` | `inviteId, householdId, memberId` *(the ACL-issued joiner)* |
 | `InviteRevoked` | `inviteId, householdId, revokedBy(MemberId)` |
 | `InviteExpired` | `inviteId, householdId` *(raised lazily; no command)* |
 
@@ -136,7 +136,7 @@ second `MemberJoined`.)
 ```
 invitee opens invite link (deep-link 4.2, or web-fallback 4.6 — same outcome)
   → Keycloak auth (JWT)
-  → adapter.in AcceptInvite: MintMemberIdentity (ACL, AD-5 — the sole minter, already built Epic 1)
+  → adapter.in AcceptInvite: IssueMemberIdentity (ACL, AD-5 — the sole issuer, already built Epic 1)
         → memberId for (keycloakUserId, householdId)
   → AcceptInvite command (carries memberId)
   → Household: invite PENDING & in-TTL? → InviteAccepted + MemberJoined(PARTICIPANT)
@@ -177,7 +177,7 @@ replay/idempotency test **in the same PR**.
 
 - **4.1 Invite by email** → `MemberInvited` entity + `InvitePerson` (membership-gated) + no-dup-pending
   (aggregate, §3.4) + already-member (ACL seam, §3⚠) + `emailHmac` + side-store + `invite_read_model`.
-- **4.2 Accept & join** → `AcceptInvite` + `InviteAccepted` + `MemberJoined(PARTICIPANT)` + ACL mint +
+- **4.2 Accept & join** → `AcceptInvite` + `InviteAccepted` + `MemberJoined(PARTICIPANT)` + ACL issue +
   purge + expired(lazy)/revoked/already-member guards. Deep-link/web-fallback = adapter.in (4.6).
 - **4.3 Roles & governance** → `LeaveHousehold`/`MemberLeft`, `RemoveMember`/`MemberRemoved`,
   `PromoteMember`/`MemberPromoted`, `DemoteMember`/`MemberDemoted`, `DeleteHousehold`/`HouseholdDeleted`,

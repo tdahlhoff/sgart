@@ -18,9 +18,10 @@ import java.util.Objects;
 /**
  * Orchestrates {@link CreateHousehold} (AC1, AC3): issue the creator's {@link MemberId} through the
  * Identity ACL's published port <em>before</em> the aggregate raises {@code MemberJoined} — the
- * event carries the issued id, so issuing cannot happen after (the load-bearing ordering, Story
- * 1.6 Dev Notes "Issue-then-append"). Returns the new {@link HouseholdId} so the caller can route
- * straight into it without waiting for the read model to catch up (read-your-writes, AR3/NFR9).
+ * event carries the issued id, so issuing cannot happen after (the load-bearing ordering, Story 1.6
+ * Dev Notes "Mint-then-append & cross-store consistency" — issue was called mint there). Returns
+ * the new {@link HouseholdId} so the caller can route straight into it without waiting for the read
+ * model to catch up (read-your-writes, AR3/NFR9).
  */
 public final class CreateHouseholdHandler {
 
