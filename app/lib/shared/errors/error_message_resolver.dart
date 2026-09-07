@@ -42,6 +42,8 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'invite.expired' => localizations.householdsAwaitInviteExpiredError,
     'invite.notFound' => localizations.householdsAwaitInviteNotFoundError,
     'invite.alreadyUsed' => localizations.householdsAwaitInviteAlreadyUsedError,
+    'governance.notPermitted' => localizations.membersGovernanceNotPermittedError,
+    'membership.lastAdmin' => localizations.membersLastAdminError,
     _ => localizations.errorGenericFallback,
   };
 }

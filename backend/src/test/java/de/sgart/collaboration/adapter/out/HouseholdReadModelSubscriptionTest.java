@@ -95,13 +95,19 @@ class HouseholdReadModelSubscriptionTest {
     @BeforeEach
     void setUp() {
         JdbcClient jdbcClient = JdbcClient.create(dataSource);
-        jdbcClient.sql("TRUNCATE TABLE household_read_model, household_membership_read_model, store_read_model").update();
+        jdbcClient
+                .sql("TRUNCATE TABLE household_read_model, store_read_model, household_member_read_model")
+                .update();
         jdbcClient.sql("TRUNCATE TABLE identity_member_mapping").update();
         readModel = new JdbcHouseholdReadModel(jdbcClient);
         mappingRepository = new JdbcMemberMappingRepository(jdbcClient);
         eventStore = new KurrentDbEventStore(client);
         projector = new HouseholdReadModelProjector(
-                client, readModel, new JdbcStoreReadModel(jdbcClient), new JdbcInviteReadModel(jdbcClient, Clock.systemUTC()));
+                client,
+                readModel,
+                new JdbcStoreReadModel(jdbcClient),
+                new JdbcInviteReadModel(jdbcClient, Clock.systemUTC()),
+                new JdbcHouseholdMemberReadModel(jdbcClient));
         projector.start();
     }
 

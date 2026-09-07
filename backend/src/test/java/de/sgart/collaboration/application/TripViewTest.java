@@ -71,7 +71,7 @@ class TripViewTest {
             implements TripStoreReadModel {
 
         @Override
-        public void addStore(TripId tripId, StoreId storeId) {
+        public void addStore(HouseholdId householdId, TripId tripId, StoreId storeId) {
             throw new UnsupportedOperationException("the projector's write, never a query's");
         }
 

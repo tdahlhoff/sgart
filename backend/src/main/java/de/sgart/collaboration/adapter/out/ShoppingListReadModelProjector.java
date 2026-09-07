@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemStatus;
+import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
@@ -152,8 +153,15 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
             case ItemTransferInitiated initiated -> itemReadModel.setTransferPending(initiated.itemId(), true);
             case ItemTransferConfirmed confirmed -> itemReadModel.removeItem(confirmed.itemId(), confirmed.listId());
             case ItemTransferCancelled cancelled -> itemReadModel.setTransferPending(cancelled.itemId(), false);
+            case HouseholdDeleted deleted -> {
+                readModel.purgeHousehold(deleted.householdId());
+                itemReadModel.purgeHousehold(deleted.householdId());
+                itemSuggestionReadModel.purgeHousehold(deleted.householdId());
+            }
             default -> {
-                // The subscription filter (see start()) only ever delivers list-stream events. The
+                // The subscription filter (see start()) covers both list- and household- stream
+                // prefixes (the latter only for HouseholdDeleted's delete-cascade purge, decision 4);
+                // every other event on either prefix that is not handled above is ignored. The
                 // trip's own TripStarted (on trip-{id}) is not projected in 3.1 (Cl. 2) — it never
                 // reaches this filter anyway.
             }
@@ -199,8 +207,12 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
     }
 
     private void subscribe() {
+        // Two prefixes on one subscription (never a second subscription, decision 4): list- for the
+        // list's own events, household- solely so this projector can see HouseholdDeleted for the
+        // delete-cascade purge — every other household-stream event is ignored by project()'s default.
         SubscriptionFilter filter = SubscriptionFilter.newBuilder()
                 .addStreamNamePrefix(StreamId.StreamType.LIST.prefix() + "-")
+                .addStreamNamePrefix(StreamId.StreamType.HOUSEHOLD.prefix() + "-")
                 .build();
         client.subscribeToAll(
                 new SubscriptionListener() {

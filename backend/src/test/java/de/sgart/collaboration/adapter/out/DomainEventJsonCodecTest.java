@@ -432,6 +432,84 @@ class DomainEventJsonCodecTest {
         assertThat(json).contains("memberId");
     }
 
+    @Test
+    void inviteRevokedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.InviteRevoked event = new de.sgart.collaboration.domain.event.InviteRevoked(
+                EventId.generate(), householdId, InviteId.generate(), MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("InviteRevoked");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberLeftRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.MemberLeft event =
+                new de.sgart.collaboration.domain.event.MemberLeft(EventId.generate(), householdId, MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("MemberLeft");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberRemovedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.MemberRemoved event = new de.sgart.collaboration.domain.event.MemberRemoved(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("MemberRemoved");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberPromotedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.MemberPromoted event = new de.sgart.collaboration.domain.event.MemberPromoted(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("MemberPromoted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void memberDemotedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.MemberDemoted event = new de.sgart.collaboration.domain.event.MemberDemoted(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("MemberDemoted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void householdDeletedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        de.sgart.collaboration.domain.event.HouseholdDeleted event = new de.sgart.collaboration.domain.event.HouseholdDeleted(
+                EventId.generate(), householdId, MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("HouseholdDeleted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void theSixGovernanceEventsJsonPayloadsCarryNoEmailHmacOrKeycloakComponent() {
+        de.sgart.collaboration.domain.event.InviteRevoked revoked = new de.sgart.collaboration.domain.event.InviteRevoked(
+                EventId.generate(), householdId, InviteId.generate(), MemberId.generate());
+        de.sgart.collaboration.domain.event.MemberLeft left =
+                new de.sgart.collaboration.domain.event.MemberLeft(EventId.generate(), householdId, MemberId.generate());
+        de.sgart.collaboration.domain.event.MemberRemoved removed = new de.sgart.collaboration.domain.event.MemberRemoved(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+        de.sgart.collaboration.domain.event.MemberPromoted promoted = new de.sgart.collaboration.domain.event.MemberPromoted(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+        de.sgart.collaboration.domain.event.MemberDemoted demoted = new de.sgart.collaboration.domain.event.MemberDemoted(
+                EventId.generate(), householdId, MemberId.generate(), MemberId.generate());
+        de.sgart.collaboration.domain.event.HouseholdDeleted deleted = new de.sgart.collaboration.domain.event.HouseholdDeleted(
+                EventId.generate(), householdId, MemberId.generate());
+
+        for (DomainEvent event : List.of(revoked, left, removed, promoted, demoted, deleted)) {
+            String json = new String(codec.toJsonBytes(event), java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(json).doesNotContain("@");
+            assertThat(json).doesNotContainIgnoringCase("email");
+            assertThat(json).doesNotContainIgnoringCase("hmac");
+            assertThat(json).doesNotContainIgnoringCase("keycloak");
+        }
+    }
+
     private DomainEvent roundTrip(DomainEvent event) {
         return codec.fromJsonBytes(codec.typeTagFor(event), codec.toJsonBytes(event));
     }

@@ -31,6 +31,7 @@ import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ItemId;
+import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreId;
@@ -1054,5 +1055,35 @@ class ShoppingListReadModelProjectorTest {
 
         assertThat(itemReadModel.itemsOf(householdId, listId)).hasSize(1);
         assertThat(itemReadModel.itemsOf(householdId, listId).get(0).status()).isEqualTo(ItemStatus.DONE);
+    }
+
+    @Test
+    void projectingHouseholdDeletedPurgesListsItemsAndSuggestionsForThatHouseholdOnlyAndIsANoOpOnReplay() {
+        HouseholdId householdToDelete = HouseholdId.generate();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        ShoppingListId listId = ShoppingListId.generate();
+        ShoppingListId otherListId = ShoppingListId.generate();
+        ItemId itemId = ItemId.generate();
+        projector.project(ShoppingList.create(listId, householdToDelete, new ShoppingListName("Wocheneinkauf"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(ShoppingList.create(otherListId, otherHousehold, new ShoppingListName("Getränke"), CommandId.generate())
+                .uncommittedEvents()
+                .get(0));
+        projector.project(new ItemAdded(
+                EventId.generate(), householdToDelete, listId, itemId, new ItemName("Milch"), null, Quantity.of(1, Unit.PIECE)));
+        de.sgart.collaboration.domain.event.HouseholdDeleted deleted =
+                new de.sgart.collaboration.domain.event.HouseholdDeleted(EventId.generate(), householdToDelete, MemberId.generate());
+
+        projector.project(deleted);
+
+        assertThat(readModel.listsOf(householdToDelete)).isEmpty();
+        assertThat(itemReadModel.itemsOf(householdToDelete, listId)).isEmpty();
+        assertThat(itemSuggestionReadModel.suggestionsOf(householdToDelete)).isEmpty();
+        assertThat(readModel.listsOf(otherHousehold)).hasSize(1);
+
+        projector.project(deleted);
+
+        assertThat(readModel.listsOf(householdToDelete)).isEmpty();
     }
 }

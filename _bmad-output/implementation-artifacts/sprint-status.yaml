@@ -41,7 +41,12 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-06 (Story 4.2 code-reviewed → in-progress: 1 HIGH access-control + 5 patches as action items)
+last_updated: 2026-09-07 (Story 4.3 — all 7 code-review patch findings dev'd; back to review)
+# Backend 847/0 (incl. ArchUnit + Testcontainers) after the review-findings pass; Flutter untouched
+# by this pass (592/0 as of the code review, not re-run). Crux: ACL de-link
+# after append verified end-to-end with recorded call-order tests. Unplanned fix: list/trip
+# projectors needed the household- stream prefix added to see HouseholdDeleted for their own
+# delete-cascade purge; trip_store_read_model gained a household_id column (V15) to stay purgeable.
 # Story 4.2 ready-for-dev (create-story, Opus 4.8) 2026-09-06 — Epic 4's 2nd story: accept an invite
 # & join; SGART's first multi-person household. Full vertical slice building on 4.1's invite entity.
 # Timo decided (2026-09-06): (1) CORE accept slice only — OS deep-link + web fallback + real Keycloak
@@ -230,7 +235,7 @@ development_status:
   epic-4: in-progress
   4-1-invite-a-person-by-email: done
   4-2-accept-an-invite-and-join: done
-  4-3-membership-roles-governance: backlog
+  4-3-membership-roles-governance: review
   4-4-real-time-live-sync: backlog
   4-5-content-free-notifications: backlog
   4-6-invite-acceptance-web-fallback: backlog

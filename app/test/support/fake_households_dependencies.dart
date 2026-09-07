@@ -18,6 +18,11 @@ class FakeHouseholdsApi implements HouseholdsApi {
   final List<String> renameCommandIds = [];
   int renameCallCount = 0;
 
+  Object? deleteErrorToThrow;
+  String? lastDeletedHouseholdId;
+  final List<String> deleteCommandIds = [];
+  int deleteCallCount = 0;
+
   @override
   Future<List<HouseholdSummary>> listMyHouseholds() async {
     if (listErrorToThrow != null) throw listErrorToThrow!;
@@ -40,6 +45,14 @@ class FakeHouseholdsApi implements HouseholdsApi {
     renameCommandIds.add(commandId);
     renameCallCount++;
     if (renameErrorToThrow != null) throw renameErrorToThrow!;
+  }
+
+  @override
+  Future<void> deleteHousehold(String householdId, {required String commandId}) async {
+    lastDeletedHouseholdId = householdId;
+    deleteCommandIds.add(commandId);
+    deleteCallCount++;
+    if (deleteErrorToThrow != null) throw deleteErrorToThrow!;
   }
 }
 

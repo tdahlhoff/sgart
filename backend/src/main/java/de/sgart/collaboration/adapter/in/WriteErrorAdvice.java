@@ -4,6 +4,7 @@ import de.sgart.collaboration.application.exception.AlreadyAHouseholdMemberAppli
 import de.sgart.collaboration.application.exception.DuplicateItemApplicationException;
 import de.sgart.collaboration.application.exception.DuplicatePendingInviteApplicationException;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
+import de.sgart.collaboration.application.exception.GovernanceNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.application.exception.InvalidInviteEmailApplicationException;
@@ -21,6 +22,7 @@ import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplic
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
 import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
+import de.sgart.collaboration.application.exception.LastAdminApplicationException;
 import de.sgart.collaboration.application.exception.ListNameChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.MoveTargetNotOpenException;
 import de.sgart.collaboration.application.exception.NotAHouseholdMemberApplicationException;
@@ -94,6 +96,16 @@ class WriteErrorAdvice {
     @ExceptionHandler(InviteAlreadyConsumedApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleInviteAlreadyConsumed(InviteAlreadyConsumedApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(LastAdminApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleLastAdmin(LastAdminApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(GovernanceNotPermittedApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleGovernanceNotPermitted(GovernanceNotPermittedApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(ConcurrencyConflictException.class)

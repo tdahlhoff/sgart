@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -234,6 +235,47 @@ class HouseholdControllerTest {
                         .content("{\"name\":\"Familie Beispiel\",\"commandId\":\"not-a-uuid\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("command.commandIdInvalid"));
+    }
+
+    @Test
+    void delete_byAnAdminReturns204() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+
+        mockMvc.perform(delete("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deleteRequestBody()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void delete_byAParticipantReturns403WithGovernanceNotPermitted() throws Exception {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId adminMemberId = MemberId.generate();
+        seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
+        MemberId participantMemberId = MemberId.generate();
+        eventStore.append(
+                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                List.of(new MemberJoined(
+                        EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
+                CommandId.generate());
+        mappingRepository.save(
+                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
+
+        mockMvc.perform(delete("/api/v1/households/{householdId}", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deleteRequestBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("governance.notPermitted"));
+    }
+
+    private static String deleteRequestBody() {
+        return """
+                {"commandId":"%s"}
+                """.formatted(UUID.randomUUID());
     }
 
     /** Seeds a household stream (creator = {@code adminMemberId}) and the caller's ACL mapping. */

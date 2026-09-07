@@ -14,17 +14,24 @@ import de.sgart.collaboration.application.command.CheckOffItemHandler;
 import de.sgart.collaboration.application.command.CompleteTripHandler;
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
+import de.sgart.collaboration.application.command.DeleteHouseholdHandler;
+import de.sgart.collaboration.application.command.DemoteMemberHandler;
 import de.sgart.collaboration.application.command.DiscardItemHandler;
 import de.sgart.collaboration.application.command.InvitePersonHandler;
+import de.sgart.collaboration.application.command.LeaveHouseholdHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.PostponeItemToListHandler;
+import de.sgart.collaboration.application.command.PromoteMemberHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
+import de.sgart.collaboration.application.command.RemoveMemberHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
 import de.sgart.collaboration.application.command.RerouteItemHandler;
+import de.sgart.collaboration.application.command.RevokeInviteHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.command.UncheckItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
 import de.sgart.collaboration.application.query.ListDoneLists;
+import de.sgart.collaboration.application.query.ListHouseholdMembers;
 import de.sgart.collaboration.application.query.ListItemSuggestions;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
@@ -33,6 +40,7 @@ import de.sgart.collaboration.application.query.ListPendingInvites;
 import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.application.query.TripView;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
+import de.sgart.collaboration.domain.readmodel.HouseholdMemberReadModel;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.ItemReadModel;
@@ -44,6 +52,7 @@ import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
+import de.sgart.identity.application.RetractMembership;
 import de.sgart.shared.EventStore;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
@@ -241,6 +250,51 @@ public class CollaborationApplicationConfig {
             InviteEmailSideStore inviteEmailSideStore,
             Clock clock) {
         return new AcceptInviteHandler(eventStore, issueMemberIdentity, inviteEmailSideStore, clock);
+    }
+
+    @Bean
+    LeaveHouseholdHandler leaveHouseholdHandler(
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity, RetractMembership retractMembership) {
+        return new LeaveHouseholdHandler(eventStore, resolveMemberIdentity, retractMembership);
+    }
+
+    @Bean
+    RemoveMemberHandler removeMemberHandler(
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity, RetractMembership retractMembership) {
+        return new RemoveMemberHandler(eventStore, resolveMemberIdentity, retractMembership);
+    }
+
+    @Bean
+    PromoteMemberHandler promoteMemberHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new PromoteMemberHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    DemoteMemberHandler demoteMemberHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new DemoteMemberHandler(eventStore, resolveMemberIdentity);
+    }
+
+    @Bean
+    DeleteHouseholdHandler deleteHouseholdHandler(
+            EventStore eventStore,
+            ResolveMemberIdentity resolveMemberIdentity,
+            RetractMembership retractMembership,
+            InviteEmailSideStore inviteEmailSideStore) {
+        return new DeleteHouseholdHandler(eventStore, resolveMemberIdentity, retractMembership, inviteEmailSideStore);
+    }
+
+    @Bean
+    RevokeInviteHandler revokeInviteHandler(
+            EventStore eventStore,
+            ResolveMemberIdentity resolveMemberIdentity,
+            InviteEmailSideStore inviteEmailSideStore) {
+        return new RevokeInviteHandler(eventStore, resolveMemberIdentity, inviteEmailSideStore);
+    }
+
+    @Bean
+    ListHouseholdMembers listHouseholdMembers(
+            ResolveMemberIdentity resolveMemberIdentity, HouseholdMemberReadModel householdMemberReadModel) {
+        return new ListHouseholdMembers(resolveMemberIdentity, householdMemberReadModel);
     }
 
     @Bean

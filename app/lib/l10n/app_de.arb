@@ -1104,5 +1104,140 @@
   "printShareFilename": "Einkaufsliste",
   "@printShareFilename": {
     "description": "Fallback base filename (without extension) offered to the OS share sheet when the list has a blank title (Story 3.5, AC2, fail-fast client guard)."
+  },
+
+  "membersManageRowLabel": "Mitglieder verwalten",
+  "@membersManageRowLabel": {
+    "description": "Label of the row in the household-management hub that opens the member-management screen (Story 4.3, AC9)."
+  },
+
+  "membersHeading": "Mitglieder",
+  "@membersHeading": {
+    "description": "Heading of the member-management screen (Story 4.3, AC9)."
+  },
+
+  "membersSelfLabel": "Sie",
+  "@membersSelfLabel": {
+    "description": "Marks the caller's own row in the member roster — pseudonymous, no name shown (AD-6, decision 5)."
+  },
+
+  "membersRoleAdmin": "Admin",
+  "@membersRoleAdmin": {
+    "description": "German label for the ADMIN role in the member roster."
+  },
+
+  "membersRoleParticipant": "Mitglied",
+  "@membersRoleParticipant": {
+    "description": "German label for the PARTICIPANT role in the member roster."
+  },
+
+  "membersLoadFailedError": "Mitglieder konnten nicht geladen werden.",
+  "@membersLoadFailedError": {
+    "description": "Shown when the member roster fails to load."
+  },
+
+  "membersPromoteAction": "Zum Admin befördern",
+  "@membersPromoteAction": {
+    "description": "Action label that promotes a Participant to Admin (Story 4.3, AC4)."
+  },
+
+  "membersDemoteAction": "Admin-Rechte entziehen",
+  "@membersDemoteAction": {
+    "description": "Action label that demotes an Admin to Participant (Story 4.3, AC4)."
+  },
+
+  "membersRemoveAction": "Entfernen",
+  "@membersRemoveAction": {
+    "description": "Action label that removes a member from the household (Story 4.3, AC4)."
+  },
+
+  "membersRemoveConfirmTitle": "Mitglied entfernen?",
+  "@membersRemoveConfirmTitle": {
+    "description": "Title of the confirmation dialog before removing a member (Story 4.3, AC9)."
+  },
+
+  "membersRemoveConfirmMessage": "Dieses Mitglied verliert sofort den Zugriff auf den Haushalt.",
+  "@membersRemoveConfirmMessage": {
+    "description": "Message of the confirmation dialog before removing a member."
+  },
+
+  "membersPromoteConfirmTitle": "Zum Admin befördern?",
+  "@membersPromoteConfirmTitle": {
+    "description": "Title of the confirmation dialog before promoting a member."
+  },
+
+  "membersDemoteConfirmTitle": "Admin-Rechte entziehen?",
+  "@membersDemoteConfirmTitle": {
+    "description": "Title of the confirmation dialog before demoting an Admin."
+  },
+
+  "membersLeaveAction": "Haushalt verlassen",
+  "@membersLeaveAction": {
+    "description": "Action label that leaves the household (Story 4.3, AC3, AC9) — the only governance action a Participant sees."
+  },
+
+  "membersLeaveConfirmTitle": "Haushalt verlassen?",
+  "@membersLeaveConfirmTitle": {
+    "description": "Title of the confirmation dialog before leaving the household."
+  },
+
+  "membersLeaveConfirmMessage": "Sie verlieren sofort den Zugriff auf diesen Haushalt.",
+  "@membersLeaveConfirmMessage": {
+    "description": "Message of the confirmation dialog before leaving the household."
+  },
+
+  "membersConfirmButtonLabel": "Bestätigen",
+  "@membersConfirmButtonLabel": {
+    "description": "Confirm button label on the member-management screen's confirmation dialogs."
+  },
+
+  "membersCancelButtonLabel": "Abbrechen",
+  "@membersCancelButtonLabel": {
+    "description": "Cancel button label on the member-management screen's confirmation dialogs."
+  },
+
+  "membersDeleteHouseholdAction": "Haushalt löschen",
+  "@membersDeleteHouseholdAction": {
+    "description": "Action label that deletes the whole household (Story 4.3, AC7, AC9) — Admin-only, hard-confirmed."
+  },
+
+  "membersDeleteHouseholdConfirmTitle": "Haushalt endgültig löschen?",
+  "@membersDeleteHouseholdConfirmTitle": {
+    "description": "Title of the hard-confirmation dialog before deleting the household."
+  },
+
+  "membersDeleteHouseholdConfirmMessage": "Alle Listen, Geschäfte und Mitgliedschaften gehen unwiderruflich verloren. Geben Sie zur Bestätigung den Haushaltsnamen „{householdName}“ ein.",
+  "@membersDeleteHouseholdConfirmMessage": {
+    "description": "Message of the hard-confirmation (type-to-confirm) dialog before deleting the household — AC7's \"hard-to-mis-trigger\" requirement.",
+    "placeholders": {
+      "householdName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "membersDeleteHouseholdConfirmFieldLabel": "Haushaltsname",
+  "@membersDeleteHouseholdConfirmFieldLabel": {
+    "description": "Label of the type-to-confirm text field on the delete-household hard-confirmation dialog."
+  },
+
+  "membersRevokeInviteAction": "Zurückziehen",
+  "@membersRevokeInviteAction": {
+    "description": "Action label that revokes a pending invite (Story 4.3, AC6, AC9)."
+  },
+
+  "membersRevokeInviteConfirmTitle": "Einladung zurückziehen?",
+  "@membersRevokeInviteConfirmTitle": {
+    "description": "Title of the confirmation dialog before revoking a pending invite."
+  },
+
+  "membersGovernanceNotPermittedError": "Nur Administratoren können diese Aktion ausführen.",
+  "@membersGovernanceNotPermittedError": {
+    "description": "Localized copy for the governance.notPermitted error code (Story 4.3, AC2) — a Participant attempted an Admin-only governance action."
+  },
+
+  "membersLastAdminError": "Der letzte Admin kann den Haushalt nicht verlassen, entfernt oder degradiert werden.",
+  "@membersLastAdminError": {
+    "description": "Localized copy for the membership.lastAdmin error code (Story 4.3, AC5) — the at-least-one-Admin invariant."
   }
 }

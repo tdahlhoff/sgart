@@ -3,10 +3,8 @@ package de.sgart.collaboration.adapter.out;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
-import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.readmodel.HouseholdNameReadModel;
 import de.sgart.shared.HouseholdId;
-import de.sgart.shared.MemberId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,16 +55,11 @@ public final class JdbcHouseholdReadModel implements HouseholdNameReadModel {
                 .update();
     }
 
-    /** Idempotent insert — re-projecting the same {@code MemberJoined} is a safe no-op. */
-    void addMember(HouseholdId householdId, MemberId memberId) {
+    /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */
+    void purgeHousehold(HouseholdId householdId) {
         jdbcClient
-                .sql("""
-                        INSERT INTO household_membership_read_model (household_id, member_id)
-                        VALUES (:householdId, :memberId)
-                        ON CONFLICT (household_id, member_id) DO NOTHING
-                        """)
+                .sql("DELETE FROM household_read_model WHERE household_id = :householdId")
                 .param("householdId", householdId.value())
-                .param("memberId", memberId.value())
                 .update();
     }
 }

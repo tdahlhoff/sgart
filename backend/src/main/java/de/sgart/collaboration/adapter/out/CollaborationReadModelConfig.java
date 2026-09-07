@@ -55,14 +55,25 @@ public class CollaborationReadModelConfig {
     }
 
     @Bean
+    JdbcHouseholdMemberReadModel jdbcHouseholdMemberReadModel(JdbcClient jdbcClient) {
+        return new JdbcHouseholdMemberReadModel(jdbcClient);
+    }
+
+    @Bean
     HouseholdReadModelProjector householdReadModelProjector(
             KurrentDBClient kurrentDbClient,
             JdbcHouseholdReadModel jdbcHouseholdReadModel,
             JdbcStoreReadModel jdbcStoreReadModel,
             JdbcInviteReadModel jdbcInviteReadModel,
+            JdbcHouseholdMemberReadModel jdbcHouseholdMemberReadModel,
             @Value("${sgart.projector.auto-start:false}") boolean autoStart) {
         return new HouseholdReadModelProjector(
-                kurrentDbClient, jdbcHouseholdReadModel, jdbcStoreReadModel, jdbcInviteReadModel, autoStart);
+                kurrentDbClient,
+                jdbcHouseholdReadModel,
+                jdbcStoreReadModel,
+                jdbcInviteReadModel,
+                jdbcHouseholdMemberReadModel,
+                autoStart);
     }
 
     @Bean

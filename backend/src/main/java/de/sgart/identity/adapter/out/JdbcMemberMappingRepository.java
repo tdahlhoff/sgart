@@ -65,6 +65,26 @@ public final class JdbcMemberMappingRepository implements MemberMappingRepositor
     }
 
     @Override
+    public void deleteMappingByMember(HouseholdId householdId, MemberId memberId) {
+        jdbcClient
+                .sql("""
+                        DELETE FROM identity_member_mapping
+                        WHERE household_id = :householdId AND member_id = :memberId
+                        """)
+                .param("householdId", householdId.value())
+                .param("memberId", memberId.value())
+                .update();
+    }
+
+    @Override
+    public void deleteAllMappings(HouseholdId householdId) {
+        jdbcClient
+                .sql("DELETE FROM identity_member_mapping WHERE household_id = :householdId")
+                .param("householdId", householdId.value())
+                .update();
+    }
+
+    @Override
     public List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId) {
         return jdbcClient
                 .sql("SELECT household_id FROM identity_member_mapping WHERE keycloak_user_id = :keycloakUserId")

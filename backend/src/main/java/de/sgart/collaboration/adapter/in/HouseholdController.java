@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.command.DeleteHouseholdHandler;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,14 +35,17 @@ class HouseholdController {
     private final CreateHouseholdHandler createHouseholdHandler;
     private final ListMyHouseholds listMyHouseholds;
     private final RenameHouseholdHandler renameHouseholdHandler;
+    private final DeleteHouseholdHandler deleteHouseholdHandler;
 
     HouseholdController(
             CreateHouseholdHandler createHouseholdHandler,
             ListMyHouseholds listMyHouseholds,
-            RenameHouseholdHandler renameHouseholdHandler) {
+            RenameHouseholdHandler renameHouseholdHandler,
+            DeleteHouseholdHandler deleteHouseholdHandler) {
         this.createHouseholdHandler = createHouseholdHandler;
         this.listMyHouseholds = listMyHouseholds;
         this.renameHouseholdHandler = renameHouseholdHandler;
+        this.deleteHouseholdHandler = deleteHouseholdHandler;
     }
 
     @PostMapping
@@ -78,8 +83,25 @@ class HouseholdController {
         renameHouseholdHandler.handle(caller.keycloakUserId(), householdId, request.name(), request.commandId());
     }
 
+    @DeleteMapping("/{householdId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @RequestBody DeleteHouseholdRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        // The handler resolves the caller's MemberId (403 if not a member), enforces Admin-only in
+        // the domain (403 governanceNotPermitted, AC2), and de-links every ACL mapping after append
+        // (AC7). No last-Admin guard — deleting the whole household is allowed for a sole Admin.
+        deleteHouseholdHandler.handle(caller.keycloakUserId(), householdId, request.commandId());
+    }
+
     /** Transport DTO for {@code POST} — the command envelope's client-facing shape (AR10). */
     record CreateHouseholdRequest(String name, String commandId) {}
+
+    /** Transport DTO for {@code DELETE} — the delete command envelope (AR10). */
+    record DeleteHouseholdRequest(String commandId) {}
 
     record CreateHouseholdResponse(String householdId) {}
 

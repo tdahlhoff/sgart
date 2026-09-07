@@ -91,4 +91,26 @@ public final class JdbcInviteReadModel implements InviteReadModel {
                 .param("inviteId", inviteId.value())
                 .update();
     }
+
+    /** Idempotent flag flip — re-projecting the same {@code InviteRevoked} is a safe no-op (Story
+     * 4.3, AC6). Drops the invite out of {@link #pendingInvitesOf}, same mechanism as {@link
+     * #markAccepted}. */
+    void markRevoked(HouseholdId householdId, InviteId inviteId) {
+        jdbcClient
+                .sql("""
+                        UPDATE invite_read_model SET status = 'REVOKED'
+                        WHERE household_id = :householdId AND invite_id = :inviteId
+                        """)
+                .param("householdId", householdId.value())
+                .param("inviteId", inviteId.value())
+                .update();
+    }
+
+    /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */
+    void purgeHousehold(HouseholdId householdId) {
+        jdbcClient
+                .sql("DELETE FROM invite_read_model WHERE household_id = :householdId")
+                .param("householdId", householdId.value())
+                .update();
+    }
 }

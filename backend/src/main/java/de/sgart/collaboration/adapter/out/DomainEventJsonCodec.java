@@ -9,9 +9,11 @@ import de.sgart.collaboration.domain.ItemNote;
 import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
 import de.sgart.collaboration.domain.event.ItemCheckedOff;
@@ -23,8 +25,12 @@ import de.sgart.collaboration.domain.event.ItemTransferConfirmed;
 import de.sgart.collaboration.domain.event.ItemTransferInitiated;
 import de.sgart.collaboration.domain.event.ItemUnchecked;
 import de.sgart.collaboration.domain.event.ItemUpdated;
+import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.MemberLeft;
+import de.sgart.collaboration.domain.event.MemberPromoted;
+import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.collaboration.domain.event.ShoppingListRenamed;
 import de.sgart.collaboration.domain.event.StoreAdded;
@@ -87,6 +93,12 @@ final class DomainEventJsonCodec {
     static final String MEMBER_INVITED_TYPE = "MemberInvited";
     static final String INVITE_EXPIRED_TYPE = "InviteExpired";
     static final String INVITE_ACCEPTED_TYPE = "InviteAccepted";
+    static final String INVITE_REVOKED_TYPE = "InviteRevoked";
+    static final String MEMBER_LEFT_TYPE = "MemberLeft";
+    static final String MEMBER_REMOVED_TYPE = "MemberRemoved";
+    static final String MEMBER_PROMOTED_TYPE = "MemberPromoted";
+    static final String MEMBER_DEMOTED_TYPE = "MemberDemoted";
+    static final String HOUSEHOLD_DELETED_TYPE = "HouseholdDeleted";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -118,6 +130,12 @@ final class DomainEventJsonCodec {
             case MemberInvited ignored -> MEMBER_INVITED_TYPE;
             case InviteExpired ignored -> INVITE_EXPIRED_TYPE;
             case InviteAccepted ignored -> INVITE_ACCEPTED_TYPE;
+            case InviteRevoked ignored -> INVITE_REVOKED_TYPE;
+            case MemberLeft ignored -> MEMBER_LEFT_TYPE;
+            case MemberRemoved ignored -> MEMBER_REMOVED_TYPE;
+            case MemberPromoted ignored -> MEMBER_PROMOTED_TYPE;
+            case MemberDemoted ignored -> MEMBER_DEMOTED_TYPE;
+            case HouseholdDeleted ignored -> HOUSEHOLD_DELETED_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -268,6 +286,34 @@ final class DomainEventJsonCodec {
                     accepted.householdId().value().toString(),
                     accepted.inviteId().value().toString(),
                     accepted.memberId().value().toString()));
+            case InviteRevoked revoked -> jsonMapper.writeValueAsBytes(new InviteRevokedPayload(
+                    revoked.eventId().value().toString(),
+                    revoked.householdId().value().toString(),
+                    revoked.inviteId().value().toString(),
+                    revoked.revokedBy().value().toString()));
+            case MemberLeft left -> jsonMapper.writeValueAsBytes(new MemberLeftPayload(
+                    left.eventId().value().toString(),
+                    left.householdId().value().toString(),
+                    left.memberId().value().toString()));
+            case MemberRemoved removed -> jsonMapper.writeValueAsBytes(new MemberRemovedPayload(
+                    removed.eventId().value().toString(),
+                    removed.householdId().value().toString(),
+                    removed.memberId().value().toString(),
+                    removed.removedBy().value().toString()));
+            case MemberPromoted promoted -> jsonMapper.writeValueAsBytes(new MemberPromotedPayload(
+                    promoted.eventId().value().toString(),
+                    promoted.householdId().value().toString(),
+                    promoted.memberId().value().toString(),
+                    promoted.promotedBy().value().toString()));
+            case MemberDemoted demoted -> jsonMapper.writeValueAsBytes(new MemberDemotedPayload(
+                    demoted.eventId().value().toString(),
+                    demoted.householdId().value().toString(),
+                    demoted.memberId().value().toString(),
+                    demoted.demotedBy().value().toString()));
+            case HouseholdDeleted deleted -> jsonMapper.writeValueAsBytes(new HouseholdDeletedPayload(
+                    deleted.eventId().value().toString(),
+                    deleted.householdId().value().toString(),
+                    deleted.deletedBy().value().toString()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -493,6 +539,52 @@ final class DomainEventJsonCodec {
                         InviteId.fromString(payload.inviteId()),
                         MemberId.fromString(payload.memberId()));
             }
+            case INVITE_REVOKED_TYPE -> {
+                InviteRevokedPayload payload = jsonMapper.readValue(json, InviteRevokedPayload.class);
+                yield new InviteRevoked(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        InviteId.fromString(payload.inviteId()),
+                        MemberId.fromString(payload.revokedBy()));
+            }
+            case MEMBER_LEFT_TYPE -> {
+                MemberLeftPayload payload = jsonMapper.readValue(json, MemberLeftPayload.class);
+                yield new MemberLeft(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        MemberId.fromString(payload.memberId()));
+            }
+            case MEMBER_REMOVED_TYPE -> {
+                MemberRemovedPayload payload = jsonMapper.readValue(json, MemberRemovedPayload.class);
+                yield new MemberRemoved(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        MemberId.fromString(payload.memberId()),
+                        MemberId.fromString(payload.removedBy()));
+            }
+            case MEMBER_PROMOTED_TYPE -> {
+                MemberPromotedPayload payload = jsonMapper.readValue(json, MemberPromotedPayload.class);
+                yield new MemberPromoted(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        MemberId.fromString(payload.memberId()),
+                        MemberId.fromString(payload.promotedBy()));
+            }
+            case MEMBER_DEMOTED_TYPE -> {
+                MemberDemotedPayload payload = jsonMapper.readValue(json, MemberDemotedPayload.class);
+                yield new MemberDemoted(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        MemberId.fromString(payload.memberId()),
+                        MemberId.fromString(payload.demotedBy()));
+            }
+            case HOUSEHOLD_DELETED_TYPE -> {
+                HouseholdDeletedPayload payload = jsonMapper.readValue(json, HouseholdDeletedPayload.class);
+                yield new HouseholdDeleted(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        MemberId.fromString(payload.deletedBy()));
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -582,4 +674,16 @@ final class DomainEventJsonCodec {
 
     /** Carries only {@code memberId} — no email/HMAC (AD-5/AD-6). */
     private record InviteAcceptedPayload(String eventId, String householdId, String inviteId, String memberId) {}
+
+    private record InviteRevokedPayload(String eventId, String householdId, String inviteId, String revokedBy) {}
+
+    private record MemberLeftPayload(String eventId, String householdId, String memberId) {}
+
+    private record MemberRemovedPayload(String eventId, String householdId, String memberId, String removedBy) {}
+
+    private record MemberPromotedPayload(String eventId, String householdId, String memberId, String promotedBy) {}
+
+    private record MemberDemotedPayload(String eventId, String householdId, String memberId, String demotedBy) {}
+
+    private record HouseholdDeletedPayload(String eventId, String householdId, String deletedBy) {}
 }

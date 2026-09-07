@@ -4,7 +4,7 @@ baseline_commit: 348b73b
 
 # Story 4.3: Membership roles & governance
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -133,7 +133,7 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
 
 ### Backend — domain events (state-model §1)
 
-- [ ] **T1. Six domain events** (AC3–AC7) under `de.sgart.collaboration.domain.event`, each a record
+- [x] **T1. Six domain events** (AC3–AC7) under `de.sgart.collaboration.domain.event`, each a record
   implementing `DomainEvent`, **ids/roles only — no PII** (AD-6), mirroring `MemberJoined`'s shape:
   - `MemberLeft(EventId, HouseholdId, MemberId memberId)`
   - `MemberRemoved(EventId, HouseholdId, MemberId memberId, MemberId removedBy)`
@@ -144,44 +144,44 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
 
 ### Backend — domain exceptions
 
-- [ ] **T2. `LastAdminException`** (AC5) — `de.sgart.collaboration.domain.exception.LastAdminException`,
+- [x] **T2. `LastAdminException`** (AC5) — `de.sgart.collaboration.domain.exception.LastAdminException`,
   signalling a leave/remove/demote that would drop the household's last Admin.
-- [ ] **T3. `GovernanceNotPermittedException`** (AC2, AC6) — governance attempted by a non-Admin. Mirror
+- [x] **T3. `GovernanceNotPermittedException`** (AC2, AC6) — governance attempted by a non-Admin. Mirror
   `RenameNotPermittedException`. Reused by remove/promote/demote/delete/revoke.
 
 ### Backend — domain aggregate (`Household` gains the governance lifecycle)
 
-- [ ] **T4. `InviteStatus.REVOKED` + folds** (AC6, AC3/AC4/AC7 role state) — add `REVOKED` to the private
+- [x] **T4. `InviteStatus.REVOKED` + folds** (AC6, AC3/AC4/AC7 role state) — add `REVOKED` to the private
   `InviteStatus` enum; in `apply(...)` add `InviteRevoked -> withStatus(REVOKED)` (mirror the `InviteAccepted`
   case). Add `apply(...)` cases for `MemberLeft`/`MemberRemoved` (→ `rolesByMember.remove(memberId)`),
   `MemberPromoted` (→ put `ADMIN`), `MemberDemoted` (→ put `PARTICIPANT`), and `HouseholdDeleted` (→ set a
   `boolean deleted = true` flag). Update the aggregate javadoc's folded-events sentence.
-- [ ] **T5. `Household.leaveHousehold(MemberId requestedBy, CommandId)`** (AC3, AC5) — `requireMember`
+- [x] **T5. `Household.leaveHousehold(MemberId requestedBy, CommandId)`** (AC3, AC5) — `requireMember`
   (non-member → convergent no-op, raise nothing, §3.5); if `requestedBy` is the **only** `ADMIN` →
   `LastAdminException`; else `raise(MemberLeft(...))`.
-- [ ] **T6. `Household.removeMember(MemberId requestedBy, MemberId target, CommandId)`** (AC4, AC5, AC2) —
+- [x] **T6. `Household.removeMember(MemberId requestedBy, MemberId target, CommandId)`** (AC4, AC5, AC2) —
   `requireAdmin(requestedBy)` (→ `GovernanceNotPermittedException`); if `target` not a member → convergent
   no-op (§3.5); if `target` is the only `ADMIN` → `LastAdminException`; else `raise(MemberRemoved(target,
   requestedBy))`.
-- [ ] **T7. `Household.promoteMember(...)` / `demoteMember(...)`** (AC4, AC5, AC2) — `requireAdmin`; unknown
+- [x] **T7. `Household.promoteMember(...)` / `demoteMember(...)`** (AC4, AC5, AC2) — `requireAdmin`; unknown
   `target` → `NotAHouseholdMemberException` (reuse); **promote an already-Admin / demote an
   already-Participant → convergent no-op** (§3.5); demote of the only Admin → `LastAdminException`; else
   raise `MemberPromoted` / `MemberDemoted`.
-- [ ] **T8. `Household.revokeInvite(MemberId requestedBy, InviteId, CommandId)`** (AC6, AC2) — `requireAdmin`;
+- [x] **T8. `Household.revokeInvite(MemberId requestedBy, InviteId, CommandId)`** (AC6, AC2) — `requireAdmin`;
   branch on the folded `InviteState`: absent → `InviteNotFoundException` (reuse); `PENDING` → `raise(InviteRevoked)`;
   `REVOKED` → convergent no-op; `ACCEPTED`/`EXPIRED` → `InviteNotFoundException` ("no pending invite to
   revoke"). *(No `now`/expiry branch needed — a past-TTL PENDING invite may still be revoked; revoke is a
   terminal governance action, expiry is lazy housekeeping.)*
-- [ ] **T9. `Household.deleteHousehold(MemberId requestedBy, CommandId)`** (AC7) — `requireAdmin`; if already
+- [x] **T9. `Household.deleteHousehold(MemberId requestedBy, CommandId)`** (AC7) — `requireAdmin`; if already
   `deleted` → convergent no-op (§3.5); else `raise(HouseholdDeleted(requestedBy))`. **No last-Admin guard**
   (deleting the whole household is allowed even for a sole Admin).
-- [ ] **T10. Guard rails** — add `private void requireAdmin(MemberId)` (throws `GovernanceNotPermittedException`
+- [x] **T10. Guard rails** — add `private void requireAdmin(MemberId)` (throws `GovernanceNotPermittedException`
   when the member's folded role ≠ `ADMIN`, including unknown members) and `private boolean isOnlyAdmin(MemberId)`
   (the atomic last-Admin check off `rolesByMember`). A mutation on an already-`deleted` household is rejected
   fail-fast (`GovernanceNotPermittedException` or a dedicated guard) as **defense-in-depth** — note it is
   largely unreachable because the ACL mappings are already de-linked (403 at the seam). Keep `apply(...)`'s
   `default -> throw` intact.
-  - [ ] `HouseholdTest` cases (one focus each): leave-happy · leave-last-admin-blocked · leave-non-member-noop ·
+  - [x] `HouseholdTest` cases (one focus each): leave-happy · leave-last-admin-blocked · leave-non-member-noop ·
     remove-happy(+role gone) · remove-by-participant-403 · remove-last-admin-blocked · remove-non-member-noop ·
     promote-happy · promote-already-admin-noop · promote-by-participant-403 · demote-happy · demote-only-admin-blocked ·
     demote-already-participant-noop · revoke-pending-happy · revoke-by-participant-403 · revoke-absent-404 ·
@@ -190,35 +190,35 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
 
 ### Backend — application (commands + handlers + exceptions, CLAUDE.md §8: DTO beside handler)
 
-- [ ] **T11. Application exceptions + `WriteErrorAdvice` mappings** (AC2, AC5) —
+- [x] **T11. Application exceptions + `WriteErrorAdvice` mappings** (AC2, AC5) —
   `LastAdminApplicationException` (**409**), `GovernanceNotPermittedApplicationException` (**403**), each with
   `errorDescriptor()` + a distinct client-facing `code` (e.g. `membership.lastAdmin`, `governance.notPermitted`).
   One `@ExceptionHandler` per type in `WriteErrorAdvice`. Reuse existing `InviteNotFoundApplicationException`
   (404) for revoke-absent and `NotAHouseholdMemberApplicationException` (403) for unknown-target. Every new
   domain exception **must** map (a missing map = 500 — 4.1/4.2 review scar).
-- [ ] **T12. `LeaveHousehold` + `LeaveHouseholdHandler`** (AC3) — command
+- [x] **T12. `LeaveHousehold` + `LeaveHouseholdHandler`** (AC3) — command
   `(HouseholdId, CommandId, AggregateVersion basedOnVersion)`. Handler injects `EventStore`,
   `ResolveMemberIdentity`, **`RetractMembership`** (T18): resolve caller (`NotAMemberException` → 403) →
   rehydrate → `leaveHousehold` → **append** → **`retractMembership.retractMember(householdId, callerMemberId)`**
   (de-link, after append). `void` return; the client re-bootstraps to re-route.
-- [ ] **T13. `RemoveMember` + `RemoveMemberHandler`** (AC4) — command
+- [x] **T13. `RemoveMember` + `RemoveMemberHandler`** (AC4) — command
   `(HouseholdId, MemberId targetMemberId, CommandId, AggregateVersion)`. Resolve caller → rehydrate →
   `removeMember(caller, target)` → append → **de-link the TARGET's** mapping
   (`retractMembership.retractMember(householdId, target)`) after append. A convergent no-op (empty
   `uncommittedEvents`) still returns success and de-links nothing new (idempotent).
-- [ ] **T14. `PromoteMember` + `PromoteMemberHandler`, `DemoteMember` + `DemoteMemberHandler`** (AC4) — same
+- [x] **T14. `PromoteMember` + `PromoteMemberHandler`, `DemoteMember` + `DemoteMemberHandler`** (AC4) — same
   command shape as remove. Resolve caller → rehydrate → domain call → append. **No ACL de-link** (role change,
   not a membership removal).
-- [ ] **T15. `DeleteHousehold` + `DeleteHouseholdHandler`** (AC7) — command `(HouseholdId, CommandId,
+- [x] **T15. `DeleteHousehold` + `DeleteHouseholdHandler`** (AC7) — command `(HouseholdId, CommandId,
   AggregateVersion)`. Resolve caller → rehydrate → `deleteHousehold(caller)` → append →
   **`retractMembership.retractHousehold(householdId)`** (de-link *all* mappings) after append. Read-model
   purge is the projectors' job (T17), not the handler's.
-- [ ] **T16. `RevokeInvite` + `RevokeInviteHandler`** (AC6) — command `(HouseholdId, InviteId, CommandId,
+- [x] **T16. `RevokeInvite` + `RevokeInviteHandler`** (AC6) — command `(HouseholdId, InviteId, CommandId,
   AggregateVersion)`. Handler injects `EventStore`, `ResolveMemberIdentity`, **`InviteEmailSideStore`**:
   resolve caller → rehydrate → `revokeInvite(caller, inviteId)` → append → **`inviteEmailSideStore.purge(inviteId)`**
   after append (AD-6 — REVOKED is a side-store purge point, §2a). A no-op revoke (already REVOKED) still
   purges idempotently.
-  - [ ] `*HandlerTest` for each (fast, in-memory doubles): assert the appended event(s), the ACL de-link
+  - [x] `*HandlerTest` for each (fast, in-memory doubles): assert the appended event(s), the ACL de-link
     (assert the mapping repo has **no** row for the removed member / no rows for a deleted household / row
     removed for a leaver), and — for a **rejected** governance call (403/409/404) — assert **no** append and
     **no** de-link occurred (the 4.2 F1 discipline: a rejected command must leave no side effect). Revoke:
@@ -226,40 +226,40 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
 
 ### Backend — Identity ACL de-link seam (state-model §5/§6, AD-7 — locked decision 3)
 
-- [ ] **T17. `MemberMappingRepository` de-link methods** — add `deleteMappingByMember(HouseholdId, MemberId)`
+- [x] **T17. `MemberMappingRepository` de-link methods** — add `deleteMappingByMember(HouseholdId, MemberId)`
   and `deleteAllMappings(HouseholdId)` to the domain port; implement in `JdbcMemberMappingRepository`
   (`DELETE ... WHERE household_id = ? AND member_id = ?` / `WHERE household_id = ?`, both idempotent) and
   `InMemoryMemberMappingRepository` (the test double). Javadoc: these are the **governance de-link** (a member
   removed/left, or a household deleted), the AD-7 mechanism that revokes access — distinct from `deleteMapping`'s
   join-failure compensation.
-  - [ ] `Jdbc*RepositoryTest`/`InMemory*RepositoryTest` — delete-by-member removes only that row (two-member
+  - [x] `Jdbc*RepositoryTest`/`InMemory*RepositoryTest` — delete-by-member removes only that row (two-member
     isolation); delete-all removes every row for the household and none of another's; both idempotent.
-- [ ] **T18. `RetractMembership` published ACL application port** — new
+- [x] **T18. `RetractMembership` published ACL application port** — new
   `de.sgart.identity.application.RetractMembership` with `retractMember(HouseholdId, MemberId)` and
   `retractHousehold(HouseholdId)`, delegating to T17. This is the **published** cross-context seam the
   Collaboration governance handlers call (AD-2 — they never touch `identity.domain` or the mapping table
   directly). Wire the bean in `IdentityBeansConfig`; inject into the four governance handlers via
   `CollaborationApplicationConfig`.
-  - [ ] `RetractMembershipTest` — delegates member/household retraction to the repo (verify the exact repo
+  - [x] `RetractMembershipTest` — delegates member/household retraction to the repo (verify the exact repo
     calls with a fake).
 
 ### Backend — read model, projector, cascade purge (AD-4; Epic-2 Action 4)
 
-- [ ] **T19. `household_member_read_model` migration** (AC8) — **V14** (next free number confirmed): table
+- [x] **T19. `household_member_read_model` migration** (AC8) — **V14** (next free number confirmed): table
   `(household_id VARCHAR, member_id VARCHAR, role VARCHAR(20), PRIMARY KEY (household_id, member_id))`. **No
   PII column** — the `NoPersistedPersonalDataTest` guard must stay green (add the table to its allow-list of
   no-PII read-model tables if that test enumerates tables).
-- [ ] **T20. `HouseholdMemberReadModel` port + `JdbcHouseholdMemberReadModel`** (AC8) — `domain/readmodel/HouseholdMemberReadModel.java`
+- [x] **T20. `HouseholdMemberReadModel` port + `JdbcHouseholdMemberReadModel`** (AC8) — `domain/readmodel/HouseholdMemberReadModel.java`
   with `upsert(householdId, memberId, role)`, `remove(householdId, memberId)`, `purgeHousehold(householdId)`,
   and a read `membersOf(householdId) -> List<MemberRoleView>` (`(memberId, role)`; **no PII**). Jdbc adapter
   mirrors `JdbcInviteReadModel`.
-- [ ] **T21. Projector cases in `HouseholdReadModelProjector`** (AC8, AC7) — fold into
+- [x] **T21. Projector cases in `HouseholdReadModelProjector`** (AC8, AC7) — fold into
   `household_member_read_model`: `MemberJoined -> upsert(role)`, `MemberPromoted -> upsert(ADMIN)`,
   `MemberDemoted -> upsert(PARTICIPANT)`, `MemberLeft`/`MemberRemoved -> remove(memberId)`. Register the new
   events in the codec first (T24). Rides the **existing** all-stream subscription — do **not** add another.
-  - [ ] `HouseholdReadModelProjectorTest` (Testcontainers) — join→member row; promote→role flips to ADMIN;
+  - [x] `HouseholdReadModelProjectorTest` (Testcontainers) — join→member row; promote→role flips to ADMIN;
     demote→PARTICIPANT; leave/remove→row gone; **two-household isolation** + **replay idempotency**.
-- [ ] **T22. Delete cascade — read-side purge** (AC7, decision 4) — add a `case HouseholdDeleted -> purge...`
+- [x] **T22. Delete cascade — read-side purge** (AC7, decision 4) — add a `case HouseholdDeleted -> purge...`
   to **each** of the three collaboration projectors, purging that projector's `householdId`-keyed rows via a
   new `purgeHousehold(HouseholdId)` on each read-model port:
   - `HouseholdReadModelProjector` → household name, store, invite, **member** read models.
@@ -267,65 +267,65 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
   - `ShoppingTripReadModelProjector` → trip read model (+ trip-store rows).
   - Each `purgeHousehold` is an idempotent `DELETE ... WHERE household_id = ?` (re-projecting `HouseholdDeleted`
     is a no-op). Streams are untouched (decision 4).
-  - [ ] Projector tests (Testcontainers) — after `HouseholdDeleted`, every read model for that household is
+  - [x] Projector tests (Testcontainers) — after `HouseholdDeleted`, every read model for that household is
     empty and **another household's rows are untouched** (isolation); re-projecting the delete is a no-op.
-- [ ] **T23. `ListHouseholdMembers` query** (AC8) — `application/query/ListHouseholdMembers.forHousehold(String
+- [x] **T23. `ListHouseholdMembers` query** (AC8) — `application/query/ListHouseholdMembers.forHousehold(String
   keycloakUserId, String householdId)`: `resolveMemberIdentity.resolve` (403 non-member) → `membersOf(...)` →
   map to a view carrying `memberId`, `role`, and `isSelf = memberId.equals(callerMemberId)`. Wire the bean.
-  - [ ] `ListHouseholdMembersTest` — returns members with roles + the caller flagged `isSelf`; a non-member
+  - [x] `ListHouseholdMembersTest` — returns members with roles + the caller flagged `isSelf`; a non-member
     caller → `NotAMemberException`.
 
 ### Backend — codec + controllers
 
-- [ ] **T24. Register the six events in `DomainEventJsonCodec`** (AC3–AC7) — stable string tags
+- [x] **T24. Register the six events in `DomainEventJsonCodec`** (AC3–AC7) — stable string tags
   (`"MemberLeft"`, `"MemberRemoved"`, `"MemberPromoted"`, `"MemberDemoted"`, `"HouseholdDeleted"`,
   `"InviteRevoked"`), `toJsonBytes`/`fromJsonBytes` cases, and payload records (ids/roles only).
-  - [ ] `DomainEventJsonCodecTest` — round-trip each; **assert each payload has no `email`/`hmac`/`keycloak`
+  - [x] `DomainEventJsonCodecTest` — round-trip each; **assert each payload has no `email`/`hmac`/`keycloak`
     component** (the privacy round-trip guard, matching the 4.1/4.2 guards).
-- [ ] **T25. `MemberController`** (AC2, AC3, AC4, AC8) — new `adapter/in/MemberController` under
+- [x] **T25. `MemberController`** (AC2, AC3, AC4, AC8) — new `adapter/in/MemberController` under
   `/api/v1/households/{householdId}/members` (mirror `InviteController`; caller from JWT only, AR10/AD-5):
   - `GET` → `ListHouseholdMembers` (roster; **no PII** in the response DTO).
   - `DELETE /me` → `LeaveHousehold` (self-leave — the client need not know its own `MemberId`).
   - `DELETE /{memberId}` → `RemoveMember` (Admin removes another).
   - `POST /{memberId}/promote` → `PromoteMember`; `POST /{memberId}/demote` → `DemoteMember`.
   - Command envelopes carry the client-generated `commandId` in the body; no response bodies on the mutations.
-  - [ ] `MemberControllerTest` (`@WebMvcTest`) — roster 200 (no PII); leave 200/204; remove 200/204 · 403
+  - [x] `MemberControllerTest` (`@WebMvcTest`) — roster 200 (no PII); leave 200/204; remove 200/204 · 403
     (participant) · 409 (last admin); promote/demote 200 · 403; **no email/name in any request/response**.
-- [ ] **T26. `HouseholdController` delete + `InviteController` revoke** (AC6, AC7) — add
+- [x] **T26. `HouseholdController` delete + `InviteController` revoke** (AC6, AC7) — add
   `@DeleteMapping("/{householdId}")` → `DeleteHousehold` on `HouseholdController`; add
   `@DeleteMapping("/{inviteId}")` → `RevokeInvite` on `InviteController`. Client-generated `commandId` in the
   body; no response bodies.
-  - [ ] `HouseholdControllerTest` — delete 200/204 (admin) · 403 (participant). `InviteControllerTest` —
+  - [x] `HouseholdControllerTest` — delete 200/204 (admin) · 403 (participant). `InviteControllerTest` —
     revoke 200/204 (admin) · 403 (participant) · 404 (absent/non-pending).
 
 ### Backend — privacy guarantees (first-class, §6) & regression guard
 
-- [ ] **T27. No-PII guarantees** (AC8) — extend the codec no-PII guard (T24) and add
+- [x] **T27. No-PII guarantees** (AC8) — extend the codec no-PII guard (T24) and add
   `assertNoPersonalDataComponent(...)` for the six new events; confirm `household_member_read_model` adds no
   PII column so `NoPersistedPersonalDataTest` stays green. Assert the member roster API DTO carries no
   email/name.
-- [ ] **T28. AC1 regression guard** — a test asserting a **Participant** can still add a store, create a list,
+- [x] **T28. AC1 regression guard** — a test asserting a **Participant** can still add a store, create a list,
   and send an invite (daily commands stay membership-gated, not role-gated) — no governance gate leaked onto
   a daily command. (Place with the relevant handler tests or a focused `HouseholdTest` case.)
 
 ### Client — Flutter (member management, roles, governance)
 
-- [ ] **T29. `MembersApi`** (AC9) — `features/members/data/members_api.dart`:
+- [x] **T29. `MembersApi`** (AC9) — `features/members/data/members_api.dart`:
   `listMembers(householdId)`, `leave(householdId, {commandId})`, `removeMember(householdId, memberId, {commandId})`,
   `promote(...)`, `demote(...)`, plus `deleteHousehold(householdId, {commandId})` and
   `revokeInvite(householdId, inviteId, {commandId})` (the last two may live in the existing `households`/`invites`
   data layer if that reads cleaner — keep one API per resource). Mirror `InvitesApi.acceptInvite`'s envelope
   shape (caller-generated `commandId`, no response body on mutations). A `MemberView(memberId, role, isSelf)` model.
-  - [ ] `members_api_test.dart` — request shapes (paths + bodies) for each endpoint.
-- [ ] **T30. `MembersCubit` / `MembersState`** (AC9) — loads the roster; exposes leave/remove/promote/demote/
+  - [x] `members_api_test.dart` — request shapes (paths + bodies) for each endpoint.
+- [x] **T30. `MembersCubit` / `MembersState`** (AC9) — loads the roster; exposes leave/remove/promote/demote/
   delete/revoke intents, each via `command_intent.dart` (one `commandId` per intent, regenerate on payload
   change / after success — Epic-1 Action) with an `isSubmitting` guard (Epic-2 Action 3). Surfaces `403`
   (`governance.notPermitted`), `409` (`membership.lastAdmin`), `404` (`invite.notFound`) as distinct inline
   errors via `error_message_resolver.dart`. On a successful **leave / removal-of-self / delete**, emits a signal
   the screen uses to call `HouseholdsCubit.bootstrap()` and re-route.
-  - [ ] `members_cubit_test.dart` — roster load; each governance action success; last-admin 409 → error;
+  - [x] `members_cubit_test.dart` — roster load; each governance action success; last-admin 409 → error;
     participant 403 → error; `isSubmitting` guard; `commandId` regenerated after success.
-- [ ] **T31. Member-management screen** (AC9) — `features/members/presentation/members_page.dart`: the roster
+- [x] **T31. Member-management screen** (AC9) — `features/members/presentation/members_page.dart`: the roster
   (caller row „Sie", others by role); **Admin** sees per-member promote/demote/remove (with confirm dialogs),
   a **revoke** action on each pending invite, and a **delete-household** action behind a **hard confirm**
   (destructive dialog — e.g. type-the-household-name or an explicit two-step confirm, „hard-to-mis-trigger"
@@ -333,29 +333,47 @@ From `epics.md#Story 4.3` (BDD), with the locked decisions and state-model §1�
   by-value way (`create_or_await_choice_page.dart` precedent — the `ProviderNotFoundException` lesson). Widget
   keys on every actionable control. Wire an entry point into the existing household settings/switcher surface
   (locate it — Story 1.7 switch/rename lives in the `households` feature; add a „Mitglieder verwalten" entry).
-  - [ ] `members_page_test.dart` — Admin sees governance controls + can promote/remove (routes/refreshes on
+  - [x] `members_page_test.dart` — Admin sees governance controls + can promote/remove (routes/refreshes on
     self-leave & delete); Participant sees only leave; last-admin error shown inline; hard-confirm required
     before delete fires (no accidental delete on a single tap).
-- [ ] **T32. Localization + a11y** (AC9) — German ARB keys (`app_de.arb`) for the screen title, role labels,
+- [x] **T32. Localization + a11y** (AC9) — German ARB keys (`app_de.arb`) for the screen title, role labels,
   „Sie", the governance actions, the confirm dialogs (incl. the hard delete-household confirm), and the
   error messages (last-admin / governance-forbidden / not-found); `Semantics`/labels on the new controls;
   `flutter analyze` clean. No stale strings (Epic-3 Action 4).
 
 ### Definition of Done (standing, per retros)
 
-- [ ] Full suites green **and named**: backend `./gradlew test` (incl. ArchUnit `HexagonalArchitectureTest` +
+- [x] Full suites green **and named**: backend `./gradlew test` (incl. ArchUnit `HexagonalArchitectureTest` +
   Testcontainers + `NoPersistedPersonalDataTest`) **and** `flutter test` + `flutter analyze` (CLAUDE.md §6;
   backend-test-hygiene). Report which suite ran and the counts.
-- [ ] Every new application exception mapped in `WriteErrorAdvice` (a missing map = 500 — 4.1/4.2 scar);
+- [x] Every new application exception mapped in `WriteErrorAdvice` (a missing map = 500 — 4.1/4.2 scar);
   `commandId` lifecycle correct; a11y labels on new widgets; no dead code/strings/stale comments.
-- [ ] **ACL de-link verified end-to-end** (locked decision 3): a removed/left member no longer resolves into
+- [x] **ACL de-link verified end-to-end** (locked decision 3): a removed/left member no longer resolves into
   the household and it drops from their switcher; a deleted household de-links all mappings — proven in the
   handler tests (mapping-repo assertions), not left for review. This is the story's highest-risk guarantee.
-- [ ] Each new/changed read model ships its two-household isolation + replay/idempotency projector test **in
+- [x] Each new/changed read model ships its two-household isolation + replay/idempotency projector test **in
   this PR** (Epic-2 Action 4) — incl. the delete-cascade purge across all three projectors.
-- [ ] Ordering-guarantee tests actually detect order (append-before-de-link, append-before-purge) — record
+- [x] Ordering-guarantee tests actually detect order (append-before-de-link, append-before-purge) — record
   call order, not just call count (the 4.1 fake-counter scar).
-- [ ] Every `[x]` task has its Test-Manifest test actually present (Epic-3 Action 2).
+- [x] Every `[x]` task has its Test-Manifest test actually present (Epic-3 Action 2).
+
+### Review Findings
+
+_Code review 2026-09-07 (Opus 4.8; Blind Hunter + Edge Case Hunter + Acceptance Auditor). All three layers ran; suites not re-run (read-only review — Dev Agent Record reports backend 837/0, Flutter 592/0, analyze clean)._
+
+- [x] [Review][Patch] Make ACL de-link caller-independent (resolved from D1, Timo 2026-09-07) — the append-then-`retractMembership` self-heal must not depend on the caller still being Admin/member. Ensure the retract runs idempotently on retry so a concurrent demote/removal of the caller cannot strand a live ACL mapping for the target [backend/src/main/java/de/sgart/collaboration/application/command/LeaveHouseholdHandler.java + RemoveMemberHandler.java + DeleteHouseholdHandler.java] (medium)
+- [x] [Review][Patch] Block self-target on the Admin remove path (resolved from D2, Timo 2026-09-07) — reject a self-target on `DELETE /{memberId}` so a voluntary departure always goes through leave and emits `MemberLeft`, never `MemberRemoved(removedBy=self)`. Co-Admin removal by another Admin stays allowed [backend/src/main/java/de/sgart/collaboration/domain/Household.java:305 + MemberController] (low)
+
+- [x] [Review][Patch] Household delete orphans pending-invite raw emails (GDPR erasure) — `DeleteHouseholdHandler` never purges `invite_email_side_store` for still-`PENDING` invites (revoke/accept both do). Rows survive *and* become undiscoverable once `invite_read_model` is purged. Inject `InviteEmailSideStore` and purge each pending invite id after append (the aggregate already exposes them) [backend/src/main/java/de/sgart/collaboration/application/command/DeleteHouseholdHandler.java:72] **(HIGH)**
+- [x] [Review][Patch] `household_membership_read_model` is never pruned on leave/remove — `MemberLeft`/`MemberRemoved` only touch the new `household_member_read_model`; the old table keeps departed members' pseudonymous `member_id` until `HouseholdDeleted`. It has no `SELECT` reader anywhere (dead/superseded), so no live leak — but it is a storage-limitation (§5) + Boy-Scout gap. Either prune it on leave/remove or retire the table + its `MemberJoined` insert [backend/src/main/java/de/sgart/collaboration/adapter/out/JdbcHouseholdReadModel.java:62] (medium)
+- [x] [Review][Patch] V15 backfills existing `trip_store_read_model` rows with the zero-UUID sentinel — `ADD COLUMN household_id NOT NULL DEFAULT '00…0'` then `DROP DEFAULT`, no real backfill. Any pre-V15 row is stamped with the sentinel and can never match a real household's delete-cascade purge. Backfill from the list's `active_trip_id` join in the same migration [backend/src/main/resources/db/migration/V15__trip_store_read_model_household_id.sql:1] (medium)
+- [x] [Review][Patch] T28 participant-capability regression guard is incomplete — the manifest requires proof a Participant can still addStore **and** createList **and** invite; only the pre-existing `addStore_isNotAdminGatedSoAParticipantMemberSucceeds` covers it, no new test asserts a Participant can create a list or send an invite. Add the two missing positive tests [backend/src/test/java/de/sgart/collaboration/domain/HouseholdTest.java:280] (medium)
+- [x] [Review][Patch] `deleteHousehold` runs `requireAdmin` before the already-deleted no-op check and omits `requireNotDeleted`, unlike every sibling — correct today only because the `HouseholdDeleted` fold leaves `rolesByMember` populated. Move `if (deleted) return;` before `requireAdmin` so a re-delete stays a convergent no-op even if a future change clears roles [backend/src/main/java/de/sgart/collaboration/domain/Household.java:410] (low)
+
+- [x] [Review][Defer] Event streams retain personal data after a user-initiated household delete; and a list/item/trip write racing `HouseholdDeleted` in `$all` can re-insert an orphan read-model row that a full rebuild does not heal — both fold into the known Epic-6 erasure work (crypto-shredding ADR-0001). Deferred, documented architectural limitation, not a 4.3 regression.
+- [x] [Review][Defer] Broadened list/trip projector subscriptions now decode *every* household event via the shared codec, so a future household event added without a codec mapping breaks the list + trip subscriptions, not just the household projector. `DomainEventJsonCodecTest` guards registration today; add a stream-type/event-type guard before decode when the schema grows. Deferred, low.
+
+_Dismissed as noise (2): async read-model purge has no completeness/alerting check (acceptable eventual consistency; the resubscribe scheduler replays on restart); `MembersCubit` mutates roster/invites locally on success without re-reading (by-design optimistic UI, serialized by a single `isSubmitting` guard)._
 
 ## Dev Notes
 
@@ -558,10 +576,140 @@ command/query gate) derive household membership **solely** from the `identity_me
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+None — no failing CI run or debug session; implementation proceeded directly from the story's
+Dev Notes and locked decisions with no blocking defects encountered.
+
 ### Completion Notes List
 
+- Full vertical slice landed in one pass: six domain events, two domain exceptions, six aggregate
+  governance methods (`leaveHousehold`/`removeMember`/`promoteMember`/`demoteMember`/`revokeInvite`/
+  `deleteHousehold`) + `requireAdmin`/`isOnlyAdmin`/`requireNotDeleted` guards, six commands +
+  handlers, the `RetractMembership` published ACL port + `MemberMappingRepository` de-link methods,
+  the `household_member_read_model` read side (port + Jdbc adapter + projector cases), the
+  delete-cascade purge across all three collaboration projectors, `MemberController` +
+  `HouseholdController`/`InviteController` additions, codec registration, and the full Flutter
+  member-management slice (API/cubit/state/screen + l10n).
+- **Crux verified end-to-end**: every governance handler that removes access
+  (`LeaveHouseholdHandler`, `RemoveMemberHandler`, `DeleteHouseholdHandler`) de-links the ACL
+  mapping *after* a successful append, proven with recorded-call-order tests (not just call counts)
+  and "rejected call → no append, no de-link" assertions mirroring the 4.2 F1 discipline.
+- **Architectural finding not anticipated by the story**: `ShoppingListReadModelProjector` and
+  `ShoppingTripReadModelProjector` each subscribe only to their own stream prefix (`list-`/`trip-`),
+  so neither could see `HouseholdDeleted` (raised on the `household-` stream) to purge their own
+  read models. Fixed by adding the `household-` prefix to both subscriptions (still one
+  subscription each, per decision 4 — "never add another") and handling `HouseholdDeleted` in their
+  `project(...)` alongside their existing events. `trip_store_read_model` additionally needed a new
+  `household_id` column (migration V15) — its Story 3.2 design deliberately omitted one (derivable
+  via the list's `active_trip_id`), but that derivation breaks once the list projector's own
+  delete-cascade purge has already run (the two projectors run unordered, independent
+  subscriptions), so the trip-store rows needed to carry their own household id to stay purgeable.
+- `deleteHousehold`/`revokeInvite` were added to the existing `HouseholdsApi`/`InvitesApi` (per the
+  story's own "may live in the existing households/invites data layer" note) rather than
+  `MembersApi`, keeping one API per resource; `MembersApi` covers list/leave/remove/promote/demote.
+- Delete-household's client hard-confirm is the type-the-household-name pattern (locked-decision
+  default, Question 2). Its `TextEditingController` is owned by a dedicated `StatefulWidget`
+  (`_DeleteHouseholdConfirmDialog`) rather than disposed manually right after `showDialog` returns —
+  the manual-dispose approach raced the dialog's still-animating exit transition and threw "used
+  after being disposed" under `pumpAndSettle`; letting Flutter's normal widget lifecycle own
+  disposal fixed it.
+- **Superseded by the review pass below**: self-only removal was originally not special-cased (per
+  Question 4's default). The 2026-09-07 review (D2) reversed that — `removeMember` now rejects a
+  self-target unconditionally, so a voluntary departure always goes through `leaveHousehold`.
+- Backend: `./gradlew test` — **837 passed, 0 failed** (incl. ArchUnit `HexagonalArchitectureTest`,
+  `NoPersistedPersonalDataTest`, and all Testcontainers projector/repository suites).
+- Flutter: `flutter test` — **592 passed, 0 failed**; `flutter analyze` — **no issues found**.
+
+**2026-09-07 — Review Findings pass (all 7 `[Review][Patch]` items):**
+- **D1 (ACL de-link caller-independent, medium):** `Household` gained `isMember`/`isDeleted` query
+  accessors. `RemoveMemberHandler` now rehydrates before resolving the caller and self-heals — if the
+  target is already not a member (a prior append succeeded but its de-link never ran or failed), it
+  retracts the mapping unconditionally, before any authorization check, so a concurrent demote/removal
+  of the retrying caller can't strand it. `DeleteHouseholdHandler` needed no handler-level change:
+  fixing the ordering bug below (`deleted` no-op before `requireAdmin`) already makes its retry
+  caller-independent, since `retractHousehold` de-links every mapping in one atomic statement.
+- **D2 (block self-target on remove, low):** `Household.removeMember` now rejects `target ==
+  requestedBy` unconditionally (even for the household's only Admin, even for a co-Admin) —
+  self-departure must go through `leaveHousehold`. This made the last-Admin branch inside
+  `removeMember` provably unreachable (removing a *different* member can never hit the sole-Admin
+  case once `requireAdmin` already forced `requestedBy` to be an Admin), so it — and
+  `RemoveMemberHandler`'s now-dead `LastAdminException` catch — were removed as dead code (CLAUDE.md
+  §1). `remove_theLastAdminReturns409...` tests were replaced with self-target 403 tests.
+- **Invite purge on household delete (HIGH):** `Household` gained `pendingInviteIds()`;
+  `DeleteHouseholdHandler` now takes `InviteEmailSideStore` and purges every still-`PENDING` invite's
+  raw email after append, closing the GDPR erasure gap.
+- **Retire `household_membership_read_model` (medium):** chose retirement over prune-on-leave/remove
+  (KISS/YAGNI — a table with no `SELECT` reader anywhere doesn't earn new prune plumbing). Dropped via
+  `V16`; the `MemberJoined` insert and the table's purge statement were removed from
+  `JdbcHouseholdReadModel`/`HouseholdReadModelProjector`.
+- **V15 backfill (medium):** replaced the zero-UUID-sentinel default with a real backfill —
+  `UPDATE ... FROM shopping_list_read_model WHERE active_trip_id = trip_id` — before the `NOT NULL`
+  constraint is applied. V15 was still unreleased (untracked in this branch), so edited in place
+  rather than layering a new migration.
+- **T28 regression guard (medium):** added `invitePerson_isNotAdminGatedSoAParticipantMemberSucceeds`
+  (`HouseholdTest`), `aParticipantMemberCanSendAnInvite` (`InvitePersonHandlerTest`), and
+  `aParticipantMemberCanCreateAList` (`CreateShoppingListHandlerTest`) — the manifest's three
+  capabilities (addStore/createList/invite) each now have a dedicated Participant-succeeds test.
+- **`deleteHousehold` ordering (low):** the `deleted` no-op check now runs before `requireAdmin` (was
+  after), matching every sibling governance method — a re-delete retry stays convergent even if the
+  caller's role changed concurrently.
+- Full backend suite re-run after the pass: `./gradlew test` — **847 passed, 0 failed** (incl.
+  ArchUnit). Flutter suite untouched by this pass (no client changes), so not re-run.
+
 ### File List
+
+**Backend — new:**
+- `backend/src/main/java/de/sgart/collaboration/domain/event/{MemberLeft,MemberRemoved,MemberPromoted,MemberDemoted,HouseholdDeleted,InviteRevoked}.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/exception/{LastAdminException,GovernanceNotPermittedException}.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/readmodel/{HouseholdMemberReadModel,MemberRoleView}.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/{LeaveHousehold,LeaveHouseholdHandler,RemoveMember,RemoveMemberHandler,PromoteMember,PromoteMemberHandler,DemoteMember,DemoteMemberHandler,DeleteHousehold,DeleteHouseholdHandler,RevokeInvite,RevokeInviteHandler}.java`
+- `backend/src/main/java/de/sgart/collaboration/application/exception/{LastAdminApplicationException,GovernanceNotPermittedApplicationException}.java`
+- `backend/src/main/java/de/sgart/collaboration/application/query/ListHouseholdMembers.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/in/MemberController.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/JdbcHouseholdMemberReadModel.java`
+- `backend/src/main/java/de/sgart/identity/application/RetractMembership.java`
+- `backend/src/main/resources/db/migration/{V14__household_member_read_model.sql,V15__trip_store_read_model_household_id.sql,V16__drop_household_membership_read_model.sql}`
+
+**Backend — modified:**
+- `backend/src/main/java/de/sgart/collaboration/domain/Household.java`
+- `backend/src/main/java/de/sgart/collaboration/application/CommandFieldTranslations.java`
+- `backend/src/main/java/de/sgart/collaboration/application/command/{RemoveMemberHandler,DeleteHouseholdHandler}.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/in/{HouseholdController,InviteController,WriteErrorAdvice}.java`
+- `backend/src/main/java/de/sgart/collaboration/adapter/out/{DomainEventJsonCodec,HouseholdReadModelProjector,ShoppingListReadModelProjector,ShoppingTripReadModelProjector,CollaborationApplicationConfig,CollaborationReadModelConfig,JdbcHouseholdReadModel,JdbcStoreReadModel,JdbcInviteReadModel,JdbcItemReadModel,JdbcItemSuggestionReadModel,JdbcShoppingListReadModel,JdbcTripStoreReadModel}.java`
+- `backend/src/main/java/de/sgart/collaboration/domain/readmodel/TripStoreReadModel.java`
+- `backend/src/main/java/de/sgart/identity/domain/MemberMappingRepository.java`
+- `backend/src/main/java/de/sgart/identity/adapter/out/{IdentityBeansConfig,JdbcMemberMappingRepository,InMemoryMemberMappingRepository}.java`
+
+**Backend — new tests:**
+- `backend/src/test/java/de/sgart/collaboration/application/{LeaveHouseholdHandlerTest,RemoveMemberHandlerTest,PromoteMemberHandlerTest,DemoteMemberHandlerTest,DeleteHouseholdHandlerTest,RevokeInviteHandlerTest,ListHouseholdMembersTest}.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/in/MemberControllerTest.java`
+- `backend/src/test/java/de/sgart/identity/adapter/out/InMemoryMemberMappingRepositoryTest.java`
+- `backend/src/test/java/de/sgart/identity/application/RetractMembershipTest.java`
+
+**Backend — modified tests:**
+- `backend/src/test/java/de/sgart/collaboration/domain/HouseholdTest.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/out/{DomainEventJsonCodecTest,HouseholdReadModelProjectorTest,HouseholdReadModelSubscriptionTest,ShoppingListReadModelProjectorTest,ShoppingTripReadModelProjectorTest}.java`
+- `backend/src/test/java/de/sgart/collaboration/adapter/in/{HouseholdControllerTest,InviteControllerTest,TripControllerTest,MemberControllerTest}.java`
+- `backend/src/test/java/de/sgart/collaboration/application/{TripViewTest,RemoveMemberHandlerTest,DeleteHouseholdHandlerTest,InvitePersonHandlerTest,CreateShoppingListHandlerTest}.java`
+- `backend/src/test/java/de/sgart/identity/adapter/out/JdbcMemberMappingRepositoryTest.java`
+
+**Client — new:**
+- `app/lib/features/members/data/{member_view,members_api}.dart`
+- `app/lib/features/members/presentation/{members_cubit,members_state,members_page}.dart`
+- `app/test/features/members/data/members_api_test.dart`
+- `app/test/features/members/presentation/{members_cubit_test,members_page_test}.dart`
+- `app/test/features/households/data/households_api_test.dart`
+- `app/test/support/fake_members_dependencies.dart`
+
+**Client — modified:**
+- `app/lib/features/households/data/households_api.dart` (+ `deleteHousehold`)
+- `app/lib/features/invites/data/invites_api.dart` (+ `revokeInvite`)
+- `app/lib/features/households/presentation/{first_run_router,manage_household_page}.dart`
+- `app/lib/shared/errors/error_message_resolver.dart`
+- `app/lib/l10n/app_de.arb` (+ generated `app/lib/l10n/gen/{app_localizations,app_localizations_de}.dart`)
+- `app/test/features/households/presentation/manage_household_page_test.dart`
+- `app/test/features/invites/data/invites_api_test.dart`
+- `app/test/support/{fake_households_dependencies,fake_invites_dependencies}.dart`

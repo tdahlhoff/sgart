@@ -137,4 +137,30 @@ class ShoppingTripReadModelProjectorTest {
         assertThat(tripStoreReadModel.storesOf(tripAId)).containsExactly(edeka);
         assertThat(tripStoreReadModel.storesOf(tripBId)).containsExactly(netto);
     }
+
+    @Test
+    void projectingHouseholdDeletedPurgesTripStoreRowsForThatHouseholdOnlyAndIsANoOpOnReplay() {
+        HouseholdId householdToDelete = HouseholdId.generate();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        TripId tripInDeletedHousehold = TripId.generate();
+        TripId tripInOtherHousehold = TripId.generate();
+        StoreId edeka = StoreId.generate();
+        StoreId netto = StoreId.generate();
+        projector.project(new TripStarted(
+                EventId.generate(), tripInDeletedHousehold, householdToDelete, ShoppingListId.generate(), List.of(edeka)));
+        projector.project(new TripStarted(
+                EventId.generate(), tripInOtherHousehold, otherHousehold, ShoppingListId.generate(), List.of(netto)));
+        de.sgart.collaboration.domain.event.HouseholdDeleted deleted =
+                new de.sgart.collaboration.domain.event.HouseholdDeleted(
+                        EventId.generate(), householdToDelete, de.sgart.shared.MemberId.generate());
+
+        projector.project(deleted);
+
+        assertThat(tripStoreReadModel.storesOf(tripInDeletedHousehold)).isEmpty();
+        assertThat(tripStoreReadModel.storesOf(tripInOtherHousehold)).containsExactly(netto);
+
+        projector.project(deleted);
+
+        assertThat(tripStoreReadModel.storesOf(tripInDeletedHousehold)).isEmpty();
+    }
 }

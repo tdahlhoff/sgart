@@ -4,6 +4,7 @@ import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
+import de.sgart.identity.application.RetractMembership;
 import de.sgart.identity.domain.MemberMappingRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,5 +42,10 @@ public class IdentityBeansConfig {
     @Bean
     FindHouseholdMemberByEmail findHouseholdMemberByEmail() {
         return new DeferredFindHouseholdMemberByEmail();
+    }
+
+    @Bean
+    RetractMembership retractMembership(MemberMappingRepository memberMappingRepository) {
+        return new RetractMembership(memberMappingRepository);
     }
 }

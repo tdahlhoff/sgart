@@ -1,5 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.StoreAddedToTrip;
 import de.sgart.collaboration.domain.event.TripCompleted;
 import de.sgart.collaboration.domain.event.TripStarted;
@@ -65,12 +66,16 @@ public final class ShoppingTripReadModelProjector implements SmartLifecycle {
     /** Folds one event into the read model. Idempotent — safe to call again for the same event. */
     public void project(DomainEvent event) {
         switch (event) {
-            case TripStarted started ->
-                started.storeIds().forEach(storeId -> tripStoreReadModel.addStore(started.tripId(), storeId));
-            case StoreAddedToTrip added -> tripStoreReadModel.addStore(added.tripId(), added.storeId());
+            case TripStarted started -> started.storeIds()
+                    .forEach(storeId -> tripStoreReadModel.addStore(started.householdId(), started.tripId(), storeId));
+            case StoreAddedToTrip added ->
+                tripStoreReadModel.addStore(added.householdId(), added.tripId(), added.storeId());
             case TripCompleted completed -> tripStoreReadModel.deleteForTrip(completed.tripId());
+            case HouseholdDeleted deleted -> tripStoreReadModel.purgeHousehold(deleted.householdId());
             default -> {
-                // The subscription filter (see subscribe()) only ever delivers trip-stream events.
+                // The subscription filter (see subscribe()) covers both trip- and household- stream
+                // prefixes (the latter only for HouseholdDeleted's delete-cascade purge, decision 4);
+                // every other event on either prefix that is not handled above is ignored.
             }
         }
     }
@@ -114,8 +119,12 @@ public final class ShoppingTripReadModelProjector implements SmartLifecycle {
     }
 
     private void subscribe() {
+        // Two prefixes on one subscription (never a second subscription, decision 4): trip- for the
+        // trip's own events, household- solely so this projector can see HouseholdDeleted for the
+        // delete-cascade purge — every other household-stream event is ignored by project()'s default.
         SubscriptionFilter filter = SubscriptionFilter.newBuilder()
                 .addStreamNamePrefix(StreamId.StreamType.TRIP.prefix() + "-")
+                .addStreamNamePrefix(StreamId.StreamType.HOUSEHOLD.prefix() + "-")
                 .build();
         client.subscribeToAll(
                 new SubscriptionListener() {

@@ -21,6 +21,12 @@ abstract interface class InvitesApi {
   /// caller-minted idempotency key, reused across retries of the same attempt (AD-8). No response
   /// body — the caller already holds [householdId] and re-bootstraps to route in (AC1/AC6).
   Future<void> acceptInvite(String householdId, {required String inviteId, required String commandId});
+
+  /// Revokes the pending invite [inviteId] (Story 4.3, AC6) — Admin-only, no response body.
+  /// [commandId] is the caller-minted idempotency key, reused across retries (AD-8). A non-Admin
+  /// caller surfaces `governance.notPermitted` (403); an absent/non-pending invite surfaces
+  /// `invite.notFound` (404).
+  Future<void> revokeInvite(String householdId, {required String inviteId, required String commandId});
 }
 
 class HttpInvitesApi implements InvitesApi {
@@ -55,5 +61,10 @@ class HttpInvitesApi implements InvitesApi {
     await _client.postJson('/api/v1/households/$householdId/invites/$inviteId/accept', {
       'commandId': commandId,
     });
+  }
+
+  @override
+  Future<void> revokeInvite(String householdId, {required String inviteId, required String commandId}) {
+    return _client.deleteJson('/api/v1/households/$householdId/invites/$inviteId', {'commandId': commandId});
   }
 }

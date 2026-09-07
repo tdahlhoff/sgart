@@ -138,7 +138,7 @@ class TripControllerTest {
         }
 
         @Override
-        public void addStore(TripId tripId, StoreId storeId) {
+        public void addStore(HouseholdId householdId, TripId tripId, StoreId storeId) {
             // no-op — this test double is preset via put(...), never mutated by the projector.
         }
 

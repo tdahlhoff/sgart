@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.in;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +12,8 @@ import de.sgart.collaboration.application.NormalizedEmail;
 import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRole;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteView;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
@@ -20,6 +23,7 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.InviteId;
@@ -357,6 +361,71 @@ class InviteControllerTest {
                         .with(jwt().jwt(jwt -> jwt.subject("stranger-sub"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));
+    }
+
+    @Test
+    void revoke_byAnAdminReturns204() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        household.invitePerson(
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
+                inviteId,
+                new EmailHmac("hmac-1"),
+                Instant.now(),
+                CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+
+        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void revoke_byAParticipantReturns403WithGovernanceNotPermitted() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        MemberId adminMemberId =
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow();
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), Instant.now(), CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+        MemberId participantMemberId = MemberId.generate();
+        eventStore.append(
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
+                List.of(new MemberJoined(
+                        EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
+                CommandId.generate());
+        mappingRepository.save(
+                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
+
+        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("governance.notPermitted"));
+    }
+
+    @Test
+    void revoke_anAbsentInviteReturns404() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+
+        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
+                        householdId.toString(), InviteId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("invite.notFound"));
     }
 
     private static String inviteRequestBody(String email, String inviteId) {

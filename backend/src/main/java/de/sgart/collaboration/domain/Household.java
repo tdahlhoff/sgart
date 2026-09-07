@@ -1,18 +1,26 @@
 package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.InviteRevoked;
+import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.MemberLeft;
+import de.sgart.collaboration.domain.event.MemberPromoted;
+import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
+import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
 import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
 import de.sgart.collaboration.domain.exception.InviteExpiredException;
 import de.sgart.collaboration.domain.exception.InviteNotFoundException;
+import de.sgart.collaboration.domain.exception.LastAdminException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.shared.CommandId;
@@ -36,13 +44,15 @@ import java.util.Objects;
  * The first real aggregate (Story 1.6): a household is the top-level tenant every list, store,
  * and trip belongs to (glossary). State changes only through {@link #apply(DomainEvent)}, folding
  * {@link HouseholdCreated}, {@link MemberJoined}, {@link HouseholdRenamed}, {@link MemberInvited},
- * {@link InviteExpired}, and {@link InviteAccepted} — never mutated directly by a command method
- * (the {@link EventSourcedAggregate} contract).
+ * {@link InviteExpired}, {@link InviteAccepted}, {@link InviteRevoked}, {@link MemberLeft}, {@link
+ * MemberRemoved}, {@link MemberPromoted}, {@link MemberDemoted}, and {@link HouseholdDeleted} —
+ * never mutated directly by a command method (the {@link EventSourcedAggregate} contract).
  */
 public final class Household extends EventSourcedAggregate {
 
     private HouseholdId householdId;
     private HouseholdName name;
+    private boolean deleted;
     private final Map<MemberId, HouseholdRole> rolesByMember = new HashMap<>();
     private final Map<StoreId, StoreState> storesById = new HashMap<>();
     private final Map<InviteId, InviteState> pendingInvitesById = new HashMap<>();
@@ -84,6 +94,34 @@ public final class Household extends EventSourcedAggregate {
 
     public HouseholdName name() {
         return name;
+    }
+
+    /**
+     * Whether {@code memberId} currently holds a role in this household, per the folded event
+     * history — used by the governance handlers to self-heal a stranded ACL mapping (retract is
+     * caller-independent) without requiring a fresh authorization check.
+     */
+    public boolean isMember(MemberId memberId) {
+        return rolesByMember.containsKey(memberId);
+    }
+
+    /** Whether this household has been deleted, per the folded event history. */
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    /**
+     * The ids of every currently-{@code PENDING} invite, per the folded event history — used by
+     * {@link de.sgart.collaboration.application.command.DeleteHouseholdHandler} to purge their raw
+     * email rows from the {@link de.sgart.collaboration.application.InviteEmailSideStore} (AD-6):
+     * revoke and accept already purge on their own invite; a household delete must purge every
+     * invite still pending, or its raw email survives, undiscoverable once the read model is gone.
+     */
+    public List<InviteId> pendingInviteIds() {
+        return pendingInvitesById.entrySet().stream()
+                .filter(entry -> entry.getValue().status() == InviteStatus.PENDING)
+                .map(Map.Entry::getKey)
+                .toList();
     }
 
     /**
@@ -262,6 +300,185 @@ public final class Household extends EventSourcedAggregate {
         }
     }
 
+    /**
+     * A member leaves their household voluntarily (Story 4.3, AC3, AC5) — no membership gate on
+     * <em>who</em> can leave (anyone leaving is by definition self-service), only on whether they
+     * are currently a member. Leaving when not a member is a convergent no-op (§3.5). The household's
+     * last Admin may not leave ({@link LastAdminException}, AC5) — the invariant is guarded here,
+     * atomically, off the folded {@code rolesByMember} map.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void leaveHousehold(MemberId requestedBy, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireNotDeleted();
+
+        if (!rolesByMember.containsKey(requestedBy)) {
+            return; // convergent no-op — not a member, nothing to leave (§3.5)
+        }
+        if (isOnlyAdmin(requestedBy)) {
+            throw new LastAdminException("The last Admin of a household may not leave it");
+        }
+        raise(new MemberLeft(EventId.generate(), householdId, requestedBy));
+    }
+
+    /**
+     * An Admin removes <strong>another</strong> member from the household (Story 4.3, AC2, AC4) —
+     * Admin-only governance. A self-target is always rejected ({@link GovernanceNotPermittedException})
+     * — a voluntary departure must go through {@link #leaveHousehold}, so it always emits {@code
+     * MemberLeft}, never a self-inflicted {@code MemberRemoved}. Because a self-target is blocked
+     * before this point and {@code requestedBy} must already be an Admin, the target of a genuine
+     * removal can never be the household's sole Admin — the last-Admin invariant does not apply here
+     * (it does for {@link #leaveHousehold} and {@link #demoteMember}). Removing a non-member is a
+     * convergent no-op (§3.5).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void removeMember(MemberId requestedBy, MemberId target, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(target, "target must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireNotDeleted();
+        requireAdmin(requestedBy);
+
+        if (target.equals(requestedBy)) {
+            throw new GovernanceNotPermittedException(
+                    "An Admin may not remove themselves; leave the household instead");
+        }
+        if (!rolesByMember.containsKey(target)) {
+            return; // convergent no-op — target is not a member (§3.5)
+        }
+        raise(new MemberRemoved(EventId.generate(), householdId, target, requestedBy));
+    }
+
+    /**
+     * An Admin promotes a Participant to Admin (Story 4.3, AC2, AC4). Promoting an already-Admin is
+     * a convergent no-op (§3.5); an unknown target throws {@link NotAHouseholdMemberException}.
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void promoteMember(MemberId requestedBy, MemberId target, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(target, "target must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireNotDeleted();
+        requireAdmin(requestedBy);
+
+        HouseholdRole currentRole = rolesByMember.get(target);
+        if (currentRole == null) {
+            throw new NotAHouseholdMemberException("Cannot promote a caller who is not a member of the household");
+        }
+        if (currentRole == HouseholdRole.ADMIN) {
+            return; // convergent no-op — already an Admin (§3.5)
+        }
+        raise(new MemberPromoted(EventId.generate(), householdId, target, requestedBy));
+    }
+
+    /**
+     * An Admin demotes another Admin to Participant (Story 4.3, AC2, AC4, AC5). Demoting an
+     * already-Participant is a convergent no-op (§3.5); an unknown target throws {@link
+     * NotAHouseholdMemberException}; demoting the household's last Admin is prevented ({@link
+     * LastAdminException}, AC5).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void demoteMember(MemberId requestedBy, MemberId target, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(target, "target must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireNotDeleted();
+        requireAdmin(requestedBy);
+
+        HouseholdRole currentRole = rolesByMember.get(target);
+        if (currentRole == null) {
+            throw new NotAHouseholdMemberException("Cannot demote a caller who is not a member of the household");
+        }
+        if (currentRole == HouseholdRole.PARTICIPANT) {
+            return; // convergent no-op — already a Participant (§3.5)
+        }
+        if (isOnlyAdmin(target)) {
+            throw new LastAdminException("The last Admin of a household may not be demoted");
+        }
+        raise(new MemberDemoted(EventId.generate(), householdId, target, requestedBy));
+    }
+
+    /**
+     * An Admin revokes a pending invite (Story 4.3, AC2, AC6), completing its lifecycle ({@code
+     * PENDING -> REVOKED}). Branches on the folded invite state: absent or a terminal
+     * non-{@code PENDING} state other than {@code REVOKED} (i.e. {@code ACCEPTED}/{@code EXPIRED}) is
+     * rejected as "no pending invite to revoke" ({@link InviteNotFoundException}); an already-{@code
+     * REVOKED} invite is a convergent no-op (§3.5). No expiry check — a past-TTL {@code PENDING}
+     * invite may still be revoked (revoke is a terminal governance action; expiry is lazy
+     * housekeeping elsewhere).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void revokeInvite(MemberId requestedBy, InviteId inviteId, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(inviteId, "inviteId must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+        requireNotDeleted();
+        requireAdmin(requestedBy);
+
+        InviteState invite = pendingInvitesById.get(inviteId);
+        if (invite == null) {
+            throw new InviteNotFoundException("No invite " + inviteId + " exists in this household");
+        }
+
+        switch (invite.status()) {
+            case PENDING -> raise(new InviteRevoked(EventId.generate(), householdId, inviteId, requestedBy));
+            case REVOKED -> { /* convergent no-op — already revoked (§3.5) */ }
+            case ACCEPTED, EXPIRED ->
+                throw new InviteNotFoundException("Invite " + inviteId + " has no pending invite to revoke");
+        }
+    }
+
+    /**
+     * An Admin deletes the household (Story 4.3, AC2, AC7) — no last-Admin guard, unlike leave/
+     * remove/demote: deleting the whole household is allowed even for a sole Admin. Deleting an
+     * already-deleted household is a convergent no-op (§3.5).
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void deleteHousehold(MemberId requestedBy, CommandId commandId) {
+        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        if (deleted) {
+            return; // convergent no-op — already deleted (§3.5), checked before requireAdmin so a
+            // re-delete retry stays convergent even for a caller whose role has since changed
+        }
+        requireAdmin(requestedBy);
+        raise(new HouseholdDeleted(EventId.generate(), householdId, requestedBy));
+    }
+
+    private void requireAdmin(MemberId requestedBy) {
+        if (rolesByMember.get(requestedBy) != HouseholdRole.ADMIN) {
+            throw new GovernanceNotPermittedException(
+                    "Only an Admin of the household may perform this governance action");
+        }
+    }
+
+    private boolean isOnlyAdmin(MemberId memberId) {
+        if (rolesByMember.get(memberId) != HouseholdRole.ADMIN) {
+            return false;
+        }
+        return rolesByMember.values().stream().filter(role -> role == HouseholdRole.ADMIN).count() == 1;
+    }
+
+    /**
+     * Defense-in-depth guard against mutating an already-deleted household (Story 4.3, T10) — largely
+     * unreachable in practice because the ACL mappings are already de-linked by the time this would
+     * be called (a deleted household's members 403 at the ACL seam first), but a real domain
+     * invariant nonetheless.
+     */
+    private void requireNotDeleted() {
+        if (deleted) {
+            throw new GovernanceNotPermittedException("This household has been deleted");
+        }
+    }
+
     private void requireMember(MemberId requestedBy) {
         if (!rolesByMember.containsKey(requestedBy)) {
             throw new NotAHouseholdMemberException(
@@ -314,6 +531,17 @@ public final class Household extends EventSourcedAggregate {
                     pendingInvitesById.put(accepted.inviteId(), existing.withStatus(InviteStatus.ACCEPTED));
                 }
             }
+            case InviteRevoked revoked -> {
+                InviteState existing = pendingInvitesById.get(revoked.inviteId());
+                if (existing != null) {
+                    pendingInvitesById.put(revoked.inviteId(), existing.withStatus(InviteStatus.REVOKED));
+                }
+            }
+            case MemberLeft left -> rolesByMember.remove(left.memberId());
+            case MemberRemoved removed -> rolesByMember.remove(removed.memberId());
+            case MemberPromoted promoted -> rolesByMember.put(promoted.memberId(), HouseholdRole.ADMIN);
+            case MemberDemoted demoted -> rolesByMember.put(demoted.memberId(), HouseholdRole.PARTICIPANT);
+            case HouseholdDeleted ignored -> this.deleted = true;
             default -> throw new IllegalArgumentException(
                     "Household cannot apply unknown event type: " + event.getClass());
         }
@@ -336,7 +564,8 @@ public final class Household extends EventSourcedAggregate {
     private enum InviteStatus {
         PENDING,
         EXPIRED,
-        ACCEPTED
+        ACCEPTED,
+        REVOKED
     }
 
     /**

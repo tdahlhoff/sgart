@@ -128,6 +128,36 @@ void main() {
       );
     });
 
+    test('revokeInvite_deletesTheCorrectPathAndBodyShape', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter((options) async => _jsonResponse(const {}, 204));
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpInvitesApi(client);
+
+      await api.revokeInvite('household-1', inviteId: 'invite-1', commandId: 'command-1');
+
+      final request = adapter.lastRequest!;
+      expect(request.path, '/api/v1/households/household-1/invites/invite-1');
+      expect(request.method, 'DELETE');
+      final body = request.data as Map<String, dynamic>;
+      expect(body['commandId'], 'command-1');
+    });
+
+    test('revokeInvite_mapsAServerErrorToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'invite.notFound', 'message': 'debug only'}, 404),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpInvitesApi(client);
+
+      await expectLater(
+        api.revokeInvite('household-1', inviteId: 'invite-1', commandId: 'command-1'),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'invite.notFound')),
+      );
+    });
+
     test('listPendingInvites_mapsAServerErrorToAnAppException', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
       dio.httpClientAdapter = _FakeHttpClientAdapter(

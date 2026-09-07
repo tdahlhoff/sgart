@@ -111,4 +111,12 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
                 .param("status", ListStatus.DONE.name())
                 .update();
     }
+
+    /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */
+    void purgeHousehold(HouseholdId householdId) {
+        jdbcClient
+                .sql("DELETE FROM shopping_list_read_model WHERE household_id = :householdId")
+                .param("householdId", householdId.value())
+                .update();
+    }
 }

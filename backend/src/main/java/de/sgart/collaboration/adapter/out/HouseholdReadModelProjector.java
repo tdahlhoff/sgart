@@ -1,12 +1,19 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
+import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
+import de.sgart.collaboration.domain.event.InviteRevoked;
+import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.event.MemberLeft;
+import de.sgart.collaboration.domain.event.MemberPromoted;
+import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.shared.DomainEvent;
@@ -53,6 +60,7 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
     private final JdbcHouseholdReadModel readModel;
     private final JdbcStoreReadModel storeReadModel;
     private final JdbcInviteReadModel inviteReadModel;
+    private final JdbcHouseholdMemberReadModel memberReadModel;
     private final DomainEventJsonCodec codec = new DomainEventJsonCodec();
     private final boolean autoStart;
 
@@ -63,8 +71,9 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
             KurrentDBClient client,
             JdbcHouseholdReadModel readModel,
             JdbcStoreReadModel storeReadModel,
-            JdbcInviteReadModel inviteReadModel) {
-        this(client, readModel, storeReadModel, inviteReadModel, false);
+            JdbcInviteReadModel inviteReadModel,
+            JdbcHouseholdMemberReadModel memberReadModel) {
+        this(client, readModel, storeReadModel, inviteReadModel, memberReadModel, false);
     }
 
     public HouseholdReadModelProjector(
@@ -72,11 +81,13 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
             JdbcHouseholdReadModel readModel,
             JdbcStoreReadModel storeReadModel,
             JdbcInviteReadModel inviteReadModel,
+            JdbcHouseholdMemberReadModel memberReadModel,
             boolean autoStart) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         this.readModel = Objects.requireNonNull(readModel, "readModel must not be null");
         this.storeReadModel = Objects.requireNonNull(storeReadModel, "storeReadModel must not be null");
         this.inviteReadModel = Objects.requireNonNull(inviteReadModel, "inviteReadModel must not be null");
+        this.memberReadModel = Objects.requireNonNull(memberReadModel, "memberReadModel must not be null");
         this.autoStart = autoStart;
     }
 
@@ -90,7 +101,7 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
         switch (event) {
             case HouseholdCreated created -> readModel.upsertHousehold(created.householdId(), created.name());
             case HouseholdRenamed renamed -> readModel.upsertHousehold(renamed.householdId(), renamed.newName());
-            case MemberJoined joined -> readModel.addMember(joined.householdId(), joined.memberId());
+            case MemberJoined joined -> memberReadModel.upsert(joined.householdId(), joined.memberId(), joined.role());
             case StoreAdded added ->
                 storeReadModel.upsertStore(added.householdId(), added.storeId(), added.name(), added.chainId());
             case StoreArchived archived -> storeReadModel.markArchived(archived.householdId(), archived.storeId());
@@ -98,6 +109,19 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
                     invited.householdId(), invited.inviteId(), invited.invitedBy(), invited.invitedAt());
             case InviteExpired expired -> inviteReadModel.markExpired(expired.householdId(), expired.inviteId());
             case InviteAccepted accepted -> inviteReadModel.markAccepted(accepted.householdId(), accepted.inviteId());
+            case InviteRevoked revoked -> inviteReadModel.markRevoked(revoked.householdId(), revoked.inviteId());
+            case MemberPromoted promoted ->
+                memberReadModel.upsert(promoted.householdId(), promoted.memberId(), HouseholdRole.ADMIN);
+            case MemberDemoted demoted ->
+                memberReadModel.upsert(demoted.householdId(), demoted.memberId(), HouseholdRole.PARTICIPANT);
+            case MemberLeft left -> memberReadModel.remove(left.householdId(), left.memberId());
+            case MemberRemoved removed -> memberReadModel.remove(removed.householdId(), removed.memberId());
+            case HouseholdDeleted deleted -> {
+                readModel.purgeHousehold(deleted.householdId());
+                storeReadModel.purgeHousehold(deleted.householdId());
+                inviteReadModel.purgeHousehold(deleted.householdId());
+                memberReadModel.purgeHousehold(deleted.householdId());
+            }
             default -> {
                 // The subscription filter (see start()) only ever delivers household-stream events.
             }

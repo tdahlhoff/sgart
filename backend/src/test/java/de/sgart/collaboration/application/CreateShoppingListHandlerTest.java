@@ -6,14 +6,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
+import de.sgart.collaboration.domain.Household;
+import de.sgart.collaboration.domain.HouseholdName;
+import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.ShoppingListName;
+import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.ShoppingListCreated;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.shared.AggregateVersion;
+import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
+import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.ShoppingListId;
@@ -26,12 +33,14 @@ import org.junit.jupiter.api.Test;
 /**
  * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL, no framework or
  * persistence (CLAUDE.md §6). Proves the create-list command path (AC1): a member's create appends
- * {@code ShoppingListCreated} (named or unnamed) to a brand-new {@code list-{id}} stream, a
- * non-member is rejected, and malformed fields map to their localizable codes.
+ * {@code ShoppingListCreated} (named or unnamed) to a brand-new {@code list-{id}} stream, create is
+ * not Admin-gated (a Participant succeeds too, Story 4.3 T28), a non-member is rejected, and
+ * malformed fields map to their localizable codes.
  */
 class CreateShoppingListHandlerTest {
 
     private static final String MEMBER_SUB = "anna-sub";
+    private static final String PARTICIPANT_SUB = "bob-sub";
 
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
@@ -42,6 +51,23 @@ class CreateShoppingListHandlerTest {
 
     private void seedMembership() {
         mappingRepository.save(new MemberMapping(householdId, MemberId.generate(), new KeycloakUserId(MEMBER_SUB)));
+    }
+
+    /** Seeds a real {@link Household} aggregate with an Admin and a Participant, so the Participant
+     * identity is genuine (a role recorded on the household stream), not merely an ACL row — even
+     * though this handler itself never reads the role (create is membership-, not role-gated). */
+    private void seedHouseholdWithAdminAndParticipant() {
+        MemberId adminMemberId = MemberId.generate();
+        MemberId participantMemberId = MemberId.generate();
+        StreamId householdStreamId = StreamId.forHousehold(householdId);
+        Household household =
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+        eventStore.append(AggregateVersion.initial(householdStreamId), household.uncommittedEvents(), CommandId.generate());
+        eventStore.append(
+                AggregateVersion.of(householdStreamId, 2),
+                List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
+                CommandId.generate());
+        mappingRepository.save(new MemberMapping(householdId, participantMemberId, new KeycloakUserId(PARTICIPANT_SUB)));
     }
 
     @Test
@@ -82,6 +108,16 @@ class CreateShoppingListHandlerTest {
 
         assertThat(eventStore.readStream(StreamId.forList(firstListId))).hasSize(1);
         assertThat(eventStore.readStream(StreamId.forList(secondListId))).hasSize(1);
+    }
+
+    @Test
+    void aParticipantMemberCanCreateAList() {
+        seedHouseholdWithAdminAndParticipant();
+        ShoppingListId listId = ShoppingListId.generate();
+
+        handler.handle(PARTICIPANT_SUB, householdId.toString(), listId.toString(), "Getränke", UUID.randomUUID().toString());
+
+        assertThat(eventStore.readStream(StreamId.forList(listId))).hasSize(1);
     }
 
     @Test

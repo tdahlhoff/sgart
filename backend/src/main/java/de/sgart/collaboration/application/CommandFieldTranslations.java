@@ -19,6 +19,7 @@ import de.sgart.shared.CommandId;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.InviteId;
 import de.sgart.shared.ItemId;
+import de.sgart.shared.MemberId;
 import de.sgart.shared.Quantity;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.StoreChainId;
@@ -119,6 +120,17 @@ public final class CommandFieldTranslations {
             return InviteId.fromString(rawInviteId);
         } catch (IllegalArgumentException notAUuid) {
             throw new InvalidCommandEnvelopeException("command.inviteIdInvalid", "inviteId must be a valid UUID");
+        }
+    }
+
+    public static MemberId toMemberId(String rawMemberId) {
+        if (rawMemberId == null || rawMemberId.isBlank()) {
+            throw new InvalidCommandEnvelopeException("command.memberIdRequired", "memberId must be provided");
+        }
+        try {
+            return MemberId.fromString(rawMemberId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new InvalidCommandEnvelopeException("command.memberIdInvalid", "memberId must be a valid UUID");
         }
     }
 

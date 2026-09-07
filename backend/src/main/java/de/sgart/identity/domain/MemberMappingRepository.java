@@ -39,4 +39,18 @@ public interface MemberMappingRepository {
 
     /** @return every household the given person is a member of, in no particular order. */
     List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId);
+
+    /**
+     * The <strong>governance de-link</strong> (Story 4.3, AD-7): removes the mapping row for {@code
+     * (householdId, memberId)} if present; a no-op when none exists (idempotent). Distinct from
+     * {@link #deleteMapping(KeycloakUserId, HouseholdId)}'s join-failure compensation — this is the
+     * mechanism that revokes access when a member leaves or is removed.
+     */
+    void deleteMappingByMember(HouseholdId householdId, MemberId memberId);
+
+    /**
+     * The <strong>governance de-link</strong> for a deleted household (Story 4.3, AD-7): removes
+     * every mapping row for {@code householdId}; idempotent — a no-op when none exist.
+     */
+    void deleteAllMappings(HouseholdId householdId);
 }

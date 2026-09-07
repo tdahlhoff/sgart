@@ -84,4 +84,54 @@ class JdbcMemberMappingRepositoryTest {
     void householdIdsFor_isEmptyForAPersonWithNoMappings() {
         assertThat(repository.householdIdsFor(new KeycloakUserId("stranger-sub"))).isEmpty();
     }
+
+    @Test
+    void deleteMappingByMember_removesOnlyThatMembersRowInThatHousehold() {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId annaId = MemberId.generate();
+        MemberId bobId = MemberId.generate();
+        repository.save(new MemberMapping(householdId, annaId, new KeycloakUserId("anna-sub")));
+        repository.save(new MemberMapping(householdId, bobId, new KeycloakUserId("bob-sub")));
+
+        repository.deleteMappingByMember(householdId, annaId);
+
+        assertThat(repository.findMemberId(new KeycloakUserId("anna-sub"), householdId)).isEmpty();
+        assertThat(repository.findMemberId(new KeycloakUserId("bob-sub"), householdId)).contains(bobId);
+    }
+
+    @Test
+    void deleteMappingByMember_isIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId memberId = MemberId.generate();
+
+        repository.deleteMappingByMember(householdId, memberId);
+
+        assertThat(repository.findMemberId(new KeycloakUserId("anna-sub"), householdId)).isEmpty();
+    }
+
+    @Test
+    void deleteAllMappings_removesEveryRowForTheHouseholdAndNoneOfAnothers() {
+        HouseholdId householdToDelete = HouseholdId.generate();
+        HouseholdId otherHousehold = HouseholdId.generate();
+        repository.save(new MemberMapping(householdToDelete, MemberId.generate(), new KeycloakUserId("anna-sub")));
+        repository.save(new MemberMapping(householdToDelete, MemberId.generate(), new KeycloakUserId("bob-sub")));
+        MemberId otherHouseholdMemberId = MemberId.generate();
+        repository.save(new MemberMapping(otherHousehold, otherHouseholdMemberId, new KeycloakUserId("anna-sub")));
+
+        repository.deleteAllMappings(householdToDelete);
+
+        assertThat(repository.findMemberId(new KeycloakUserId("anna-sub"), householdToDelete)).isEmpty();
+        assertThat(repository.findMemberId(new KeycloakUserId("bob-sub"), householdToDelete)).isEmpty();
+        assertThat(repository.findMemberId(new KeycloakUserId("anna-sub"), otherHousehold))
+                .contains(otherHouseholdMemberId);
+    }
+
+    @Test
+    void deleteAllMappings_isIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+
+        repository.deleteAllMappings(householdId);
+
+        assertThat(repository.householdIdsFor(new KeycloakUserId("anna-sub"))).isEmpty();
+    }
 }

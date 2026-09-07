@@ -2,12 +2,14 @@ package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.command.AcceptInviteHandler;
 import de.sgart.collaboration.application.command.InvitePersonHandler;
+import de.sgart.collaboration.application.command.RevokeInviteHandler;
 import de.sgart.collaboration.application.query.ListPendingInvites;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,14 +33,17 @@ class InviteController {
     private final InvitePersonHandler invitePersonHandler;
     private final AcceptInviteHandler acceptInviteHandler;
     private final ListPendingInvites listPendingInvites;
+    private final RevokeInviteHandler revokeInviteHandler;
 
     InviteController(
             InvitePersonHandler invitePersonHandler,
             AcceptInviteHandler acceptInviteHandler,
-            ListPendingInvites listPendingInvites) {
+            ListPendingInvites listPendingInvites,
+            RevokeInviteHandler revokeInviteHandler) {
         this.invitePersonHandler = invitePersonHandler;
         this.acceptInviteHandler = acceptInviteHandler;
         this.listPendingInvites = listPendingInvites;
+        this.revokeInviteHandler = revokeInviteHandler;
     }
 
     @PostMapping
@@ -81,9 +86,27 @@ class InviteController {
                 .toList();
     }
 
+    @DeleteMapping("/{inviteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revoke(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String inviteId,
+            @RequestBody RevokeInviteRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        // The handler resolves the caller's MemberId (403 if not a member), enforces Admin-only
+        // (403 governanceNotPermitted, AC2) and the invite state machine (404, AC6), and purges the
+        // raw-email side-store row after append (AD-6).
+        revokeInviteHandler.handle(caller.keycloakUserId(), householdId, inviteId, request.commandId());
+    }
+
     /** Transport DTO for {@code POST} — the invite command envelope (AR10). {@code inviteId} is the
      * client-generated id. */
     record InviteRequest(String inviteId, String email, String commandId) {}
+
+    /** Transport DTO for {@code DELETE} — the revoke command envelope (AR10). */
+    record RevokeInviteRequest(String commandId) {}
 
     /** Transport DTO for {@code POST .../accept} — no email/role (Story 4.2, locked decision 3). */
     record AcceptInviteRequest(String commandId) {}

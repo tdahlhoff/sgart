@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
+import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/manage_household_page.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/invites/data/pending_invite.dart';
+import 'package:sgart/features/members/data/member_view.dart';
+import 'package:sgart/features/members/data/members_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 
+import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_members_dependencies.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -17,6 +22,8 @@ void main() {
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeInvitesApi invitesApi;
+    late FakeMembersApi membersApi;
+    late FakeHouseholdsApi householdsApi;
 
     const household = HouseholdSummary(householdId: 'household-1', name: 'Familie Muster');
 
@@ -24,6 +31,9 @@ void main() {
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
+      membersApi = FakeMembersApi()
+        ..membersToReturn = const [MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true)];
+      householdsApi = FakeHouseholdsApi();
     });
 
     Widget buildSubject() => wrapForTesting(
@@ -32,6 +42,8 @@ void main() {
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
               RepositoryProvider<InvitesApi>.value(value: invitesApi),
+              RepositoryProvider<MembersApi>.value(value: membersApi),
+              RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
             ],
             child: const ManageHouseholdPage(household: household),
           ),
@@ -69,6 +81,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('invite-row-invite-1')), findsOneWidget);
+    });
+
+    testWidgets('theMembersRowOpensTheMembersPage', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('manage-members-row')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('member-row-member-1')), findsOneWidget);
     });
   });
 }

@@ -20,6 +20,11 @@ abstract interface class HouseholdsApi {
   /// idempotency key for the rename intent, reused across retries (AD-8). A backend that rejects a
   /// non-Admin surfaces as an [AppException] carrying `household.renameNotPermitted`.
   Future<void> renameHousehold(String householdId, String name, {required String commandId});
+
+  /// Deletes the household (Story 4.3, AC7) — Admin-only, no response body. [commandId] is the
+  /// caller-supplied idempotency key, reused across retries (AD-8). A non-Admin caller surfaces
+  /// `governance.notPermitted` (403).
+  Future<void> deleteHousehold(String householdId, {required String commandId});
 }
 
 class HttpHouseholdsApi implements HouseholdsApi {
@@ -49,5 +54,10 @@ class HttpHouseholdsApi implements HouseholdsApi {
   @override
   Future<void> renameHousehold(String householdId, String name, {required String commandId}) {
     return _client.patchJson('/api/v1/households/$householdId', {'name': name, 'commandId': commandId});
+  }
+
+  @override
+  Future<void> deleteHousehold(String householdId, {required String commandId}) {
+    return _client.deleteJson('/api/v1/households/$householdId', {'commandId': commandId});
   }
 }

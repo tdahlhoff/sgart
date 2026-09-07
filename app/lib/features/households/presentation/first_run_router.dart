@@ -13,6 +13,7 @@ import '../../invites/data/invites_api.dart';
 import '../../lists/data/item_suggestions_api.dart';
 import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
+import '../../members/data/members_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
 import '../../trips/data/trips_api.dart';
@@ -43,6 +44,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final HouseholdsApi _householdsApi;
   late final StoresApi _storesApi;
   late final InvitesApi _invitesApi;
+  late final MembersApi _membersApi;
   late final ShoppingListsApi _shoppingListsApi;
   late final ItemsApi _itemsApi;
   late final ItemSuggestionsApi _itemSuggestionsApi;
@@ -63,6 +65,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _householdsApi = HttpHouseholdsApi(httpClient);
     _storesApi = HttpStoresApi(httpClient);
     _invitesApi = HttpInvitesApi(httpClient);
+    _membersApi = HttpMembersApi(httpClient);
     _shoppingListsApi = HttpShoppingListsApi(httpClient);
     _itemsApi = HttpItemsApi(httpClient);
     _itemSuggestionsApi = HttpItemSuggestionsApi(httpClient);
@@ -87,6 +90,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         // The onboarding wizard's invite step + the manage-household hub's invite page read this
         // (Story 4.1).
         RepositoryProvider<InvitesApi>.value(value: _invitesApi),
+        // The manage-household hub's member-management page reads this (Story 4.3).
+        RepositoryProvider<MembersApi>.value(value: _membersApi),
         // The Listen tab reads this to build its household-scoped ShoppingListsCubit (Story 2.1).
         RepositoryProvider<ShoppingListsApi>.value(value: _shoppingListsApi),
         // The list detail screen reads this to build its list-scoped ListDetailCubit (Story 2.3).

@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
+import de.sgart.shared.HouseholdId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import java.util.List;
@@ -23,13 +24,14 @@ public final class JdbcTripStoreReadModel implements TripStoreReadModel {
 
     /** Idempotent upsert — re-projecting the same event is a genuine no-op ({@code DO NOTHING}). */
     @Override
-    public void addStore(TripId tripId, StoreId storeId) {
+    public void addStore(HouseholdId householdId, TripId tripId, StoreId storeId) {
         jdbcClient
                 .sql("""
-                        INSERT INTO trip_store_read_model (trip_id, store_id)
-                        VALUES (:tripId, :storeId)
+                        INSERT INTO trip_store_read_model (household_id, trip_id, store_id)
+                        VALUES (:householdId, :tripId, :storeId)
                         ON CONFLICT (trip_id, store_id) DO NOTHING
                         """)
+                .param("householdId", householdId.value())
                 .param("tripId", tripId.value())
                 .param("storeId", storeId.value())
                 .update();
@@ -54,6 +56,14 @@ public final class JdbcTripStoreReadModel implements TripStoreReadModel {
         jdbcClient
                 .sql("DELETE FROM trip_store_read_model WHERE trip_id = :tripId")
                 .param("tripId", tripId.value())
+                .update();
+    }
+
+    /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */
+    void purgeHousehold(HouseholdId householdId) {
+        jdbcClient
+                .sql("DELETE FROM trip_store_read_model WHERE household_id = :householdId")
+                .param("householdId", householdId.value())
                 .update();
     }
 }

@@ -41,14 +41,16 @@ import org.junit.jupiter.api.Test;
 /**
  * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL + in-memory side-store, no
  * framework or persistence (CLAUDE.md §6). Proves the invite command path (AC1–AC5): a member's
- * invite appends {@code MemberInvited} carrying the HMAC, an already-a-member email is rejected
- * (409, AC3/E5) with no append, a non-member is rejected (403), a duplicate pending invite is
- * rejected (409, AC2), a past-TTL pending invite is expired then re-invited (AC5) with a side-store
- * purge, and every write to the side-store happens only after a successful append.
+ * invite appends {@code MemberInvited} carrying the HMAC, invite is not Admin-gated (a Participant
+ * succeeds too, Story 4.3 T28), an already-a-member email is rejected (409, AC3/E5) with no append,
+ * a non-member is rejected (403), a duplicate pending invite is rejected (409, AC2), a past-TTL
+ * pending invite is expired then re-invited (AC5) with a side-store purge, and every write to the
+ * side-store happens only after a successful append.
  */
 class InvitePersonHandlerTest {
 
     private static final String ADMIN_SUB = "anna-sub";
+    private static final String PARTICIPANT_SUB = "bob-sub";
     private static final Instant FIXED_NOW = Instant.parse("2026-09-06T10:00:00Z");
 
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
@@ -79,6 +81,21 @@ class InvitePersonHandlerTest {
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
     }
 
+    private MemberId seedHouseholdWithAdminAndParticipant() {
+        seedHouseholdWithAdmin();
+        MemberId participantId = MemberId.generate();
+        eventStore.append(
+                AggregateVersion.of(streamId, 2),
+                List.of(new de.sgart.collaboration.domain.event.MemberJoined(
+                        de.sgart.shared.EventId.generate(),
+                        householdId,
+                        participantId,
+                        de.sgart.collaboration.domain.HouseholdRole.PARTICIPANT)),
+                CommandId.generate());
+        mappingRepository.save(new MemberMapping(householdId, participantId, new KeycloakUserId(PARTICIPANT_SUB)));
+        return participantId;
+    }
+
     @Test
     void invitingAPersonAppendsMemberInvitedCarryingTheHmac() {
         seedHouseholdWithAdmin();
@@ -105,6 +122,17 @@ class InvitePersonHandlerTest {
         assertThat(sideStore.findEmail(inviteId)).contains(NormalizedEmail.fromRaw("anna@example.com"));
         assertThat(sideStore.storeCallCount).isEqualTo(1);
         assertThat(sideStore.appendWasVisibleOnEveryStoreCall).isTrue();
+    }
+
+    @Test
+    void aParticipantMemberCanSendAnInvite() {
+        seedHouseholdWithAdminAndParticipant();
+
+        handler().handle(PARTICIPANT_SUB, householdId.toString(), InviteId.generate().toString(), "carla@example.com",
+                CommandId.generate().toString());
+
+        List<DomainEvent> events = eventStore.readStream(streamId);
+        assertThat(events.get(events.size() - 1)).isInstanceOf(MemberInvited.class);
     }
 
     @Test
