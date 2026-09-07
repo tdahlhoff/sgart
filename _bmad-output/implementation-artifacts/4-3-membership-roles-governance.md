@@ -4,7 +4,7 @@ baseline_commit: 348b73b
 
 # Story 4.3: Membership roles & governance
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
