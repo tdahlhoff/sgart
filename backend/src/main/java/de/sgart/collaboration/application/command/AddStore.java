@@ -15,7 +15,7 @@ import java.util.Objects;
  * handler read before appending — an online load-then-append (AD-8); a client-supplied
  * {@code basedOnVersion} plus the offline queue is Epic 5.
  *
- * <p>The {@link StoreId} is minted <em>client-side</em> and carried here, so the command response
+ * <p>The {@link StoreId} is generated <em>client-side</em> and carried here, so the command response
  * needs no body (read-your-writes without waiting on a projection). {@code chainId} is the optional
  * accepted chain suggestion (AC2), {@code null} when the store is unlinked.
  */

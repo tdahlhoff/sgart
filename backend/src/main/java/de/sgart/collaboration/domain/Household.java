@@ -53,8 +53,8 @@ public final class Household extends EventSourcedAggregate {
 
     /**
      * Creates a brand-new household on its own stream, with {@code adminMemberId} as its creator
-     * (AC1). {@code adminMemberId} must already be minted by the Identity ACL (the sole minter,
-     * AD-5) — this factory never mints one itself. {@code commandId} is validated for
+     * (AC1). {@code adminMemberId} must already be issued by the Identity ACL (the sole issuer,
+     * AD-5) — this factory never issues one itself. {@code commandId} is validated for
      * completeness of the command envelope but carries no domain meaning here; idempotency is the
      * {@code EventStore}'s concern (AD-8), not the aggregate's.
      */
@@ -207,7 +207,7 @@ public final class Household extends EventSourcedAggregate {
     /**
      * Redeems a personal invite (Story 4.2, AC1, AC3, AC4, AC5) — the one command with
      * <strong>no membership gate</strong>: accept is precisely how a non-member becomes one, unlike
-     * {@link #invitePerson}'s {@code requireMember}. {@code joiner} is the Identity-ACL-minted
+     * {@link #invitePerson}'s {@code requireMember}. {@code joiner} is the Identity-ACL-issued
      * {@link MemberId} for the accepting caller (AD-5); {@code now} is caller-injected, never {@code
      * Instant.now()} here, so expiry stays deterministic and testable.
      *

@@ -20,7 +20,7 @@ import java.util.Objects;
  * MemberId} through the Identity ACL's published {@link ResolveMemberIdentity} port (AD-2 — never
  * {@code identity.domain}) to confirm membership, then let the {@link ShoppingList} aggregate raise
  * {@code ShoppingListCreated} on its own brand-new {@code list-{id}} stream. The {@code listId} is
- * minted client-side and carried in the command, so the response needs no body (read-your-writes
+ * generated client-side and carried in the command, so the response needs no body (read-your-writes
  * without waiting on a projection). The command returns {@code void} — a command yields no domain
  * data (CQRS); the client already knows the id and name it sent.
  */

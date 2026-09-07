@@ -11,7 +11,7 @@ import java.util.UUID;
  *
  * <p>UUID-backed and carrying no domain meaning (AD-5, §2). Generated <em>client-side</em> and
  * carried in the start-trip command envelope, so the command response needs no body — the client
- * already knows the id it minted (read-your-writes without waiting on a projection).
+ * already knows the id it generated (read-your-writes without waiting on a projection).
  */
 public record TripId(UUID value) {
 

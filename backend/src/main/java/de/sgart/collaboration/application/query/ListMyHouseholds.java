@@ -29,7 +29,7 @@ public final class ListMyHouseholds {
 
     /**
      * @return every household the caller belongs to, in no particular order. Membership is taken
-     *     from the <em>authoritative</em> Identity ACL mapping (written synchronously by the mint),
+     *     from the <em>authoritative</em> Identity ACL mapping (written synchronously by the issue),
      *     so the 0/1/≥2 routing count is never under-reported by a lagging projection. The display
      *     name is best-effort from the eventually-consistent name read model; a household whose
      *     name has not yet been projected still appears (with an empty name) rather than being

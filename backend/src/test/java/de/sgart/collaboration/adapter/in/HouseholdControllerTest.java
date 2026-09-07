@@ -148,7 +148,7 @@ class HouseholdControllerTest {
     @Test
     void create_derivesTheCallerIdentityOnlyFromTheJwtSubjectNeverFromTheRequestBody() throws Exception {
         // The request body carries no identity field at all (CreateHouseholdRequest has none) —
-        // two different JWT subjects independently minting into their own household proves
+        // two different JWT subjects independently issuing into their own household proves
         // identity resolution is genuinely sub-only, not something a client could spoof (AR10).
         String firstResponse = mockMvc.perform(post("/api/v1/households")
                         .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))

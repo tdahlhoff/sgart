@@ -6,7 +6,7 @@ import de.sgart.collaboration.application.exception.InvalidHouseholdNameExceptio
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.MemberJoined;
-import de.sgart.identity.application.MintMemberIdentity;
+import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventStore;
@@ -16,20 +16,20 @@ import de.sgart.shared.StreamId;
 import java.util.Objects;
 
 /**
- * Orchestrates {@link CreateHousehold} (AC1, AC3): mint the creator's {@link MemberId} through the
+ * Orchestrates {@link CreateHousehold} (AC1, AC3): issue the creator's {@link MemberId} through the
  * Identity ACL's published port <em>before</em> the aggregate raises {@code MemberJoined} — the
- * event carries the minted id, so minting cannot happen after (the load-bearing ordering, Story
- * 1.6 Dev Notes "Mint-then-append"). Returns the new {@link HouseholdId} so the caller can route
+ * event carries the issued id, so issuing cannot happen after (the load-bearing ordering, Story
+ * 1.6 Dev Notes "Issue-then-append"). Returns the new {@link HouseholdId} so the caller can route
  * straight into it without waiting for the read model to catch up (read-your-writes, AR3/NFR9).
  */
 public final class CreateHouseholdHandler {
 
     private final EventStore eventStore;
-    private final MintMemberIdentity mintMemberIdentity;
+    private final IssueMemberIdentity issueMemberIdentity;
 
-    public CreateHouseholdHandler(EventStore eventStore, MintMemberIdentity mintMemberIdentity) {
+    public CreateHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
-        this.mintMemberIdentity = Objects.requireNonNull(mintMemberIdentity, "mintMemberIdentity must not be null");
+        this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
     }
 
     /**
@@ -50,14 +50,14 @@ public final class CreateHouseholdHandler {
         CommandId commandId = CommandFieldTranslations.toCommandId(rawCommandId);
         HouseholdName name = CommandFieldTranslations.toHouseholdName(rawName);
         // Deterministic per (keycloakUserId, commandId): a retried create derives the same stream,
-        // so the idempotent mint replays the existing MemberId and the append is a no-op — the
+        // so the idempotent issue replays the existing MemberId and the append is a no-op — the
         // whole create converges on one household instead of duplicating it (Clarification 5).
         HouseholdId householdId = HouseholdId.deterministicFrom(keycloakUserId + "|" + commandId);
         AggregateVersion basedOnVersion = AggregateVersion.initial(StreamId.forHousehold(householdId));
         CreateHousehold command = new CreateHousehold(commandId, basedOnVersion, name);
 
-        // Mint precedes append: MemberJoined must carry the ACL-minted MemberId (AD-5).
-        MemberId adminMemberId = mintMemberIdentity.mint(keycloakUserId, householdId);
+        // Issue precedes append: MemberJoined must carry the ACL-issued MemberId (AD-5).
+        MemberId adminMemberId = issueMemberIdentity.issue(keycloakUserId, householdId);
         Household household = Household.create(householdId, command.name(), adminMemberId, command.commandId());
         eventStore.append(command.basedOnVersion(), household.uncommittedEvents(), command.commandId());
 

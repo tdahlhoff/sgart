@@ -14,7 +14,7 @@ import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
-import de.sgart.identity.application.MintMemberIdentity;
+import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
@@ -52,7 +52,7 @@ class AcceptInviteHandlerTest {
 
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
-    private final MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(mappingRepository);
+    private final IssueMemberIdentity issueMemberIdentity = new IssueMemberIdentity(mappingRepository);
     private final FakeInviteEmailSideStore sideStore = new FakeInviteEmailSideStore();
 
     private final HouseholdId householdId = HouseholdId.generate();
@@ -60,7 +60,7 @@ class AcceptInviteHandlerTest {
     private final StreamId streamId = StreamId.forHousehold(householdId);
 
     private AcceptInviteHandler handler(Clock clock) {
-        return new AcceptInviteHandler(eventStore, mintMemberIdentity, sideStore, clock);
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, sideStore, clock);
     }
 
     private AcceptInviteHandler handler() {
@@ -96,7 +96,7 @@ class AcceptInviteHandlerTest {
         InviteId firstInviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
         handler().handle("anna-sub", householdId.toString(), firstInviteId.toString(), CommandId.generate().toString());
 
-        // Anna accepts a second, independent personal invite to the same household (E5): the mint
+        // Anna accepts a second, independent personal invite to the same household (E5): the issue
         // replays her existing MemberId, so this must be a joined-outcome with no second MemberJoined.
         Household forSecondInvite = Household.rehydrate(streamId, eventStore.readStream(streamId));
         AggregateVersion versionBeforeSecondInvite = forSecondInvite.version();
@@ -236,7 +236,7 @@ class AcceptInviteHandlerTest {
         InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
-                mintMemberIdentity,
+                issueMemberIdentity,
                 sideStore,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 
@@ -260,11 +260,11 @@ class AcceptInviteHandlerTest {
         InviteId secondInviteId = InviteId.generate();
         forSecondInvite.invitePerson(adminMemberId, secondInviteId, new EmailHmac("hmac-2"), FIXED_NOW, CommandId.generate());
         eventStore.append(versionBeforeSecondInvite, forSecondInvite.uncommittedEvents(), CommandId.generate());
-        MemberId annaMemberId = mintMemberIdentity.provision("anna-sub", householdId).memberId();
+        MemberId annaMemberId = issueMemberIdentity.provision("anna-sub", householdId).memberId();
 
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
-                mintMemberIdentity,
+                issueMemberIdentity,
                 sideStore,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
         assertThatThrownBy(() -> handler.handle(
@@ -282,7 +282,7 @@ class AcceptInviteHandlerTest {
         InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
-                mintMemberIdentity,
+                issueMemberIdentity,
                 sideStore,
                 Clock.fixed(FIXED_NOW.plus(Duration.ofDays(8)), ZoneOffset.UTC));
 

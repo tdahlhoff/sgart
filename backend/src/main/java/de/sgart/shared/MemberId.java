@@ -8,7 +8,7 @@ import java.util.UUID;
  * {@code identity.domain}, because other contexts (e.g. Collaboration) reference it and a
  * context's domain must not depend on another context's domain (AD-2).
  *
- * <p>The Identity ACL is the sole minter and sole resolver of a {@code MemberId} (AD-5) — a
+ * <p>The Identity ACL is the sole issuer and sole resolver of a {@code MemberId} (AD-5) — a
  * person who belongs to two households has two unrelated {@code MemberId}s. This type carries no
  * Keycloak identity; see {@code identity.domain.KeycloakUserId}.
  */

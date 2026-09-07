@@ -42,7 +42,7 @@ import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
-import de.sgart.identity.application.MintMemberIdentity;
+import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.shared.EventStore;
 import java.time.Clock;
@@ -61,8 +61,8 @@ import org.springframework.context.annotation.Configuration;
 public class CollaborationApplicationConfig {
 
     @Bean
-    CreateHouseholdHandler createHouseholdHandler(EventStore eventStore, MintMemberIdentity mintMemberIdentity) {
-        return new CreateHouseholdHandler(eventStore, mintMemberIdentity);
+    CreateHouseholdHandler createHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity) {
+        return new CreateHouseholdHandler(eventStore, issueMemberIdentity);
     }
 
     @Bean
@@ -237,10 +237,10 @@ public class CollaborationApplicationConfig {
     @Bean
     AcceptInviteHandler acceptInviteHandler(
             EventStore eventStore,
-            MintMemberIdentity mintMemberIdentity,
+            IssueMemberIdentity issueMemberIdentity,
             InviteEmailSideStore inviteEmailSideStore,
             Clock clock) {
-        return new AcceptInviteHandler(eventStore, mintMemberIdentity, inviteEmailSideStore, clock);
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, inviteEmailSideStore, clock);
     }
 
     @Bean

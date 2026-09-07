@@ -5,7 +5,7 @@ import de.sgart.shared.ErrorDescriptor;
 /**
  * Raised by {@link ResolveMemberIdentity} when a {@code (keycloakUserId, householdId)} pair has
  * no mapping — the caller is not a member of that household. This is always an authorization
- * failure, never a signal to mint a new {@code MemberId} (AD-5).
+ * failure, never a signal to issue a new {@code MemberId} (AD-5).
  */
 public final class NotAMemberException extends RuntimeException {
 

@@ -22,7 +22,7 @@ public record HouseholdId(UUID value) {
     /**
      * Derives a stable household id from a {@code seed}: the same seed always yields the same id (a
      * pure function). The create-household flow seeds this with {@code (keycloakUserId, commandId)}
-     * so a retried create converges on one household instead of minting duplicates (Story 1.6
+     * so a retried create converges on one household instead of generating duplicates (Story 1.6
      * Clarification 5). Implemented as a name-based (version 3) UUID over the seed bytes.
      */
     public static HouseholdId deterministicFrom(String seed) {

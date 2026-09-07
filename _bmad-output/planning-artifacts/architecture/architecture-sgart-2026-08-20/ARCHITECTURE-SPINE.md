@@ -89,7 +89,7 @@ graph TD
 
 - **Binds:** every aggregate, event, and read model that references a person.
 - **Prevents:** PII (Keycloak id, email, name) in the immutable log; cross-household correlation of a person.
-- **Rule:** Domain events carry a per-membership **`MemberId`** (opaque, unique within a household) — never `keycloakUserId`, email, or display name. The **Identity ACL is the sole minter** of a `MemberId`: it creates the id when a member first joins (invite acceptance), writes the mapping, and the Household's `MemberJoined` event then carries that same id — no other component generates one. The ACL owns the sole mutable mapping `{householdId, memberId → keycloakUserId}` and resolves `(keycloakUserId, householdId) → memberId` on each request. A person in two households has two unrelated `MemberId`s.
+- **Rule:** Domain events carry a per-membership **`MemberId`** (opaque, unique within a household) — never `keycloakUserId`, email, or display name. The **Identity ACL is the sole issuer** of a `MemberId`: it creates the id when a member first joins (invite acceptance), writes the mapping, and the Household's `MemberJoined` event then carries that same id — no other component generates one. The ACL owns the sole mutable mapping `{householdId, memberId → keycloakUserId}` and resolves `(keycloakUserId, householdId) → memberId` on each request. A person in two households has two unrelated `MemberId`s.
 
 ### AD-6 — No persisted PII; identity display data is read live from Keycloak
 

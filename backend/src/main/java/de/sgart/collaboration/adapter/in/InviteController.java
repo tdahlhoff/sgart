@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Invite management (Story 4.1, AC1/AC4/AC6/AC7): invites are nested under the household they
- * belong to — the aggregate that owns them (AD-10). {@code POST} sends an invite (the client minted
+ * belong to — the aggregate that owns them (AD-10). {@code POST} sends an invite (the client generated
  * the {@code inviteId} and carries it, so the response needs no body — {@code 201});
  * {@code GET} lists the household's pending invites (AC6) — <strong>no email in the response</strong>
  * (AD-6). Caller identity comes only from the JWT {@code sub} via {@link AuthenticatedCaller} —
@@ -65,7 +65,7 @@ class InviteController {
             @RequestBody AcceptInviteRequest request) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
 
-        // The handler mints the joiner's MemberId (AD-5), enforces the invite state machine (404/410/409,
+        // The handler issues the joiner's MemberId (AD-5), enforces the invite state machine (404/410/409,
         // AC3/AC5), and validates the envelope (400). No response body — the client already holds
         // householdId and re-bootstraps to route in (AC1/AC6).
         acceptInviteHandler.handle(caller.keycloakUserId(), householdId, inviteId, request.commandId());
@@ -82,7 +82,7 @@ class InviteController {
     }
 
     /** Transport DTO for {@code POST} — the invite command envelope (AR10). {@code inviteId} is the
-     * client-minted id. */
+     * client-generated id. */
     record InviteRequest(String inviteId, String email, String commandId) {}
 
     /** Transport DTO for {@code POST .../accept} — no email/role (Story 4.2, locked decision 3). */

@@ -9,7 +9,7 @@ import java.util.Objects;
 
 /**
  * A person joined a household with a given {@link HouseholdRole} (AC1). Carries only the
- * Identity-ACL-minted {@link MemberId} — never a {@code keycloakUserId}, display name, or email
+ * Identity-ACL-issued {@link MemberId} — never a {@code keycloakUserId}, display name, or email
  * (AD-5/AD-6). In this story {@code role} is always {@link HouseholdRole#ADMIN} (the household
  * creator); Epic 4's invite-acceptance path reuses this same event with {@link
  * HouseholdRole#PARTICIPANT}.

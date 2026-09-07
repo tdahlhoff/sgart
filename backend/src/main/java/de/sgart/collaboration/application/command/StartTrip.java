@@ -12,7 +12,7 @@ import java.util.Objects;
 /**
  * The caller's intention to start a trip against a list across one or more stores (Story 3.1,
  * AC1). {@code basedOnVersion} is the <em>loaded</em> list's stream version the handler read
- * before appending — an online load-then-append (AD-8). {@code tripId} is client-minted (mirrors
+ * before appending — an online load-then-append (AD-8). {@code tripId} is client-generated (mirrors
  * {@code listId} on {@link CreateShoppingList}) so the response needs no body.
  */
 public record StartTrip(

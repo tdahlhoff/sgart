@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Shopping list management (Story 2.1 AC1/AC2/AC3; Story 2.2 AC1/AC2): lists are nested under the
  * household they belong to (mirroring {@code StoreController}), even though {@code ShoppingList} is
  * a distinct aggregate that references the household by id only (AD-3). {@code POST} creates a list
- * (the client minted the {@code listId} and carries it, so the response needs no body — {@code
+ * (the client generated the {@code listId} and carries it, so the response needs no body — {@code
  * 201}); {@code GET} lists the household's lists, {@code open} (default, the AC2 ordinal source) or
  * {@code done} (the read-only archive) per the {@code ?filter} parameter — an unrecognized value is a
  * fail-fast {@code 400}; {@code PATCH} renames a list ({@code 204}, mirroring the household rename
@@ -99,7 +99,7 @@ class ShoppingListController {
     }
 
     /** Transport DTO for {@code POST} — the create-list command envelope (AR10). {@code listId} is the
-     * client-minted id; {@code name} is the optional list name, {@code null}/blank for an unnamed list. */
+     * client-generated id; {@code name} is the optional list name, {@code null}/blank for an unnamed list. */
     record CreateShoppingListRequest(String listId, String name, String commandId) {}
 
     /** Transport DTO for {@code PATCH} — the rename-list command envelope (AR10). */

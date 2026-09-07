@@ -11,7 +11,7 @@ import java.util.Objects;
 /**
  * The caller's intention to invite a person by email (Story 4.1, AC1). Mirrors {@link AddStore}:
  * {@code basedOnVersion} is the loaded household-stream version (online load-then-append, AD-8);
- * the {@link InviteId} is minted client-side so the {@code POST} response needs no body
+ * the {@link InviteId} is generated client-side so the {@code POST} response needs no body
  * (read-your-writes). Carries {@link EmailHmac}, never the raw email (AD-6) — the handler computes
  * the digest before constructing this command.
  */

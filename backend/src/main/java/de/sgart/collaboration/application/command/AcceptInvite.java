@@ -12,7 +12,7 @@ import java.util.Objects;
  * Mirrors {@link InvitePerson}: {@code basedOnVersion} is the loaded household-stream version
  * (online load-then-append, AD-8). Carries no email or role — the invite is a bearer capability
  * (locked decision 3) and the role is fixed {@code PARTICIPANT} in the domain; the joiner id comes
- * from the JWT via {@code MintMemberIdentity}, never the request body.
+ * from the JWT via {@code IssueMemberIdentity}, never the request body.
  */
 public record AcceptInvite(HouseholdId householdId, InviteId inviteId, CommandId commandId, AggregateVersion basedOnVersion)
         implements Command {

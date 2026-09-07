@@ -7,7 +7,7 @@ CREATE TABLE identity_member_mapping (
     PRIMARY KEY (household_id, member_id)
 );
 
--- One mapping per (household, person) — findMemberId's lookup, and what keeps mint idempotent per
+-- One mapping per (household, person) — findMemberId's lookup, and what keeps issue idempotent per
 -- (keycloakUserId, householdId) (Clarification 5).
 CREATE UNIQUE INDEX idx_identity_member_mapping_household_keycloak
     ON identity_member_mapping (household_id, keycloak_user_id);

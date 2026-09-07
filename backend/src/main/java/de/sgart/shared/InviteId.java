@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Cross-context identifier for a pending household invite (Story 4.1). Mirrors {@link StoreId}:
- * UUID-backed, no domain meaning (AD-5), minted client-side and carried in the invite command
+ * UUID-backed, no domain meaning (AD-5), generated client-side and carried in the invite command
  * envelope so the {@code POST} response needs no body (read-your-writes without waiting on a
  * projection).
  */

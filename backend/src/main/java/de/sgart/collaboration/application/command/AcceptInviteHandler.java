@@ -9,7 +9,7 @@ import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
 import de.sgart.collaboration.domain.exception.InviteExpiredException;
 import de.sgart.collaboration.domain.exception.InviteNotFoundException;
-import de.sgart.identity.application.MintMemberIdentity;
+import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ProvisionedMemberId;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
@@ -32,12 +32,12 @@ import java.util.Objects;
  * identity comes entirely from their own JWT.
  *
  * <p><strong>Provision-then-persist-on-success</strong> (AD-5, DSGVO data-minimization): unlike
- * {@link CreateHouseholdHandler}, which has no post-mint domain-rejection branch, {@code
+ * {@link CreateHouseholdHandler}, which has no post-issue domain-rejection branch, {@code
  * acceptInvite} can still throw ({@code InviteNotFound}/{@code InviteExpired}/{@code
- * InviteAlreadyConsumed}) after the joiner's id is known. Minting eagerly there would durably map a
+ * InviteAlreadyConsumed}) after the joiner's id is known. Issuing eagerly there would durably map a
  * rejected or stranger caller into the household — a household-access leak and a GDPR breach.
- * {@link MintMemberIdentity#provision} only computes the id (existing or a fresh unsaved one); the
- * durable mapping is written by {@link MintMemberIdentity#persist} <em>before</em> {@code append},
+ * {@link IssueMemberIdentity#provision} only computes the id (existing or a fresh unsaved one); the
+ * durable mapping is written by {@link IssueMemberIdentity#persist} <em>before</em> {@code append},
  * and only once the domain call above has not thrown. The lazy-expiry {@code catch} below appends
  * and purges the expiry housekeeping with no persist, so no mapping is ever written for an
  * expired/rejected/stranger caller.
@@ -47,7 +47,7 @@ import java.util.Objects;
  * CreateHouseholdHandler} already relies on). But accept can still lose the {@code append} to a
  * concurrent redemption of the same bearer invite — the retry then rejects the loser (409) while
  * the mapping persisted. So a failing success-path {@code append} triggers a compensating {@link
- * MintMemberIdentity#retract}, guarded by {@link ProvisionedMemberId#freshlyProvisioned()} so an
+ * IssueMemberIdentity#retract}, guarded by {@link ProvisionedMemberId#freshlyProvisioned()} so an
  * existing member's real mapping is never deleted. (The fully atomic answer — a transactional
  * outbox across the JDBC mapping and the KurrentDB stream — is deferred, mirroring 4.1.)
  *
@@ -59,17 +59,17 @@ import java.util.Objects;
 public final class AcceptInviteHandler {
 
     private final EventStore eventStore;
-    private final MintMemberIdentity mintMemberIdentity;
+    private final IssueMemberIdentity issueMemberIdentity;
     private final InviteEmailSideStore inviteEmailSideStore;
     private final Clock clock;
 
     public AcceptInviteHandler(
             EventStore eventStore,
-            MintMemberIdentity mintMemberIdentity,
+            IssueMemberIdentity issueMemberIdentity,
             InviteEmailSideStore inviteEmailSideStore,
             Clock clock) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
-        this.mintMemberIdentity = Objects.requireNonNull(mintMemberIdentity, "mintMemberIdentity must not be null");
+        this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
         this.inviteEmailSideStore =
                 Objects.requireNonNull(inviteEmailSideStore, "inviteEmailSideStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -98,7 +98,7 @@ public final class AcceptInviteHandler {
         // id (AD-5). This only computes the id (existing mapping, or a fresh *unsaved* one) — the
         // durable mapping is written by persist(), below, only once acceptInvite has not thrown.
         // freshlyProvisioned() tells us whether a compensating retract is safe if append later fails.
-        ProvisionedMemberId provisioned = mintMemberIdentity.provision(keycloakUserId, householdId);
+        ProvisionedMemberId provisioned = issueMemberIdentity.provision(keycloakUserId, householdId);
         MemberId joiner = provisioned.memberId();
 
         StreamId streamId = StreamId.forHousehold(householdId);
@@ -135,7 +135,7 @@ public final class AcceptInviteHandler {
 
         // Success path only: persist the joiner's mapping before append, so an id-stable retry
         // stays recoverable if append itself then fails (mirrors CreateHouseholdHandler's ordering).
-        mintMemberIdentity.persist(keycloakUserId, householdId, joiner);
+        issueMemberIdentity.persist(keycloakUserId, householdId, joiner);
 
         try {
             if (!household.uncommittedEvents().isEmpty()) {
@@ -148,7 +148,7 @@ public final class AcceptInviteHandler {
             // (409) — the exact F1 leak. Roll the mapping back, but only when *this* attempt freshly
             // provisioned it: an existing member's real mapping must never be deleted (AD-5).
             if (provisioned.freshlyProvisioned()) {
-                mintMemberIdentity.retract(keycloakUserId, householdId);
+                issueMemberIdentity.retract(keycloakUserId, householdId);
             }
             throw appendFailed;
         }

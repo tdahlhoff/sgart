@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Item management (Story 2.3, AC1–AC8): items are nested under the list they belong to, even
  * though {@code Item} is an entity inside the {@code ShoppingList} aggregate rather than a
  * standalone one (AD-10), mirroring {@code StoreController}. {@code POST} adds an item (the client
- * minted the {@code itemId} and carries it, so the response needs no body — {@code 201}); {@code
+ * generated the {@code itemId} and carries it, so the response needs no body — {@code 201}); {@code
  * GET} lists the list's items in creation order; {@code PATCH} updates an item ({@code 204});
  * {@code DELETE} removes an item ({@code 204}, idempotent — AC4). Caller identity comes only from
  * the JWT {@code sub} via {@link AuthenticatedCaller} — never from the body/path (AR10, AD-5).
@@ -245,7 +245,7 @@ class ItemController {
 
     /**
      * Transport DTO for {@code POST} — the add-item command envelope (AR10). {@code itemId} is the
-     * client-minted id; {@code note} is optional; {@code amount} is a decimal string, {@code unit}
+     * client-generated id; {@code note} is optional; {@code amount} is a decimal string, {@code unit}
      * the enum name.
      */
     record AddItemRequest(String itemId, String name, String note, String amount, String unit, String commandId) {}

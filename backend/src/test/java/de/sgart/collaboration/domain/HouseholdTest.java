@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Pure domain-layer unit test — no framework, persistence, or transport (CLAUDE.md §6). Proves the
  * first real aggregate: creating a household raises {@code HouseholdCreated} then {@code
- * MemberJoined} carrying the caller-minted {@link MemberId}, and replaying that history rebuilds
+ * MemberJoined} carrying the caller-issued {@link MemberId}, and replaying that history rebuilds
  * identical state (AC1, AC3).
  */
 class HouseholdTest {

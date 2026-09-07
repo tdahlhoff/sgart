@@ -44,7 +44,7 @@ import org.springframework.context.SmartLifecycle;
  * separate projector from {@link HouseholdReadModelProjector} — that one's subscription filter is
  * the {@code household-} prefix, so lists need their own subscription over the {@code list-}
  * prefix rather than overloading it. Eventually consistent (AR3/NFR9): the create-list response
- * carries no body (the client minted the {@code listId}), so first paint never waits on this
+ * carries no body (the client generated the {@code listId}), so first paint never waits on this
  * catching up.
  *
  * <p>Runs as a {@link SmartLifecycle} whose auto-start is gated by a flag (default off), mirroring

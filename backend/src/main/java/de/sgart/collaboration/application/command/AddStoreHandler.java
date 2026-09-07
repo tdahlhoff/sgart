@@ -28,7 +28,7 @@ import java.util.Objects;
  * invariant (AC1). The append uses the <em>loaded</em> stream version as the expected version
  * (online load-then-append, AD-8); a concurrent write loses with the store's {@code
  * ConcurrencyConflictException} (→ 409). The command returns {@code void} — a command yields no
- * domain data (CQRS); the client minted the {@link StoreId} and knows the name it sent.
+ * domain data (CQRS); the client generated the {@link StoreId} and knows the name it sent.
  *
  * <p><strong>AC4 reusability:</strong> this handler holds no manage-screen assumption — it is the
  * single store-creation path every later inline picker (Stories 2.6 / 3.1 / 3.2) reuses.

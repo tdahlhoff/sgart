@@ -425,7 +425,7 @@ class DomainEventJsonCodecTest {
 
         String json = new String(codec.toJsonBytes(event), java.nio.charset.StandardCharsets.UTF_8);
 
-        // Privacy round-trip guard (AD-5/AD-6): only the minted memberId, never an email or HMAC.
+        // Privacy round-trip guard (AD-5/AD-6): only the issued memberId, never an email or HMAC.
         assertThat(json).doesNotContain("@");
         assertThat(json).doesNotContainIgnoringCase("email");
         assertThat(json).doesNotContainIgnoringCase("hmac");

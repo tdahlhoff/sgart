@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Trip start (Story 3.1, AC1, AC3, AC7): nested under the list it starts from — the linked-list
  * requirement is structural (a trip is started <em>from</em> a list, AC3). {@code POST} starts a
- * trip across one or more stores (the client minted {@code tripId} and carries it, so the response
+ * trip across one or more stores (the client generated {@code tripId} and carries it, so the response
  * needs no body — {@code 201}). Caller identity comes only from the JWT {@code sub} via {@link
  * AuthenticatedCaller} — never from the body/path (AR10, AD-5).
  *
@@ -122,7 +122,7 @@ class TripController {
 
     /**
      * Transport DTO for {@code POST} — the start-trip command envelope (AR10). {@code tripId} is
-     * the client-minted id; {@code storeIds} are plain {@code String}s so this controller never
+     * the client-generated id; {@code storeIds} are plain {@code String}s so this controller never
      * imports {@code ..domain..} (ArchUnit).
      */
     record StartTripRequest(String tripId, List<String> storeIds, String commandId) {}

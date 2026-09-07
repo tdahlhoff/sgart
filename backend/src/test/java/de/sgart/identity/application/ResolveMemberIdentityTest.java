@@ -31,7 +31,7 @@ class ResolveMemberIdentityTest {
     }
 
     @Test
-    void resolve_rejectsAnUnknownKeycloakUserIdWithNotAMemberInsteadOfMintingANewId() {
+    void resolve_rejectsAnUnknownKeycloakUserIdWithNotAMemberInsteadOfIssuingANewId() {
         ResolveMemberIdentity resolveMemberIdentity =
                 new ResolveMemberIdentity(new InMemoryMemberMappingRepository());
 

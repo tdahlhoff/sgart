@@ -13,7 +13,7 @@ import java.util.Objects;
 /**
  * The caller's intention to add an item to a shopping list (Story 2.3, AC1). {@code basedOnVersion}
  * is the <em>loaded</em> list-stream version the handler read before appending — an online
- * load-then-append (AD-8). The {@link ItemId} is minted <em>client-side</em> and carried here, so
+ * load-then-append (AD-8). The {@link ItemId} is generated <em>client-side</em> and carried here, so
  * the command response needs no body (read-your-writes without waiting on a projection). {@code
  * note} is the optional item note, {@code null} when absent.
  */

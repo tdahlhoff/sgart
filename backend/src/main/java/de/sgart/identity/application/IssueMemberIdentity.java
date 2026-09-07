@@ -8,37 +8,37 @@ import de.sgart.shared.MemberId;
 import java.util.Objects;
 
 /**
- * The Identity ACL's mint (write) port — the <strong>sole</strong> place a {@link MemberId} is
+ * The Identity ACL's issue (write) port — the <strong>sole</strong> place a {@link MemberId} is
  * ever generated (AD-5). A command/write use case, sibling to {@link ResolveMemberIdentity}; the
  * Collaboration create-household flow (Story 1.6) calls this published application-layer port
  * across the context boundary — it never reaches into {@code identity.domain} or its mapping
  * table directly (AD-2). The published signature takes a plain {@code String}, not {@link
  * KeycloakUserId}, so that type stays contained within the Identity context (AD-2).
  */
-public final class MintMemberIdentity {
+public final class IssueMemberIdentity {
 
     private final MemberMappingRepository memberMappingRepository;
 
-    public MintMemberIdentity(MemberMappingRepository memberMappingRepository) {
+    public IssueMemberIdentity(MemberMappingRepository memberMappingRepository) {
         this.memberMappingRepository =
                 Objects.requireNonNull(memberMappingRepository, "memberMappingRepository must not be null");
     }
 
     /**
-     * Mints a fresh {@link MemberId} for {@code (keycloakUserId, householdId)} and durably writes
-     * the mapping row, or — if this exact pair was already minted — replays the existing id
-     * instead of minting a second (idempotent retry, Clarification 5). A person who belongs to two
+     * Issues a fresh {@link MemberId} for {@code (keycloakUserId, householdId)} and durably writes
+     * the mapping row, or — if this exact pair was already issued — replays the existing id
+     * instead of issuing a second (idempotent retry, Clarification 5). A person who belongs to two
      * households always gets two unrelated ids: idempotency is scoped per household, never across
      * households.
      *
      * <p>Equivalent to {@link #provision} followed by {@link #persist} — used by callers (e.g.
-     * {@code CreateHouseholdHandler}) with no post-mint domain-rejection branch, where a committed
+     * {@code CreateHouseholdHandler}) with no post-issue domain-rejection branch, where a committed
      * mapping always maps to real membership. A handler that can still reject <em>after</em>
-     * minting (e.g. {@code AcceptInviteHandler}) must call {@link #provision} and {@link #persist}
+     * issuing (e.g. {@code AcceptInviteHandler}) must call {@link #provision} and {@link #persist}
      * separately, persisting only on its success path, so a rejected caller never gains a durable
      * mapping (AD-5, DSGVO data-minimization).
      */
-    public MemberId mint(String keycloakUserId, HouseholdId householdId) {
+    public MemberId issue(String keycloakUserId, HouseholdId householdId) {
         MemberId memberId = provision(keycloakUserId, householdId).memberId();
         persist(keycloakUserId, householdId, memberId);
         return memberId;

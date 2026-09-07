@@ -65,7 +65,7 @@ class JdbcMemberMappingRepositoryTest {
     }
 
     @Test
-    void twoMintsForTheSameKeycloakUserInTwoHouseholdsYieldTwoUnrelatedMemberIdsBothLocatable() {
+    void twoIssuesForTheSameKeycloakUserInTwoHouseholdsYieldTwoUnrelatedMemberIdsBothLocatable() {
         KeycloakUserId keycloakUserId = new KeycloakUserId("anna-sub");
         HouseholdId firstHousehold = HouseholdId.generate();
         HouseholdId secondHousehold = HouseholdId.generate();

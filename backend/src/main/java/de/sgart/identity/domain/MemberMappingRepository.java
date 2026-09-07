@@ -23,11 +23,11 @@ public interface MemberMappingRepository {
 
     /**
      * @return the mapped {@link MemberId} for a known {@code (keycloakUserId, householdId)} pair,
-     *     or empty when the person is not a member of that household — never a newly minted id.
+     *     or empty when the person is not a member of that household — never a newly issued id.
      */
     Optional<MemberId> findMemberId(KeycloakUserId keycloakUserId, HouseholdId householdId);
 
-    /** Persists a newly minted mapping row. The Identity ACL is the sole caller (AD-5). */
+    /** Persists a newly issued mapping row. The Identity ACL is the sole caller (AD-5). */
     void save(MemberMapping mapping);
 
     /**

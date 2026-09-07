@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Store management (Story 1.8, AC1/AC3): stores are nested under the household they belong to — the
- * aggregate that owns them (AD-10). {@code POST} adds a store (the client minted the {@code storeId}
+ * aggregate that owns them (AD-10). {@code POST} adds a store (the client generated the {@code storeId}
  * and carries it, so the response needs no body — {@code 201}); {@code DELETE} <strong>archives</strong>
  * a store ({@code 204}) — it never row-deletes it, so historical trips/assignments keep their record
  * (AC3), and the honest {@code DELETE}-that-archives is documented here; {@code GET} lists the
@@ -84,7 +84,7 @@ class StoreController {
 
     /**
      * Transport DTO for {@code POST} — the add-store command envelope (AR10). {@code storeId} is the
-     * client-minted id; {@code chainId} is the optional accepted chain (AC2), {@code null} when the
+     * client-generated id; {@code chainId} is the optional accepted chain (AC2), {@code null} when the
      * store is unlinked.
      */
     record AddStoreRequest(String storeId, String name, String chainId, String commandId) {}
