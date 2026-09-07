@@ -1,5 +1,5 @@
 # generated: 2026-08-22
-# last_updated: 2026-08-22
+# last_updated: 2026-09-07
 # project: sgart
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,25 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-06 (Story 4.1 done → committed to main c5b84c0; all 13 patches applied + re-reviewed, 1 AC7 follow-up + 3 findings deferred; backend 713/0, flutter 532/0, analyze clean)
+last_updated: 2026-09-06 (Story 4.2 code-reviewed → in-progress: 1 HIGH access-control + 5 patches as action items)
+# Story 4.2 ready-for-dev (create-story, Opus 4.8) 2026-09-06 — Epic 4's 2nd story: accept an invite
+# & join; SGART's first multi-person household. Full vertical slice building on 4.1's invite entity.
+# Timo decided (2026-09-06): (1) CORE accept slice only — OS deep-link + web fallback + real Keycloak
+# email delivery/Admin email→user lookup all stay in 4.6 (in-app paste-link Accept screen now); (2)
+# invite link = BEARER capability (householdId+inviteId UUID), NOT email-bound (no email touched in
+# accept at all); (3) full vertical slice (backend + Flutter). Backend: new InviteAccepted event (memberId
+# only, AD-5/6) + Household.acceptInvite (NO membership gate — mint-then-append) with 5 branches
+# (pending-in-TTL→InviteAccepted[+MemberJoined PARTICIPANT, skipped if already member=E5 no-op] /
+# past-TTL→raise InviteExpired+throw / already-EXPIRED→throw / unknown→404 / consumed→409); AcceptInvite
+# cmd+handler (MintMemberIdentity idempotent = E5 no-dup-join; purge-on-accept = 1st success-path AD-6
+# purge; append-before-purge; append lazy InviteExpired on the 410 path); 3 app exceptions incl. new
+# 410 GONE in WriteErrorAdvice; codec InviteAccepted + no-PII payload guard; JdbcInviteReadModel.markAccepted
+# (V12 status reused — NO migration) + projector case + isolation/replay test; POST .../invites/{id}/accept
+# (200). NO email/hasher/email-lookup, NO household_member_read_model (→4.3), NO migration. Client: invite-link
+# parser (reused by 4.6 deep link) + InvitesApi.acceptInvite + AcceptInviteCubit + light up await_invite_page
+# (bootstrap→shell on join) + l10n/a11y. Fix-rigor: correct DeferredFindHouseholdMemberByEmail + await_invite_page
+# javadoc (Epic-3 Action 4). 3 non-blocking Qs (inviter-name→4.3; 410-vs-409; entry confirmed). Baseline
+# last-green ≈ backend 713 / Flutter 532 (57ab53e).
 # Story 4.1 ready-for-dev (create-story, Opus 4.8) 2026-09-06 — Epic 4's first story + SGART's FIRST
 # GDPR/PII-touching feature: invite a person by email. Builds on the up-front epic-4 membership state
 # model (retro Action 1). Invite is an ENTITY of the Household aggregate (household-{id} stream,
@@ -211,7 +229,7 @@ development_status:
   # Epic 4: Live Collaboration & Membership
   epic-4: in-progress
   4-1-invite-a-person-by-email: done
-  4-2-accept-an-invite-and-join: backlog
+  4-2-accept-an-invite-and-join: done
   4-3-membership-roles-governance: backlog
   4-4-real-time-live-sync: backlog
   4-5-content-free-notifications: backlog

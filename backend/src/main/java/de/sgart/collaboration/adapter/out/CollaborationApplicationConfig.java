@@ -4,6 +4,7 @@ import de.sgart.collaboration.application.InviteEmailHasher;
 import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
+import de.sgart.collaboration.application.command.AcceptInviteHandler;
 import de.sgart.collaboration.application.command.AddItemHandler;
 import de.sgart.collaboration.application.command.AddStoreHandler;
 import de.sgart.collaboration.application.command.AddStoreToTripHandler;
@@ -231,6 +232,15 @@ public class CollaborationApplicationConfig {
     @Bean
     ListPendingInvites listPendingInvites(ResolveMemberIdentity resolveMemberIdentity, InviteReadModel inviteReadModel) {
         return new ListPendingInvites(resolveMemberIdentity, inviteReadModel);
+    }
+
+    @Bean
+    AcceptInviteHandler acceptInviteHandler(
+            EventStore eventStore,
+            MintMemberIdentity mintMemberIdentity,
+            InviteEmailSideStore inviteEmailSideStore,
+            Clock clock) {
+        return new AcceptInviteHandler(eventStore, mintMemberIdentity, inviteEmailSideStore, clock);
     }
 
     @Bean

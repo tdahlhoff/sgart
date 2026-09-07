@@ -2,6 +2,7 @@ package de.sgart.collaboration.domain;
 
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -9,6 +10,9 @@ import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
+import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
+import de.sgart.collaboration.domain.exception.InviteExpiredException;
+import de.sgart.collaboration.domain.exception.InviteNotFoundException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.shared.CommandId;
@@ -31,8 +35,9 @@ import java.util.Objects;
 /**
  * The first real aggregate (Story 1.6): a household is the top-level tenant every list, store,
  * and trip belongs to (glossary). State changes only through {@link #apply(DomainEvent)}, folding
- * {@link HouseholdCreated}, {@link MemberJoined}, and {@link HouseholdRenamed} — never mutated
- * directly by a command method (the {@link EventSourcedAggregate} contract).
+ * {@link HouseholdCreated}, {@link MemberJoined}, {@link HouseholdRenamed}, {@link MemberInvited},
+ * {@link InviteExpired}, and {@link InviteAccepted} — never mutated directly by a command method
+ * (the {@link EventSourcedAggregate} contract).
  */
 public final class Household extends EventSourcedAggregate {
 
@@ -199,6 +204,64 @@ public final class Household extends EventSourcedAggregate {
                 EventId.generate(), householdId, inviteId, emailHmac, requestedBy, HouseholdRole.PARTICIPANT, now));
     }
 
+    /**
+     * Redeems a personal invite (Story 4.2, AC1, AC3, AC4, AC5) — the one command with
+     * <strong>no membership gate</strong>: accept is precisely how a non-member becomes one, unlike
+     * {@link #invitePerson}'s {@code requireMember}. {@code joiner} is the Identity-ACL-minted
+     * {@link MemberId} for the accepting caller (AD-5); {@code now} is caller-injected, never {@code
+     * Instant.now()} here, so expiry stays deterministic and testable.
+     *
+     * <p>Branches on the folded invite state for {@code inviteId}:
+     * <ol>
+     *   <li>absent → {@link InviteNotFoundException} (no event);</li>
+     *   <li>{@code PENDING} and not expired at {@code now} → raises {@link InviteAccepted}, and —
+     *       unless {@code joiner} is already a member (AC4, E5) — also raises {@link MemberJoined}
+     *       as {@link HouseholdRole#PARTICIPANT};</li>
+     *   <li>{@code PENDING} and expired at {@code now} → raises the lazy {@link InviteExpired}
+     *       transition, then throws {@link InviteExpiredException} (AC3);</li>
+     *   <li>{@code EXPIRED} → throws {@link InviteExpiredException} (no new event);</li>
+     *   <li>{@code ACCEPTED} → a no-op success (raises nothing) if {@code joiner} is already a
+     *       member (the convergent re-accept, AD-8/§3.5), otherwise throws {@link
+     *       InviteAlreadyConsumedException} (AC5) — a spent link cannot be ridden by a stranger.</li>
+     * </ol>
+     *
+     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
+     */
+    public void acceptInvite(InviteId inviteId, MemberId joiner, Instant now, CommandId commandId) {
+        Objects.requireNonNull(inviteId, "inviteId must not be null");
+        Objects.requireNonNull(joiner, "joiner must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        Objects.requireNonNull(commandId, "commandId must not be null");
+
+        InviteState invite = pendingInvitesById.get(inviteId);
+        if (invite == null) {
+            throw new InviteNotFoundException("No invite " + inviteId + " exists in this household");
+        }
+
+        switch (invite.status()) {
+            case PENDING -> {
+                if (invite.isExpiredAt(now)) {
+                    raise(new InviteExpired(EventId.generate(), householdId, inviteId));
+                    throw new InviteExpiredException("Invite " + inviteId + " has expired");
+                }
+                raise(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
+                if (!rolesByMember.containsKey(joiner)) {
+                    raise(new MemberJoined(EventId.generate(), householdId, joiner, HouseholdRole.PARTICIPANT));
+                }
+            }
+            case EXPIRED -> throw new InviteExpiredException("Invite " + inviteId + " has expired");
+            case ACCEPTED -> {
+                if (!rolesByMember.containsKey(joiner)) {
+                    throw new InviteAlreadyConsumedException(
+                            "Invite " + inviteId + " was already accepted by someone else");
+                }
+                // convergent no-op — the same joiner re-accepting an already-consumed invite (AD-8)
+            }
+            default ->
+                throw new IllegalStateException("Unhandled invite status " + invite.status());
+        }
+    }
+
     private void requireMember(MemberId requestedBy) {
         if (!rolesByMember.containsKey(requestedBy)) {
             throw new NotAHouseholdMemberException(
@@ -245,6 +308,12 @@ public final class Household extends EventSourcedAggregate {
                     pendingInvitesById.put(expired.inviteId(), existing.withStatus(InviteStatus.EXPIRED));
                 }
             }
+            case InviteAccepted accepted -> {
+                InviteState existing = pendingInvitesById.get(accepted.inviteId());
+                if (existing != null) {
+                    pendingInvitesById.put(accepted.inviteId(), existing.withStatus(InviteStatus.ACCEPTED));
+                }
+            }
             default -> throw new IllegalArgumentException(
                     "Household cannot apply unknown event type: " + event.getClass());
         }
@@ -262,10 +331,12 @@ public final class Household extends EventSourcedAggregate {
         }
     }
 
-    /** Status a folded invite carries — kept foldable/out of the active-blocker set once expired. */
+    /** Status a folded invite carries — kept foldable/out of the active-blocker set once expired or
+     * accepted (Story 4.2). */
     private enum InviteStatus {
         PENDING,
-        EXPIRED
+        EXPIRED,
+        ACCEPTED
     }
 
     /**

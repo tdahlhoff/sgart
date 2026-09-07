@@ -3,6 +3,7 @@ package de.sgart.collaboration.adapter.out;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -96,6 +97,7 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
             case MemberInvited invited -> inviteReadModel.upsertInvite(
                     invited.householdId(), invited.inviteId(), invited.invitedBy(), invited.invitedAt());
             case InviteExpired expired -> inviteReadModel.markExpired(expired.householdId(), expired.inviteId());
+            case InviteAccepted accepted -> inviteReadModel.markAccepted(accepted.householdId(), accepted.inviteId());
             default -> {
                 // The subscription filter (see start()) only ever delivers household-stream events.
             }

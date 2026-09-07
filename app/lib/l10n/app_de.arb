@@ -88,17 +88,47 @@
 
   "householdsAwaitInviteChoiceButtonLabel": "Auf Einladung warten",
   "@householdsAwaitInviteChoiceButtonLabel": {
-    "description": "Label of the button that leads to the informational await-invite dead-end (invite acceptance is Epic 4)."
+    "description": "Label of the button that leads to the accept-invite screen."
   },
 
-  "householdsAwaitInviteHeading": "Auf Einladung warten",
+  "householdsAwaitInviteHeading": "Einladung annehmen",
   "@householdsAwaitInviteHeading": {
-    "description": "Heading of the informational await-invite screen."
+    "description": "Heading of the accept-invite screen (Story 4.2)."
   },
 
-  "householdsAwaitInviteBody": "Sobald dich jemand zu seinem Haushalt einlädt, kannst du die Einladung annehmen. Diese Funktion folgt in einem späteren Update.",
+  "householdsAwaitInviteBody": "Füge den Einladungslink oder -code ein, um dem Haushalt beizutreten.",
   "@householdsAwaitInviteBody": {
-    "description": "Body copy of the informational await-invite screen — no invite flow ships in this story (Epic 4)."
+    "description": "Body copy of the accept-invite screen (Story 4.2)."
+  },
+
+  "householdsAwaitInviteLinkFieldLabel": "Einladungslink oder -code",
+  "@householdsAwaitInviteLinkFieldLabel": {
+    "description": "Label of the field where the invitee pastes their invite link or code (Story 4.2)."
+  },
+
+  "householdsAwaitInviteJoinButtonLabel": "Beitreten",
+  "@householdsAwaitInviteJoinButtonLabel": {
+    "description": "Label of the button that redeems the pasted invite and joins the household (Story 4.2)."
+  },
+
+  "householdsAwaitInviteInvalidLinkError": "Dieser Einladungslink oder -code ist ungültig.",
+  "@householdsAwaitInviteInvalidLinkError": {
+    "description": "Inline error shown when the pasted invite link/code cannot be parsed (Story 4.2, client-side fail-fast)."
+  },
+
+  "householdsAwaitInviteExpiredError": "Diese Einladung ist abgelaufen.",
+  "@householdsAwaitInviteExpiredError": {
+    "description": "Inline error shown when the invite is past its time-to-live (Story 4.2, AC3)."
+  },
+
+  "householdsAwaitInviteNotFoundError": "Diese Einladung wurde nicht gefunden.",
+  "@householdsAwaitInviteNotFoundError": {
+    "description": "Inline error shown when the invite does not exist (Story 4.2, AC5)."
+  },
+
+  "householdsAwaitInviteAlreadyUsedError": "Diese Einladung wurde bereits verwendet.",
+  "@householdsAwaitInviteAlreadyUsedError": {
+    "description": "Inline error shown when the invite was already consumed by someone else (Story 4.2, AC5)."
   },
 
   "householdsBackButtonLabel": "Zurück",

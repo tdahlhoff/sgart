@@ -14,6 +14,9 @@ import de.sgart.collaboration.application.exception.InvalidMoveTargetException;
 import de.sgart.collaboration.application.exception.InvalidShoppingListNameException;
 import de.sgart.collaboration.application.exception.InvalidStoreNameException;
 import de.sgart.collaboration.application.exception.InvalidTripStoreSelectionException;
+import de.sgart.collaboration.application.exception.InviteAlreadyConsumedApplicationException;
+import de.sgart.collaboration.application.exception.InviteExpiredApplicationException;
+import de.sgart.collaboration.application.exception.InviteNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemChangeNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotFoundApplicationException;
 import de.sgart.collaboration.application.exception.ItemNotDuringTripApplicationException;
@@ -76,6 +79,21 @@ class WriteErrorAdvice {
     @ExceptionHandler(InvalidInviteEmailApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleInvalidInviteEmail(InvalidInviteEmailApplicationException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InviteNotFoundApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleInviteNotFound(InviteNotFoundApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InviteExpiredApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleInviteExpired(InviteExpiredApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.GONE).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(InviteAlreadyConsumedApplicationException.class)
+    ResponseEntity<ErrorDescriptor> handleInviteAlreadyConsumed(InviteAlreadyConsumedApplicationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(ConcurrencyConflictException.class)

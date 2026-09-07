@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.NormalizedEmail;
+import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
@@ -232,6 +233,104 @@ class InviteControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(inviteRequestBody("eva@example.com", InviteId.generate().toString())))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void accept_returns200ForAValidInvite() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        household.invitePerson(
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
+                inviteId,
+                new EmailHmac("hmac-1"),
+                Instant.now(),
+                CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void accept_returns404ForAnUnknownInvite() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), InviteId.generate().toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("invite.notFound"))
+                .andExpect(jsonPath("$.email").doesNotExist());
+    }
+
+    @Test
+    void accept_returns410ForAnExpiredInvite() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        Instant longAgo = Instant.now().minus(java.time.Duration.ofDays(8));
+        household.invitePerson(
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
+                inviteId,
+                new EmailHmac("hmac-1"),
+                longAgo,
+                CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("invite.expired"));
+    }
+
+    @Test
+    void accept_returns409ForAConsumedInviteAcceptedByAnotherCaller() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        household.invitePerson(
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
+                inviteId,
+                new EmailHmac("hmac-1"),
+                Instant.now(),
+                CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("first-joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("second-joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("invite.alreadyUsed"));
+    }
+
+    private static String acceptRequestBody() {
+        return """
+                {"commandId":"%s"}
+                """.formatted(UUID.randomUUID());
     }
 
     @Test

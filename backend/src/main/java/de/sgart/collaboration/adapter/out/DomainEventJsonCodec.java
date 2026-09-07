@@ -10,6 +10,7 @@ import de.sgart.collaboration.domain.ShoppingListName;
 import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
@@ -85,6 +86,7 @@ final class DomainEventJsonCodec {
     static final String TRIP_COMPLETED_TYPE = "TripCompleted";
     static final String MEMBER_INVITED_TYPE = "MemberInvited";
     static final String INVITE_EXPIRED_TYPE = "InviteExpired";
+    static final String INVITE_ACCEPTED_TYPE = "InviteAccepted";
 
     private final JsonMapper jsonMapper = new JsonMapper();
 
@@ -115,6 +117,7 @@ final class DomainEventJsonCodec {
             case TripCompleted ignored -> TRIP_COMPLETED_TYPE;
             case MemberInvited ignored -> MEMBER_INVITED_TYPE;
             case InviteExpired ignored -> INVITE_EXPIRED_TYPE;
+            case InviteAccepted ignored -> INVITE_ACCEPTED_TYPE;
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -260,6 +263,11 @@ final class DomainEventJsonCodec {
                     expired.eventId().value().toString(),
                     expired.householdId().value().toString(),
                     expired.inviteId().value().toString()));
+            case InviteAccepted accepted -> jsonMapper.writeValueAsBytes(new InviteAcceptedPayload(
+                    accepted.eventId().value().toString(),
+                    accepted.householdId().value().toString(),
+                    accepted.inviteId().value().toString(),
+                    accepted.memberId().value().toString()));
             default -> throw new IllegalArgumentException("No JSON mapping for event type: " + event.getClass());
         };
     }
@@ -477,6 +485,14 @@ final class DomainEventJsonCodec {
                         HouseholdId.fromString(payload.householdId()),
                         InviteId.fromString(payload.inviteId()));
             }
+            case INVITE_ACCEPTED_TYPE -> {
+                InviteAcceptedPayload payload = jsonMapper.readValue(json, InviteAcceptedPayload.class);
+                yield new InviteAccepted(
+                        EventId.fromString(payload.eventId()),
+                        HouseholdId.fromString(payload.householdId()),
+                        InviteId.fromString(payload.inviteId()),
+                        MemberId.fromString(payload.memberId()));
+            }
             default -> throw new IllegalArgumentException("Unknown event type tag: " + typeTag);
         };
     }
@@ -563,4 +579,7 @@ final class DomainEventJsonCodec {
             String invitedAt) {}
 
     private record InviteExpiredPayload(String eventId, String householdId, String inviteId) {}
+
+    /** Carries only {@code memberId} — no email/HMAC (AD-5/AD-6). */
+    private record InviteAcceptedPayload(String eventId, String householdId, String inviteId, String memberId) {}
 }

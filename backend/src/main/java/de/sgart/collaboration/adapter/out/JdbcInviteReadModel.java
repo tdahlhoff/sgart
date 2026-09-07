@@ -77,4 +77,18 @@ public final class JdbcInviteReadModel implements InviteReadModel {
                 .param("inviteId", inviteId.value())
                 .update();
     }
+
+    /** Idempotent flag flip — re-projecting the same {@code InviteAccepted} is a safe no-op (Story
+     * 4.2, AC2). Drops the invite out of {@link #pendingInvitesOf} without a schema change; V12's
+     * {@code status VARCHAR(20)} already accommodates {@code ACCEPTED}. */
+    void markAccepted(HouseholdId householdId, InviteId inviteId) {
+        jdbcClient
+                .sql("""
+                        UPDATE invite_read_model SET status = 'ACCEPTED'
+                        WHERE household_id = :householdId AND invite_id = :inviteId
+                        """)
+                .param("householdId", householdId.value())
+                .param("inviteId", inviteId.value())
+                .update();
+    }
 }

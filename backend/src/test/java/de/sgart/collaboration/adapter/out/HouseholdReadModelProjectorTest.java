@@ -11,6 +11,7 @@ import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -244,6 +245,78 @@ class HouseholdReadModelProjectorTest {
                 HouseholdRole.PARTICIPANT, invitedAt));
 
         clock.advanceBy(de.sgart.collaboration.domain.Invite.TIME_TO_LIVE.plusSeconds(1));
+
+        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
+    }
+
+    @Test
+    void projectingInviteAcceptedFlipsTheInviteToAcceptedSoItDropsFromThePendingList() {
+        HouseholdId householdId = HouseholdId.generate();
+        InviteId inviteId = InviteId.generate();
+        MemberId joiner = MemberId.generate();
+        projector.project(new MemberInvited(
+                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
+
+        projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
+
+        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
+    }
+
+    @Test
+    void projectingMemberJoinedFromAnAcceptedInviteAddsTheJoinerAsAHouseholdMember() {
+        HouseholdId householdId = HouseholdId.generate();
+        InviteId inviteId = InviteId.generate();
+        MemberId joiner = MemberId.generate();
+        projector.project(new MemberInvited(
+                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
+
+        projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
+        projector.project(new MemberJoined(EventId.generate(), householdId, joiner, HouseholdRole.PARTICIPANT));
+
+        Long membershipRowCount = JdbcClient.create(dataSource)
+                .sql("SELECT COUNT(*) FROM household_membership_read_model WHERE household_id = :householdId AND member_id = :memberId")
+                .param("householdId", householdId.value())
+                .param("memberId", joiner.value())
+                .query(Long.class)
+                .single();
+        assertThat(membershipRowCount).isEqualTo(1L);
+    }
+
+    @Test
+    void twoHouseholdsInviteAcceptedIsolatedFromEachOther() {
+        HouseholdId firstHousehold = HouseholdId.generate();
+        HouseholdId secondHousehold = HouseholdId.generate();
+        InviteId firstInvite = InviteId.generate();
+        InviteId secondInvite = InviteId.generate();
+        projector.project(new MemberInvited(
+                EventId.generate(), firstHousehold, firstInvite, new EmailHmac("hmac-1"), MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
+        projector.project(new MemberInvited(
+                EventId.generate(), secondHousehold, secondInvite, new EmailHmac("hmac-2"), MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
+
+        projector.project(new InviteAccepted(EventId.generate(), firstHousehold, firstInvite, MemberId.generate()));
+
+        assertThat(inviteReadModel.pendingInvitesOf(firstHousehold)).isEmpty();
+        assertThat(inviteReadModel.pendingInvitesOf(secondHousehold))
+                .extracting(InviteView::inviteId)
+                .containsExactly(secondInvite);
+    }
+
+    @Test
+    void reProjectingInviteAcceptedIsIdempotent() {
+        HouseholdId householdId = HouseholdId.generate();
+        InviteId inviteId = InviteId.generate();
+        MemberId joiner = MemberId.generate();
+        projector.project(new MemberInvited(
+                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
+        InviteAccepted accepted = new InviteAccepted(EventId.generate(), householdId, inviteId, joiner);
+
+        projector.project(accepted);
+        projector.project(accepted);
 
         assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
     }

@@ -48,6 +48,11 @@ public final class InMemoryMemberMappingRepository implements MemberMappingRepos
     }
 
     @Override
+    public void deleteMapping(KeycloakUserId keycloakUserId, HouseholdId householdId) {
+        mappingsByHouseholdAndKeycloakUser.remove(new HouseholdKeycloakKey(householdId, keycloakUserId));
+    }
+
+    @Override
     public List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId) {
         return mappingsByHouseholdAndKeycloakUser.keySet().stream()
                 .filter(key -> key.keycloakUserId().equals(keycloakUserId))

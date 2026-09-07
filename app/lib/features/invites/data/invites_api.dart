@@ -16,6 +16,11 @@ abstract interface class InvitesApi {
 
   /// Lists the household's pending (non-expired) invites (AC6). No email in the response (AD-6).
   Future<List<PendingInvite>> listPendingInvites(String householdId);
+
+  /// Redeems the invite [inviteId] and joins [householdId] (Story 4.2, AC1). [commandId] is the
+  /// caller-minted idempotency key, reused across retries of the same attempt (AD-8). No response
+  /// body — the caller already holds [householdId] and re-bootstraps to route in (AC1/AC6).
+  Future<void> acceptInvite(String householdId, {required String inviteId, required String commandId});
 }
 
 class HttpInvitesApi implements InvitesApi {
@@ -43,5 +48,12 @@ class HttpInvitesApi implements InvitesApi {
   Future<List<PendingInvite>> listPendingInvites(String householdId) async {
     final json = await _client.getJsonList('/api/v1/households/$householdId/invites');
     return json.map((entry) => PendingInvite.fromJson(entry as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> acceptInvite(String householdId, {required String inviteId, required String commandId}) async {
+    await _client.postJson('/api/v1/households/$householdId/invites/$inviteId/accept', {
+      'commandId': commandId,
+    });
   }
 }

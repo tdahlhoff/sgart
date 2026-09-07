@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -12,6 +13,9 @@ import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
+import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
+import de.sgart.collaboration.domain.exception.InviteExpiredException;
+import de.sgart.collaboration.domain.exception.InviteNotFoundException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
 import de.sgart.collaboration.domain.exception.RenameNotPermittedException;
 import de.sgart.shared.AggregateVersion;
@@ -288,6 +292,7 @@ class HouseholdTest {
         assertNoPersonalDataComponent(StoreAdded.class);
         assertNoPersonalDataComponent(StoreArchived.class);
         assertNoPersonalDataComponent(InviteExpired.class);
+        assertNoPersonalDataComponent(InviteAccepted.class);
     }
 
     @Test
@@ -392,6 +397,125 @@ class HouseholdTest {
 
         assertThat(household.uncommittedEvents()).hasSize(1);
         assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
+    }
+
+    @Test
+    void acceptInvite_onAPendingInTtlInvite_raisesInviteAcceptedAndMemberJoinedAsParticipant() {
+        Household household = createdHousehold();
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+        MemberId joiner = MemberId.generate();
+
+        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(60), CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(2);
+        InviteAccepted accepted = (InviteAccepted) household.uncommittedEvents().get(0);
+        assertThat(accepted.inviteId()).isEqualTo(inviteId);
+        assertThat(accepted.memberId()).isEqualTo(joiner);
+        MemberJoined joined = (MemberJoined) household.uncommittedEvents().get(1);
+        assertThat(joined.memberId()).isEqualTo(joiner);
+        assertThat(joined.role()).isEqualTo(HouseholdRole.PARTICIPANT);
+    }
+
+    @Test
+    void acceptInvite_bySomeoneAlreadyAMember_raisesInviteAcceptedButNoSecondMemberJoined() {
+        MemberId existingMember = MemberId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId),
+                List.of(
+                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
+                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
+                        new MemberJoined(EventId.generate(), householdId, existingMember, HouseholdRole.PARTICIPANT)));
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+
+        household.acceptInvite(inviteId, existingMember, invitedAt.plusSeconds(60), CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(1);
+        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteAccepted.class);
+    }
+
+    @Test
+    void acceptInvite_onAPastTtlPendingInvite_raisesInviteExpiredThenThrowsInviteExpired() {
+        Household household = createdHousehold();
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+        Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
+
+        assertThatThrownBy(() -> household.acceptInvite(
+                        inviteId, MemberId.generate(), pastTtl, CommandId.generate()))
+                .isInstanceOf(InviteExpiredException.class);
+
+        assertThat(household.uncommittedEvents()).hasSize(1);
+        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteExpired.class);
+        assertThat(((InviteExpired) household.uncommittedEvents().get(0)).inviteId()).isEqualTo(inviteId);
+    }
+
+    @Test
+    void acceptInvite_onAnAlreadyExpiredInvite_throwsInviteExpiredWithoutANewEvent() {
+        Household household = createdHousehold();
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+        Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
+        assertThatThrownBy(() -> household.acceptInvite(inviteId, MemberId.generate(), pastTtl, CommandId.generate()))
+                .isInstanceOf(InviteExpiredException.class);
+        household.markEventsCommitted();
+
+        assertThatThrownBy(() -> household.acceptInvite(
+                        inviteId, MemberId.generate(), pastTtl.plusSeconds(60), CommandId.generate()))
+                .isInstanceOf(InviteExpiredException.class);
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void acceptInvite_onAnUnknownInvite_throwsInviteNotFound() {
+        Household household = createdHousehold();
+        household.markEventsCommitted();
+
+        assertThatThrownBy(() -> household.acceptInvite(
+                        InviteId.generate(), MemberId.generate(), Instant.now(), CommandId.generate()))
+                .isInstanceOf(InviteNotFoundException.class);
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void acceptInvite_reAcceptedByTheSameJoiner_isAConvergentNoOp() {
+        Household household = createdHousehold();
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+        MemberId joiner = MemberId.generate();
+        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(60), CommandId.generate());
+        household.markEventsCommitted();
+
+        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(120), CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void acceptInvite_onAConsumedInviteByANonMember_throwsInviteAlreadyConsumed() {
+        Household household = createdHousehold();
+        InviteId inviteId = InviteId.generate();
+        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
+        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.markEventsCommitted();
+        household.acceptInvite(inviteId, MemberId.generate(), invitedAt.plusSeconds(60), CommandId.generate());
+        household.markEventsCommitted();
+
+        assertThatThrownBy(() -> household.acceptInvite(
+                        inviteId, MemberId.generate(), invitedAt.plusSeconds(120), CommandId.generate()))
+                .isInstanceOf(InviteAlreadyConsumedException.class);
+        assertThat(household.uncommittedEvents()).isEmpty();
     }
 
     private Household createdHousehold() {

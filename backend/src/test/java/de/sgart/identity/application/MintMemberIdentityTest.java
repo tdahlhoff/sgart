@@ -57,4 +57,77 @@ class MintMemberIdentityTest {
         assertThat(repository.householdIdsFor(KEYCLOAK_USER_ID))
                 .containsExactlyInAnyOrder(firstHousehold, secondHousehold);
     }
+
+    @Test
+    void provision_returnsAFreshUnsavedMemberIdMarkedFreshlyProvisionedAndWritesNoMapping() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+
+        ProvisionedMemberId provisioned = mintMemberIdentity.provision(RAW_KEYCLOAK_USER_ID, householdId);
+
+        assertThat(provisioned.freshlyProvisioned()).isTrue();
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).isEmpty();
+    }
+
+    @Test
+    void provision_replaysTheExistingMemberIdMarkedNotFreshlyProvisionedWhenAlreadyPersisted() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId persisted = mintMemberIdentity.mint(RAW_KEYCLOAK_USER_ID, householdId);
+
+        ProvisionedMemberId provisioned = mintMemberIdentity.provision(RAW_KEYCLOAK_USER_ID, householdId);
+
+        assertThat(provisioned.memberId()).isEqualTo(persisted);
+        assertThat(provisioned.freshlyProvisioned()).isFalse();
+    }
+
+    @Test
+    void persist_makesAProvisionedMemberIdResolvableAfterwards() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId provisioned = mintMemberIdentity.provision(RAW_KEYCLOAK_USER_ID, householdId).memberId();
+
+        mintMemberIdentity.persist(RAW_KEYCLOAK_USER_ID, householdId, provisioned);
+
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).contains(provisioned);
+    }
+
+    @Test
+    void persist_isIdempotentForAnIdStableRetry() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId provisioned = mintMemberIdentity.provision(RAW_KEYCLOAK_USER_ID, householdId).memberId();
+
+        mintMemberIdentity.persist(RAW_KEYCLOAK_USER_ID, householdId, provisioned);
+        mintMemberIdentity.persist(RAW_KEYCLOAK_USER_ID, householdId, provisioned);
+
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).contains(provisioned);
+    }
+
+    @Test
+    void retract_removesAPersistedMappingSoTheCallerIsNoLongerAMember() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+        mintMemberIdentity.mint(RAW_KEYCLOAK_USER_ID, householdId);
+
+        mintMemberIdentity.retract(RAW_KEYCLOAK_USER_ID, householdId);
+
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).isEmpty();
+    }
+
+    @Test
+    void retract_isANoOpWhenNoMappingExists() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        MintMemberIdentity mintMemberIdentity = new MintMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+
+        mintMemberIdentity.retract(RAW_KEYCLOAK_USER_ID, householdId);
+
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).isEmpty();
+    }
 }

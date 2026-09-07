@@ -7,6 +7,7 @@ import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
 import de.sgart.collaboration.domain.HouseholdRole;
+import de.sgart.collaboration.domain.event.InviteAccepted;
 import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.ItemName;
 import de.sgart.collaboration.domain.ItemNote;
@@ -406,6 +407,29 @@ class DomainEventJsonCodecTest {
 
         assertThat(codec.typeTagFor(event)).isEqualTo("InviteExpired");
         assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void inviteAcceptedRoundTripsThroughJsonUnderItsStableTypeTag() {
+        InviteAccepted event =
+                new InviteAccepted(EventId.generate(), householdId, InviteId.generate(), MemberId.generate());
+
+        assertThat(codec.typeTagFor(event)).isEqualTo("InviteAccepted");
+        assertThat(roundTrip(event)).isEqualTo(event);
+    }
+
+    @Test
+    void inviteAcceptedJsonPayloadCarriesNoEmailOrHmacComponent() {
+        InviteAccepted event =
+                new InviteAccepted(EventId.generate(), householdId, InviteId.generate(), MemberId.generate());
+
+        String json = new String(codec.toJsonBytes(event), java.nio.charset.StandardCharsets.UTF_8);
+
+        // Privacy round-trip guard (AD-5/AD-6): only the minted memberId, never an email or HMAC.
+        assertThat(json).doesNotContain("@");
+        assertThat(json).doesNotContainIgnoringCase("email");
+        assertThat(json).doesNotContainIgnoringCase("hmac");
+        assertThat(json).contains("memberId");
     }
 
     private DomainEvent roundTrip(DomainEvent event) {

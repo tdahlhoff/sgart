@@ -30,6 +30,13 @@ public interface MemberMappingRepository {
     /** Persists a newly minted mapping row. The Identity ACL is the sole caller (AD-5). */
     void save(MemberMapping mapping);
 
+    /**
+     * Removes the mapping row for {@code (keycloakUserId, householdId)} if present; a no-op when
+     * none exists (idempotent). The Identity ACL is the sole caller (AD-5) — it compensates a
+     * mapping written for a caller who then failed to complete their join.
+     */
+    void deleteMapping(KeycloakUserId keycloakUserId, HouseholdId householdId);
+
     /** @return every household the given person is a member of, in no particular order. */
     List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId);
 }

@@ -98,6 +98,36 @@ void main() {
       expect(result.first.status, 'PENDING');
     });
 
+    test('acceptInvite_postsTheCorrectPathAndBodyShape', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter((options) async => _jsonResponse(const {}, 200));
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpInvitesApi(client);
+
+      await api.acceptInvite('household-1', inviteId: 'invite-1', commandId: 'command-1');
+
+      final request = adapter.lastRequest!;
+      expect(request.path, '/api/v1/households/household-1/invites/invite-1/accept');
+      expect(request.method, 'POST');
+      final body = request.data as Map<String, dynamic>;
+      expect(body['commandId'], 'command-1');
+    });
+
+    test('acceptInvite_mapsAServerErrorToAnAppException', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'invite.expired', 'message': 'debug only'}, 410),
+      );
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpInvitesApi(client);
+
+      await expectLater(
+        api.acceptInvite('household-1', inviteId: 'invite-1', commandId: 'command-1'),
+        throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'invite.expired')),
+      );
+    });
+
     test('listPendingInvites_mapsAServerErrorToAnAppException', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
       dio.httpClientAdapter = _FakeHttpClientAdapter(

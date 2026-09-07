@@ -6,12 +6,18 @@ class FakeInvitesApi implements InvitesApi {
   List<PendingInvite> pendingInvitesToReturn = const [];
   Object? listPendingInvitesError;
   Object? sendInviteError;
+  Object? acceptInviteError;
 
   String? lastSentEmail;
   String? lastSentInviteId;
   final List<String> sendCommandIds = [];
   final List<String> sendInviteIds = [];
   int sendCallCount = 0;
+
+  String? lastAcceptedHouseholdId;
+  String? lastAcceptedInviteId;
+  final List<String> acceptCommandIds = [];
+  int acceptCallCount = 0;
 
   @override
   Future<List<PendingInvite>> listPendingInvites(String householdId) async {
@@ -32,5 +38,14 @@ class FakeInvitesApi implements InvitesApi {
     sendInviteIds.add(inviteId);
     sendCallCount++;
     if (sendInviteError != null) throw sendInviteError!;
+  }
+
+  @override
+  Future<void> acceptInvite(String householdId, {required String inviteId, required String commandId}) async {
+    lastAcceptedHouseholdId = householdId;
+    lastAcceptedInviteId = inviteId;
+    acceptCommandIds.add(commandId);
+    acceptCallCount++;
+    if (acceptInviteError != null) throw acceptInviteError!;
   }
 }

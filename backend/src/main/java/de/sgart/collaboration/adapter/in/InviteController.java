@@ -1,5 +1,6 @@
 package de.sgart.collaboration.adapter.in;
 
+import de.sgart.collaboration.application.command.AcceptInviteHandler;
 import de.sgart.collaboration.application.command.InvitePersonHandler;
 import de.sgart.collaboration.application.query.ListPendingInvites;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
@@ -28,10 +29,15 @@ import org.springframework.web.bind.annotation.RestController;
 class InviteController {
 
     private final InvitePersonHandler invitePersonHandler;
+    private final AcceptInviteHandler acceptInviteHandler;
     private final ListPendingInvites listPendingInvites;
 
-    InviteController(InvitePersonHandler invitePersonHandler, ListPendingInvites listPendingInvites) {
+    InviteController(
+            InvitePersonHandler invitePersonHandler,
+            AcceptInviteHandler acceptInviteHandler,
+            ListPendingInvites listPendingInvites) {
         this.invitePersonHandler = invitePersonHandler;
+        this.acceptInviteHandler = acceptInviteHandler;
         this.listPendingInvites = listPendingInvites;
     }
 
@@ -50,6 +56,21 @@ class InviteController {
                 caller.keycloakUserId(), householdId, request.inviteId(), request.email(), request.commandId());
     }
 
+    @PostMapping("/{inviteId}/accept")
+    @ResponseStatus(HttpStatus.OK)
+    void accept(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String householdId,
+            @PathVariable String inviteId,
+            @RequestBody AcceptInviteRequest request) {
+        AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
+
+        // The handler mints the joiner's MemberId (AD-5), enforces the invite state machine (404/410/409,
+        // AC3/AC5), and validates the envelope (400). No response body — the client already holds
+        // householdId and re-bootstraps to route in (AC1/AC6).
+        acceptInviteHandler.handle(caller.keycloakUserId(), householdId, inviteId, request.commandId());
+    }
+
     @GetMapping
     List<PendingInviteResponse> list(@AuthenticationPrincipal Jwt jwt, @PathVariable String householdId) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
@@ -63,6 +84,9 @@ class InviteController {
     /** Transport DTO for {@code POST} — the invite command envelope (AR10). {@code inviteId} is the
      * client-minted id. */
     record InviteRequest(String inviteId, String email, String commandId) {}
+
+    /** Transport DTO for {@code POST .../accept} — no email/role (Story 4.2, locked decision 3). */
+    record AcceptInviteRequest(String commandId) {}
 
     /** No email field — the invite read model carries none (AD-6, privacy-first, AC7). */
     record PendingInviteResponse(String inviteId, String invitedAt, String invitedBy, String status) {}

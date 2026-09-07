@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/create_or_await_choice_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
+import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -17,6 +19,7 @@ void main() {
     late HouseholdsCubit householdsCubit;
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
+    late FakeInvitesApi invitesApi;
 
     setUp(() {
       householdsApi = FakeHouseholdsApi();
@@ -24,6 +27,7 @@ void main() {
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
+      invitesApi = FakeInvitesApi();
     });
 
     tearDown(() => householdsCubit.close());
@@ -38,6 +42,7 @@ void main() {
               RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+              RepositoryProvider<InvitesApi>.value(value: invitesApi),
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,
@@ -62,6 +67,18 @@ void main() {
       // The wizard's name step built without a ProviderNotFoundException — it reached HouseholdsApi
       // (its CreateHouseholdCubit) and, once past the name step, StoresApi/StoreChainReferenceCache.
       expect(find.byKey(const Key('onboarding-name-field')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('choosingAwaitInviteOpensTheAcceptInviteScreenWithoutEscapingItsProviders', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('await-invite-choice-button')));
+      await tester.pumpAndSettle();
+
+      // The accept-invite screen built without a ProviderNotFoundException — it reached InvitesApi
+      // (its AcceptInviteCubit) and HouseholdsCubit (the by-value re-provide, Story 4.2).
+      expect(find.byKey(const Key('await-invite-link-field')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

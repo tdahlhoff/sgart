@@ -38,6 +38,10 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'invite.emailInvalid' => localizations.invitesEmailInvalidError,
     'invite.duplicatePending' => localizations.invitesDuplicatePendingError,
     'invite.alreadyAMember' => localizations.invitesAlreadyAMemberError,
+    'invite.invalidLink' => localizations.householdsAwaitInviteInvalidLinkError,
+    'invite.expired' => localizations.householdsAwaitInviteExpiredError,
+    'invite.notFound' => localizations.householdsAwaitInviteNotFoundError,
+    'invite.alreadyUsed' => localizations.householdsAwaitInviteAlreadyUsedError,
     _ => localizations.errorGenericFallback,
   };
 }
