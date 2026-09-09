@@ -30,6 +30,7 @@ import de.sgart.collaboration.application.command.RevokeInviteHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.command.UncheckItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
+import de.sgart.collaboration.application.query.AuthorizeHouseholdStream;
 import de.sgart.collaboration.application.query.ListDoneLists;
 import de.sgart.collaboration.application.query.ListHouseholdMembers;
 import de.sgart.collaboration.application.query.ListItemSuggestions;
@@ -295,6 +296,11 @@ public class CollaborationApplicationConfig {
     ListHouseholdMembers listHouseholdMembers(
             ResolveMemberIdentity resolveMemberIdentity, HouseholdMemberReadModel householdMemberReadModel) {
         return new ListHouseholdMembers(resolveMemberIdentity, householdMemberReadModel);
+    }
+
+    @Bean
+    AuthorizeHouseholdStream authorizeHouseholdStream(ResolveMemberIdentity resolveMemberIdentity) {
+        return new AuthorizeHouseholdStream(resolveMemberIdentity);
     }
 
     @Bean

@@ -60,6 +60,15 @@ sgart:
   # known, committed secret in production.
   invite:
     email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET}
+  # Live sync (Story 4.4): the per-household SSE stream's heartbeat cadence and the emitter's own
+  # async timeout. The heartbeat interval must stay shorter than any intermediary proxy's idle
+  # timeout so a live-but-quiet connection isn't dropped. The emitter timeout is 0 (Servlet-spec
+  # "no timeout") because a persistent stream must outlive spring.mvc.async's ~30s default — passing
+  # a non-null per-emitter timeout overrides that default for this endpoint only, so the global MVC
+  # property is left untouched.
+  live-sync:
+    heartbeat-interval-seconds: ${SGART_LIVE_SYNC_HEARTBEAT_INTERVAL_SECONDS:15}
+    emitter-timeout-ms: ${SGART_LIVE_SYNC_EMITTER_TIMEOUT_MS:0}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;

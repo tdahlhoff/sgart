@@ -142,3 +142,40 @@
 
 - **Personal data retained in event streams after household delete + racing-write orphan read-model row** — AC7 delete purges read models and ACL mappings but leaves the authoritative per-aggregate event streams (item names, purchase history — declared personal data, §5) intact; deferred to Epic 6 erasure per crypto-shredding ADR-0001. Related: an `ItemAdded`/`StoreAddedToTrip` from a separate aggregate stream that lands after `HouseholdDeleted` in `$all` order re-inserts an orphan list/item/trip read-model row that even a full projector rebuild does not heal (purge replays before the re-insert). Narrow race; no live access (ACL de-linked → 403). Fold into the Epic-6 erasure/gating design.
 - **List/trip projectors now decode every household event via the shared codec** — the `household-` stream prefix was added to both subscriptions solely to observe `HouseholdDeleted`, so a future household event added without a `DomainEventJsonCodec` mapping (throws on unknown tag) would break the list *and* trip subscriptions, not just the household projector. `DomainEventJsonCodecTest` guards registration today; add a stream-type/event-type guard before decode when the household schema grows. Low.
+
+## Deferred from: code review of story-4.4 (2026-09-09)
+
+- **Existing projectors chain `addStreamNamePrefix` twice → runtime throw on first real live
+  subscription.** `ShoppingListReadModelProjector` and `ShoppingTripReadModelProjector` build their
+  `list-`+`household-` filters with two chained `addStreamNamePrefix` calls, which
+  `kurrentdb-client 1.2.1` rejects (`IllegalStateException: Filter type is already set to STREAM`).
+  Their live subscriptions have never been exercised end-to-end (only `project(...)` directly), so
+  this is latent — the first real live subscription against KurrentDB would throw. Story 4.4 worked
+  around it in `HouseholdLiveSyncFanout` with a single `withStreamNameRegularExpression` filter.
+  Verify a follow-up ticket exists to fix the two projectors the same way.
+- **T8 reconcile omits open list-detail / trip-detail screens.** `HouseholdLiveSyncController` only
+  reconciles the shell-owned `ShoppingListsCubit` + `ActiveTripsCubit`; a member sitting on a pushed
+  list-detail or trip-detail screen receives the nudge but nothing refreshes what they're viewing.
+  Acknowledged by the dev per the spec's "when open" qualifier — wire the detail cubits through the
+  shell's live-sync controller in a later story.
+- **`HouseholdResolver` caches grow unbounded.** `listHouseholdCache` / `tripHouseholdCache` insert
+  every list/trip id ever resolved and never evict (not on list/trip deletion, not on
+  `HouseholdDeleted`). Slow memory growth over the singleton fan-out's lifetime.
+- **Eviction skipped if a governance event body fails to decode.** `MemberRemoved`/`MemberLeft`
+  decode in `HouseholdLiveSyncFanout.react` runs inside the per-event log-and-skip, so a decode
+  failure means the member is not evicted and keeps their open stream. Access stays safe (synchronous
+  ACL de-link + 403 on every content refetch); this is promptness/cleanup only.
+- **`_defaultEventStreamFactory` swallows all exceptions.** `on Object { return null; }` in
+  `household_shell.dart` is meant to tolerate a missing `AuthenticatedHttpClient` provider in tests,
+  but also silently disables live sync if `forHousehold` ever throws for a real reason (fail-fast, §1).
+- **Live-sync heartbeat scheduling under load.** `HouseholdStreamController` drives every connection's
+  heartbeat off one shared single-thread scheduler, and `sendHeartbeatOrClose` only catches
+  `LiveConnectionClosedException` — a non-`IOException` from `emitter.send` escapes and
+  `scheduleAtFixedRate` then silently cancels that connection's future heartbeats. Fine at MVP scale.
+- **T12 wire-level SSE delivery not asserted.** Delivery is proven to the registry broadcast +
+  `asyncStarted()`, not to an actual `changed` frame in an HTTP SSE response body; split across two
+  tests by design. Add a full live-HTTP-SSE assertion if the transport is ever reworked.
+- **Live roster reconcile on `resource:"members"` nudge.** The member roster is on a pushed
+  manage-household screen (not the shell), so a live membership change won't refresh an open roster.
+  Deferred alongside the detail-cubit reconcile (review decision ③1); the household-name switcher-chip
+  refresh IS being done now (P8).

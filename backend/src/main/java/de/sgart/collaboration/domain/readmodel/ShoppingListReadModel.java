@@ -4,6 +4,7 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.TripId;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Domain-owned port over the shopping-list CQRS read model (AD-4) — built solely by {@code
@@ -40,5 +41,17 @@ public interface ShoppingListReadModel {
      */
     default void markDone(ShoppingListId listId) {
         throw new UnsupportedOperationException("markDone is not implemented by this read model");
+    }
+
+    /**
+     * Resolves the household a list belongs to (Story 4.4, T4) — the live-sync fan-out's
+     * stream-name resolver uses this for the five list-scoped events that carry no {@code
+     * householdId} field ({@code ItemRemoved}, {@code ItemUpdated}, {@code ShoppingListRenamed},
+     * {@code ItemTransferConfirmed}, {@code ItemTransferCancelled}). Empty when the list is not
+     * (yet) projected — a projector-race edge the caller skips rather than fails on. Defaulted so
+     * read-only query test doubles keep compiling; a real implementation always overrides it.
+     */
+    default Optional<HouseholdId> householdIdOfList(ShoppingListId listId) {
+        throw new UnsupportedOperationException("householdIdOfList is not implemented by this read model");
     }
 }

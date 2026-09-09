@@ -201,9 +201,19 @@
     "description": "Tooltip/semantics label for the tappable household-name chip in the persistent header."
   },
 
-  "householdsSyncStatusPlaceholderLabel": "Synchronisierung",
-  "@householdsSyncStatusPlaceholderLabel": {
-    "description": "Semantics/tooltip label for the sync/offline status placeholder in the header (the real status is Epic 4/5)."
+  "householdsSyncStatusLiveLabel": "Synchronisiert",
+  "@householdsSyncStatusLiveLabel": {
+    "description": "Semantics/tooltip label for the live-sync status indicator when the connection is live (Story 4.4)."
+  },
+
+  "householdsSyncStatusConnectingLabel": "Synchronisierung läuft…",
+  "@householdsSyncStatusConnectingLabel": {
+    "description": "Semantics/tooltip label for the live-sync status indicator while connecting or reconnecting (Story 4.4)."
+  },
+
+  "householdsSyncStatusOfflineLabel": "Nicht verbunden",
+  "@householdsSyncStatusOfflineLabel": {
+    "description": "Semantics/tooltip label for the live-sync status indicator when offline or the stream was revoked (Story 4.4)."
   },
 
   "householdsRenameHeading": "Haushalt umbenennen",

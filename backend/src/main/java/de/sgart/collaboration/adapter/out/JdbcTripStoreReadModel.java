@@ -6,6 +6,7 @@ import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -57,6 +58,20 @@ public final class JdbcTripStoreReadModel implements TripStoreReadModel {
                 .sql("DELETE FROM trip_store_read_model WHERE trip_id = :tripId")
                 .param("tripId", tripId.value())
                 .update();
+    }
+
+    /**
+     * The trip-scoped live-sync resolver lookup (Story 4.4, T4) — cached by the caller. Any one
+     * store row for the trip carries the same {@code household_id} (the column exists solely so
+     * {@link #purgeHousehold} can target a household's rows directly), so the first row suffices.
+     */
+    @Override
+    public Optional<HouseholdId> householdIdOfTrip(TripId tripId) {
+        return jdbcClient
+                .sql("SELECT household_id FROM trip_store_read_model WHERE trip_id = :tripId LIMIT 1")
+                .param("tripId", tripId.value())
+                .query((resultSet, rowNumber) -> HouseholdId.fromString(resultSet.getString("household_id")))
+                .optional();
     }
 
     /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */

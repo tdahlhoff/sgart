@@ -4,6 +4,7 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Domain-owned port over the trip-store CQRS read model (AD-4, Story 3.2, Cl. 4) — built solely by
@@ -33,4 +34,15 @@ public interface TripStoreReadModel {
      * a safe no-op (DELETE WHERE on a missing set). Mirrors {@link #addStore}.
      */
     void deleteForTrip(TripId tripId);
+
+    /**
+     * Resolves the household a trip belongs to (Story 4.4, T4) — the live-sync fan-out's
+     * stream-name resolver uses this for {@code trip-} stream events, none of which carry a
+     * {@code householdId} field directly resolvable without a row lookup. Empty when the trip has
+     * no store rows (yet) projected — a projector-race edge the caller skips rather than fails on.
+     * Defaulted so test doubles keep compiling; a real implementation always overrides it.
+     */
+    default Optional<HouseholdId> householdIdOfTrip(TripId tripId) {
+        throw new UnsupportedOperationException("householdIdOfTrip is not implemented by this read model");
+    }
 }

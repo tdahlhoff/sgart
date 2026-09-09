@@ -9,6 +9,7 @@ import de.sgart.shared.ShoppingListId;
 import de.sgart.shared.TripId;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -110,6 +111,16 @@ public final class JdbcShoppingListReadModel implements ShoppingListReadModel {
                 .param("listId", listId.value())
                 .param("status", ListStatus.DONE.name())
                 .update();
+    }
+
+    /** The list-scoped live-sync resolver lookup (Story 4.4, T4) — cached by the caller. */
+    @Override
+    public Optional<HouseholdId> householdIdOfList(ShoppingListId listId) {
+        return jdbcClient
+                .sql("SELECT household_id FROM shopping_list_read_model WHERE list_id = :listId")
+                .param("listId", listId.value())
+                .query((resultSet, rowNumber) -> HouseholdId.fromString(resultSet.getString("household_id")))
+                .optional();
     }
 
     /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */

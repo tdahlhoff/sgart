@@ -84,6 +84,26 @@ class AuthenticatedHttpClient {
     }
   }
 
+  /// Opens a raw `text/event-stream` GET (Story 4.4's live-sync SSE stream) — bypasses the JSON
+  /// helpers above since an SSE body is line-oriented text streamed indefinitely, not a single
+  /// JSON response. Left un-mapped to [AppException]: the SSE client (not this shared transport)
+  /// decides reconnect-vs-terminal from the raw [Response]'s status code — a `403` must never
+  /// retry, unlike every JSON call's uniform error handling. `validateStatus` always accepts so a
+  /// 4xx/5xx rejection reaches the caller as a readable [Response] instead of throwing a
+  /// [DioException] before the status code can be inspected (Review P1). Still goes through the
+  /// same bearer interceptor as every other request — the token is never duplicated or
+  /// special-cased for streaming.
+  Future<Response<ResponseBody>> openEventStream(String path) {
+    return _dio.get<ResponseBody>(
+      path,
+      options: Options(
+        responseType: ResponseType.stream,
+        headers: {'Accept': 'text/event-stream'},
+        validateStatus: (_) => true,
+      ),
+    );
+  }
+
   AppError _mapToAppError(DioException exception) {
     final response = exception.response;
     final body = response?.data;

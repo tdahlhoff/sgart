@@ -41,6 +41,7 @@ class FirstRunRouter extends StatefulWidget {
 
 class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
+  late final AuthenticatedHttpClient _httpClient;
   late final HouseholdsApi _householdsApi;
   late final StoresApi _storesApi;
   late final InvitesApi _invitesApi;
@@ -58,18 +59,18 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     super.initState();
     final authCubit = context.read<AuthCubit>();
     _dio = Dio(BaseOptions(baseUrl: BackendConfig.baseUrl));
-    final httpClient = AuthenticatedHttpClient(
+    _httpClient = AuthenticatedHttpClient(
       dio: _dio,
       accessTokenProvider: () async => authCubit.currentAccessToken,
     );
-    _householdsApi = HttpHouseholdsApi(httpClient);
-    _storesApi = HttpStoresApi(httpClient);
-    _invitesApi = HttpInvitesApi(httpClient);
-    _membersApi = HttpMembersApi(httpClient);
-    _shoppingListsApi = HttpShoppingListsApi(httpClient);
-    _itemsApi = HttpItemsApi(httpClient);
-    _itemSuggestionsApi = HttpItemSuggestionsApi(httpClient);
-    _tripsApi = HttpTripsApi(httpClient);
+    _householdsApi = HttpHouseholdsApi(_httpClient);
+    _storesApi = HttpStoresApi(_httpClient);
+    _invitesApi = HttpInvitesApi(_httpClient);
+    _membersApi = HttpMembersApi(_httpClient);
+    _shoppingListsApi = HttpShoppingListsApi(_httpClient);
+    _itemsApi = HttpItemsApi(_httpClient);
+    _itemSuggestionsApi = HttpItemSuggestionsApi(_httpClient);
+    _tripsApi = HttpTripsApi(_httpClient);
   }
 
   @override
@@ -82,6 +83,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
+        // The household shell reads this to open its per-household live-sync SSE stream (Story 4.4).
+        RepositoryProvider<AuthenticatedHttpClient>.value(value: _httpClient),
         RepositoryProvider<HouseholdsApi>.value(value: _householdsApi),
         // Stores management + every future inline store picker reads these; provided here (where
         // HouseholdsApi is) so the manage screen and pickers can `context.read` them (Story 1.8).

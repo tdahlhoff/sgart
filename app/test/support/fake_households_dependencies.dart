@@ -8,6 +8,7 @@ class FakeHouseholdsApi implements HouseholdsApi {
   String? createdHouseholdIdToReturn;
   Object? listErrorToThrow;
   Object? createErrorToThrow;
+  int listCallCount = 0;
   String? lastCreatedName;
   String? lastCommandId;
   int createCallCount = 0;
@@ -25,6 +26,7 @@ class FakeHouseholdsApi implements HouseholdsApi {
 
   @override
   Future<List<HouseholdSummary>> listMyHouseholds() async {
+    listCallCount++;
     if (listErrorToThrow != null) throw listErrorToThrow!;
     return householdsToReturn ?? const [];
   }
