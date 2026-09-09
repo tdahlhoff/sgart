@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG-ONLY network security config for real-device / emulator testing against the local dev
+  stack. It lives under src/debug, so it is merged into debug builds ONLY and never ships in a
+  release build — production keeps Android's secure default (cleartext denied, TLS required),
+  honouring CLAUDE.md §5 "security by design & by default".
+
+  The dev backend and Keycloak speak plain http (no TLS locally), which Android 9+ (API 28+)
+  blocks by default. Cleartext is opened for exactly the local dev hosts, nothing wider:
+    - localhost    reached from a USB device via `adb reverse tcp:8081 tcp:8081` (+ 8080)
+    - 10.0.2.2     the Android emulator's alias for the host loopback
+    - 192.168.0.166  the dev machine's LAN IP, for a phone testing over Wi-Fi
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">192.168.0.166</domain>
+    </domain-config>
+</network-security-config>
