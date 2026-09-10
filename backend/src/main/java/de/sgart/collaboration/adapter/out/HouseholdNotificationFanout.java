@@ -301,12 +301,37 @@ public final class HouseholdNotificationFanout implements SmartLifecycle {
                     }
                 },
                 SubscribeToAllOptions.get().fromEnd().filter(filter));
-        currentSubscription = subscription;
+        if (!retainSubscription(subscription)) {
+            // stop() won the race between subscribeToAll returning and the assignment below (this
+            // runs unsynchronized on the resubscribe scheduler thread). Never retain the live
+            // subscription then — it would be orphaned, firing onEvent after the fan-out ended and
+            // never stopped. Cancel it as soon as it lands, and do not schedule a resubscribe.
+            subscription.thenAccept(Subscription::stop);
+            return;
+        }
         subscription.exceptionally(failure -> {
             log.warn("Notification fan-out failed to subscribe; resubscribing", failure);
             scheduleResubscribe();
             return null;
         });
+    }
+
+    /**
+     * Atomically retain a just-created subscription, but only while still running (the shutdown-race
+     * guard, Epic 4 retro) — mirrors {@link HouseholdLiveSyncFanout#retainSubscription}. {@link
+     * #stop()} clears/cancels {@link #currentSubscription} under this same monitor, so a subscription
+     * created concurrently on the resubscribe thread is either retained-then-cancelled-by-stop or
+     * rejected here — never orphaned.
+     *
+     * @return {@code true} if retained (still running); {@code false} if {@code stop()} already ran,
+     *     in which case the caller must cancel the subscription itself.
+     */
+    synchronized boolean retainSubscription(CompletableFuture<Subscription> subscription) {
+        if (!running) {
+            return false;
+        }
+        currentSubscription = subscription;
+        return true;
     }
 
     private synchronized void scheduleResubscribe() {

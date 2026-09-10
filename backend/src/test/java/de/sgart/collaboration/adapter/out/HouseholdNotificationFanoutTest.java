@@ -24,6 +24,7 @@ import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
+import io.kurrent.dbclient.Subscription;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -225,6 +227,33 @@ class HouseholdNotificationFanoutTest {
         fanout.react("list-" + listId.value(), "ItemAdded", new byte[0]);
 
         assertThat(deviceTokenRepository.findByToken("anna-phone")).isEmpty();
+    }
+
+    @Test
+    void retainSubscription_rejectsASubscriptionThatLandsAfterStop() {
+        // The shutdown race (Epic 4 retro): subscribeToAll returns on the resubscribe thread AFTER
+        // stop() already ran. The guard must refuse to retain it, so the caller cancels it rather
+        // than orphaning a live $all subscription that stop() can no longer see.
+        HouseholdNotificationFanout fanout = fanoutWith(neverCalledListReadModel(), neverCalledTripReadModel());
+        fanout.start();
+        fanout.stop();
+
+        CompletableFuture<Subscription> lateSubscription = new CompletableFuture<>();
+
+        assertThat(fanout.retainSubscription(lateSubscription)).isFalse();
+    }
+
+    @Test
+    void retainSubscription_retainsASubscriptionWhileRunning() {
+        HouseholdNotificationFanout fanout = fanoutWith(neverCalledListReadModel(), neverCalledTripReadModel());
+        fanout.start();
+        try {
+            CompletableFuture<Subscription> subscription = new CompletableFuture<>();
+
+            assertThat(fanout.retainSubscription(subscription)).isTrue();
+        } finally {
+            fanout.stop();
+        }
     }
 
     private HouseholdNotificationFanout fanoutWith(ShoppingListReadModel listReadModel, TripStoreReadModel tripReadModel) {

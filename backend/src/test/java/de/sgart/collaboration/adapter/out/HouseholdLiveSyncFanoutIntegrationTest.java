@@ -71,6 +71,7 @@ class HouseholdLiveSyncFanoutIntegrationTest {
     private KurrentDbEventStore eventStore;
     private HouseholdLiveSyncFanout fanout;
     private RecordingRegistry registry;
+    private HouseholdResolver resolver;
 
     @BeforeAll
     static void startInfrastructure() {
@@ -97,7 +98,7 @@ class HouseholdLiveSyncFanoutIntegrationTest {
         jdbcClient.sql("TRUNCATE TABLE shopping_list_read_model, item_read_model").update();
         eventStore = new KurrentDbEventStore(client);
         registry = new RecordingRegistry();
-        HouseholdResolver resolver =
+        resolver =
                 new HouseholdResolver(new JdbcShoppingListReadModel(jdbcClient), new JdbcTripStoreReadModel(jdbcClient));
         fanout = new HouseholdLiveSyncFanout(client, registry, resolver);
         fanout.start();
@@ -196,6 +197,48 @@ class HouseholdLiveSyncFanoutIntegrationTest {
         // stop() and this would eventually observe the broadcast anyway.
         Thread.sleep(2000);
         assertThat(registry.broadcastsFor(afterStopHouseholdId)).isEmpty();
+    }
+
+    @Test
+    void fromEnd_neverReplaysEventsThatPrecededTheSubscription() throws InterruptedException {
+        // LD-2: the fan-out subscribes fromEnd and holds no per-client position — a downtime gap is
+        // healed by the client's reconnect-refetch, NEVER by replay. Stop setUp's live subscription
+        // so nothing is observing while we write the "before" event.
+        fanout.stop();
+
+        HouseholdId beforeSubscribeHouseholdId = HouseholdId.generate();
+        eventStore.append(
+                AggregateVersion.initial(StreamId.forHousehold(beforeSubscribeHouseholdId)),
+                List.of(new de.sgart.collaboration.domain.event.HouseholdRenamed(
+                        EventId.generate(), beforeSubscribeHouseholdId, new HouseholdName("Vor dem Abo"))),
+                CommandId.generate());
+
+        // A fresh fan-out that subscribes fromEnd *after* the event above already exists in $all.
+        RecordingRegistry laterRegistry = new RecordingRegistry();
+        HouseholdLiveSyncFanout laterFanout = new HouseholdLiveSyncFanout(client, laterRegistry, resolver);
+        laterFanout.start();
+        try {
+            // Let the fromEnd subscription establish before writing the "after" event, so it lands
+            // strictly after the subscription's end position (mirrors the negative-wait style used
+            // by stop_cancelsTheLiveSubscription...).
+            Thread.sleep(1500);
+
+            HouseholdId afterSubscribeHouseholdId = HouseholdId.generate();
+            eventStore.append(
+                    AggregateVersion.initial(StreamId.forHousehold(afterSubscribeHouseholdId)),
+                    List.of(new de.sgart.collaboration.domain.event.HouseholdRenamed(
+                            EventId.generate(), afterSubscribeHouseholdId, new HouseholdName("Nach dem Abo"))),
+                    CommandId.generate());
+
+            // The post-subscription event is delivered...
+            awaitTrue(
+                    () -> laterRegistry.broadcastsFor(afterSubscribeHouseholdId).contains("household"),
+                    "the fromEnd subscription did not observe the event appended after it started");
+            // ...but the pre-subscription event is never replayed.
+            assertThat(laterRegistry.broadcastsFor(beforeSubscribeHouseholdId)).isEmpty();
+        } finally {
+            laterFanout.stop();
+        }
     }
 
     private void awaitBroadcast(HouseholdId householdId, String resource) throws InterruptedException {

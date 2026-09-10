@@ -20,9 +20,11 @@ import de.sgart.shared.StoreId;
 import de.sgart.shared.TripId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
+import io.kurrent.dbclient.Subscription;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -94,6 +96,57 @@ class HouseholdLiveSyncFanoutTest {
     }
 
     @Test
+    void react_broadcastsTripForATripScopedEventResolvedViaTheReadModel() {
+        HouseholdId householdId = HouseholdId.generate();
+        TripId tripId = TripId.generate();
+        TripStoreReadModel resolvingTripReadModel = new TripStoreReadModel() {
+            @Override
+            public void addStore(HouseholdId ignoredHousehold, TripId ignoredTrip, StoreId ignoredStore) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public List<StoreId> storesOf(TripId ignoredTrip) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deleteForTrip(TripId ignoredTrip) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Optional<HouseholdId> householdIdOfTrip(TripId lookedUpTripId) {
+                return lookedUpTripId.equals(tripId) ? Optional.of(householdId) : Optional.empty();
+            }
+        };
+        HouseholdLiveSyncFanout fanout = fanoutWith(neverCalledShoppingListReadModel(), resolvingTripReadModel);
+
+        // The trip body is never decoded on this path (resourceFor reads the stream key alone), so
+        // empty bytes suffice — this proves the trip- prefix resolves + broadcasts "trip".
+        fanout.react("trip-" + tripId.value(), "ItemCheckedOff", new byte[0]);
+
+        assertThat(registry.broadcasts).containsExactly(new Broadcast(householdId, "trip"));
+        assertThat(registry.evictedMembers).isEmpty();
+        assertThat(registry.evictedHouseholds).isEmpty();
+    }
+
+    @Test
+    void react_broadcastsMembersForAnInviteEventOnTheHouseholdStreamWithoutEvicting() {
+        HouseholdId householdId = HouseholdId.generate();
+        HouseholdLiveSyncFanout fanout = fanoutWith(neverCalledShoppingListReadModel(), neverCalledTripStoreReadModel());
+
+        // An Invite* household-stream event is not one of the three de-link events, so it only
+        // broadcasts — and resourceFor maps the "Invite"/"Member" event-type prefix to "members"
+        // from the type string alone, so the body is never decoded (empty bytes suffice).
+        fanout.react("household-" + householdId.value(), "InviteAccepted", new byte[0]);
+
+        assertThat(registry.broadcasts).containsExactly(new Broadcast(householdId, "members"));
+        assertThat(registry.evictedMembers).isEmpty();
+        assertThat(registry.evictedHouseholds).isEmpty();
+    }
+
+    @Test
     void start_schedulesAResubscribeWhenTheInitialSubscribeToAllFailsOutright() throws InterruptedException {
         // neverConnectedClient points at a refused local port (esdb://localhost:1) — subscribeToAll
         // eventually completes exceptionally once the underlying gRPC channel gives up retrying.
@@ -109,6 +162,33 @@ class HouseholdLiveSyncFanoutTest {
             }
             throw new AssertionError(
                     "expected a resubscribe to be scheduled after the initial subscribeToAll failed outright");
+        } finally {
+            fanout.stop();
+        }
+    }
+
+    @Test
+    void retainSubscription_rejectsASubscriptionThatLandsAfterStop() {
+        // The shutdown race (Epic 4 retro): subscribeToAll returns on the resubscribe thread AFTER
+        // stop() already ran. The guard must refuse to retain it, so the caller cancels it rather
+        // than orphaning a live $all subscription that stop() can no longer see.
+        HouseholdLiveSyncFanout fanout = fanoutWith(neverCalledShoppingListReadModel(), neverCalledTripStoreReadModel());
+        fanout.start();
+        fanout.stop();
+
+        CompletableFuture<Subscription> lateSubscription = new CompletableFuture<>();
+
+        assertThat(fanout.retainSubscription(lateSubscription)).isFalse();
+    }
+
+    @Test
+    void retainSubscription_retainsASubscriptionWhileRunning() {
+        HouseholdLiveSyncFanout fanout = fanoutWith(neverCalledShoppingListReadModel(), neverCalledTripStoreReadModel());
+        fanout.start();
+        try {
+            CompletableFuture<Subscription> subscription = new CompletableFuture<>();
+
+            assertThat(fanout.retainSubscription(subscription)).isTrue();
         } finally {
             fanout.stop();
         }

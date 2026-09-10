@@ -192,10 +192,14 @@
   subject, so a validated-but-sub-less token throws NPE → opaque 500 instead of 401/400. Pre-existing
   seam, systemic across every controller (newly reachable via `DeviceController`). Fix once for all
   inbound adapters.
-- **[LOW] Fan-out shutdown race can orphan a `$all` subscription** — if `stop()` runs between a
-  scheduled `subscribe()`'s `subscribeToAll(...)` and its `currentSubscription =` assignment, the new
-  live subscription is written after `stop()` cleared the field and is never stopped. Pre-existing
-  pattern copied verbatim from `HouseholdLiveSyncFanout` (Story 4.4) — fix both fan-outs together.
+- **[RESOLVED 2026-09-10, Epic 4 retro] Fan-out shutdown race can orphan a `$all` subscription** — if
+  `stop()` ran between a scheduled `subscribe()`'s `subscribeToAll(...)` and its `currentSubscription =`
+  assignment, the new live subscription was written after `stop()` cleared the field and never stopped.
+  FIXED in both `HouseholdLiveSyncFanout` and `HouseholdNotificationFanout`: the assignment now goes
+  through `retainSubscription(...)`, an atomic `synchronized` check-and-assign against `running`; a
+  subscription that lands after `stop()` is rejected and cancelled by the caller instead of retained.
+  Covered by `retainSubscription_rejectsASubscriptionThatLandsAfterStop` /
+  `..._retainsASubscriptionWhileRunning` unit tests in both fan-out test classes.
 
 ## Deferred from: code review of 4-6-invite-acceptance-web-fallback (2026-09-10)
 
