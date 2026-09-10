@@ -39,7 +39,7 @@ SGART serves **households** — a couple, a family, a shared flat — where more
 
 - **Solo power-budgeters** who want a full personal-finance / envelope-budgeting tool — SGART tracks grocery spend as a byproduct, it is not a budgeting app.
 - **Store / retailer operators** — there is no merchant side; store and price data are private to each household.
-- **The general public, at MVP.** MVP onboards a curated friends-&-family cohort only; open self-signup and any growth mechanics are Post-MVP.
+- **The general public, during MVP/beta.** MVP and the beta onboard a curated friends-&-family cohort only, with accounts created manually. Self-registration is scheduled before any public app-store release (FR-29) — a named requirement, not an open-ended Post-MVP maybe. Open-ended growth mechanics (referrals, discovery, etc.) remain genuinely Post-MVP.
 - **Users needing a full web experience.** Web exists in v1 only as an invite-acceptance fallback, not as a client for daily use.
 
 ### 2.3 Key User Journeys
@@ -147,6 +147,22 @@ The system enforces role-based permissions and the "at least one Admin" invarian
 
 **Notes:**
 - `[NOTE FOR PM]` GDPR erasure vs. event-sourced history: a Member's "right to be forgotten" collides with an immutable event log that references their user id. Resolution strategy (pseudonymization / crypto-shredding of the id) is an Open Question (§8) and a data-governance decision for architecture — flagged, not solved here.
+
+#### FR-29: Self-registration for the public phase
+Before SGART is distributed via public app stores, a person with no existing account can create one from the app, without requiring an existing member to invite them first — **and** a person who *is* invited by email never has to go through a separate registration step at all. Gates the public/app-store release; not required for the MVP/beta curated cohort (manual account creation, §2.2).
+**Consequences (testable):**
+- On first launch with no session, the app's own login screen shows a visible "Register" link/button alongside sign-in — a person never has to already know a registration URL or be told one out of band.
+- **First-time authentication is passwordless (magic link):** the person enters their email and receives a one-time sign-in link; tapping it authenticates them immediately — no password is set or checked at this point. This applies both to the "Register" entry point (first person of a group, no inviter) and to accepting an email invite as a brand-new person (no separate "create an account" step before accept — the invite link *is* their onboarding).
+- **Immediately after that first magic-link login, the person is forced to set a real password before proceeding further** (Keycloak's "Update Password" required action) — because the magic-link email may since have been deleted and cannot be relied on as a recurring credential. Every login after this one uses the password (or the device's already-issued long-lived session), not another emailed link.
+- Registration/first-login requires the email to be verified (implicit in having received and used the magic link) before the account can create or join a Household.
+- Registration captures explicit acceptance of the privacy notice / terms (GDPR lawful basis, consent must be revocable per CLAUDE.md §5) before any personal data beyond the account itself is processed.
+- A registered person can self-serve a password reset later without contacting the operator.
+- Once authenticated for the first time, the person proceeds through the existing FR-1 create/await-invite flow (or FR-2 accept-invite flow) unchanged — this FR only changes *how someone becomes authenticated*, not what happens after.
+**Feature-specific NFRs:**
+- Delegates entirely to Keycloak (NFR4) — no new SGART-owned credential storage, no new domain event or aggregate. Uses Keycloak's built-in magic-link/email-OTP authentication flow and "Update Password" required action rather than a custom credential mechanism.
+**Notes:**
+- `[NOTE FOR PM]` Deliberately scoped as a *gate before public release*, distinct from the MVP/beta curated-cohort model (§2.2) — manual Admin Console account creation continues through beta.
+- `[NOTE FOR PM]` Narrows the population that needs a true "registration form": only the first person of a new group (no inviter) needs FR-29's register entry point at all. Everyone they invite gets an account provisioned by the same magic-link + forced-password mechanism at invite-accept time — from the invitee's point of view there is no separate "register," only "open the invite link."
 
 ### 4.2 Stores & Chain Reference
 
@@ -408,7 +424,7 @@ A Member can view spend and price-history analytics for their Household. Realize
 - **No US cloud dependency, ever.** Self-hosted, German-hosted, no US hyperscaler in the data path.
 - **No full web client in v1.** Web is invite-acceptance fallback only.
 - **No ads and no monetization in MVP.** (Public-phase monetization is an Open Question, not a v1 goal.)
-- **No public self-signup in MVP.** Friends-&-family cohort only.
+- **No public self-signup during the MVP/beta curated cohort** — but self-registration is a scheduled, gated requirement before any public app-store release (FR-29), not an open-ended deferral.
 
 ## 6. MVP Scope
 
@@ -438,7 +454,7 @@ A Member can view spend and price-history analytics for their Household. Realize
 - **Smart / *predictive* item suggestions** (recommending what you might need from shopping patterns, seasonality, etc.). *Distinct from* MVP autocomplete (FR-27), which is deterministic type-ahead over your own history — that ships in MVP.
 - **Additional UI languages (Dutch, French, …) and per-market StoreChain data.** *Reason:* MVP is German-first and validates with a German-speaking friends-&-family cohort; the architecture is i18n-ready (FR-24) so these are translation/data tasks, not rework. `[NOTE FOR PM] First localization fast-follow once the core loop holds.`
 - **Geolocation-assisted Store discovery (FR-28)** — backlog, *not dropped*; gated on selecting a privacy-friendly geodata source (Open Q8.10). MVP adds Stores by free-form name + client-side chain match.
-- **Full web client** and **public self-signup / growth mechanics**.
+- **Full web client** (Post-MVP, open-ended) and **open-ended growth mechanics** (referrals, discovery — Post-MVP). Self-registration itself is out of scope for MVP/beta but is a scheduled, named requirement (FR-29, Epic 7) gated before the public app-store release — not lumped with the open-ended items above.
 
 ## 7. Success Metrics
 

@@ -41,7 +41,12 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-10 (Epic 4 retrospective — retro done, 6 action items recorded)
+last_updated: 2026-09-10 (correct-course: Epic 7 added — self-registration gate before public app-store release, see sprint-change-proposal-2026-09-10.md)
+# correct-course 2026-09-10 — Epic 7: Self-Registration & Public Onboarding added (backlog, 3 stories),
+# sequenced after Epic 6. Gates the public app-store release; does NOT block the current beta (manual
+# Keycloak Admin Console account creation continues through beta). PRD FR-29 / epics.md FR15. Also
+# corrected a stale Epic-4 action-item status: "SSE fan-out path tests" was open but actually landed
+# in commit 501a456 — flipped to done.
 # Story 4.6 review (dev-story) 2026-09-10 — T1-T10 complete. Backend 953/0 (incl. ArchUnit +
 # Testcontainers), Flutter 641/0 + analyze clean. Epic 4's final story — retro next after review.
 # Story 4.6 ready-for-dev (create-story, Opus 4.8) 2026-09-10 — Epic 4's FINAL story: invite-acceptance
@@ -270,6 +275,16 @@ development_status:
   6-3-retention-privacy-guarantee-tests: backlog
   epic-6-retrospective: optional
 
+  # Epic 7: Self-Registration & Public Onboarding (added 2026-09-10, sprint-change-proposal-2026-09-10.md;
+  # revised 2026-09-10 to magic-link + forced-password-set, see same proposal doc's addendum)
+  # Gate before public app-store release, does NOT block beta. Sequenced after Epic 6.
+  epic-7: backlog
+  7-1-self-register-a-new-account-via-magic-link: backlog
+  7-2-passwordless-account-provisioning-at-invite-acceptance: backlog
+  7-3-consent-capture-at-first-authentication: backlog
+  7-4-self-service-password-reset: backlog
+  epic-7-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Extract a client command-id abstraction (one commandId per intent; regenerate on payload change and after a successful append) with tests proving edited-retry and post-success both regenerate"
@@ -358,8 +373,12 @@ action_items:
   - epic: 4
     action: "[CRITICAL PATH before Epic 5] Close the under-tested SSE fan-out paths (subscribe / replay / shutdown-race across both HouseholdLiveSyncFanout and the 4.5 fan-out)"
     owner: "Dev"
-    status: open
+    status: done
   - epic: 4
     action: "[CRITICAL PATH before Epic 5] GDPR privacy-guarantee tests for the Epic-4 mechanisms that exist now: de-link=erasure (household deletion purge, membership retract), no-PII-in-events, invite side-store purge points; full Epic-6 export/erasure feature tests stay with Epic 6"
     owner: "Dev"
     status: open
+  - epic: 6
+    action: "[Sprint Change Proposal 2026-09-10] Added Epic 7 (Self-Registration & Public Onboarding, FR15/FR-29) after Epic 6 — gate before the public app-store release, does not block beta. Triggered by Timo noticing the invite flow has no path for a brand-new person with no inviter to become authenticated; manual Admin Console account creation continues through beta. See sprint-change-proposal-2026-09-10.md."
+    owner: "PM"
+    status: done

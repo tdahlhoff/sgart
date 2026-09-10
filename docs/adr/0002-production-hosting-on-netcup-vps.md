@@ -70,6 +70,23 @@ so deployment must **cap the JVM heaps of both the backend and Keycloak (`-Xmx`)
 | Intrusion protection | `fail2ban` active on the `sshd` jail |
 | Emergency access | netcup Server Control Panel → KVM console / Rescue system (works independently of SSH; use this if locked out) |
 
+## Domain
+
+**No domain purchase — use netcup's assigned hostname, `v2202609416029517751.happysrv.de`, for TLS.**
+It already forward-resolves to the VPS's IPv4 (`89.58.46.117`, verified via `getent ahosts`
+2026-09-10), which is all Let's Encrypt's HTTP-01 challenge needs — it does not require domain
+ownership, only that the name resolves to a server you control. Sufficient for the small-private-beta
+scope: invite links are shared manually (SMTP delivery deferred, follow-up 8), and neither Android App
+Links nor iOS Universal Links are in scope yet (both need a domain you control DNS for, and the
+custom-scheme deep link `de.sgart.app://invite` already works without one).
+
+**Trade-off accepted:** netcup controls this DNS record, not us. It is tied to this specific VPS for
+as long as it's rented — a server migration, or netcup changing its hostname-assignment scheme, breaks
+the TLS cert and every place the hostname is configured (`sgart.invite.base-url`, the Keycloak issuer,
+the app's release build config). A domain we own would be portable across hosts; revisit if SGART
+moves off this VPS or needs Android App Links / iOS Universal Links (both require verified ownership
+of the apex domain, which an assigned provider hostname cannot satisfy).
+
 ## Consequences
 
 **Positive**
@@ -94,7 +111,13 @@ so deployment must **cap the JVM heaps of both the backend and Keycloak (`-Xmx`)
 
 These are our responsibility, not the provider's — the server + AVV is only the foundation:
 
-1. **Sign the netcup AVV** in the Customer Control Panel before any personal data is processed.
+1. **Sign the netcup AVV** in the Customer Control Panel before any personal data is processed —
+   **DONE (2026-09-10).** Categories selected: data subjects — Kunden (app users/beta testers),
+   Besucher der Website (the public `/invite` web-fallback page + reverse-proxy/SSH access logs);
+   personal-data categories — Namensdaten, Kontakt- und Adressdaten, Logindaten, Daten zu
+   Vorlieben und Verhaltensweisen (purchase history, per Rule 5), and **Foto- und Videodaten**
+   (checked pre-emptively for the future receipt-scanning/OCR feature, so the AVV won't need
+   amending when it ships). No special/sensitive categories (Art. 9) apply.
 2. **Production Compose** that drops the DEV-only flags in `docker-compose.yml`
    (`KURRENTDB_INSECURE`, Keycloak `start-dev`), adds resource limits, and moves secrets out of a
    plain `.env`.
@@ -115,7 +138,10 @@ These are our responsibility, not the provider's — the server + AVV is only th
 7. **Server hardening**: SSH key-only ✅, `ufw` firewall (22/TCP, 80/TCP, 443/TCP,
    64738 TCP + UDP for Murmur, default-deny incoming) ✅, `fail2ban` ✅, automatic security
    updates still open.
-8. **Keycloak SMTP (registration/invite e-mails)**: Keycloak will send mail directly from this VPS.
+8. **Android release signing keystore** — Timo-only manual step (generate + back up outside the
+   repo), Gradle signing config wired and ready. See
+   [`docs/android-release-signing.md`](../android-release-signing.md).
+9. **Keycloak SMTP (registration/invite e-mails)**: Keycloak will send mail directly from this VPS.
    Before enabling it: remove netcup's default "netcup Mail Block" policy in SCP → Firewall (it
    blocks inbound/outbound SMTP by default); then set up SPF/DKIM/DMARC for the sending domain, or
    deliverability will suffer since the VPS IP has no mail reputation. Fallback if that proves

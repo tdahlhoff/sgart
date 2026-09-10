@@ -63,6 +63,8 @@ FR13 (CAP-13): **German-first, i18n-ready UI with locale selection.** The MVP sh
 
 FR14 (CAP-14): **Data-subject rights: erasure & export.** A person's personal data can be located, exported (in a portable form), and erased on request; erasure destroys the Identity-ACL mapping, scrubs read models and device/offline caches, and deletes the Keycloak account, leaving only unlinkable pseudonyms in the event log with no personal data recoverable; erasure, export, and retention each have explicit tests. *(CLAUDE.md §5; PRD data-protection)*
 
+FR15 (CAP-15): **Self-registration for the public phase.** A person with no existing account can register from the app — reached via a visible "Register" link/button on the login screen, opened in-app through the same AppAuth surface used for sign-in. First-time authentication is **passwordless (magic link)**; immediately after that first login the person is **forced to set a real password** (the magic-link email may since be deleted and can't be relied on as a recurring credential). The **same magic-link + forced-password mechanism provisions an invitee's account at invite-accept time** — a brand-new invitee never goes through a separate registration step at all. Registration/first-login also captures explicit acceptance of the privacy notice/terms before any personal data beyond the account is processed; self-service password reset is included for later. Gates the public app-store release; not required for the MVP/beta curated cohort. *(PRD FR-29)*
+
 ### NonFunctional Requirements
 
 *From SPEC Constraints and cross-cutting quality attributes.*
@@ -81,7 +83,7 @@ NFR6: **Clean Code + binding ubiquitous language.** No abbreviations; names refl
 
 NFR7: **Mobile-first.** iOS + Android via Flutter/BLoC; web exists only as an invite-acceptance fallback in v1, never as a daily client.
 
-NFR8: **Curated cohort; solo is first-class.** MVP onboards a friends-&-family cohort only, with no public self-signup; a household of one is fully supported alongside multi-person households.
+NFR8: **Curated cohort through MVP/beta; solo is first-class.** MVP and the beta onboard a friends-&-family cohort with manually created accounts; self-registration (FR15/Epic 7) is required before any public app-store release, not an open-ended deferral. A household of one is fully supported alongside multi-person households.
 
 NFR9: **Sync reliability & eventual consistency.** Live changes appear within a few seconds under normal connectivity; the client auto-reconnects and reconciles after a drop; offline replay is idempotent (no double-apply); read models are eventually consistent and the UI must tolerate that.
 
@@ -144,7 +146,7 @@ UX-DR22: **Store picker component** — a reusable store selector used for item 
 
 ### Deferred (out of MVP — not decomposed into stories)
 
-Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-based routing); analytics dashboard; configurable notification settings & receipt-scanned notifications; list duplicate/template (fast-follow); geolocation store discovery; additional UI languages & multi-market StoreChain data; full web client; crypto-shredding implementation; **Trip pause/resume (permanently dropped, not deferred)**. The `priceintelligence` module is reserved (empty) in the scaffold but nothing is built for it.
+Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-based routing); analytics dashboard; configurable notification settings & receipt-scanned notifications; list duplicate/template (fast-follow); geolocation store discovery; additional UI languages & multi-market StoreChain data; full web client; crypto-shredding implementation; **Trip pause/resume (permanently dropped, not deferred)**. The `priceintelligence` module is reserved (empty) in the scaffold but nothing is built for it. **Self-registration is not in this open-ended list** — it is scheduled and specced as Epic 7 (FR15), gated before the public app-store release, not an open-ended deferral.
 
 ### FR Coverage Map
 
@@ -164,8 +166,9 @@ Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-b
 | FR12 | Content-free notifications | Epic 4 |
 | FR13 | German-first / locale | Epic 1 |
 | FR14 | Erasure & export | Epic 6 |
+| FR15 | Self-registration | Epic 7 |
 
-*All 14 FRs mapped. NFRs and ARs are foundational and realized primarily in Epic 1 (scaffold,
+*All 15 FRs mapped. NFRs and ARs are foundational and realized primarily in Epic 1 (scaffold,
 paradigm, identity, localization layer, design system), then upheld across every epic per the
 Architecture spine and CLAUDE.md.*
 
@@ -231,6 +234,12 @@ event log (guarded by the last-Admin invariant); export, erasure, and retention 
 **explicit tests**.
 **FRs covered:** FR14.
 *(UX-DR15; realizes AD-5/AD-6/AD-7, NFR2.)*
+
+### Epic 7: Self-Registration & Public Onboarding
+A person with no existing account can register themselves, verify their email, and accept the
+privacy notice — the gate that must clear before SGART leaves the curated friends-&-family cohort
+for public app-store distribution. Does not block beta.
+**FRs covered:** FR15.
 
 ---
 
@@ -947,3 +956,95 @@ So that personal data isn't kept indefinitely and the guarantees can't silently 
 **Given** the privacy guarantees
 **When** the test suite runs
 **Then** **erasure, export, and retention each have explicit automated tests** using **synthetic data only** (CAP-14, NFR6), and a failing privacy test blocks merge.
+
+---
+
+## Epic 7: Self-Registration & Public Onboarding
+
+Before SGART leaves the curated friends-&-family cohort for public app-store distribution, a
+person with no existing account and no inviter can create one — and a person who **is** invited by
+email never has to register separately at all. Both paths authenticate for the first time via a
+**passwordless magic link**, then are **forced to set a real password immediately after** (the
+magic-link email may since be deleted, so it can't be relied on as a recurring credential).
+Self-service password reset closes the same gap for existing/beta accounts later. **Gate before
+public release**, not required for beta. *(FR15/FR-29.)*
+
+### Story 7.1: Self-register a new account via magic link
+
+As a person with no SGART account and no inviter,
+I want to create one myself with just my email,
+So that I can start using SGART without waiting on someone to invite or provision me.
+
+**Acceptance Criteria:**
+
+**Given** a fresh app install, first launch, no session
+**When** the login screen is shown
+**Then** it displays a visible "Registrieren" link/button next to sign-in — discoverable without any out-of-band instruction (FR15).
+
+**Given** that link
+**When** a person with no account taps it and enters their email
+**Then** Keycloak emails a one-time sign-in (magic) link; no password is requested at this step.
+
+**Given** that magic link
+**When** the person opens it
+**Then** they are authenticated **in-app** (the existing AppAuth/in-app-browser surface from Story 1.4) — this both authenticates them and verifies the email, with no separate "Verify Email" step needed.
+
+**Given** a person authenticated for the first time via magic link *(this account and Story 7.2's both land here)*
+**When** they reach the app
+**Then** they are **forced to set a real password** before doing anything else (Keycloak's "Update Password" required action) — the magic-link email cannot be relied on for future logins.
+
+**Given** the password is set
+**When** the flow completes
+**Then** the person lands in the existing FR-1 create/await-invite routing — no new post-registration flow is built.
+
+### Story 7.2: Passwordless account provisioning at invite acceptance
+
+As an invited person with no existing SGART account,
+I want to just open my invite link and get in,
+So that I never have to fill out a separate registration form before joining the household that invited me.
+
+**Acceptance Criteria:**
+
+**Given** an invite email whose address has **no existing SGART/Keycloak account**
+**When** the invitee opens the invite link
+**Then** the same magic-link mechanism as Story 7.1 provisions their account against that email — the invite link itself is their onboarding, with no separate "register first, then accept" detour.
+
+**Given** that first magic-link authentication
+**When** it succeeds
+**Then** the same forced "Update Password" step from Story 7.1 applies before the invite-accept completes.
+
+**Given** an invite email whose address **already has** an account (existing SGART user, or already mid-registration)
+**When** they open the invite link
+**Then** the existing accept-invite flow (Story 4.2) applies unchanged — this story only covers the brand-new-invitee case.
+
+### Story 7.3: Consent capture at first authentication
+
+As the operator,
+I want explicit, revocable consent captured before any personal data beyond the account is processed,
+So that both self-registration and invite-provisioned accounts have a documented GDPR lawful basis.
+
+**Acceptance Criteria:**
+
+**Given** a person authenticating for the first time via either Story 7.1 or Story 7.2's magic-link flow
+**When** they complete the forced password-set step
+**Then** they must also explicitly accept the privacy notice/terms (Keycloak's "Terms and Conditions" required action) before proceeding — no silent/implied consent.
+
+**Given** an accepted consent record
+**When** the person later requests erasure (Epic 6)
+**Then** the consent timestamp is included in what gets erased/exported — no orphaned consent record survives erasure.
+
+### Story 7.4: Self-service password reset
+
+As a registered person,
+I want to reset my own password,
+So that a forgotten password doesn't require contacting the operator.
+
+**Acceptance Criteria:**
+
+**Given** the sign-in screen
+**When** a person requests a password reset
+**Then** Keycloak's self-service reset flow (`resetPasswordAllowed: true`) sends a reset email without operator involvement.
+
+**Given** the beta's manually created accounts
+**When** Epic 7 ships
+**Then** existing testers can also use self-service reset going forward — this is not registration-only.

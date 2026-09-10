@@ -1,0 +1,9 @@
+# Copy this file to key.properties (same directory) and fill in your real values.
+# key.properties is gitignored — never commit it or the keystore file it points to.
+# See docs/android-release-signing.md for how to generate the keystore.
+
+storePassword=changeme
+keyPassword=changeme
+keyAlias=sgart
+# Path is relative to app/android/ (where this file lives once copied to key.properties).
+storeFile=sgart-release.jks

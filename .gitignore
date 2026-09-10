@@ -17,6 +17,11 @@ app/.flutter-plugins
 app/.flutter-plugins-dependencies
 app/pubspec.lock
 
+# Android release signing — never commit the keystore or its passwords (docs/android-release-signing.md)
+app/android/key.properties
+app/android/*.jks
+app/android/*.keystore
+
 # Docker local volumes
 .docker-data/
 
