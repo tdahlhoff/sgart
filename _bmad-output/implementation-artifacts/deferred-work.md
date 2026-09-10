@@ -179,3 +179,20 @@
   manage-household screen (not the shell), so a live membership change won't refresh an open roster.
   Deferred alongside the detail-cubit reconcile (review decision ③1); the household-name switcher-chip
   refresh IS being done now (P8).
+
+## Deferred from: code review of story-4.5 (2026-09-10)
+
+- **[LOW] Invalid-token prune has no generation guard** — `PruneDeviceToken.prune` /
+  `HouseholdNotificationFanout.notifyRecipients` does an unconditional `deleteByToken` on a
+  `TOKEN_INVALID` result; a token re-registered between recipient resolution and the prune could be
+  deleted. Only reachable once a real FCM/APNs adapter actually returns `TOKEN_INVALID` (the
+  `LoggingContentFreePushSender` default always returns `DELIVERED`). Fold into the deferred FCM
+  wiring follow-up (D2) — add a `registeredAt`/generation guard when the live adapter lands.
+- **[LOW] JWT with no `sub` claim → 500** — `AuthenticatedCaller.fromJwt` `requireNonNull`s the
+  subject, so a validated-but-sub-less token throws NPE → opaque 500 instead of 401/400. Pre-existing
+  seam, systemic across every controller (newly reachable via `DeviceController`). Fix once for all
+  inbound adapters.
+- **[LOW] Fan-out shutdown race can orphan a `$all` subscription** — if `stop()` runs between a
+  scheduled `subscribe()`'s `subscribeToAll(...)` and its `currentSubscription =` assignment, the new
+  live subscription is written after `stop()` cleared the field and is never stopped. Pre-existing
+  pattern copied verbatim from `HouseholdLiveSyncFanout` (Story 4.4) — fix both fan-outs together.

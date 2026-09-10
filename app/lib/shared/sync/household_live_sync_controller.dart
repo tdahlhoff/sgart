@@ -23,6 +23,7 @@ class HouseholdLiveSyncController {
     required Future<void> Function() onReconcile,
     Future<void> Function()? onHouseholdChanged,
     Future<void> Function()? onRevoked,
+    Stream<HouseholdChangeNudge>? pushNudges,
     Duration coalesceWindow = const Duration(milliseconds: 300),
   })  : _onReconcile = onReconcile, // ignore: prefer_initializing_formals
         _onHouseholdChanged = onHouseholdChanged, // ignore: prefer_initializing_formals
@@ -30,6 +31,12 @@ class HouseholdLiveSyncController {
         _coalesceWindow = coalesceWindow { // ignore: prefer_initializing_formals
     _statusSubscription = eventStream.statusStream.listen(_onStatus);
     _changeSubscription = eventStream.changes.listen(_onChange);
+    // Story 4.5 (AC1, D2): a background push wakes the app the same way a live SSE nudge does —
+    // reusing this exact seam so a push never gets a second, parallel debounce/reconcile path.
+    // The caller (household_shell.dart) already filters the stream to this household's id before
+    // passing it in, mirroring how eventStream.changes is implicitly already household-scoped
+    // (its SSE connection is opened against one household's stream).
+    _pushSubscription = pushNudges?.listen(_onChange);
   }
 
   final Future<void> Function() _onReconcile;
@@ -39,6 +46,7 @@ class HouseholdLiveSyncController {
 
   late final StreamSubscription<LiveSyncStatus> _statusSubscription;
   late final StreamSubscription<HouseholdChangeNudge> _changeSubscription;
+  StreamSubscription<HouseholdChangeNudge>? _pushSubscription;
   Timer? _debounce;
   bool _householdChangedPending = false;
 
@@ -74,5 +82,6 @@ class HouseholdLiveSyncController {
     _debounce?.cancel();
     await _statusSubscription.cancel();
     await _changeSubscription.cancel();
+    await _pushSubscription?.cancel();
   }
 }

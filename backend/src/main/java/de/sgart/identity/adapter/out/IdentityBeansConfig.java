@@ -3,9 +3,15 @@ package de.sgart.identity.adapter.out;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
+import de.sgart.identity.application.PruneDeviceToken;
+import de.sgart.identity.application.RegisterDeviceToken;
+import de.sgart.identity.application.ResolveHouseholdPushTargets;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
+import de.sgart.identity.application.UnregisterDeviceToken;
+import de.sgart.identity.domain.DeviceTokenRepository;
 import de.sgart.identity.domain.MemberMappingRepository;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -47,5 +53,31 @@ public class IdentityBeansConfig {
     @Bean
     RetractMembership retractMembership(MemberMappingRepository memberMappingRepository) {
         return new RetractMembership(memberMappingRepository);
+    }
+
+    @Bean
+    DeviceTokenRepository deviceTokenRepository(JdbcClient jdbcClient) {
+        return new JdbcDeviceTokenRepository(jdbcClient);
+    }
+
+    @Bean
+    RegisterDeviceToken registerDeviceToken(DeviceTokenRepository deviceTokenRepository, Clock clock) {
+        return new RegisterDeviceToken(deviceTokenRepository, clock);
+    }
+
+    @Bean
+    UnregisterDeviceToken unregisterDeviceToken(DeviceTokenRepository deviceTokenRepository) {
+        return new UnregisterDeviceToken(deviceTokenRepository);
+    }
+
+    @Bean
+    PruneDeviceToken pruneDeviceToken(DeviceTokenRepository deviceTokenRepository) {
+        return new PruneDeviceToken(deviceTokenRepository);
+    }
+
+    @Bean
+    ResolveHouseholdPushTargets resolveHouseholdPushTargets(
+            MemberMappingRepository memberMappingRepository, DeviceTokenRepository deviceTokenRepository) {
+        return new ResolveHouseholdPushTargets(memberMappingRepository, deviceTokenRepository);
     }
 }

@@ -41,6 +41,15 @@ public interface MemberMappingRepository {
     List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId);
 
     /**
+     * The reverse lookup of {@link #householdIdsFor(KeycloakUserId)} (Story 4.5, AC4): every
+     * current member's {@link KeycloakUserId} for a household — the recipient-resolution seam the
+     * notification fan-out's published port ({@code ResolveHouseholdPushTargets}) composes with
+     * {@link DeviceTokenRepository} to reach only current members (AD-2, "mapping = access"). A
+     * de-linked member is already absent here — no separate filtering needed by the caller.
+     */
+    List<KeycloakUserId> keycloakUserIdsFor(HouseholdId householdId);
+
+    /**
      * The <strong>governance de-link</strong> (Story 4.3, AD-7): removes the mapping row for {@code
      * (householdId, memberId)} if present; a no-op when none exists (idempotent). Distinct from
      * {@link #deleteMapping(KeycloakUserId, HouseholdId)}'s join-failure compensation — this is the

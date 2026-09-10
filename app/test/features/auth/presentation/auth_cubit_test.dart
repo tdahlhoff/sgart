@@ -9,6 +9,7 @@ import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_push_notifications.dart';
 
 void main() {
   group('AuthState', () {
@@ -223,6 +224,69 @@ void main() {
       await cubit.close();
 
       await signInFuture;
+    });
+
+    group('push notification registration (Story 4.5, AC5)', () {
+      late FakePushNotifications pushNotifications;
+
+      setUp(() {
+        pushNotifications = FakePushNotifications();
+      });
+
+      AuthCubit buildCubitWithPush() => AuthCubit(
+            oidcClient: oidcClient,
+            tokenStorage: tokenStorage,
+            identityApi: identityApi,
+            activeHouseholdStore: activeHouseholdStore,
+            pushNotifications: pushNotifications,
+          );
+
+      test('signIn_registersTheDeviceTokenOnceAuthenticated', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubitWithPush();
+
+        await cubit.signIn();
+        await Future<void>.delayed(Duration.zero); // the registration call is fire-and-forget
+
+        expect(pushNotifications.registerCallCount, 1);
+        await cubit.close();
+      });
+
+      test('signIn_neverRegistersWhenAuthenticationFails', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+        identityApi.errorToThrow = const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
+        final cubit = buildCubitWithPush();
+
+        await cubit.signIn();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(pushNotifications.registerCallCount, 0);
+        await cubit.close();
+      });
+
+      test('signOut_unregistersTheDeviceToken', () async {
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        final cubit = buildCubitWithPush();
+
+        await cubit.signOut();
+
+        expect(pushNotifications.unregisterCallCount, 1);
+        await cubit.close();
+      });
+
+      test('worksWithNoPushNotificationsDependencyAtAll', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit(); // no pushNotifications injected
+
+        await cubit.signIn();
+        await cubit.signOut();
+
+        await cubit.close();
+      });
     });
   });
 }

@@ -95,4 +95,16 @@ public final class JdbcMemberMappingRepository implements MemberMappingRepositor
                 .map(HouseholdId::new)
                 .toList();
     }
+
+    @Override
+    public List<KeycloakUserId> keycloakUserIdsFor(HouseholdId householdId) {
+        return jdbcClient
+                .sql("SELECT keycloak_user_id FROM identity_member_mapping WHERE household_id = :householdId")
+                .param("householdId", householdId.value())
+                .query(String.class)
+                .list()
+                .stream()
+                .map(KeycloakUserId::new)
+                .toList();
+    }
 }

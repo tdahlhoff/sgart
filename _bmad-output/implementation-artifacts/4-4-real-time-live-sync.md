@@ -4,7 +4,7 @@ baseline_commit: e5ce589953f77ddf34a393b4db467684b4b1a478
 
 # Story 4.4: Real-time live sync
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

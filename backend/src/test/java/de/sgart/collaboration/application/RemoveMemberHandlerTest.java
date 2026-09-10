@@ -111,6 +111,11 @@ class RemoveMemberHandlerTest {
                     public List<HouseholdId> householdIdsFor(de.sgart.identity.domain.KeycloakUserId keycloakUserId) {
                         return mappingRepository.householdIdsFor(keycloakUserId);
                     }
+
+                    @Override
+                    public List<de.sgart.identity.domain.KeycloakUserId> keycloakUserIdsFor(HouseholdId householdIdArg) {
+                        return mappingRepository.keycloakUserIdsFor(householdIdArg);
+                    }
                 };
         RemoveMemberHandler orderTrackingHandler = new RemoveMemberHandler(
                 orderTrackingEventStore,

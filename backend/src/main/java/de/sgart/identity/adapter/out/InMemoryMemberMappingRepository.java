@@ -71,5 +71,13 @@ public final class InMemoryMemberMappingRepository implements MemberMappingRepos
                 .toList();
     }
 
+    @Override
+    public List<KeycloakUserId> keycloakUserIdsFor(HouseholdId householdId) {
+        return mappingsByHouseholdAndKeycloakUser.keySet().stream()
+                .filter(key -> key.householdId().equals(householdId))
+                .map(HouseholdKeycloakKey::keycloakUserId)
+                .toList();
+    }
+
     private record HouseholdKeycloakKey(HouseholdId householdId, KeycloakUserId keycloakUserId) {}
 }

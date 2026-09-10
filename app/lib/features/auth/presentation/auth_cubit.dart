@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
+import '../../../shared/push/push_notifications.dart';
 import '../../households/data/active_household_store.dart';
 import '../data/identity_api.dart';
 import '../data/oidc_client.dart';
@@ -13,20 +16,33 @@ import 'auth_state.dart';
 /// sign-out (AC1, AC2, AC3). Depends only on the
 /// [OidcClient]/[SecureTokenStorage]/[IdentityApi]/[ActiveHouseholdStore] interfaces so tests never
 /// touch a real OIDC library, device storage, or network.
+///
+/// [pushNotifications] is optional (Story 4.5, AC5) — most existing call sites (and most tests)
+/// have no interest in push registration, mirroring `HouseholdShell`'s guarded-optional
+/// `eventStreamFactory`. When present: registers the device token once sign-in resolves to an
+/// authenticated session, and unregisters it on sign-out.
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit({
     required this._oidcClient,
     required this._tokenStorage,
     required this._identityApi,
     required this._activeHouseholdStore,
+    this._pushNotifications,
   }) : super(const AuthState.unauthenticated());
 
   final OidcClient _oidcClient;
   final SecureTokenStorage _tokenStorage;
   final IdentityApi _identityApi;
   final ActiveHouseholdStore _activeHouseholdStore;
+  final PushNotifications? _pushNotifications;
 
   OidcTokens? _tokens;
+
+  /// Bumped on every sign-out so a best-effort device-token registration that was started on
+  /// sign-in but resolves *after* the user signs out can detect that its session ended and undo
+  /// itself — otherwise the in-flight `register()` would re-create a live token row for a
+  /// signed-out device (Story 4.5, AC5).
+  int _sessionGeneration = 0;
 
   /// The access token the bearer interceptor attaches, or `null` when signed out. This cubit owns
   /// the in-memory session, so the HTTP client reads it from here instead of decrypting secure
@@ -60,6 +76,14 @@ class AuthCubit extends Cubit<AuthState> {
   /// clears the on-device last-active household so a later sign-in on the same device never
   /// inherits the previous person's active household (DSGVO / AD-7, Story 1.7 Clarification B).
   Future<void> signOut() async {
+    _sessionGeneration++;
+    try {
+      await _pushNotifications?.unregister();
+    } on Object {
+      // Best-effort (Story 4.5, AC5) — local sign-out must still succeed even when the
+      // unregister call fails; a stale token on the backend self-heals via the transport's
+      // invalid-token prune (AC5) the next time a push actually targets it.
+    }
     try {
       await _oidcClient.endSession(idToken: _tokens?.idToken);
     } on Object {
@@ -87,6 +111,9 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final identity = await _identityApi.fetchMe();
       _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId, identity.email));
+      // Best-effort (Story 4.5, AC5) — a failed registration must never fail the sign-in itself;
+      // the app already works fully without a device token, it just misses background pushes.
+      unawaited(_registerPushTokenBestEffort());
     } on Object catch (error) {
       final appError = _toAppError(error);
       if (allowRefresh && appError.code == 'auth.unauthorized' && await _tryRefreshTokens()) {
@@ -129,6 +156,22 @@ class AuthCubit extends Cubit<AuthState> {
       return error.error;
     }
     return AppError(code: 'auth.unknown', message: error.toString());
+  }
+
+  Future<void> _registerPushTokenBestEffort() async {
+    final registeredForGeneration = _sessionGeneration;
+    try {
+      await _pushNotifications?.register();
+      if (_sessionGeneration != registeredForGeneration) {
+        // The user signed out while this registration was in flight; its sign-out unregister ran
+        // before the token existed, so undo the now-orphaned registration for the signed-out
+        // device (Story 4.5, AC5).
+        await _pushNotifications?.unregister();
+      }
+    } on Object {
+      // See the call site's comment — never let a push-registration failure surface as a sign-in
+      // failure.
+    }
   }
 
   void _safeEmit(AuthState state) {

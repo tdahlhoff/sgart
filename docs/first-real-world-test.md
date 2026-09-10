@@ -202,6 +202,54 @@ usbipd detach --busid 2-4             # release the phone back to Windows
 
 ---
 
+## Background push notifications (Story 4.5, D2) — deferred manual wiring
+
+Story 4.5 shipped device-token registration, the swappable `ContentFreePushSender` port, and the
+content-free notification fan-out — but the **live** transport is deliberately left unwired (locked
+decision D2): the wired default is `LoggingContentFreePushSender` (logs the payload instead of
+sending it), and `FcmContentFreePushSender` is a documented skeleton behind
+`sgart.push.fcm.enabled` that throws `UnsupportedOperationException` if turned on before this
+section's steps are done. The Flutter side ships only the `PushNotifications` port,
+`BackendDeviceRegistrationClient`, and a fake — **no** `firebase_messaging` dependency, no native
+Android/iOS config. None of this needs external credentials for `flutter test`/`flutter
+analyze`/the backend test suite to stay green; it is only needed to see a **real** push arrive on a
+physical phone with the app backgrounded.
+
+To wire it up for real (not required for this guide's Parts 0–5, which already prove live sync over
+SSE while the app is foregrounded):
+
+1. **Firebase project.** Create a Firebase project, add an Android app with package id
+   `de.sgart.app` (or your build's applicationId), download `google-services.json` into
+   `app/android/app/`. Add the Google Services Gradle plugin to `app/android/build.gradle.kts` /
+   `app/android/app/build.gradle.kts` (not present in this repo yet).
+2. **Backend: implement `FcmContentFreePushSender`.** Add the `firebase-admin` Java SDK dependency
+   to `backend/build.gradle.kts`, download a service-account key (Firebase Console → Project
+   Settings → Service Accounts), and replace the skeleton's
+   `throw new UnsupportedOperationException(...)` in
+   `backend/src/main/java/de/sgart/collaboration/adapter/out/FcmContentFreePushSender.java` with a
+   real `FirebaseMessaging.send(...)` call — map FCM's `UNREGISTERED`/`NOT_FOUND` error to
+   `PushDeliveryResult.TOKEN_INVALID` (AC5's stale-token prune already wired above it). Set
+   `SGART_PUSH_FCM_ENABLED=true` to switch the wired bean from `LoggingContentFreePushSender`.
+   Never commit the service-account key — treat it like the existing `.env` secrets.
+3. **Flutter: add `firebase_messaging`.** Add the `firebase_messaging` package (verify latest
+   version supported by this repo's Flutter/Dart SDK constraint, CLAUDE.md §7) and run
+   `flutterfire configure` (or hand-wire `Firebase.initializeApp`) to generate
+   `firebase_options.dart`. Implement a concrete `PushNotifications` behind the existing port
+   (`app/lib/shared/push/push_notifications.dart`) that obtains the FCM token via
+   `FirebaseMessaging.instance.getToken()`, calls `BackendDeviceRegistrationClient.register(...)`,
+   listens to `FirebaseMessaging.onTokenRefresh` to re-register, and surfaces
+   `FirebaseMessaging.onMessage`/`onBackgroundMessage` as `HouseholdChangeNudge`s on
+   `incomingPushes` — never read any payload field beyond `householdId`/`resource` into state
+   (LD-1).
+4. **iOS: APNs.** Add the Apple Push Notification key/cert in the Firebase Console, enable the Push
+   Notifications + Background Modes → Remote notifications capabilities in Xcode, and add
+   `GoogleService-Info.plist`.
+5. **Verify.** Background the app (not force-quit), trigger a list change from another member, and
+   confirm the notification arrives; then re-open the app and confirm it wakes-and-fetches instead
+   of rendering anything from the push payload.
+
+---
+
 ## Alternatives to this USB path
 
 - **Android emulator (on Windows):** reaches the host via `10.0.2.2`. App flags:

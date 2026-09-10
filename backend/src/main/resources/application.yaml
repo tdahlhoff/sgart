@@ -69,6 +69,13 @@ sgart:
   live-sync:
     heartbeat-interval-seconds: ${SGART_LIVE_SYNC_HEARTBEAT_INTERVAL_SECONDS:15}
     emitter-timeout-ms: ${SGART_LIVE_SYNC_EMITTER_TIMEOUT_MS:0}
+  # Content-free background push (Story 4.5, D2): off by default everywhere, so the hermetic
+  # LoggingContentFreePushSender is the wired default (tests/CI/local dev never need live FCM
+  # credentials). A real deployment that has completed the manual Firebase Admin SDK + credentials
+  # wiring (docs/first-real-world-test) sets SGART_PUSH_FCM_ENABLED=true to switch transports.
+  push:
+    fcm:
+      enabled: ${SGART_PUSH_FCM_ENABLED:false}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;

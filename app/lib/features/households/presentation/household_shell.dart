@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/http/authenticated_http_client.dart';
+import '../../../shared/push/push_notifications.dart';
 import '../../../shared/sync/household_event_stream.dart';
 import '../../../shared/sync/household_live_sync_controller.dart';
 import '../../../shared/sync/live_sync_status.dart';
@@ -28,6 +29,11 @@ import 'households_cubit.dart';
 /// without a real HTTP client.
 typedef HouseholdEventStreamFactory = HouseholdEventStream? Function(BuildContext context, String householdId);
 
+/// Resolves the app-wide [PushNotifications] instance, if any (Story 4.5, AC1) — mirrors
+/// [HouseholdEventStreamFactory]'s guarded-optional shape. Overridden in tests that want
+/// deterministic control over incoming pushes without a real DI ancestor.
+typedef PushNotificationsResolver = PushNotifications? Function(BuildContext context);
+
 /// The persistent app shell (Story 1.7 AC1, Story 1.11 AC1; live sync Story 4.4): a header whose
 /// title is the active household's name rendered as a tappable switcher chip (left) plus a live
 /// connection-status indicator (right), over a three-tab body — Listen · Einkauf · Profil. Listen
@@ -49,11 +55,13 @@ class HouseholdShell extends StatefulWidget {
     required this.activeHousehold,
     required this.households,
     this.eventStreamFactory = _defaultEventStreamFactory,
+    this.pushNotificationsResolver = _defaultPushNotificationsResolver,
   });
 
   final HouseholdSummary activeHousehold;
   final List<HouseholdSummary> households;
   final HouseholdEventStreamFactory eventStreamFactory;
+  final PushNotificationsResolver pushNotificationsResolver;
 
   /// The production wiring. Guarded: a harness that has not wired [AuthenticatedHttpClient] into
   /// this subtree (most widget tests, which have no interest in live sync) simply gets no live
@@ -63,6 +71,17 @@ class HouseholdShell extends StatefulWidget {
     try {
       final httpClient = context.read<AuthenticatedHttpClient>();
       return HouseholdEventStream.forHousehold(httpClient: httpClient, householdId: householdId);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Guarded exactly like [_defaultEventStreamFactory] — a harness with no [PushNotifications]
+  /// ancestor (most widget tests, and any build where D2's native FCM wiring is still deferred)
+  /// simply gets no push wake-and-fetch rather than a crash.
+  static PushNotifications? _defaultPushNotificationsResolver(BuildContext context) {
+    try {
+      return context.read<PushNotifications>();
     } on Object {
       return null;
     }
@@ -123,6 +142,14 @@ class _HouseholdShellState extends State<HouseholdShell> {
     if (eventStream == null) {
       return;
     }
+    // Story 4.5 (AC1): a background push carries the same content-free {householdId, resource}
+    // shape as the SSE nudge; filtered to this shell's active household before it reaches the
+    // controller, so a push that targets a different household never fires a reconcile here (the
+    // KISS choice — that other household simply fetches fresh state when the user switches to
+    // it, matching every other household's normal on-open fetch).
+    final pushNotifications = widget.pushNotificationsResolver(context);
+    final pushNudges = pushNotifications?.incomingPushes
+        .where((nudge) => nudge.householdId == widget.activeHousehold.householdId);
     _liveSyncController = HouseholdLiveSyncController(
       eventStream: eventStream,
       onReconcile: () async {
@@ -136,6 +163,7 @@ class _HouseholdShellState extends State<HouseholdShell> {
       // A `403` (AC3, this member was removed/left — Review P1/decision ①1): re-bootstrap so the
       // now-inaccessible household drops out of view, silently re-routing to selection/create.
       onRevoked: _rebootstrapHouseholds,
+      pushNudges: pushNudges,
     );
     eventStream.start();
   }
