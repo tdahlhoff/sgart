@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-10
+last_updated: 2026-09-10 (Epic 4 retrospective — retro done, 6 action items recorded)
 # Story 4.6 review (dev-story) 2026-09-10 — T1-T10 complete. Backend 953/0 (incl. ArchUnit +
 # Testcontainers), Flutter 641/0 + analyze clean. Epic 4's final story — retro next after review.
 # Story 4.6 ready-for-dev (create-story, Opus 4.8) 2026-09-10 — Epic 4's FINAL story: invite-acceptance
@@ -254,7 +254,7 @@ development_status:
   4-4-real-time-live-sync: done
   4-5-content-free-notifications: done
   4-6-invite-acceptance-web-fallback: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   # Epic 5: Offline Resilience & Conflict
   epic-5: backlog
@@ -276,9 +276,9 @@ action_items:
     owner: "Dev"
     status: done
   - epic: 1
-    action: "Add a base error-advice contract test asserting every command endpoint maps missing/malformed input and every reachable domain exception to a 4xx (never 500)"
+    action: "Add a base error-advice contract test asserting every command endpoint maps missing/malformed input and every reachable domain exception to a 4xx (never 500) [RETIRED 2026-09-10, Epic 4 retro: superseded by distributed per-endpoint coverage that held across 4 epics]"
     owner: "Dev"
-    status: open
+    status: done
   - epic: 1
     action: "Extend story Definition-of-Done: commandId lifecycle correct, error advice mapped+tested, a11y labels on new interactive widgets, no dead strings/fields/stale comments, client fail-fast guard on text inputs"
     owner: "Process"
@@ -322,11 +322,11 @@ action_items:
   - epic: 3
     action: "Model-first planning for shared state: when an epic touches a shared state model or cross-aggregate vocabulary, draft the state machine + single ubiquitous transfer vocabulary as an explicit up-front artifact during epic/first-story planning, before the first story that mutates it (targets the item-transfer/status churn across 3.3/3.4/3.6)"
     owner: "PM+Architect"
-    status: open
+    status: done
   - epic: 3
     action: "Automated task-to-test cross-check: create-story emits an expected-tests manifest (task -> named test); a check script or code-review pre-step diffs claimed-done [x] tasks against tests that exist and fails the story if a [x] task has no matching test (structural, not a per-story reminder)"
     owner: "Dev+Process"
-    status: open
+    status: done
   - epic: 3
     action: "Prefer structural/code-once enforcement over per-story reminders for recurring DoD items: fold the optimistic-state check and read-model isolation+replay into create-story scaffolding / the Action-2 manifest instead of re-committing them as memory items a fourth time"
     owner: "Process"
@@ -334,12 +334,32 @@ action_items:
   - epic: 3
     action: "Fix commits get first-pass rigor: a fix's test must exercise the exact branch it claims (no hollow retry tests) and a fix must not leave contradicting javadoc/docs behind; treat every second-pass fix commit as reviewable code"
     owner: "Dev"
-    status: open
+    status: done
   - epic: 3
-    action: "Build the base error-advice contract test OR formally retire the action (3rd epic carrying Epic 1 Action 2 unbuilt while distributed per-endpoint coverage has held up); decide in Epic 4's first endpoint story"
+    action: "Build the base error-advice contract test OR formally retire the action (3rd epic carrying Epic 1 Action 2 unbuilt while distributed per-endpoint coverage has held up); decide in Epic 4's first endpoint story [DECIDED 2026-09-10, Epic 4 retro: RETIRED - per-endpoint coverage wins]"
+    owner: "Dev"
+    status: done
+  - epic: 3
+    action: "Address the checkpointed-subscription debt before/early in live sync (Story 4.4): the fromStart-replay-on-every-reconnect projectors and the cross-projector empty-store-set transient both become multi-user-visible under SSE; evaluate checkpointed subscriptions + a client trip-still-loading affordance during 4.4 planning [Epic 4 retro: NOT addressed in 4.4, carried to Epic 5 reconnect planning]"
+    owner: "Architect+Dev"
+    status: open
+  - epic: 4
+    action: "Retire the base error-advice contract test action - distributed per-endpoint error-advice coverage has held across four epics; formally closes Epic 1 Action 2 / Epic 3 Action 5"
+    owner: "Timo+Dev"
+    status: done
+  - epic: 4
+    action: "Add a technical-approach checkpoint to create-story: an explicit 'technical approach / non-functional concerns (concurrency, blocking model, transport)' section that must be filled before dev starts on any infrastructure-touching story (targets the 4.4 blocking-SSE-caught-in-review headline)"
+    owner: "PM+Architect"
+    status: open
+  - epic: 4
+    action: "Architect design pass for infra-touching stories: any story touching concurrency, transport, or a new adapter gets a short architect design pass before implementation, separate from code review (chosen alongside the create-story checkpoint)"
+    owner: "Architect"
+    status: open
+  - epic: 4
+    action: "[CRITICAL PATH before Epic 5] Close the under-tested SSE fan-out paths (subscribe / replay / shutdown-race across both HouseholdLiveSyncFanout and the 4.5 fan-out)"
     owner: "Dev"
     status: open
-  - epic: 3
-    action: "Address the checkpointed-subscription debt before/early in live sync (Story 4.4): the fromStart-replay-on-every-reconnect projectors and the cross-projector empty-store-set transient both become multi-user-visible under SSE; evaluate checkpointed subscriptions + a client trip-still-loading affordance during 4.4 planning"
-    owner: "Architect+Dev"
+  - epic: 4
+    action: "[CRITICAL PATH before Epic 5] GDPR privacy-guarantee tests for the Epic-4 mechanisms that exist now: de-link=erasure (household deletion purge, membership retract), no-PII-in-events, invite side-store purge points; full Epic-6 export/erasure feature tests stay with Epic 6"
+    owner: "Dev"
     status: open
