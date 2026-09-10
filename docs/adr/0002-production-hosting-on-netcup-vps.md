@@ -58,6 +58,18 @@ image); this removed the only open technical question about the ARM alternative 
 so deployment must **cap the JVM heaps of both the backend and Keycloak (`-Xmx`)** and provision
 **~2 GB swap**. Any future sizing decision starts from these 8 GB.
 
+## Server access
+
+| Attribute | Value |
+|---|---|
+| Hostname | `v2202609416029517751.happysrv.de` |
+| IPv4 | `89.58.46.117` |
+| IPv6 | `2a03:4000:67:79d:38ed:78ff:fe14:2cb5` |
+| SSH | Key-only (password auth disabled), `PermitRootLogin no` — log in as `timo`, use `sudo` for root actions |
+| Users | `timo` (sudo-enabled), `root` (SSH login disabled, reachable via netcup KVM/Rescue console) |
+| Intrusion protection | `fail2ban` active on the `sshd` jail |
+| Emergency access | netcup Server Control Panel → KVM console / Rescue system (works independently of SSH; use this if locked out) |
+
 ## Consequences
 
 **Positive**
@@ -94,5 +106,12 @@ These are our responsibility, not the provider's — the server + AVV is only th
    only. The proxy must not buffer or short-timeout the SSE live-sync endpoint (Story 4.4).
 5. **Encrypted EU backups** with a defined retention period (Rule 5 storage limitation).
 6. **JVM heap caps** (backend + Keycloak) and **~2 GB swap** so the 8 GB holds.
-7. **Server hardening**: SSH key-only, firewall opening only **443/TCP** (HTTPS) and **64738
-   TCP + UDP** (Murmur — confirm UDP is permitted), `fail2ban`, automatic security updates.
+7. **Server hardening**: SSH key-only ✅, `ufw` firewall (22/TCP, 80/TCP, 443/TCP,
+   64738 TCP + UDP for Murmur, default-deny incoming) ✅, `fail2ban` ✅, automatic security
+   updates still open.
+8. **Keycloak SMTP (registration/invite e-mails)**: Keycloak will send mail directly from this VPS.
+   Before enabling it: remove netcup's default "netcup Mail Block" policy in SCP → Firewall (it
+   blocks inbound/outbound SMTP by default); then set up SPF/DKIM/DMARC for the sending domain, or
+   deliverability will suffer since the VPS IP has no mail reputation. Fallback if that proves
+   unreliable: an external transactional e-mail relay (e.g. Mailgun/SendGrid free tier) instead of
+   direct SMTP.
