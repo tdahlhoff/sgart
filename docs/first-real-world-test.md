@@ -250,6 +250,97 @@ SSE while the app is foregrounded):
 
 ---
 
+## Invite deep link + web fallback (Story 4.6) — deferred manual wiring
+
+Story 4.6 wired every seam that is unit/integration-testable without a production host (locked
+decision D1): the host-scoped `de.sgart.app://invite` deep-link handler, the minimal static
+`/invite` web-fallback page, the config-gated `KeycloakAdminFindHouseholdMemberByEmail` lookup
+(D4), and the single `InviteLinkFactory` (`sgart.invite.base-url`) every entry point builds its
+link from. None of this needs external credentials or a real domain for `flutter test`/`flutter
+analyze`/the backend test suite to stay green — it is only needed to verify the **production**
+entry points end-to-end: a browser or another device opening a real invite link, without the app
+already installed via USB/emulator.
+
+### Trigger the deep link manually (dev, no production host needed)
+
+With the app installed (this guide's Parts 0–5) and a pending invite's `householdId`/`inviteId` in
+hand (e.g. from the dev-profile `InvitePersonHandler` log line, `sgart.invite.base-url`'s log-only
+guard, Story 4.6 AC6):
+
+```bash
+adb shell am start -a android.intent.action.VIEW \
+  -d "de.sgart.app://invite?h=<householdId>&i=<inviteId>" de.sgart.app
+```
+
+This exercises the exact `AndroidManifest.xml` intent-filter/`InviteDeepLinkService` path AC1
+covers with unit/widget tests — the `adb` step is what proves the OS actually routes the URI to the
+installed app, which `flutter test` cannot.
+
+### Verified `https` Android App Links + iOS Universal Links (needs the production domain)
+
+The dev-only custom scheme (`de.sgart.app://invite?...`) works without any of this — it is the
+**fallback-free** path once the app is installed. Verified `https://<domain>/invite` App
+Links/Universal Links additionally let the *same* link open the app directly from a browser/chat
+app without a scheme prompt, and are what makes the web-fallback page (below) actually reachable at
+a real URL:
+
+1. **Android App Links.** Host `https://<domain>/.well-known/assetlinks.json` (served by the
+   production reverse proxy) declaring the app's package id and the **release-signing** key's
+   SHA-256 fingerprint (`keytool -list -v -keystore <release-keystore>`, not the debug key). Add an
+   `autoVerify="true"` `https` intent filter for host `<domain>`, path `/invite`, alongside the
+   existing custom-scheme filter added in Story 4.6 (`AndroidManifest.xml`) — do not remove the
+   custom-scheme one, it is what dev/USB testing above still uses.
+2. **iOS Universal Links.** Host `https://<domain>/.well-known/apple-app-site-association` (no file
+   extension, served as `application/json`) declaring the app's Team ID + bundle id and the
+   `/invite` path. Add the `associated-domains` entitlement (`applinks:<domain>`) in Xcode's
+   Signing & Capabilities.
+3. **Verify** with each platform's own domain-verification diagnostics (Android: `adb shell pm
+   get-app-links de.sgart.app`; iOS: the Associated Domains diagnostics in Xcode/Console) before
+   relying on it — a misconfigured `assetlinks.json`/AASA silently falls back to opening a browser
+   instead of the app.
+
+### Reverse-proxy `/invite` route (needs the production host)
+
+Per ADR-0002 (no TLS reverse proxy yet): once one exists, route `https://<domain>/invite*` to the
+backend's `GET /invite`/`GET /invite/config.json` (Story 4.6 `InviteWebFallbackController`) the same
+way the API's `/api/v1/**` prefix is routed — same origin, so the page's same-origin `fetch()` calls
+to `/api/v1/households/{h}/invites/{i}/accept` need no CORS configuration.
+
+### Production Keycloak redirect URIs for the web fallback (needs the production domain)
+
+The dev-only `sgart-web-invite` client (`keycloak/realm-sgart.json`) is scoped to
+`http://localhost:8081/invite*`/`http://localhost:8081` (`webOrigins`). For production, add the
+real domain's redirect URI (`https://<domain>/invite*`) and web origin (`https://<domain>`) to that
+client — do not reuse `sgart-app`'s native redirect set (Q1's default, isolating web origins from
+the native app). Update `sgart.invite.base-url`
+(`SGART_INVITE_BASE_URL=https://<domain>/invite`) and the web page's served `authorizeUrl`/
+`tokenUrl` (driven by `sgart.security.jwt.issuer`, already environment-driven) to match.
+
+### SMTP invite-email delivery (needs the mail-unblocked VPS + SPF/DKIM/DMARC)
+
+`InvitePersonHandler` already builds the link via `InviteLinkFactory` and logs it at `INFO` under
+the `dev` profile only (Story 4.6, AC6 — opaque UUIDs, not PII, AD-6). Wiring **delivery** needs
+Keycloak SMTP configured per ADR-0002 §8 (first requires netcup's outbound mail-block removed, plus
+SPF/DKIM/DMARC on the sending domain) *or* a transactional email relay (SendGrid/Postmark/etc.)
+called from a new adapter that reads the `InviteLinkFactory`-built link and the invitee's raw email
+from `InviteEmailSideStore` (the one place it is allowed to live, AD-6) — build this the same way
+D4 wires `KeycloakAdminFindHouseholdMemberByEmail`: a `@ConditionalOnProperty`-gated adapter,
+default off, no admin/SMTP credentials needed for `./gradlew test`.
+
+### Enabling the Keycloak Admin lookup (D4)
+
+Local/dev testing already has a seeded confidential client (`sgart-admin`,
+`keycloak/realm-sgart.json`) with a service-account `view-users` role on `realm-management` — set
+`SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` (default `false`) against the local Keycloak from this
+guide's Part 1 and `KeycloakAdminFindHouseholdMemberByEmail` replaces
+`DeferredFindHouseholdMemberByEmail`; the 4.1 already-a-member check (AC3/E5) then resolves for
+real. For production: provision a **separate** confidential client with only the `view-users`
+realm-management role (least privilege — never reuse `sgart-admin`'s dev secret,
+`local-dev-only-keycloak-admin-secret-change-me`) and set
+`SGART_IDENTITY_KEYCLOAK_ADMIN_BASE_URL`/`_REALM`/`_CLIENT_ID`/`_CLIENT_SECRET` to match.
+
+---
+
 ## Alternatives to this USB path
 
 - **Android emulator (on Windows):** reaches the host via `10.0.2.2`. App flags:

@@ -24,6 +24,17 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Story 4.6 (D2, AC1/AC8): the invite deep link, host-scoped so it never collides
+                 with flutter_appauth's OAuth redirect receiver on the same de.sgart.app scheme
+                 (registered separately via manifestPlaceholders["appAuthRedirectScheme"] in
+                 build.gradle.kts, host "oauth"). Android routes by scheme+host, so the two
+                 intent-filters do not fight over the same URI. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="de.sgart.app" android:host="invite"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

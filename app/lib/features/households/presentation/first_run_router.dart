@@ -9,7 +9,9 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
+import '../../invites/presentation/pending_invite_link_cubit.dart';
 import '../../lists/data/item_suggestions_api.dart';
 import '../../lists/data/items_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
@@ -19,6 +21,7 @@ import '../../stores/data/stores_api.dart';
 import '../../trips/data/trips_api.dart';
 import '../data/active_household_store.dart';
 import '../data/households_api.dart';
+import 'await_invite_page.dart';
 import 'create_or_await_choice_page.dart';
 import 'household_selection_page.dart';
 import 'household_shell.dart';
@@ -115,14 +118,38 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   }
 }
 
+/// Resolves the app-wide [PendingInviteLinkCubit], if any (Story 4.6, AC1/AC3) — mirrors
+/// [HouseholdShell]'s `PushNotificationsResolver` guarded-optional shape. Overridden in tests that
+/// want deterministic control over deep-link routing without a real DI ancestor.
+typedef PendingInviteLinkCubitResolver = PendingInviteLinkCubit? Function(BuildContext context);
+
 /// Switches on [HouseholdsState] once fetched. Separated from [FirstRunRouter] so tests can drive
 /// it with a fake [HouseholdsCubit] instead of the real HTTP dependency (CLAUDE.md §6).
+///
+/// Also the Story 4.6 (AC1/AC3) routing point for a pending OS deep-link/cold-start invite link:
+/// [FirstRunRouter] only mounts once authenticated, so this is where a link offered to
+/// [PendingInviteLinkCubit] while signed out finally gets consumed — this class already owns the
+/// `InvitesApi`/`HouseholdsCubit` [openAwaitInvitePage] needs, so no second accept path is built
+/// (DRY, mirrors [CreateOrAwaitChoicePage]'s "I have an invite" choice).
 class FirstRunRouterBody extends StatelessWidget {
-  const FirstRunRouterBody({super.key});
+  const FirstRunRouterBody({super.key, this.pendingInviteLinkCubitResolver = _defaultPendingInviteLinkCubitResolver});
+
+  final PendingInviteLinkCubitResolver pendingInviteLinkCubitResolver;
+
+  /// Guarded exactly like [HouseholdShell]'s push resolver — a harness with no
+  /// [PendingInviteLinkCubit] ancestor (most widget tests) simply gets no deep-link routing rather
+  /// than a crash.
+  static PendingInviteLinkCubit? _defaultPendingInviteLinkCubitResolver(BuildContext context) {
+    try {
+      return context.read<PendingInviteLinkCubit>();
+    } on Object {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HouseholdsCubit, HouseholdsState>(
+    final content = BlocBuilder<HouseholdsCubit, HouseholdsState>(
       builder: (context, state) {
         return switch (state.status) {
           HouseholdsStatus.loading => const _LoadingPage(),
@@ -135,6 +162,56 @@ class FirstRunRouterBody extends StatelessWidget {
           HouseholdsStatus.failure => const _FailurePage(),
         };
       },
+    );
+
+    final pendingInviteLinkCubit = pendingInviteLinkCubitResolver(context);
+    if (pendingInviteLinkCubit == null) {
+      return content;
+    }
+    return _PendingInviteLinkRouter(cubit: pendingInviteLinkCubit, child: content);
+  }
+}
+
+/// Routes a [PendingInviteLinkCubit] link into [openAwaitInvitePage] exactly once (AC1/AC3): once
+/// for a link that was already pending the moment this widget mounts (the signed-out→sign-in case
+/// — [FirstRunRouterBody] only exists post-auth, so a link offered before sign-in sits in the
+/// cubit's current state with no new emission for a plain [BlocListener] to catch), and once more
+/// for any link offered later while this subtree is already alive. [PendingInviteLinkCubit.consume]
+/// is what keeps the two paths from double-routing the same link.
+class _PendingInviteLinkRouter extends StatefulWidget {
+  const _PendingInviteLinkRouter({required this.cubit, required this.child});
+
+  final PendingInviteLinkCubit cubit;
+  final Widget child;
+
+  @override
+  State<_PendingInviteLinkRouter> createState() => _PendingInviteLinkRouterState();
+}
+
+class _PendingInviteLinkRouterState extends State<_PendingInviteLinkRouter> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _consumeAndRoute());
+  }
+
+  void _consumeAndRoute() {
+    if (!mounted) {
+      return;
+    }
+    final link = widget.cubit.consume();
+    if (link != null) {
+      openAwaitInvitePage(context, initialLink: link);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<PendingInviteLinkCubit, InviteLink?>(
+      bloc: widget.cubit,
+      listenWhen: (previous, current) => current != null,
+      listener: (context, link) => _consumeAndRoute(),
+      child: widget.child,
     );
   }
 }

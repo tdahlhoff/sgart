@@ -60,6 +60,13 @@ sgart:
   # known, committed secret in production.
   invite:
     email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET}
+    # Invite link factory (Story 4.6, AC6): the single configurable base URL every invite link is
+    # built from — the exact form the deep link, the web fallback page, and InviteLink.tryParse
+    # (Flutter) all consume.
+    base-url: ${SGART_INVITE_BASE_URL:http://localhost:8081/invite}
+    # The dedicated public PKCE client the web fallback page (Story 4.6, D3) authenticates with —
+    # isolates web origins/redirects from the native app's sgart-app client (keycloak/realm-sgart.json).
+    web-client-id: ${SGART_INVITE_WEB_CLIENT_ID:sgart-web-invite}
   # Live sync (Story 4.4): the per-household SSE stream's heartbeat cadence and the emitter's own
   # async timeout. The heartbeat interval must stay shorter than any intermediary proxy's idle
   # timeout so a live-but-quiet connection isn't dropped. The emitter timeout is 0 (Servlet-spec
@@ -76,6 +83,19 @@ sgart:
   push:
     fcm:
       enabled: ${SGART_PUSH_FCM_ENABLED:false}
+  identity:
+    # Keycloak Admin email→user lookup (Story 4.6, D4): off by default everywhere, so the hermetic
+    # DeferredFindHouseholdMemberByEmail stays wired (tests/CI/local dev never need admin credentials).
+    # A real deployment that has completed the manual confidential-admin-client wiring
+    # (docs/first-real-world-test) sets SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true to switch adapters.
+    # No default for client-secret outside the "dev" profile: enabling this without a real secret
+    # fails context startup rather than silently using a known, committed one in production.
+    keycloak-admin:
+      enabled: ${SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED:false}
+      base-url: ${SGART_IDENTITY_KEYCLOAK_ADMIN_BASE_URL:http://localhost:8080}
+      realm: ${SGART_IDENTITY_KEYCLOAK_ADMIN_REALM:sgart}
+      client-id: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_ID:sgart-admin}
+      client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;
@@ -88,3 +108,6 @@ spring:
 sgart:
   invite:
     email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET:local-dev-only-invite-hmac-secret-change-me}
+  identity:
+    keycloak-admin:
+      client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-only-keycloak-admin-secret-change-me}

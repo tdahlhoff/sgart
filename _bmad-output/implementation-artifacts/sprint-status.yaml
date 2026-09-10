@@ -42,6 +42,21 @@
 
 generated: 2026-08-22
 last_updated: 2026-09-10
+# Story 4.6 review (dev-story) 2026-09-10 — T1-T10 complete. Backend 953/0 (incl. ArchUnit +
+# Testcontainers), Flutter 641/0 + analyze clean. Epic 4's final story — retro next after review.
+# Story 4.6 ready-for-dev (create-story, Opus 4.8) 2026-09-10 — Epic 4's FINAL story: invite-acceptance
+# web fallback + OS deep link. Config/entry-point wiring over 4.2's accept engine (reuses AcceptInvite +
+# InviteLink.tryParse; NO new membership domain state, NO migration). Timo locked D1-D4 (2026-09-10):
+# (D1) code the testable slice now, document prod-infra as manual follow-up (prod NOT deployed per
+# ADR-0002 — no domain/TLS/SMTP); (D2) deep link = custom scheme de.sgart.app://invite?h=&i= via
+# app_links now (host-scoped 'invite' vs appauth's 'oauth' — the crux), https App Links/iOS Universal
+# Links documented; (D3) web fallback = minimal static HTML+JS accept-only page (backend static + view
+# controller), NO Flutter-web target; (D4) real Keycloak Admin email->user lookup behind
+# @ConditionalOnProperty (Deferred stays default = no admin creds for CI/tests), completing 4.1's E5
+# check; SMTP invite-email delivery documented. Also: InviteLinkFactory + sgart.invite.base-url.
+# 3 non-blocking Qs (dedicated web PKCE client; dev link logging; distinct scheme if OAuth contends).
+# After 4.6 review → Epic 4 retro (see epic-4-retro-notes). Baseline last-green ≈ backend 945 /
+# Flutter 626 (Story 4.5, 500ec09).
 # Backend 847/0 (incl. ArchUnit + Testcontainers) after the review-findings pass; Flutter untouched
 # by this pass (592/0 as of the code review, not re-run). Crux: ACL de-link
 # after append verified end-to-end with recorded call-order tests. Unplanned fix: list/trip
@@ -238,7 +253,7 @@ development_status:
   4-3-membership-roles-governance: done
   4-4-real-time-live-sync: done
   4-5-content-free-notifications: done
-  4-6-invite-acceptance-web-fallback: backlog
+  4-6-invite-acceptance-web-fallback: done
   epic-4-retrospective: optional
 
   # Epic 5: Offline Resilience & Conflict

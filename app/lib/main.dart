@@ -8,11 +8,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'features/auth/presentation/auth_gate.dart';
+import 'features/invites/data/invite_link.dart';
+import 'features/invites/presentation/pending_invite_link_cubit.dart';
 import 'features/settings/data/locale_preference_store.dart';
 import 'features/settings/presentation/locale_cubit.dart';
 import 'features/settings/presentation/locale_state.dart';
 import 'features/settings/supported_locales.dart';
 import 'l10n/gen/app_localizations.dart';
+import 'shared/deeplinks/invite_deep_link_service.dart';
 import 'theme/sgart_theme.dart';
 
 /// Entry point of the SGART Flutter client.
@@ -53,37 +56,77 @@ void registerBundledFontLicenses() {
   });
 }
 
-class SgartApp extends StatelessWidget {
+class SgartApp extends StatefulWidget {
   const SgartApp({super.key});
+
+  @override
+  State<SgartApp> createState() => _SgartAppState();
+}
+
+class _SgartAppState extends State<SgartApp> {
+  // Held above AuthGate (Story 4.6, AC1/AC3) so a deep link that arrives before sign-in survives
+  // the sign-in→accept transition — see PendingInviteLinkCubit.
+  final PendingInviteLinkCubit _pendingInviteLinkCubit = PendingInviteLinkCubit();
+  final InviteDeepLinkService _inviteDeepLinkService = InviteDeepLinkService.appLinks();
+  StreamSubscription<InviteLink>? _inviteLinkSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _inviteDeepLinkService.initialInviteLink().then((link) {
+      if (link != null) {
+        _pendingInviteLinkCubit.offer(link);
+      }
+    }).catchError((Object error, StackTrace stackTrace) {
+      // A platform-channel failure while reading the cold-start link must not surface as an
+      // uncaught async error — no deep link simply means no routing (Story 4.6 review).
+      FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stackTrace));
+    });
+    _inviteLinkSubscription = _inviteDeepLinkService.inviteLinkStream.listen(
+      _pendingInviteLinkCubit.offer,
+      onError: (Object error, StackTrace stackTrace) =>
+          FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stackTrace)),
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_inviteLinkSubscription?.cancel());
+    unawaited(_pendingInviteLinkCubit.close());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     // Held above MaterialApp so it can drive `MaterialApp.locale`; the auth-lifecycle bridge inside
     // AuthGate loads/clears the per-user preference (Story 1.10, provider-tree note).
-    return BlocProvider(
-      create: (_) => LocaleCubit(const SharedPreferencesLocalePreferenceStore()),
-      child: BlocBuilder<LocaleCubit, LocaleState>(
-        builder: (context, localeState) {
-          return MaterialApp(
-            title: 'SGART',
-            theme: SgartTheme.light(),
-            darkTheme: SgartTheme.dark(),
-            themeMode: ThemeMode.system,
-            // `null` follows the device locale (resolved below); an explicit choice pins a region.
-            locale: localeState.effectiveLocale,
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: supportedLocales,
-            localeResolutionCallback: resolveSupportedLocale,
-            // The sign-in gate is the app's single entry path (Story 1.4) — no app shell or routing
-            // yet (Story 1.6). Kept `const` so a locale rebuild does not recreate AuthGate/AuthCubit.
-            home: const AuthGate(),
-          );
-        },
+    return BlocProvider<PendingInviteLinkCubit>.value(
+      value: _pendingInviteLinkCubit,
+      child: BlocProvider(
+        create: (_) => LocaleCubit(const SharedPreferencesLocalePreferenceStore()),
+        child: BlocBuilder<LocaleCubit, LocaleState>(
+          builder: (context, localeState) {
+            return MaterialApp(
+              title: 'SGART',
+              theme: SgartTheme.light(),
+              darkTheme: SgartTheme.dark(),
+              themeMode: ThemeMode.system,
+              // `null` follows the device locale (resolved below); an explicit choice pins a region.
+              locale: localeState.effectiveLocale,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: supportedLocales,
+              localeResolutionCallback: resolveSupportedLocale,
+              // The sign-in gate is the app's single entry path (Story 1.4) — no app shell or
+              // routing yet (Story 1.6).
+              home: const AuthGate(),
+            );
+          },
+        ),
       ),
     );
   }

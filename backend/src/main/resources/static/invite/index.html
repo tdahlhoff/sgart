@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SGART Einladung</title>
+<!--
+  Story 4.6 (D3, AC2/AC5): the minimal, accept-only web fallback. No external CDN/script (bundled,
+  offline-of-third-parties, NFR7) — this is the ONE place invite acceptance happens on the web; it
+  exposes no other app functionality, no navigation into the app's daily surfaces. Authenticates via
+  Keycloak Authorization Code + PKCE, then calls the same accept endpoint the OS deep link uses
+  (Story 4.2's AcceptInvite path) — AC3, same join outcome either way.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.25rem; }
+  p.hint { color: #666; font-size: 0.9rem; }
+  .status { padding: 1rem; border-radius: 0.5rem; margin-top: 1rem; }
+  .status.pending { background: #eef; }
+  .status.success { background: #e6f7ea; }
+  .status.error { background: #fdeaea; }
+  #confirm { margin-top: 1rem; }
+  #confirm button { font-size: 1rem; padding: 0.6rem 1.2rem; margin-right: 0.5rem; border-radius: 0.5rem; }
+</style>
+</head>
+<body>
+<h1>SGART Haushaltseinladung</h1>
+<div id="status" class="status pending">Einladung wird geprüft …</div>
+<p class="hint">
+  Diese Seite dient ausschließlich der Annahme einer Haushaltseinladung. Mit dem Beitritt werden nur
+  die für die Mitgliedschaft nötigen Daten verarbeitet (Rechtsgrundlage: Vertrag/berechtigtes
+  Interesse der Haushaltsverwaltung). Sie treten dem Haushalt als „Mitglied" bei.
+</p>
+
+<div id="confirm" hidden>
+  <p>Möchten Sie diesem Haushalt als „Mitglied" beitreten?</p>
+  <button id="accept-button" type="button">Beitreten</button>
+  <button id="decline-button" type="button">Ablehnen</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var statusEl = document.getElementById("status");
+
+  function showStatus(kind, message) {
+    statusEl.className = "status " + kind;
+    statusEl.textContent = message;
+  }
+
+  function base64UrlEncode(buffer) {
+    var bytes = new Uint8Array(buffer);
+    var binary = "";
+    for (var i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function randomString(length) {
+    var array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return base64UrlEncode(array.buffer);
+  }
+
+  async function sha256Base64Url(value) {
+    var data = new TextEncoder().encode(value);
+    var digest = await crypto.subtle.digest("SHA-256", data);
+    return base64UrlEncode(digest);
+  }
+
+  function currentInviteParams() {
+    var params = new URLSearchParams(window.location.search);
+    return {
+      householdId: params.get("h"),
+      inviteId: params.get("i"),
+      code: params.get("code"),
+      state: params.get("state"),
+      error: params.get("error")
+    };
+  }
+
+  function redirectUriWithoutAuthParams() {
+    var url = new URL(window.location.href);
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("session_state");
+    url.searchParams.delete("iss");
+    return url.toString();
+  }
+
+  function generateCommandId() {
+    return crypto.randomUUID();
+  }
+
+  async function beginSignIn(config, householdId, inviteId) {
+    var codeVerifier = randomString(64);
+    var codeChallenge = await sha256Base64Url(codeVerifier);
+    var state = randomString(16);
+    sessionStorage.setItem("sgart.invite.codeVerifier", codeVerifier);
+    sessionStorage.setItem("sgart.invite.state", state);
+    sessionStorage.setItem("sgart.invite.householdId", householdId);
+    sessionStorage.setItem("sgart.invite.inviteId", inviteId);
+
+    var authorizeUrl = new URL(config.authorizeUrl);
+    authorizeUrl.searchParams.set("client_id", config.clientId);
+    authorizeUrl.searchParams.set("redirect_uri", redirectUriWithoutAuthParams());
+    authorizeUrl.searchParams.set("response_type", "code");
+    authorizeUrl.searchParams.set("scope", "openid");
+    authorizeUrl.searchParams.set("code_challenge", codeChallenge);
+    authorizeUrl.searchParams.set("code_challenge_method", "S256");
+    authorizeUrl.searchParams.set("state", state);
+    window.location.assign(authorizeUrl.toString());
+  }
+
+  async function exchangeCodeForToken(config, code) {
+    var codeVerifier = sessionStorage.getItem("sgart.invite.codeVerifier");
+    var body = new URLSearchParams();
+    body.set("grant_type", "authorization_code");
+    body.set("client_id", config.clientId);
+    body.set("code", code);
+    body.set("redirect_uri", redirectUriWithoutAuthParams());
+    body.set("code_verifier", codeVerifier);
+
+    var response = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    });
+    if (!response.ok) {
+      throw new Error("token-exchange-failed");
+    }
+    var token = await response.json();
+    return token.access_token;
+  }
+
+  async function acceptInvite(accessToken, householdId, inviteId) {
+    var response = await fetch(
+      "/api/v1/households/" + encodeURIComponent(householdId) + "/invites/" + encodeURIComponent(inviteId) + "/accept",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ commandId: generateCommandId() })
+      }
+    );
+    return response;
+  }
+
+  // The invitee confirms (or declines) the join explicitly — the page never joins a household on
+  // their behalf without a gesture (UX-DR20 calm decline; Story 4.6 review, Decision 1).
+  function promptConfirm(accessToken, householdId, inviteId) {
+    var confirmEl = document.getElementById("confirm");
+    showStatus("pending", "Bitte bestätigen Sie den Beitritt.");
+    confirmEl.hidden = false;
+    document.getElementById("accept-button").addEventListener("click", async function () {
+      confirmEl.hidden = true;
+      showStatus("pending", "Beitritt wird verarbeitet …");
+      try {
+        var acceptResponse = await acceptInvite(accessToken, householdId, inviteId);
+        showOutcome(acceptResponse);
+      } catch (error) {
+        showStatus("error", "Der Einladungslink ist ungültig.");
+      }
+    });
+    document.getElementById("decline-button").addEventListener("click", function () {
+      confirmEl.hidden = true;
+      showStatus("pending", "Sie sind dem Haushalt nicht beigetreten.");
+    });
+  }
+
+  function showOutcome(response) {
+    if (response.status === 200) {
+      showStatus("success", "Willkommen! Sie sind dem Haushalt als Mitglied beigetreten.");
+    } else if (response.status === 404) {
+      showStatus("error", "Diese Einladung wurde nicht gefunden.");
+    } else if (response.status === 409) {
+      showStatus("error", "Diese Einladung wurde bereits verwendet.");
+    } else if (response.status === 410) {
+      showStatus("error", "Diese Einladung ist abgelaufen.");
+    } else {
+      showStatus("error", "Der Einladungslink ist ungültig.");
+    }
+  }
+
+  async function run() {
+    var params = currentInviteParams();
+
+    // Keycloak returned an error (e.g. the invitee cancelled sign-in): the redirect carries `error`
+    // but no `code`. Stop here — without this the page would re-enter beginSignIn and loop forever
+    // (Story 4.6 review).
+    if (params.error) {
+      showStatus("error", "Die Anmeldung wurde abgebrochen oder ist fehlgeschlagen.");
+      return;
+    }
+
+    if (params.code) {
+      var storedState = sessionStorage.getItem("sgart.invite.state");
+      var householdId = sessionStorage.getItem("sgart.invite.householdId");
+      var inviteId = sessionStorage.getItem("sgart.invite.inviteId");
+      if (!storedState || storedState !== params.state || !householdId || !inviteId) {
+        showStatus("error", "Der Einladungslink ist ungültig.");
+        return;
+      }
+      try {
+        var configResponse = await fetch("/invite/config.json");
+        var config = await configResponse.json();
+        var accessToken = await exchangeCodeForToken(config, params.code);
+        promptConfirm(accessToken, householdId, inviteId);
+      } catch (error) {
+        showStatus("error", "Der Einladungslink ist ungültig.");
+      }
+      return;
+    }
+
+    if (!params.householdId || !params.inviteId) {
+      showStatus("error", "Der Einladungslink ist ungültig.");
+      return;
+    }
+
+    try {
+      var configResponse2 = await fetch("/invite/config.json");
+      var config2 = await configResponse2.json();
+      showStatus("pending", "Sie werden zur Anmeldung weitergeleitet …");
+      await beginSignIn(config2, params.householdId, params.inviteId);
+    } catch (error) {
+      showStatus("error", "Der Einladungslink ist ungültig.");
+    }
+  }
+
+  run();
+})();
+</script>
+</body>
+</html>

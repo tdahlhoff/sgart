@@ -7,11 +7,12 @@ import java.util.Optional;
 
 /**
  * The 4.1 implementation of {@link FindHouseholdMemberByEmail}: always resolves "unknown" (empty).
- * Deliberately deferred (locked decision 2, Story 4.1) — a real Keycloak Admin API email→user
- * lookup ships in Story 4.6. Story 4.2's accept flow never needs it: the joiner's {@code MemberId}
- * is issued from their own JWT ({@code IssueMemberIdentity}), never resolved by email. Until 4.6,
- * every invite email is treated as belonging to nobody yet, which is correct: no second member
- * exists to already be one.
+ * This is the <strong>fallback</strong> wired whenever {@code
+ * sgart.identity.keycloak-admin.enabled=false} (the default — tests, CI, local dev). The real
+ * Keycloak Admin API email→user lookup is {@code KeycloakAdminFindHouseholdMemberByEmail} (Story
+ * 4.6, D4), config-gated in {@code IdentityBeansConfig}. Story 4.2's accept flow never needs
+ * either: the joiner's {@code MemberId} is issued from their own JWT ({@code
+ * IssueMemberIdentity}), never resolved by email.
  */
 public final class DeferredFindHouseholdMemberByEmail implements FindHouseholdMemberByEmail {
 

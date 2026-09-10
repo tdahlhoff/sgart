@@ -104,6 +104,12 @@ These are our responsibility, not the provider's — the server + AVV is only th
 4. **TLS in transit**: a reverse proxy (Caddy or nginx/Traefik) with Let's Encrypt in front of the
    backend; **never expose KurrentDB / PostgreSQL / Keycloak** — internal to the Docker network
    only. The proxy must not buffer or short-timeout the SSE live-sync endpoint (Story 4.4).
+   **Docker bypasses `ufw`**: a container's `ports:` mapping is wired via `iptables` directly and
+   is reachable from the internet regardless of `ufw` rules (unlike the dev `docker-compose.yml`,
+   which maps 5432/2113/8080 — fine locally, a GDPR-relevant exposure in prod). The production
+   compose must publish **only** the reverse proxy (80/443) and Murmur (64738); Postgres,
+   KurrentDB, and Keycloak get no `ports:` entry at all, reachable only over the internal Docker
+   network.
 5. **Encrypted EU backups** with a defined retention period (Rule 5 storage limitation).
 6. **JVM heap caps** (backend + Keycloak) and **~2 GB swap** so the 8 GB holds.
 7. **Server hardening**: SSH key-only ✅, `ufw` firewall (22/TCP, 80/TCP, 443/TCP,

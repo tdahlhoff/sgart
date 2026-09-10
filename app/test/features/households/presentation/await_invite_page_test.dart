@@ -5,6 +5,7 @@ import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/await_invite_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/households/presentation/households_state.dart';
+import 'package:sgart/features/invites/data/invite_link.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
@@ -28,14 +29,14 @@ void main() {
 
     tearDown(() => householdsCubit.close());
 
-    Widget buildSubject() => wrapForTesting(
+    Widget buildSubject({InviteLink? initialLink}) => wrapForTesting(
           Navigator(
             onGenerateRoute: (settings) => MaterialPageRoute(
               builder: (_) => RepositoryProvider<InvitesApi>.value(
                 value: invitesApi,
                 child: BlocProvider<HouseholdsCubit>.value(
                   value: householdsCubit,
-                  child: const AwaitInvitePage(),
+                  child: AwaitInvitePage(initialLink: initialLink),
                 ),
               ),
             ),
@@ -80,6 +81,19 @@ void main() {
 
       expect(find.byKey(const Key('await-invite-error')), findsOneWidget);
       expect(find.text('Diese Einladung ist abgelaufen.'), findsOneWidget);
+    });
+
+    testWidgets('anInitialLinkPreFillsTheFieldAndAutoTriggersTheAccept', (tester) async {
+      householdsApi.householdsToReturn = [const HouseholdSummary(householdId: 'household-1', name: 'Familie Muster')];
+      await tester.pumpWidget(buildSubject(
+        initialLink: const InviteLink(householdId: 'household-1', inviteId: 'invite-1'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('household-1:invite-1'), findsOneWidget);
+      expect(invitesApi.lastAcceptedHouseholdId, 'household-1');
+      expect(invitesApi.lastAcceptedInviteId, 'invite-1');
+      expect(householdsCubit.state.status, HouseholdsStatus.shell);
     });
 
     testWidgets('backButtonStillPops', (tester) async {

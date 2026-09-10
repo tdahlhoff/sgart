@@ -3,6 +3,7 @@ package de.sgart.collaboration.application.command;
 import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.InviteEmailHasher;
 import de.sgart.collaboration.application.InviteEmailSideStore;
+import de.sgart.collaboration.application.InviteLinkFactory;
 import de.sgart.collaboration.application.NormalizedEmail;
 import de.sgart.collaboration.application.exception.AlreadyAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.DuplicatePendingInviteApplicationException;
@@ -28,6 +29,8 @@ import de.sgart.shared.StreamId;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Orchestrates {@link InvitePerson} (AC1–AC5): resolve the caller's {@link MemberId} through the
@@ -47,12 +50,16 @@ import java.util.Objects;
  */
 public final class InvitePersonHandler {
 
+    private static final Logger LOG = LoggerFactory.getLogger(InvitePersonHandler.class);
+
     private final EventStore eventStore;
     private final ResolveMemberIdentity resolveMemberIdentity;
     private final FindHouseholdMemberByEmail findHouseholdMemberByEmail;
     private final InviteEmailHasher inviteEmailHasher;
     private final InviteEmailSideStore inviteEmailSideStore;
+    private final InviteLinkFactory inviteLinkFactory;
     private final Clock clock;
+    private final boolean logInviteLinkForDevTesting;
 
     public InvitePersonHandler(
             EventStore eventStore,
@@ -60,7 +67,9 @@ public final class InvitePersonHandler {
             FindHouseholdMemberByEmail findHouseholdMemberByEmail,
             InviteEmailHasher inviteEmailHasher,
             InviteEmailSideStore inviteEmailSideStore,
-            Clock clock) {
+            InviteLinkFactory inviteLinkFactory,
+            Clock clock,
+            boolean logInviteLinkForDevTesting) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.resolveMemberIdentity =
                 Objects.requireNonNull(resolveMemberIdentity, "resolveMemberIdentity must not be null");
@@ -69,7 +78,9 @@ public final class InvitePersonHandler {
         this.inviteEmailHasher = Objects.requireNonNull(inviteEmailHasher, "inviteEmailHasher must not be null");
         this.inviteEmailSideStore =
                 Objects.requireNonNull(inviteEmailSideStore, "inviteEmailSideStore must not be null");
+        this.inviteLinkFactory = Objects.requireNonNull(inviteLinkFactory, "inviteLinkFactory must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.logInviteLinkForDevTesting = logInviteLinkForDevTesting;
     }
 
     /**
@@ -131,5 +142,13 @@ public final class InvitePersonHandler {
                 .filter(InviteExpired.class::isInstance)
                 .map(InviteExpired.class::cast)
                 .forEach(expired -> inviteEmailSideStore.purge(expired.inviteId()));
+
+        // The link carries only opaque UUIDs (AD-6) — no PII — so logging it is acceptable, but only
+        // under the dev profile (manual end-to-end testing without SMTP); a real deployment never
+        // logs invite links by default (Story 4.6, AC6/D4). Build it only when it is actually
+        // logged — nothing else consumes it today (the email-delivery seam is documented, not wired).
+        if (logInviteLinkForDevTesting) {
+            LOG.info("Invite link for manual dev testing: {}", inviteLinkFactory.buildLink(householdId, inviteId));
+        }
     }
 }

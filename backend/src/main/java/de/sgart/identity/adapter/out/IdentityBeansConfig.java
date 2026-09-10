@@ -12,9 +12,12 @@ import de.sgart.identity.application.UnregisterDeviceToken;
 import de.sgart.identity.domain.DeviceTokenRepository;
 import de.sgart.identity.domain.MemberMappingRepository;
 import java.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.web.client.RestClient;
 
 /**
  * Wires the Identity ACL's durable mapping repository and its application-layer ports (Story 1.6:
@@ -45,8 +48,38 @@ public class IdentityBeansConfig {
         return new ResolveMemberIdentity(memberMappingRepository);
     }
 
+    /**
+     * The real Story 4.6 (D4, AC4) lookup — active only when {@code
+     * sgart.identity.keycloak-admin.enabled=true} is set explicitly. Building the {@link RestClient}
+     * performs no I/O (lazy, like every other adapter in this class); the first Admin API call is
+     * what actually reaches Keycloak.
+     */
     @Bean
-    FindHouseholdMemberByEmail findHouseholdMemberByEmail() {
+    @ConditionalOnProperty(prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "true")
+    FindHouseholdMemberByEmail keycloakAdminFindHouseholdMemberByEmail(
+            MemberMappingRepository memberMappingRepository,
+            @Value("${sgart.identity.keycloak-admin.base-url}") String baseUrl,
+            @Value("${sgart.identity.keycloak-admin.realm}") String realm,
+            @Value("${sgart.identity.keycloak-admin.client-id}") String clientId,
+            @Value("${sgart.identity.keycloak-admin.client-secret}") String clientSecret) {
+        return new KeycloakAdminFindHouseholdMemberByEmail(
+                RestClient.builder().baseUrl(baseUrl).build(), memberMappingRepository, realm, clientId, clientSecret);
+    }
+
+    /**
+     * The wired default — active whenever the Keycloak Admin adapter above is not (Story 4.1).
+     * Gated on the same property (its {@code false}/absent case) rather than {@code
+     * @ConditionalOnMissingBean}, so the wiring does not depend on this method being declared after
+     * the Keycloak bean ({@code @ConditionalOnMissingBean} is bean-declaration-order sensitive in a
+     * user {@code @Configuration} — Story 4.6 review).
+     */
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
+    FindHouseholdMemberByEmail deferredFindHouseholdMemberByEmail() {
         return new DeferredFindHouseholdMemberByEmail();
     }
 

@@ -58,6 +58,8 @@ class InvitePersonHandlerTest {
     private final FakeInviteEmailSideStore sideStore =
             new FakeInviteEmailSideStore(() -> this.eventStore.readStream(this.streamId));
     private final FakeFindHouseholdMemberByEmail findHouseholdMemberByEmail = new FakeFindHouseholdMemberByEmail();
+    private final RecordingInviteLinkFactory inviteLinkFactory =
+            new RecordingInviteLinkFactory("http://localhost:8081/invite");
     private final Clock fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
     private final HouseholdId householdId = HouseholdId.generate();
@@ -71,7 +73,9 @@ class InvitePersonHandlerTest {
                 findHouseholdMemberByEmail,
                 new FakeInviteEmailHasher(),
                 sideStore,
-                fixedClock);
+                inviteLinkFactory,
+                fixedClock,
+                false);
     }
 
     private void seedHouseholdWithAdmin() {
@@ -195,7 +199,9 @@ class InvitePersonHandlerTest {
                 findHouseholdMemberByEmail,
                 new FakeInviteEmailHasher(),
                 sideStore,
-                pastClock);
+                inviteLinkFactory,
+                pastClock,
+                false);
         firstHandler.handle(ADMIN_SUB, householdId.toString(), staleInviteId.toString(), "anna@example.com",
                 CommandId.generate().toString());
         assertThat(sideStore.findEmail(staleInviteId)).isPresent();
@@ -207,7 +213,9 @@ class InvitePersonHandlerTest {
                 findHouseholdMemberByEmail,
                 new FakeInviteEmailHasher(),
                 sideStore,
-                muchLaterClock);
+                inviteLinkFactory,
+                muchLaterClock,
+                false);
         laterHandler.handle(ADMIN_SUB, householdId.toString(), InviteId.generate().toString(), "anna@example.com",
                 CommandId.generate().toString());
 
@@ -244,6 +252,39 @@ class InvitePersonHandlerTest {
     }
 
     @Test
+    void invitingAPersonUnderDevLinkLoggingBuildsTheInviteLinkFromTheOpaqueIdsOnly() {
+        seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        InvitePersonHandler devLoggingHandler = new InvitePersonHandler(
+                eventStore,
+                new ResolveMemberIdentity(mappingRepository),
+                findHouseholdMemberByEmail,
+                new FakeInviteEmailHasher(),
+                sideStore,
+                inviteLinkFactory,
+                fixedClock,
+                true);
+
+        devLoggingHandler.handle(ADMIN_SUB, householdId.toString(), inviteId.toString(), "anna@example.com",
+                CommandId.generate().toString());
+
+        assertThat(inviteLinkFactory.builtLinks).hasSize(1);
+        assertThat(inviteLinkFactory.builtLinks.get(0))
+                .isEqualTo("http://localhost:8081/invite?h=" + householdId + "&i=" + inviteId)
+                .doesNotContain("anna@example.com");
+    }
+
+    @Test
+    void invitingAPersonWithoutDevLinkLoggingDoesNotBuildTheInviteLink() {
+        seedHouseholdWithAdmin();
+
+        handler().handle(ADMIN_SUB, householdId.toString(), InviteId.generate().toString(), "anna@example.com",
+                CommandId.generate().toString());
+
+        assertThat(inviteLinkFactory.builtLinks).isEmpty();
+    }
+
+    @Test
     void mapsAMalformedInviteIdToInviteIdInvalid() {
         seedHouseholdWithAdmin();
 
@@ -253,6 +294,24 @@ class InvitePersonHandlerTest {
                 .isInstanceOf(InvalidCommandEnvelopeException.class)
                 .satisfies(thrown -> assertThat(((InvalidCommandEnvelopeException) thrown).errorDescriptor().code())
                         .isEqualTo("command.inviteIdInvalid"));
+    }
+
+    /** Records every link built, so a test can assert the factory is invoked only when dev
+     * link-logging is enabled without pulling in a mocking framework (mirrors the other
+     * hand-written fakes in this test). */
+    private static final class RecordingInviteLinkFactory extends InviteLinkFactory {
+        private final List<String> builtLinks = new java.util.ArrayList<>();
+
+        RecordingInviteLinkFactory(String baseUrl) {
+            super(baseUrl);
+        }
+
+        @Override
+        public String buildLink(HouseholdId householdId, InviteId inviteId) {
+            String link = super.buildLink(householdId, inviteId);
+            builtLinks.add(link);
+            return link;
+        }
     }
 
     /** A minimal, deterministic fake hasher — a fixed, reproducible mapping, never the real HMAC. */

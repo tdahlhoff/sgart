@@ -6,36 +6,81 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/accept_invite_cubit.dart';
 import '../../invites/presentation/accept_invite_state.dart';
 import 'households_cubit.dart';
 
+/// Pushes [AwaitInvitePage] with the `InvitesApi`/`HouseholdsCubit` re-provided across the pushed
+/// route boundary (the `ProviderNotFoundException` lesson, Story 4.2) — the one call site both
+/// [CreateOrAwaitChoicePage]'s manual "I have an invite" choice and [FirstRunRouterBody]'s Story
+/// 4.6 deep-link routing use, so the two entry points can never drift into separate accept paths
+/// (AC3, DRY).
+void openAwaitInvitePage(BuildContext context, {InviteLink? initialLink}) {
+  final invitesApi = context.read<InvitesApi>();
+  final householdsCubit = context.read<HouseholdsCubit>();
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => RepositoryProvider<InvitesApi>.value(
+        value: invitesApi,
+        child: BlocProvider<HouseholdsCubit>.value(
+          value: householdsCubit,
+          child: AwaitInvitePage(initialLink: initialLink),
+        ),
+      ),
+    ),
+  );
+}
+
 /// The accept-invite screen (Story 4.2, AC6, Epic-1 retro Action 5): the invitee pastes their
 /// personal invite link/code and joins the household. Replaces the informational dead-end that
-/// stood here since Story 1.9 — the OS deep-link/web-fallback entry points that route to this same
-/// accept outcome are Story 4.6 (decision 1).
+/// stood here since Story 1.9. Also the Story 4.6 routing target for the OS deep link and the
+/// "I have an invite" choice: when [initialLink] is given (the deep-link/pending-link case, AC1/
+/// AC3), the field is pre-filled and the join is triggered automatically — the same
+/// `AcceptInviteCubit`/`AcceptInvite` path either way (DRY).
 class AwaitInvitePage extends StatelessWidget {
-  const AwaitInvitePage({super.key});
+  const AwaitInvitePage({super.key, this.initialLink});
+
+  final InviteLink? initialLink;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => AcceptInviteCubit(invitesApi: context.read<InvitesApi>()),
-      child: const _AwaitInviteView(),
+      child: _AwaitInviteView(initialLink: initialLink),
     );
   }
 }
 
 class _AwaitInviteView extends StatefulWidget {
-  const _AwaitInviteView();
+  const _AwaitInviteView({this.initialLink});
+
+  final InviteLink? initialLink;
 
   @override
   State<_AwaitInviteView> createState() => _AwaitInviteViewState();
 }
 
 class _AwaitInviteViewState extends State<_AwaitInviteView> {
-  final _linkController = TextEditingController();
+  late final _linkController = TextEditingController(text: _rawFormOf(widget.initialLink));
+
+  static String? _rawFormOf(InviteLink? link) => link == null ? null : '${link.householdId}:${link.inviteId}';
+
+  @override
+  void initState() {
+    super.initState();
+    final link = widget.initialLink;
+    if (link != null) {
+      // Deferred to the first frame: `context.read<AcceptInviteCubit>()` needs the BlocProvider
+      // ancestor built by AwaitInvitePage, which is not yet mounted while this State initializes.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<AcceptInviteCubit>().accept(_rawFormOf(link)!);
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {

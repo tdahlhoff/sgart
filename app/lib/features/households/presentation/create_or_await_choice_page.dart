@@ -5,7 +5,6 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
-import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
@@ -87,22 +86,6 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
     );
   }
 
-  /// Pushes the accept-invite screen (Story 4.2). Same `ProviderNotFoundException` lesson as
-  /// [_openOnboarding]: re-provide the [InvitesApi] the screen's cubit needs and the
-  /// [HouseholdsCubit] it re-bootstraps on success, by value, across the pushed route boundary.
-  void _openAwaitInvite(BuildContext context) {
-    final invitesApi = context.read<InvitesApi>();
-    final householdsCubit = context.read<HouseholdsCubit>();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RepositoryProvider<InvitesApi>.value(
-          value: invitesApi,
-          child: BlocProvider<HouseholdsCubit>.value(
-            value: householdsCubit,
-            child: const AwaitInvitePage(),
-          ),
-        ),
-      ),
-    );
-  }
+  /// Pushes the accept-invite screen (Story 4.2) — see [openAwaitInvitePage].
+  void _openAwaitInvite(BuildContext context) => openAwaitInvitePage(context);
 }

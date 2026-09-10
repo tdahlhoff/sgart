@@ -196,3 +196,17 @@
   scheduled `subscribe()`'s `subscribeToAll(...)` and its `currentSubscription =` assignment, the new
   live subscription is written after `stop()` cleared the field and is never stopped. Pre-existing
   pattern copied verbatim from `HouseholdLiveSyncFanout` (Story 4.4) — fix both fan-outs together.
+
+## Deferred from: code review of 4-6-invite-acceptance-web-fallback (2026-09-10)
+
+- **[LOW] `InviteDeepLinkService` host filter will drop the documented `https` App Links** —
+  `invite_deep_link_service.dart:49` filters `uri.host != 'invite'`, which silently drops the
+  canonical `https://<domain>/invite?...` App Links that `InviteLink.tryParse` supports and T9
+  documents wiring later. Consistent with the current custom-scheme-only scope; when T9's verified
+  `https` App Links / Universal Links are wired, widen the filter to also accept
+  `uri.scheme == 'https' && uri.path == '/invite'`.
+- **[LOW] Lossy `InviteLink` → colon-form → re-parse round-trip** —
+  `await_invite_page.dart:68` (`_rawFormOf`) re-flattens the structured `InviteLink` to `h:i` and
+  `AcceptInviteCubit.accept` re-parses it; a `:` in either id would break the round-trip. Not
+  reachable today (invite ids are opaque UUIDs). Cleaner design: pass the `InviteLink` through to an
+  `accept(InviteLink)` path instead of re-serializing to a string (Boy-Scout, small cubit-API change).

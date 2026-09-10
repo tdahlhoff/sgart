@@ -2,6 +2,7 @@ package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.InviteEmailHasher;
 import de.sgart.collaboration.application.InviteEmailSideStore;
+import de.sgart.collaboration.application.InviteLinkFactory;
 import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.application.command.AcceptInviteHandler;
@@ -59,6 +60,8 @@ import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 /**
  * Wires the Collaboration context's application layer — the command handlers and queries for
@@ -228,15 +231,29 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
+    InviteLinkFactory inviteLinkFactory(@Value("${sgart.invite.base-url}") String baseUrl) {
+        return new InviteLinkFactory(baseUrl);
+    }
+
+    @Bean
     InvitePersonHandler invitePersonHandler(
             EventStore eventStore,
             ResolveMemberIdentity resolveMemberIdentity,
             FindHouseholdMemberByEmail findHouseholdMemberByEmail,
             InviteEmailHasher inviteEmailHasher,
             InviteEmailSideStore inviteEmailSideStore,
-            Clock clock) {
+            InviteLinkFactory inviteLinkFactory,
+            Clock clock,
+            Environment environment) {
         return new InvitePersonHandler(
-                eventStore, resolveMemberIdentity, findHouseholdMemberByEmail, inviteEmailHasher, inviteEmailSideStore, clock);
+                eventStore,
+                resolveMemberIdentity,
+                findHouseholdMemberByEmail,
+                inviteEmailHasher,
+                inviteEmailSideStore,
+                inviteLinkFactory,
+                clock,
+                environment.acceptsProfiles(Profiles.of("dev")));
     }
 
     @Bean
