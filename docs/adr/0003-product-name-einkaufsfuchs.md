@@ -130,6 +130,29 @@ Claim candidates logged: *"Der Einkauf, der prickelt."* / *"Stoßt an auf schlau
 was the last entry in the session log — no follow-up mini-round (spelling/claim/icon-label
 variants, the treatment Einkaufsfuchs and Zwergi both got) has been run for SEKT yet.
 
+## Update 2026-09-12 — informal web sanity check for Zwergi and SEKT (not a DPMA check)
+
+An attempt to automate the actual DPMAregister search (register.dpma.de) for all three candidates
+failed: the site sits behind bot-detection (F5-style challenge cookies) on top of a stateful,
+JS-driven search form, which isn't reliably scriptable from here. Follow-up 2's DPMA/trademark
+check is therefore still fully outstanding for all three names — the sanity check below is a plain
+web search only, the same informal level of check "Einkaufsfuchs" and "Zwergi" already got earlier
+in this document, extended to cover "SEKT" for the first time.
+
+- **Zwergi:** no shopping/household app or software product found under this name. It is already
+  used as a product name in two unrelated, different-Nice-class categories — a horse ID tag
+  ("Zwergi Pferdemarke," Soulhorse) and a baby pacifier chain ("Zwergi," Baby Wood Love), both small
+  craft-shop items — low collision risk given the category difference. The one same-category hit
+  remains "Zwergi Chat" (an unrelated chatbot SaaS), already noted above.
+- **SEKT:** no shopping/grocery-tracker app or software product found under this name. Hard to
+  search cleanly since "Sekt" (sparkling wine) is a common German word, which likely means a
+  crowded trademark space in unrelated classes (wineries, drink brands) — not a same-category
+  blocker, but worth expecting as SEO/discoverability noise regardless of trademark risk.
+
+Net: neither name shows a same-category real-world conflict the way Einkaufsfuchs does. This does
+not clear either name — it only means the informal check found nothing to flag, same limitation as
+the rest of this section.
+
 ## Follow-ups
 
 1. **Scope the technical rename, explicitly, before doing it.** This ADR records the naming
