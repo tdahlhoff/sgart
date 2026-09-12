@@ -108,43 +108,71 @@ class _AwaitInviteViewState extends State<_AwaitInviteView> {
           child: BlocBuilder<AcceptInviteCubit, AcceptInviteState>(
             builder: (context, state) {
               final isSubmitting = state.status == AcceptInviteStatus.submitting;
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(SgartShapes.cardPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(localizations.householdsAwaitInviteHeading),
-                    const SizedBox(height: SgartShapes.headingGap),
-                    Text(localizations.householdsAwaitInviteBody, textAlign: TextAlign.center),
-                    const SizedBox(height: SgartShapes.space4),
-                    TextField(
-                      key: const Key('await-invite-link-field'),
-                      controller: _linkController,
-                      decoration: InputDecoration(labelText: localizations.householdsAwaitInviteLinkFieldLabel),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: SgartShapes.screenHeaderPadding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          localizations.householdsAwaitInviteHeading,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: SgartShapes.headingGap),
+                        Text(localizations.householdsAwaitInviteBody, textAlign: TextAlign.center),
+                      ],
                     ),
-                    if (state.status == AcceptInviteStatus.failure && state.error != null) ...[
-                      const SizedBox(height: SgartShapes.space2),
-                      Text(
-                        localizedMessageForErrorCode(localizations, state.error!.code),
-                        key: const Key('await-invite-error'),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            key: const Key('await-invite-link-field'),
+                            controller: _linkController,
+                            decoration:
+                                InputDecoration(labelText: localizations.householdsAwaitInviteLinkFieldLabel),
+                          ),
+                          if (state.status == AcceptInviteStatus.failure && state.error != null) ...[
+                            const SizedBox(height: SgartShapes.space2),
+                            Text(
+                              localizedMessageForErrorCode(localizations, state.error!.code),
+                              key: const Key('await-invite-error'),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                    const SizedBox(height: SgartShapes.space4),
-                    SgartButton(
-                      key: const Key('await-invite-join-button'),
-                      label: localizations.householdsAwaitInviteJoinButtonLabel,
-                      onPressed:
-                          isSubmitting ? null : () => context.read<AcceptInviteCubit>().accept(_linkController.text),
                     ),
-                    const SizedBox(height: SgartShapes.space2),
-                    SgartButton(
-                      key: const Key('await-invite-back-button'),
-                      label: localizations.householdsBackButtonLabel,
-                      variant: SgartButtonVariant.secondary,
-                      onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SgartButton(
+                          key: const Key('await-invite-join-button'),
+                          label: localizations.householdsAwaitInviteJoinButtonLabel,
+                          onPressed: isSubmitting
+                              ? null
+                              : () => context.read<AcceptInviteCubit>().accept(_linkController.text),
+                        ),
+                        const SizedBox(height: SgartShapes.space2),
+                        SgartButton(
+                          key: const Key('await-invite-back-button'),
+                          label: localizations.householdsBackButtonLabel,
+                          variant: SgartButtonVariant.secondary,
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),

@@ -32,6 +32,14 @@ abstract final class SgartShapes {
   static const double rowPaddingY = space3;
   static const double headingGap = space2;
 
+  /// Padding for a screen's fixed header block (heading + supporting text) — sign-in, first-run
+  /// choice, accept invite, mirroring the onboarding wizard's `_OnboardingStepHeader`. Triple
+  /// [space4] on top rather than [cardPadding]: flush against the app bar reads as cramped for a
+  /// heading. No bottom inset — an `Expanded`/`Spacer` follows, pushing the screen's action(s) to
+  /// the bottom in a fixed, thumb-reachable position (Timo, 2026-09-12: consistent across every
+  /// short form/choice screen, not just the wizard).
+  static const EdgeInsets screenHeaderPadding = EdgeInsets.fromLTRB(cardPadding, space4 * 3, cardPadding, 0);
+
   /// Minimum interactive target, applied to width as well as height
   /// (accessibility, DESIGN §5 / UX-DR5 / NFR10).
   static const double minTapTarget = 48;

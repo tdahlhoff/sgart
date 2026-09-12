@@ -27,34 +27,51 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
     return Scaffold(
       appBar: const SgartAppBar(title: 'SGART'),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(SgartShapes.cardPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(localizations.householdsChoiceHeading),
-              const SizedBox(height: SgartShapes.space4),
-              SgartButton(
-                key: const Key('create-household-choice-button'),
-                label: localizations.householdsCreateChoiceButtonLabel,
-                onPressed: () => _openOnboarding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: SgartShapes.screenHeaderPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    localizations.householdsChoiceHeading,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: SgartShapes.headingGap),
+                  Text(
+                    localizations.onboardingChoicePrivacyNote,
+                    key: const Key('onboarding-choice-privacy'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(height: SgartShapes.space2),
-              SgartButton(
-                key: const Key('await-invite-choice-button'),
-                label: localizations.householdsAwaitInviteChoiceButtonLabel,
-                variant: SgartButtonVariant.secondary,
-                onPressed: () => _openAwaitInvite(context),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(SgartShapes.cardPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SgartButton(
+                    key: const Key('create-household-choice-button'),
+                    label: localizations.householdsCreateChoiceButtonLabel,
+                    onPressed: () => _openOnboarding(context),
+                  ),
+                  const SizedBox(height: SgartShapes.space2),
+                  SgartButton(
+                    key: const Key('await-invite-choice-button'),
+                    label: localizations.householdsAwaitInviteChoiceButtonLabel,
+                    variant: SgartButtonVariant.secondary,
+                    onPressed: () => _openAwaitInvite(context),
+                  ),
+                ],
               ),
-              const SizedBox(height: SgartShapes.space4),
-              Text(
-                localizations.onboardingChoicePrivacyNote,
-                key: const Key('onboarding-choice-privacy'),
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

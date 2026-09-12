@@ -170,34 +170,44 @@ class _OnboardingStepHeader extends StatelessWidget {
     final totalSteps = _OnboardingStep.values.length;
     final current = step.index + 1;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              key: const Key('onboarding-back-button'),
-              icon: const Icon(Icons.arrow_back),
-              tooltip: localizations.householdsBackButtonLabel,
-              onPressed: onBack,
-            ),
-            Text(
-              localizations.onboardingStepLabel(current, totalSteps),
-              key: const Key('onboarding-step-label'),
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ],
-        ),
-        const SizedBox(height: SgartShapes.space2),
-        LinearProgressIndicator(
-          key: const Key('onboarding-progress'),
-          value: current / totalSteps,
-        ),
-        const SizedBox(height: SgartShapes.space4),
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: SgartShapes.headingGap),
-        Text(help, style: Theme.of(context).textTheme.bodyMedium),
-      ],
+    return Padding(
+      // Horizontal + top only: the content below already carries its own top padding (the
+      // scroll view's EdgeInsets.all), so a bottom inset here would double that gap.
+      padding: const EdgeInsets.fromLTRB(
+        SgartShapes.cardPadding,
+        SgartShapes.cardPadding,
+        SgartShapes.cardPadding,
+        0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                key: const Key('onboarding-back-button'),
+                icon: const Icon(Icons.arrow_back),
+                tooltip: localizations.householdsBackButtonLabel,
+                onPressed: onBack,
+              ),
+              Text(
+                localizations.onboardingStepLabel(current, totalSteps),
+                key: const Key('onboarding-step-label'),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: SgartShapes.space2),
+          LinearProgressIndicator(
+            key: const Key('onboarding-progress'),
+            value: current / totalSteps,
+          ),
+          const SizedBox(height: SgartShapes.space4),
+          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: SgartShapes.headingGap),
+          Text(help, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
     );
   }
 }

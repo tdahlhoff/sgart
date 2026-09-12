@@ -6,6 +6,11 @@
     "description": "Heading shown on the sign-in gate before a person has authenticated."
   },
 
+  "authSignInSubtitle": "Die gemeinsame Einkaufsliste für deinen Haushalt: Alle sehen live, was gebraucht wird — ob am Handy oder auf dem ausgedruckten Zettel im Laden.",
+  "@authSignInSubtitle": {
+    "description": "Short supporting copy under the sign-in heading, explaining what SGART is before the person signs in."
+  },
+
   "authSignInButtonLabel": "Anmelden",
   "@authSignInButtonLabel": {
     "description": "Label of the button that starts the Keycloak Authorization Code + PKCE sign-in flow."

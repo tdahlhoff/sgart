@@ -24,29 +24,54 @@ class SignInPage extends StatelessWidget {
       body: SafeArea(
         child: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, state) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(SgartShapes.cardPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(localizations.authSignInHeading),
-                  const SizedBox(height: SgartShapes.headingGap),
-                  if (state.status == AuthStatus.failure && state.error != null) ...[
-                    Text(
-                      localizedMessageForErrorCode(localizations, state.error!.code),
-                      key: const Key('sign-in-error'),
-                    ),
-                    const SizedBox(height: SgartShapes.space4),
-                  ],
-                  SgartButton(
-                    key: const Key('sign-in-button'),
-                    label: localizations.authSignInButtonLabel,
-                    onPressed: state.status == AuthStatus.inProgress
-                        ? null
-                        : () => context.read<AuthCubit>().signIn(),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: SgartShapes.screenHeaderPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        localizations.authSignInHeading,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: SgartShapes.headingGap),
+                      Text(
+                        localizations.authSignInSubtitle,
+                        key: const Key('sign-in-subtitle'),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state.status == AuthStatus.failure && state.error != null) ...[
+                        Text(
+                          localizedMessageForErrorCode(localizations, state.error!.code),
+                          key: const Key('sign-in-error'),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: SgartShapes.space4),
+                      ],
+                      SgartButton(
+                        key: const Key('sign-in-button'),
+                        label: localizations.authSignInButtonLabel,
+                        onPressed: state.status == AuthStatus.inProgress
+                            ? null
+                            : () => context.read<AuthCubit>().signIn(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             );
           },
         ),

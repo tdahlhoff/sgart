@@ -38,10 +38,11 @@ void main() {
           BlocProvider<AuthCubit>.value(value: cubit, child: const SignInPage()),
         );
 
-    testWidgets('rendersTheSignInHeadingAndButton', (tester) async {
+    testWidgets('rendersTheSignInHeadingSubtitleAndButton', (tester) async {
       await tester.pumpWidget(buildSubject());
 
       expect(find.text('Willkommen bei SGART'), findsOneWidget);
+      expect(find.byKey(const Key('sign-in-subtitle')), findsOneWidget);
       expect(find.text('Anmelden'), findsOneWidget);
     });
 
