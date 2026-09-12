@@ -22,6 +22,9 @@ dependencies {
     // Web/transport lives only in adapter.in — the domain never sees these types (AD-1),
     // enforced by the ArchUnit architecture test.
     implementation("org.springframework.boot:spring-boot-starter-web")
+    // Liveness/readiness for local smoke tests and future deploy health checks (scripts/health-check.sh).
+    // Only "health" is web-exposed by default (Boot's own default), so no infra detail leaks unauthenticated.
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     // JWT resource-server validation for the identity context's adapter.in (Story 1.4, AD-5).
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     // PostgreSQL read side (Story 1.6): durable Identity ACL mapping + household read model.

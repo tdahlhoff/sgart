@@ -86,6 +86,10 @@ docker compose down      # stop (volumes persist)
 Credentials are **dev-only**. Production topology (managed secrets, TLS, backups, resource limits)
 is deliberately deferred.
 
+Run [`scripts/health-check.sh`](scripts/health-check.sh) to check the whole local stack (docker
+compose service health, the backend's `/actuator/health`, and Keycloak's realm discovery) in one
+go — the same script this repo's own smoke tests and future deploy checks should reuse.
+
 ### Keycloak dev realm
 
 Keycloak imports the **`sgart`** realm from [`keycloak/realm-sgart.json`](keycloak/realm-sgart.json)

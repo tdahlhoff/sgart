@@ -6,6 +6,14 @@ real Android phone over USB, from a WSL2 development machine.
 > **Scope:** local, dev-only run for hands-on testing. Everything uses plain HTTP and dev-only
 > credentials — never a production setup. No Play Store, no signing, no publishing needed.
 
+**Why local, even though a netcup vHost now exists (ADR-0002):** the vHost is provisioned but not
+deploy-ready — `docker-compose.yml` still runs the dev-only flags (`KURRENTDB_INSECURE`, Keycloak
+`start-dev`) and there is no TLS reverse proxy, no encrypted-at-rest volume, and no secrets story
+beyond a plain `.env` yet (ADR-0002 "Production concretization" backlog, items 2-5). Running there
+before that hardening lands would expose an unhardened dev stack processing personal data (Rule 5)
+on the public internet. Test locally until that backlog closes; the vHost becomes a deploy-readiness
+milestone of its own, not something to fold into a feature/manual test pass.
+
 ## Why this setup
 
 - Backend, Keycloak, KurrentDB and Postgres all run **inside WSL2**.
@@ -95,13 +103,20 @@ HMAC secret automatically.
 cd ~/projects/sgart/backend
 SGART_FLYWAY_ENABLED=true \
 SGART_PROJECTOR_AUTOSTART=true \
+SGART_POSTGRES_PASSWORD=sgart_dev_password \
 ./gradlew bootRun
 ```
 
-Leave this running. It listens on **`:8081`**. Sanity check from another WSL shell:
+`SGART_POSTGRES_PASSWORD` must match `.env`'s `POSTGRES_PASSWORD` — `docker compose` reads `.env`
+automatically, but a plain shell invocation of `./gradlew bootRun` does not, and the datasource's
+default password is empty (`application.yaml`), which fails Postgres's SCRAM auth outright.
+
+Leave this running. It listens on **`:8081`**. Sanity check from another WSL shell — or run
+[`scripts/health-check.sh`](../scripts/health-check.sh), which checks all of this (docker compose
+service health, the backend, and Keycloak) in one go:
 
 ```bash
-curl -s http://localhost:8081/actuator/health || echo "(health endpoint may differ — a connection at all means it's up)"
+curl -s http://localhost:8081/actuator/health   # {"status":"UP"} once Postgres/KurrentDB are reachable
 curl -s http://localhost:8080/realms/sgart/.well-known/openid-configuration | head -c 200   # Keycloak realm reachable
 ```
 
@@ -199,6 +214,9 @@ usbipd detach --busid 2-4             # release the phone back to Windows
 | Phone not in `usbipd list` / not attaching | Try a different USB cable/port; re-run `usbipd attach` after replug; ensure USB debugging is on. |
 | Backend starts but first-run routing is empty | `SGART_PROJECTOR_AUTOSTART=true` and `SGART_FLYWAY_ENABLED=true` must be set (Part 1.2). |
 | Keycloak unhealthy | Give it ~30s (`start_period`); check `docker compose logs keycloak`. |
+| Keycloak container exits with `Value too long for column "DESCRIPTION..."` | A client `description` in `keycloak/realm-sgart.json` exceeds Keycloak's 255-char column limit — shorten it. |
+| `bootRun` fails with `FlywaySqlUnableToConnectToDbException` / SCRAM auth error | Missing `SGART_POSTGRES_PASSWORD` (see Part 1.2) — `docker compose` reads `.env` automatically, a plain shell does not. |
+| `bootRun` fails with `Migration checksum mismatch for migration version N` | Local Postgres volume has drifted from the current migration files (only possible if `docker compose up`'s Postgres was run against this repo before). Local dev data only: `docker compose down -v && docker compose up -d` to reset it. |
 
 ---
 

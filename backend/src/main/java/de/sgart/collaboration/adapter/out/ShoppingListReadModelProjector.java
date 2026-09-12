@@ -210,9 +210,14 @@ public final class ShoppingListReadModelProjector implements SmartLifecycle {
         // Two prefixes on one subscription (never a second subscription, decision 4): list- for the
         // list's own events, household- solely so this projector can see HouseholdDeleted for the
         // delete-cascade purge — every other household-stream event is ignored by project()'s default.
+        // NOT chained addStreamNamePrefix calls (LD-2, HouseholdLiveSyncFanout.subscribe() javadoc):
+        // the kurrentdb-client (1.2.1) SubscriptionFilterBuilder throws IllegalStateException on a
+        // second call — it accepts exactly one prefix per filter. A single regular expression covers
+        // both prefixes in one filter instead.
         SubscriptionFilter filter = SubscriptionFilter.newBuilder()
-                .addStreamNamePrefix(StreamId.StreamType.LIST.prefix() + "-")
-                .addStreamNamePrefix(StreamId.StreamType.HOUSEHOLD.prefix() + "-")
+                .withStreamNameRegularExpression("^(%s|%s)-.*".formatted(
+                        StreamId.StreamType.LIST.prefix(),
+                        StreamId.StreamType.HOUSEHOLD.prefix()))
                 .build();
         client.subscribeToAll(
                 new SubscriptionListener() {

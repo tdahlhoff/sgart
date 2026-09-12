@@ -45,7 +45,7 @@
     {
       "clientId": "sgart-web-invite",
       "name": "SGART invite web fallback",
-      "description": "Public browser client for the Story 4.6 invite web-fallback page — Authorization Code + PKCE, isolated from sgart-app's native redirect/origin set. Dev redirect only; the production domain's redirect URI + web origin are a documented follow-up (docs/first-real-world-test.md).",
+      "description": "Public browser client for the Story 4.6 invite web-fallback page — Authorization Code + PKCE, isolated from sgart-app's native redirects. Dev redirect only; production redirect/origin is a documented follow-up (docs/first-real-world-test.md).",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",
@@ -79,7 +79,7 @@
     {
       "clientId": "sgart-admin",
       "name": "SGART Keycloak Admin lookup (dev)",
-      "description": "Confidential client-credentials client for the Story 4.6 (D4) Keycloak Admin email→user lookup (KeycloakAdminFindHouseholdMemberByEmail). Local/dev only — enabling it requires SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true and matches the client-id sgart-admin/base-url/realm defaults in application.yaml. Production provisioning is a documented follow-up (docs/first-real-world-test.md) — never the app's public client, never a user password.",
+      "description": "Confidential client-credentials client for the Story 4.6 (D4) Keycloak Admin email→user lookup. Local/dev only (SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true). Production provisioning is a documented follow-up (docs/first-real-world-test.md).",
       "enabled": true,
       "publicClient": false,
       "protocol": "openid-connect",

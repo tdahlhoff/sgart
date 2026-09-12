@@ -35,9 +35,10 @@ import org.springframework.context.SmartLifecycle;
  * per-client position, so a downtime gap is healed by the client's reconnect-refetch (AC2), never
  * by replay. Filters the three prefixes that carry user-visible change ({@code household-},
  * {@code list-}, {@code trip-}) on one subscription via a single regular-expression filter — see
- * {@link #subscribe()} for why this is not the chained {@code addStreamNamePrefix} calls {@link
- * ShoppingListReadModelProjector} appears to use (a client-library constraint discovered while
- * writing this story's Testcontainers test, T12).
+ * {@link #subscribe()} for why this is not chained {@code addStreamNamePrefix} calls (a
+ * client-library constraint discovered while writing this story's Testcontainers test, T12; {@link
+ * ShoppingListReadModelProjector} and {@link ShoppingTripReadModelProjector} carried the same latent
+ * defect until fixed to match, LD-2).
  *
  * <p>Also enforces "mapping = access" (AC3, T6) for the live channel: on {@link MemberRemoved}/
  * {@link MemberLeft} it evicts that member's open connections; on {@code HouseholdDeleted} it
@@ -153,11 +154,10 @@ public final class HouseholdLiveSyncFanout implements SmartLifecycle {
         // NOT SubscriptionFilter.newBuilder().addStreamNamePrefix(...) chained three times: verified
         // against the client (1.2.1) that a second addStreamNamePrefix call always throws
         // IllegalStateException("Filter type is already set to STREAM") — it accepts exactly one
-        // prefix per filter, despite ShoppingListReadModelProjector's/ShoppingTripReadModelProjector's
-        // two-prefix filters reading as if chaining were supported (their live subscriptions, driven
-        // only by project(...) directly in tests, have never actually exercised this path — a
-        // pre-existing latent defect out of this story's scope, LD-2, to fix). A single regular
-        // expression covers all three prefixes in one filter instead.
+        // prefix per filter (LD-2; ShoppingListReadModelProjector and ShoppingTripReadModelProjector
+        // carried the same chained-call defect until fixed to use this same pattern — their Testcontainers
+        // tests drove project(...) directly and never exercised the real subscribe() path). A single
+        // regular expression covers all three prefixes in one filter instead.
         SubscriptionFilter filter = SubscriptionFilter.newBuilder()
                 .withStreamNameRegularExpression("^(%s|%s|%s)-.*".formatted(
                         StreamId.StreamType.HOUSEHOLD.prefix(),
