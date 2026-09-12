@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 
 import 'keycloak_config.dart';
@@ -19,6 +20,10 @@ class AppAuthOidcClient implements OidcClient {
         KeycloakConfig.redirectUri,
         issuer: KeycloakConfig.issuer,
         scopes: KeycloakConfig.scopes,
+        // AppAuth refuses plain HTTP by default; KeycloakConfig.issuer defaults to
+        // http://localhost for local dev (same debug-only-cleartext intent as the Android
+        // network security config), so mirror that here — never in a release build.
+        allowInsecureConnections: kDebugMode,
       ),
     );
     final accessToken = response.accessToken;
@@ -42,6 +47,7 @@ class AppAuthOidcClient implements OidcClient {
         refreshToken: refreshToken,
         grantType: GrantType.refreshToken,
         scopes: KeycloakConfig.scopes,
+        allowInsecureConnections: kDebugMode,
       ),
     );
     final accessToken = response.accessToken;
@@ -61,8 +67,15 @@ class AppAuthOidcClient implements OidcClient {
     await _appAuth.endSession(
       EndSessionRequest(
         idTokenHint: idToken,
-        issuer: KeycloakConfig.issuer,
         postLogoutRedirectUrl: KeycloakConfig.redirectUri,
+        allowInsecureConnections: kDebugMode,
+        // Explicit endpoints instead of `issuer:` — see KeycloakConfig's doc comment for why
+        // discovery must never run for sign-out.
+        serviceConfiguration: const AuthorizationServiceConfiguration(
+          authorizationEndpoint: KeycloakConfig.authorizationEndpoint,
+          tokenEndpoint: KeycloakConfig.tokenEndpoint,
+          endSessionEndpoint: KeycloakConfig.endSessionEndpoint,
+        ),
       ),
     );
   }
