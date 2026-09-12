@@ -37,8 +37,8 @@ enum _OnboardingStep { name, stores, invite }
 /// onboarding regardless — solo remains first-class (AC7, unchanged from AC4/Clarification 1).
 ///
 /// Reached as a pushed route above the `FirstRunRouter` providers, so its dependencies
-/// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache]) are re-provided by
-/// value at the push site (the Story 1.6 `ProviderNotFoundException` lesson).
+/// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache], [InvitesApi]) are
+/// re-provided by value at the push site (the Story 1.6 `ProviderNotFoundException` lesson).
 class OnboardingWizardPage extends StatelessWidget {
   const OnboardingWizardPage({super.key});
 

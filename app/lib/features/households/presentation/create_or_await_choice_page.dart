@@ -5,6 +5,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
@@ -61,14 +62,16 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
 
   /// Pushes the guided onboarding wizard (Story 1.9). The push targets the root Navigator, which
   /// sits *above* the providers created in `FirstRunRouter`, so the pushed route would otherwise
-  /// escape them (`ProviderNotFoundException`, the Story 1.6 lesson). Re-provide the four the wizard
-  /// reads — `HouseholdsApi`/`HouseholdsCubit` (name step + landing) and `StoresApi`/
-  /// `StoreChainReferenceCache` (stores step) — by value, the same instances this screen already reads.
+  /// escape them (`ProviderNotFoundException`, the Story 1.6 lesson). Re-provide the five the wizard
+  /// reads — `HouseholdsApi`/`HouseholdsCubit` (name step + landing), `StoresApi`/
+  /// `StoreChainReferenceCache` (stores step), and `InvitesApi` (invite step) — by value, the same
+  /// instances this screen already reads.
   void _openOnboarding(BuildContext context) {
     final householdsApi = context.read<HouseholdsApi>();
     final householdsCubit = context.read<HouseholdsCubit>();
     final storesApi = context.read<StoresApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
+    final invitesApi = context.read<InvitesApi>();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MultiRepositoryProvider(
@@ -76,6 +79,7 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
             RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
             RepositoryProvider<StoresApi>.value(value: storesApi),
             RepositoryProvider<StoreChainReferenceCache>.value(value: storeChainReferenceCache),
+            RepositoryProvider<InvitesApi>.value(value: invitesApi),
           ],
           child: BlocProvider<HouseholdsCubit>.value(
             value: householdsCubit,

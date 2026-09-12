@@ -22,7 +22,7 @@ void main() {
     late FakeInvitesApi invitesApi;
 
     setUp(() {
-      householdsApi = FakeHouseholdsApi();
+      householdsApi = FakeHouseholdsApi()..createdHouseholdIdToReturn = 'hh-1';
       householdsCubit =
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
       storesApi = FakeStoresApi();
@@ -67,6 +67,24 @@ void main() {
       // The wizard's name step built without a ProviderNotFoundException — it reached HouseholdsApi
       // (its CreateHouseholdCubit) and, once past the name step, StoresApi/StoreChainReferenceCache.
       expect(find.byKey(const Key('onboarding-name-field')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // Regression guard: InvitesApi was missing from _openOnboarding's re-provided list, so the
+    // wizard's invite step (reached from the real push site, not a test harness that provides
+    // InvitesApi directly above OnboardingWizardPage) threw ProviderNotFoundException.
+    testWidgets('reachingTheInviteStepThroughTheRealPushSiteDoesNotEscapeInvitesApi', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('create-household-choice-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-invite-finish-button')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
