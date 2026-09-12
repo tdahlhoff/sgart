@@ -124,6 +124,21 @@
       ]
     },
     {
+      "username": "carla@example.test",
+      "email": "carla@example.test",
+      "emailVerified": true,
+      "firstName": "Carla",
+      "lastName": "Testperson",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "carla-dev-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
       "username": "service-account-sgart-admin",
       "enabled": true,
       "serviceAccountClientId": "sgart-admin",

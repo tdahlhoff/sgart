@@ -184,6 +184,9 @@ flutter install                   # installs the debug APK; launch it from the a
 2. A browser tab opens Keycloak. Sign in with a **synthetic dev user**:
    - `anna@example.test` / `anna-dev-password`
    - `ben@example.test` / `ben-dev-password`
+   - `carla@example.test` / `carla-dev-password` — a third seeded user, kept household-free so
+     signing in as her reliably reaches the create/await-invite first-run choice screen even
+     after `anna`/`ben` both already have households.
 3. The browser redirects back into the app via `de.sgart.app://oauth/callback` and you land in the
    app. Create a household, add a shopping list, etc.
 4. **Test live sync (Story 4.4):** install on a second device (or sign in as `ben` in the emulator)
