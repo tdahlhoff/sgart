@@ -101,6 +101,35 @@ reasoning, it just means the name isn't cleared to ship yet. The full session re
 mini-round that produced `Kauffux`/`Fux` and the taglines) is untouched at
 `_bmad-output/brainstorming/brainstorm-german-name-for-sgart-2026-09-11/`.
 
+## Update 2026-09-11 (later same session) — further candidates explored after the conflict
+
+After the trademark conflict above, the same brainstorming session kept going and produced two more
+directions not yet reflected in the Decision section or in `brainstorm.html` (that keepsake was
+rendered before these rounds; the raw session log,
+`_bmad-output/brainstorming/brainstorm-german-name-for-sgart-2026-09-11/.memlog.md`, has them).
+Neither has superseded "Einkaufsfuchs" as the recorded decision above — both are additional
+candidates awaiting the same trademark/availability check as Einkaufsfuchs (Follow-up 2) before
+any of the three can be chosen.
+
+**Zwergi** (and the `Einkaufszwerg`/`Kaufzwerg`/`Listenzwerg`/`Sparzwerg` family it came from): a
+household-dwarf metaphor requested specifically after the Einkaufsfuchs conflict, on the theory that
+dwarfs (Schneewittchens 7 Zwerge — industrious, work as a team, quietly hoard treasure underground)
+fit the shared-household angle and the background price-history feature at least as well as the
+animal names did. A quick web sanity check found no same-category collision (nearest hit was an
+unrelated chatbot SaaS, "Zwergi Chat"), but that is not a DPMA/trademark check. `Zwergi` is short
+enough to need no separate icon-label contraction (unlike `Einkaufsfuchs` → `Fux`/`Kauffux`).
+Two claims were kept side by side rather than picking one: *"Der schlaue Einkaufs-Begleiter"*
+(neutral, store listing/header) and *"Euer schlauer Einkaufs-Begleiter"* (warmer, in-app/marketing;
+plural "Euer" carries the shared-household angle the way "Dein" would not).
+
+**SEKT** (`Schlauer Einkaufs- und Kassenbon-Tracker`): a German-acronym direction, chosen over a
+"KLUG" alternative because every letter is a genuine word-initial (mirroring how "SGART" itself is
+built), where KLUG's "U" for "und" was a forced non-word-initial. The wordplay hook is "Sekt"
+(sparkling wine, anstoßen/feiern) playing the same role "Fuchs = schlau" played for Einkaufsfuchs.
+Claim candidates logged: *"Der Einkauf, der prickelt."* / *"Stoßt an auf schlaues Einkaufen."* This
+was the last entry in the session log — no follow-up mini-round (spelling/claim/icon-label
+variants, the treatment Einkaufsfuchs and Zwergi both got) has been run for SEKT yet.
+
 ## Follow-ups
 
 1. **Scope the technical rename, explicitly, before doing it.** This ADR records the naming
@@ -112,5 +141,7 @@ mini-round that produced `Kauffux`/`Fux` and the taglines) is untouched at
    confirmed necessary, not just precautionary (see Update above). Check DPMAregister
    (register.dpma.de) at minimum; consider a short consult with a trademark attorney given the
    confirmed same-category collision, before re-applying the Docs/UI rollout or committing further.
+   The same check is outstanding for "Zwergi" and "SEKT" (see the later-session Update above) if
+   either is picked instead.
 3. Re-apply `Einkaufsfuchs` / `Kauffux` / `Fux` / the two claims to UI mockups, store listing copy,
    and `docs/PITCH.md` only after Follow-up 2 clears — or after a different name is chosen instead.
