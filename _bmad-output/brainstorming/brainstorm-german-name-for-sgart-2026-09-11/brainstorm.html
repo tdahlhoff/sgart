@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A German Name for SGART — Brainstorm</title>
+<style>
+  :root{
+    --paper:#f6efdd;
+    --paper-dark:#ece2c8;
+    --ink:#3a2e22;
+    --ink-soft:#6b5c45;
+    --kraft:#c9a87c;
+    --kraft-dark:#a9825a;
+    --yellow:#f4d35e;
+    --yellow-dark:#d9b746;
+    --green:#4c7a5e;
+    --green-soft:#eef3e6;
+    --red:#c0392b;
+    --red-soft:#fbe4e1;
+    --blue:#5b8aa6;
+    --blue-soft:#e8f1f5;
+    --gold:#d4a017;
+    --orange:#e07a3f;
+  }
+  *{box-sizing:border-box;}
+  html{background:var(--paper);}
+  body{
+    margin:0;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, rgba(0,0,0,0.015) 1px, transparent 1px, transparent 26px),
+      var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 90px;}
+  a{color:inherit;}
+  img{max-width:100%;}
+
+  /* ---------- Header ---------- */
+  header.hero{
+    text-align:center;
+    padding:36px 16px 20px;
+  }
+  .fridge-note{
+    display:inline-block;
+    background:#fffdf6;
+    border:1px solid #e4d6b3;
+    border-radius:4px;
+    padding:18px 24px 22px;
+    box-shadow:0 6px 16px rgba(58,46,34,0.15), 0 1px 0 #fff inset;
+    transform:rotate(-1.2deg);
+    position:relative;
+    max-width:640px;
+  }
+  .fridge-note::before{
+    content:"📌";
+    position:absolute;
+    top:-18px;
+    left:50%;
+    transform:translateX(-50%) rotate(8deg);
+    font-size:1.6rem;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));
+  }
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:.72rem;
+    color:var(--ink-soft);
+    font-weight:700;
+    margin:0 0 6px;
+  }
+  h1.title{
+    font-size:clamp(1.5rem,4.5vw,2.3rem);
+    margin:0 0 10px;
+    color:var(--ink);
+  }
+  .hero p.sub{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:.95rem;
+  }
+  .hero .meta{
+    margin-top:10px;
+    font-size:.78rem;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- Timeline nav ---------- */
+  nav.timeline{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    justify-content:center;
+    margin:28px 0 8px;
+  }
+  nav.timeline a{
+    text-decoration:none;
+    background:#fff;
+    border:1px solid #e0d3ae;
+    border-radius:999px;
+    padding:6px 12px;
+    font-size:.75rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  nav.timeline a.finale{
+    background:var(--gold);
+    color:#3a2e05;
+    border-color:var(--gold);
+  }
+
+  /* ---------- Generic section chrome ---------- */
+  section{margin:56px 0;}
+  .section-head{
+    text-align:center;
+    margin-bottom:28px;
+  }
+  .section-num{
+    display:inline-block;
+    font-size:.72rem;
+    font-weight:800;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .section-head h2{
+    margin:0 0 6px;
+    font-size:clamp(1.2rem,3.6vw,1.6rem);
+  }
+  .section-head .section-sub{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:.9rem;
+    font-style:italic;
+  }
+  .insight{
+    background:#fffdf6;
+    border-left:5px solid var(--kraft-dark);
+    border-radius:4px;
+    padding:14px 18px;
+    margin:20px auto 0;
+    max-width:720px;
+    font-size:.9rem;
+    position:relative;
+    box-shadow:2px 3px 8px rgba(0,0,0,.08);
+  }
+  .insight::before{
+    content:"●";
+    color:var(--red);
+    position:absolute;
+    top:-9px;
+    left:16px;
+    font-size:1.1rem;
+    text-shadow:0 1px 1px rgba(0,0,0,.3);
+  }
+  .insight .label{
+    font-weight:800;
+    text-transform:uppercase;
+    font-size:.68rem;
+    letter-spacing:.1em;
+    color:var(--red);
+    display:block;
+    margin-bottom:4px;
+  }
+
+  /* ================= 1. Round Robin — corkboard ================= */
+  .corkboard{
+    background:
+      radial-gradient(circle at 20% 30%, rgba(0,0,0,0.08) 0, transparent 2px),
+      radial-gradient(circle at 70% 60%, rgba(0,0,0,0.08) 0, transparent 2px),
+      radial-gradient(circle at 40% 80%, rgba(0,0,0,0.08) 0, transparent 2px),
+      var(--kraft-dark);
+    background-size: 60px 60px, 70px 70px, 50px 50px, auto;
+    border-radius:14px;
+    padding:26px 20px;
+  }
+  .seeds-box{
+    background:var(--blue-soft);
+    border:2px dashed var(--blue);
+    border-radius:10px;
+    padding:12px 16px;
+    margin-bottom:20px;
+    font-size:.85rem;
+    text-align:center;
+  }
+  .seeds-box .label{
+    font-weight:800;
+    color:var(--blue);
+    font-size:.7rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    display:block;
+    margin-bottom:6px;
+  }
+  .seeds-box .names{font-weight:700;}
+  .sticky-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:16px;
+    justify-content:center;
+  }
+  .sticky{
+    background:var(--yellow);
+    width:152px;
+    min-height:118px;
+    padding:12px 12px 10px;
+    font-size:.82rem;
+    box-shadow:3px 5px 10px rgba(0,0,0,.28);
+    position:relative;
+  }
+  .sticky:nth-child(3n+1){transform:rotate(-4deg);background:var(--yellow);}
+  .sticky:nth-child(3n+2){transform:rotate(3deg);background:#f7c56e;}
+  .sticky:nth-child(3n){transform:rotate(-2deg);background:#f9dd8a;}
+  .sticky .name{font-weight:800;display:block;margin-bottom:4px;}
+  .sticky .gloss{color:#5c4a12;font-size:.74rem;}
+
+  /* ================= 2. Role Playing — speech bubbles ================= */
+  .persona-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:22px;
+  }
+  .persona-card{text-align:center;}
+  .avatar{
+    font-size:2.1rem;
+    display:block;
+    margin-bottom:6px;
+  }
+  .persona-label{
+    font-weight:800;
+    font-size:.85rem;
+    margin-bottom:10px;
+    color:var(--ink);
+  }
+  .bubble{
+    background:var(--bubble-color,#fff);
+    border-radius:16px;
+    padding:14px 16px;
+    text-align:left;
+    position:relative;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);
+  }
+  .bubble::after{
+    content:"";
+    position:absolute;
+    bottom:-9px;
+    left:28px;
+    border-width:10px 8px 0;
+    border-style:solid;
+    border-color:var(--bubble-color,#fff) transparent transparent;
+  }
+  .bubble .idea{margin:0 0 6px;font-size:.86rem;}
+  .bubble .idea:last-child{margin-bottom:0;}
+  .bubble .idea b{display:block;font-size:.95rem;}
+  .bubble .idea span{color:var(--ink-soft);font-size:.78rem;}
+  .fear{
+    margin-top:12px;
+    font-size:.76rem;
+    color:var(--ink-soft);
+    font-style:italic;
+    text-align:left;
+    padding-left:6px;
+    border-left:3px solid #ddd0ad;
+  }
+  .fear b{font-style:normal;color:var(--ink);}
+
+  /* ================= 3. Concept Blending — equation cards ================= */
+  .blend-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:16px;
+  }
+  .blend-card{
+    background:var(--green-soft);
+    border:2px dashed var(--green);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .equation{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:6px;
+    font-size:.92rem;
+    color:var(--green);
+    font-weight:700;
+  }
+  .equation .op{color:var(--ink-soft);font-weight:400;}
+  .blend-card .result{
+    margin-top:10px;
+    font-size:1.15rem;
+    font-weight:800;
+    color:#2f5744;
+  }
+  .blend-card .why{
+    margin-top:6px;
+    font-size:.8rem;
+    color:var(--ink-soft);
+  }
+
+  /* ================= 4. Evolutionary Pressure ================= */
+  .evo-wrap{
+    background:var(--green-soft);
+    border-radius:14px;
+    padding:24px 20px;
+  }
+  .gen-label{
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:.72rem;
+    color:var(--green);
+    margin:0 0 10px;
+  }
+  .chip-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .chip{
+    background:#fff;
+    border:1px solid #b8cfa0;
+    border-radius:20px;
+    padding:6px 12px;
+    font-size:.8rem;
+  }
+  .chip.culled{
+    background:var(--red-soft);
+    border-color:var(--red);
+    color:#8a2a20;
+    text-decoration:line-through;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:2px;
+  }
+  .chip.culled .reason{
+    text-decoration:none;
+    font-size:.66rem;
+    font-weight:700;
+    color:var(--red);
+  }
+  .chip.survivor{
+    border-color:var(--green);
+    font-weight:700;
+    color:var(--green);
+  }
+  .rule-box{
+    background:#fff;
+    border-radius:8px;
+    padding:10px 14px;
+    font-size:.82rem;
+    margin:14px 0;
+    border-left:4px solid var(--orange);
+  }
+  .arrow-down{
+    text-align:center;
+    font-size:1.6rem;
+    margin:6px 0 16px;
+    color:var(--green);
+  }
+  .bred-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+    margin-bottom:10px;
+  }
+  .bred-card{
+    background:#fff;
+    border-radius:10px;
+    padding:10px 16px;
+    box-shadow:0 2px 5px rgba(0,0,0,.1);
+    flex:1 1 210px;
+  }
+  .bred-card .name{font-weight:800;font-size:1rem;color:var(--ink);}
+  .bred-card .parents{font-size:.72rem;color:var(--ink-soft);}
+  .bred-card .note{font-size:.78rem;color:var(--ink-soft);margin-top:2px;}
+  .winners-line{font-size:.88rem;margin-top:14px;}
+  .winners-line b{color:var(--green);}
+
+  /* ================= 5. Onomatopoeia Forge ================= */
+  .forge{
+    background:#2b2320;
+    border-radius:14px;
+    padding:28px 20px;
+    color:#f4e9da;
+  }
+  .forge .section-head h2, .forge .section-head .section-num{color:#f4b942;}
+  .forge .section-head .section-sub{color:#d8c8ae;}
+  .forge-intro{
+    max-width:640px;
+    margin:0 auto 20px;
+    font-size:.85rem;
+    color:#d8c8ae;
+    text-align:center;
+  }
+  .spark-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    justify-content:center;
+  }
+  .spark{
+    background:#3d332c;
+    border:1px solid #6b4f2e;
+    border-radius:8px;
+    padding:10px 14px;
+    font-size:.82rem;
+    max-width:250px;
+  }
+  .spark .name{
+    color:#f4b942;
+    font-weight:800;
+    font-size:1rem;
+    display:block;
+    margin-bottom:4px;
+  }
+  .spark .sound-tag{
+    display:inline-block;
+    background:#d98a3d;
+    color:#2b2320;
+    border-radius:4px;
+    padding:1px 6px;
+    font-size:.68rem;
+    font-weight:800;
+    margin-right:4px;
+    text-transform:lowercase;
+  }
+  .spark .gloss{color:#cdbca0;}
+
+  /* ================= 6. Proverb Mining ================= */
+  .scrap-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+    justify-content:center;
+  }
+  .scrap{
+    background:#f1e6d0;
+    padding:14px 16px;
+    width:210px;
+    box-shadow:1px 3px 8px rgba(0,0,0,.18);
+    font-family:Georgia,"Times New Roman",serif;
+    border-radius:2px 10px 3px 12px/8px 3px 10px 2px;
+  }
+  .scrap:nth-child(odd){transform:rotate(-2deg);}
+  .scrap:nth-child(even){transform:rotate(1.5deg);}
+  .scrap .de{font-weight:700;font-size:.92rem;}
+  .scrap .en{
+    display:block;
+    font-style:italic;
+    color:var(--ink-soft);
+    font-size:.78rem;
+    margin-top:6px;
+  }
+  .scrap.gem{
+    background:#fff3c4;
+    border:2px solid var(--gold);
+    position:relative;
+    transform:rotate(0deg) scale(1.03);
+  }
+  .scrap.gem::before{
+    content:"★ key find";
+    position:absolute;
+    top:-11px;
+    right:10px;
+    background:var(--gold);
+    color:#3a2e05;
+    font-family:-apple-system,sans-serif;
+    font-size:.62rem;
+    font-weight:800;
+    padding:2px 7px;
+    border-radius:10px;
+  }
+  .mined-heading{
+    text-align:center;
+    font-weight:800;
+    font-size:.78rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    margin:26px 0 12px;
+  }
+  .mined-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+  }
+  .mined-chip{
+    background:#fff;
+    border:1px solid #e0d3ae;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:.8rem;
+    max-width:260px;
+  }
+  .mined-chip b{display:block;font-size:.92rem;}
+  .mined-chip .from{
+    color:var(--ink-soft);
+    font-size:.72rem;
+    font-style:italic;
+  }
+
+  /* ================= 7. Crank the Dial to 11 ================= */
+  .dial-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:18px;
+  }
+  .dial-card{
+    background:#fff5ec;
+    border:2px solid var(--orange);
+    border-radius:12px;
+    padding:16px 18px;
+    text-align:center;
+  }
+  .dial-title{
+    font-weight:800;
+    font-size:.82rem;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--orange);
+    margin-bottom:8px;
+  }
+  .dial-track{
+    height:14px;
+    background:#f0d9c8;
+    border-radius:8px;
+    position:relative;
+    margin:6px 0 4px;
+  }
+  .dial-fill{
+    position:absolute;
+    left:0;top:0;bottom:0;
+    width:97%;
+    background:linear-gradient(90deg,#f4d35e,var(--orange),var(--red));
+    border-radius:8px;
+  }
+  .dial-scale{
+    display:flex;
+    justify-content:space-between;
+    font-size:.65rem;
+    color:var(--ink-soft);
+    margin-bottom:10px;
+  }
+  .dial-scale .eleven{font-weight:800;color:var(--red);}
+  .dial-variants{
+    font-size:.78rem;
+    color:var(--ink-soft);
+    margin-bottom:10px;
+    line-height:1.7;
+  }
+  .dial-variants s{color:#b88;}
+  .dial-variants .culled-tag{font-size:.65rem;color:var(--red);}
+  .dial-survivor{
+    background:#fff;
+    border-radius:8px;
+    padding:8px 10px;
+    font-weight:800;
+    font-size:1rem;
+    color:var(--ink);
+  }
+  .dial-survivor small{
+    display:block;
+    font-weight:400;
+    font-size:.72rem;
+    color:var(--ink-soft);
+    margin-top:3px;
+  }
+
+  /* ================= 8. Mini-Round — fine-tuning ================= */
+  .insight.decision{
+    border-left-color:var(--gold);
+    box-shadow:2px 3px 10px rgba(212,160,23,.22);
+  }
+  .insight.decision::before{
+    color:var(--gold);
+  }
+  .insight.decision .label{
+    color:#8a6d1d;
+  }
+  .finetune-wrap{
+    background:var(--paper-dark);
+    border:2px solid var(--kraft);
+    border-radius:14px;
+    padding:24px 20px;
+  }
+  .finetune-wrap .mined-heading:first-child{margin-top:0;}
+
+  /* ================= Final Decision climax ================= */
+  .synthesis{
+    background:linear-gradient(165deg,#fff8e0,#ffe9a8);
+    border-radius:20px;
+    padding:36px 24px;
+    border:3px solid var(--gold);
+    box-shadow:0 10px 30px rgba(212,160,23,.25);
+  }
+  .synthesis .section-head h2{
+    font-size:clamp(1.5rem,4.5vw,2rem);
+  }
+  .crown-name{
+    text-align:center;
+    font-size:clamp(2.2rem,8vw,3.4rem);
+    font-weight:800;
+    color:#8a6d1d;
+    margin:4px 0 8px;
+    text-shadow:0 2px 0 #fff, 0 6px 16px rgba(212,160,23,.4);
+  }
+  .crown-sub{
+    text-align:center;
+    max-width:600px;
+    margin:0 auto 26px;
+    font-size:.85rem;
+    color:var(--ink-soft);
+    font-style:italic;
+  }
+  .finale-lede{
+    max-width:680px;
+    margin:0 auto 28px;
+    background:rgba(255,255,255,.6);
+    border-radius:10px;
+    padding:16px 20px;
+    font-size:.9rem;
+    text-align:center;
+  }
+  .finale-lede b{color:#8a6d1d;}
+  .finale-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:16px;
+    max-width:820px;
+    margin:0 auto;
+  }
+  .finale-card{
+    background:#fffdf6;
+    border:2px solid var(--gold);
+    border-radius:14px;
+    padding:16px 18px;
+    text-align:center;
+    box-shadow:0 4px 12px rgba(0,0,0,.12);
+  }
+  .finale-card-label{
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:.65rem;
+    font-weight:800;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  .finale-card-value{
+    font-size:1.15rem;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .finale-card-value small{
+    display:block;
+    font-weight:600;
+    font-size:.72rem;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+  .finale-card.claim .finale-card-value{
+    font-style:italic;
+    font-weight:700;
+    font-size:1rem;
+  }
+  .finale-card.future{border-color:var(--orange);}
+  .finale-card.future .finale-card-label{color:var(--orange);}
+  .shortlist-heading{
+    text-align:center;
+    font-weight:800;
+    font-size:.85rem;
+    margin:34px 0 14px;
+    letter-spacing:.03em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  .shortlist{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    justify-content:center;
+  }
+  .medal{
+    background:#fffdf6;
+    border-radius:12px;
+    padding:10px 18px;
+    font-weight:800;
+    font-size:1rem;
+    color:#8a6d1d;
+    box-shadow:0 3px 0 var(--gold), 0 6px 14px rgba(0,0,0,.15);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .medal.also-ran{
+    opacity:.55;
+    color:var(--ink-soft);
+    box-shadow:0 3px 0 #cbb98a, 0 6px 14px rgba(0,0,0,.08);
+    font-size:.9rem;
+  }
+
+  footer{
+    text-align:center;
+    margin-top:60px;
+    font-size:.75rem;
+    color:var(--ink-soft);
+  }
+
+  @media (max-width:480px){
+    .sticky{width:130px;min-height:100px;}
+    .fridge-note{padding:16px 16px 18px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="fridge-note">
+      <p class="eyebrow">Brainstorming session · logged 2026-09-11</p>
+      <h1 class="title">Finding SGART a German Name</h1>
+      <p class="sub">Seven techniques, a mini-round of fine-tuning, one fridge note — and one fox who won.</p>
+      <p class="meta">Goal: a cute, catchy — ideally animal-based — German replacement name for the shared household shopping-list &amp; receipt app.</p>
+    </div>
+  </header>
+
+  <nav class="timeline">
+    <a href="#round-robin">1 Round Robin</a>
+    <a href="#role-play">2 Role Playing</a>
+    <a href="#concept-blend">3 Concept Blending</a>
+    <a href="#evolution">4 Evolution</a>
+    <a href="#onomatopoeia">5 Onomatopoeia</a>
+    <a href="#proverbs">6 Proverb Mining</a>
+    <a href="#dial-11">7 Dial to 11</a>
+    <a href="#mini-round">8 Mini-Round</a>
+    <a href="#final-decision" class="finale">★ Final Decision</a>
+  </nav>
+
+  <!-- ================= 1. ROUND ROBIN ================= -->
+  <section id="round-robin">
+    <div class="section-head">
+      <p class="section-num">Technique 1</p>
+      <h2>Brain Writing Round Robin</h2>
+      <p class="section-sub">Passed around the table, idea by idea</p>
+    </div>
+
+    <div class="corkboard">
+      <div class="seeds-box">
+        <span class="label">Seeds already on the table</span>
+        <span class="names">Bonfuchs · Kaufhörnchen · Listenfuchs · Spatzenkasse</span>
+      </div>
+
+      <div class="sticky-grid">
+        <div class="sticky"><span class="name">Kassenhamster</span><span class="gloss">Kasse + Hamster — hamstern is literally the German verb for stockpiling groceries</span></div>
+        <div class="sticky"><span class="name">Hamsterliste</span><span class="gloss">swaps Kasse for the core Liste concept</span></div>
+        <div class="sticky"><span class="name">Zettelbiber</span><span class="gloss">Zettel (the fridge note) + Biber (industrious builder)</span></div>
+        <div class="sticky"><span class="name">Biberkorb</span><span class="gloss">beaver + Einkaufskorb (shopping basket)</span></div>
+        <div class="sticky"><span class="name">Fuchskorb</span><span class="gloss">fox + basket</span></div>
+        <div class="sticky"><span class="name">Schlaufuchs</span><span class="gloss">existing German idiom for "clever-clogs", reused as an app name</span></div>
+        <div class="sticky"><span class="name">Spargeist</span><span class="gloss">the Sparfuchs idiom split into Spar + Geist — a saving spirit / digital helper</span></div>
+        <div class="sticky"><span class="name">Sparspatz</span><span class="gloss">thrift + sparrow</span></div>
+        <div class="sticky"><span class="name">Spatzenzettel</span><span class="gloss">sparrow + fridge note</span></div>
+        <div class="sticky"><span class="name">Kühlzettel</span><span class="gloss">Kühlschrank + Zettel — a direct nod to the pitch's opening line</span></div>
+        <div class="sticky"><span class="name">Kühlfuchs</span><span class="gloss">fridge + fox</span></div>
+        <div class="sticky"><span class="name">Dachsbau</span><span class="gloss">badger + its den — Bau also reads as "build"; evokes shared household</span></div>
+        <div class="sticky"><span class="name">Vorratsdachs</span><span class="gloss">Vorrat (stockpile/supplies) + Dachs</span></div>
+        <div class="sticky"><span class="name">Vorratsfuchs</span><span class="gloss">stockpile + fox</span></div>
+        <div class="sticky"><span class="name">Hamsterbon</span><span class="gloss">Hamster + Bon — ties stockpiling directly to the receipt-scan feature</span></div>
+      </div>
+    </div>
+
+    <div class="insight">
+      <span class="label">Insight</span>
+      Round robin converged on two strong root families: <b>Hamster / Vorrat</b> (stockpiling) and <b>Fuchs / Zettel</b> (cleverness + fridge note).
+    </div>
+  </section>
+
+  <!-- ================= 2. ROLE PLAYING ================= -->
+  <section id="role-play">
+    <div class="section-head">
+      <p class="section-num">Technique 2</p>
+      <h2>Role Playing</h2>
+      <p class="section-sub">Five kitchen-table personas pitch back</p>
+    </div>
+
+    <div class="persona-grid">
+      <div class="persona-card">
+        <span class="avatar">😩</span>
+        <div class="persona-label">The stressed mom</div>
+        <div class="bubble" style="--bubble-color:#fddde3">
+          <p class="idea"><b>Kernkiste</b><span>wants warmth over tech-coldness — a cozy crate / core feel</span></p>
+          <p class="idea"><b>Hausschatz</b><span>Haus + Schatz (treasure) — the household as the treasure</span></p>
+        </div>
+        <p class="fear"><b>Fears:</b> the name sounding like a tax or utility app instead of a trusted friend.</p>
+      </div>
+
+      <div class="persona-card">
+        <span class="avatar">🛡️</span>
+        <div class="persona-label">The privacy dad</div>
+        <div class="bubble" style="--bubble-color:#dcebe3">
+          <p class="idea"><b>Igelkasse</b><span>a hedgehog rolls into a defensive ball — a register that reads as safe</span></p>
+          <p class="idea"><b>Panzerspatz</b><span>armored sparrow — tough+cute mashup signaling protection</span></p>
+        </div>
+        <p class="fear"><b>Fears:</b> any name implying the app phones data home; wants the name itself to feel local and defensive.</p>
+      </div>
+
+      <div class="persona-card">
+        <span class="avatar">🏠</span>
+        <div class="persona-label">The roommate</div>
+        <div class="bubble" style="--bubble-color:#e2ecf7">
+          <p class="idea"><b>Kassi</b><span>short, nickname-able, group-chat friendly</span></p>
+          <p class="idea"><b>Listi</b><span>same pattern, list-flavored</span></p>
+          <p class="idea"><b>Bonzo</b><span>playful, derived from Bon</span></p>
+        </div>
+        <p class="fear"><b>Wants:</b> 1–2 syllables that survive being shortened even further in texting.</p>
+      </div>
+
+      <div class="persona-card">
+        <span class="avatar">👵</span>
+        <div class="persona-label">The grandma</div>
+        <div class="bubble" style="--bubble-color:#f4ead2">
+          <p class="idea"><b>Einkaufsbüchlein</b><span>little shopping booklet — evokes the printed/analog use case</span></p>
+          <p class="idea"><b>Kassenbüchlein</b><span>little cash/receipt booklet — warm and ledger-like</span></p>
+        </div>
+        <p class="fear"><b>Wants:</b> the name to feel like a real paper notebook, not an app.</p>
+      </div>
+
+      <div class="persona-card">
+        <span class="avatar">📣</span>
+        <div class="persona-label">Marketing</div>
+        <div class="bubble" style="--bubble-color:#efe1f2">
+          <p class="idea"><b>Kassaro</b><span>coined, brandable non-word — ownable and trademark-friendly</span></p>
+          <p class="idea"><b>Fuxo</b><span>informal fox-derivative, brandable</span></p>
+        </div>
+        <p class="fear"><b>Rejects:</b> purely descriptive compounds (e.g. Einkaufsbüchlein) as hard to trademark; wants a coined or lightly-twisted word.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. CONCEPT BLENDING ================= -->
+  <section id="concept-blend">
+    <div class="section-head">
+      <p class="section-num">Technique 3</p>
+      <h2>Concept Blending</h2>
+      <p class="section-sub">Two concepts merged into one jar</p>
+    </div>
+
+    <div class="blend-grid">
+      <div class="blend-card">
+        <div class="equation">🛒 shared list <span class="op">+</span> 🐝 beehive</div>
+        <div class="result">Schwarmliste · Bienenkasse</div>
+        <div class="why">a self-organizing colony where members contribute without central control; the list routes by store the way bees route by flower patch</div>
+      </div>
+
+      <div class="blend-card">
+        <div class="equation">🧾 price history <span class="op">+</span> 📔 diary</div>
+        <div class="result">Bontagebuch</div>
+        <div class="why">a Preistagebuch that quietly journals what things cost, the way a diary journals feelings</div>
+      </div>
+
+      <div class="blend-card">
+        <div class="equation">📝 fridge-note culture <span class="op">+</span> 🗺️ treasure map</div>
+        <div class="result">Schatzzettel · Kühlschrankschatz</div>
+        <div class="why">the shopping list becomes a treasure map to the fridge</div>
+      </div>
+
+      <div class="blend-card">
+        <div class="equation">🏬 store-grouped trip <span class="op">+</span> 🐦 migratory flock</div>
+        <div class="result">Kaufvogel</div>
+        <div class="why">each store is a stopover on a flight plan</div>
+      </div>
+
+      <div class="blend-card">
+        <div class="equation">🏡 household <span class="op">+</span> 🦊 shared den</div>
+        <div class="result">Fuchsbau</div>
+        <div class="why">cozy, family-home coded — Bau also doubles as "build/construction"</div>
+      </div>
+
+      <div class="blend-card">
+        <div class="equation">💰 private price history <span class="op">+</span> 🏦 treasury / vault</div>
+        <div class="result">Preisschatz · Hörnchenschatz</div>
+        <div class="why">squirrel-hoard flavored variant on the same blend</div>
+      </div>
+    </div>
+
+    <div class="insight">
+      <span class="label">Insight</span>
+      The blend framing that resonates most isn't word-mashing — it's a <b>merger-concept</b>: the app as a quiet, self-organizing treasury or colony that nobody has to manage by hand.
+    </div>
+  </section>
+
+  <!-- ================= 4. EVOLUTIONARY PRESSURE ================= -->
+  <section id="evolution">
+    <div class="section-head">
+      <p class="section-num">Technique 4 · biomimetic</p>
+      <h2>Evolutionary Pressure</h2>
+      <p class="section-sub">Random-pick animals, culled by the "said aloud by a cashier" test</p>
+    </div>
+
+    <div class="evo-wrap">
+      <p class="gen-label">Gen 0 — random-pick ugly variants</p>
+      <div class="chip-row">
+        <span class="chip">Mausliste</span>
+        <span class="chip culled">Rattereinkauf<span class="reason">culled — rat carries disgust connotation</span></span>
+        <span class="chip">Kuhbon</span>
+        <span class="chip culled">Schweinezettel<span class="reason">culled — pig carries negative connotation in German</span></span>
+        <span class="chip">Entenkasse</span>
+        <span class="chip survivor">Wieselkorb</span>
+        <span class="chip">Dachsliste</span>
+        <span class="chip survivor">Igelbon</span>
+        <span class="chip survivor">Spatzentresor</span>
+        <span class="chip survivor">Hamsterhort</span>
+        <span class="chip survivor">Bibernest</span>
+        <span class="chip survivor">Ameisenkiste</span>
+        <span class="chip survivor">Eulenzettel</span>
+        <span class="chip culled">Kranichkasse<span class="reason">culled — weak / awkward sound</span></span>
+        <span class="chip culled">Rabenhort<span class="reason">culled — Rabeneltern (bad-parent idiom) baggage</span></span>
+        <span class="chip culled">Krötenfuchs<span class="reason">culled — nonsense combination</span></span>
+      </div>
+
+      <div class="rule-box"><b>Selection rule:</b> must survive being said aloud by a cashier without a gross or negative connotation, ideally under 3 syllables, no bad-idiom baggage.</div>
+
+      <p class="gen-label">Gen 0 survivors</p>
+      <div class="chip-row">
+        <span class="chip survivor">Hamsterhort</span>
+        <span class="chip survivor">Igelbon</span>
+        <span class="chip survivor">Wieselkorb</span>
+        <span class="chip survivor">Bibernest</span>
+        <span class="chip survivor">Ameisenkiste</span>
+        <span class="chip survivor">Eulenzettel</span>
+        <span class="chip survivor">Spatzentresor</span>
+      </div>
+
+      <div class="arrow-down">↓ bred ↓</div>
+
+      <p class="gen-label">Gen 1 — bred crosses</p>
+      <div class="bred-grid">
+        <div class="bred-card"><div class="name">Hamsterbon</div><div class="parents">Hamsterhort × Igelbon</div><div class="note">convergent with the round-robin result — validates the root</div></div>
+        <div class="bred-card"><div class="name">Wieselkiste</div><div class="parents">Wieselkorb × Ameisenkiste</div><div class="note">quick + storage, punchy sound</div></div>
+        <div class="bred-card"><div class="name">Bibertresor</div><div class="parents">Bibernest × Spatzentresor</div><div class="note">industrious + vault/privacy-coded</div></div>
+        <div class="bred-card"><div class="name">Eulenbon</div><div class="parents">Eulenzettel × Igelbon</div><div class="note">wise + receipt</div></div>
+      </div>
+
+      <div class="rule-box"><b>Gen 2 selection rule tightened:</b> must carry a shared/household hint, not just solo hoarding.</div>
+      <p class="winners-line">Survive best: <b>Wieselkiste</b> and <b>Bibertresor</b>. Held as solo-coded backups: Hamsterbon and Eulenbon.</p>
+    </div>
+  </section>
+
+  <!-- ================= 5. ONOMATOPOEIA FORGE ================= -->
+  <section id="onomatopoeia">
+    <div class="section-head">
+      <p class="section-num">Technique 5 · invented on the spot</p>
+      <h2>Onomatopoeia Forge</h2>
+      <p class="section-sub">Hammering real domain sounds into German name fragments</p>
+    </div>
+
+    <div class="forge">
+      <p class="forge-intro">Method: take real domain sounds — the rustling receipt, the squeaking cart wheel, the notification ping, the fridge thunk, the pen scratch — and shape them into name fragments.</p>
+      <div class="spark-grid">
+        <div class="spark"><span class="name">Raschelfuchs</span><span class="sound-tag">raschel</span><span class="gloss">rustle of receipt paper + fox</span></div>
+        <div class="spark"><span class="name">Quietschkorb</span><span class="sound-tag">quietsch</span><span class="gloss">squeaking cart wheel + basket</span></div>
+        <div class="spark"><span class="name">Pingkorb</span><span class="sound-tag">ping</span><span class="gloss">the pitch's own word for the content-free push notification</span></div>
+        <div class="spark"><span class="name">Pinghamster</span><span class="sound-tag">ping</span><span class="gloss">same ping-sound hook, hamster-flavored</span></div>
+        <div class="spark"><span class="name">Schmatzhamster</span><span class="sound-tag">schmatzen</span><span class="gloss">lip-smacking/munching sound — playful eating association</span></div>
+        <div class="spark"><span class="name">Kritzelliste</span><span class="sound-tag">kritzeln</span><span class="gloss">to scribble — evokes the handwritten fridge note</span></div>
+        <div class="spark"><span class="name">Piepfuchs</span><span class="sound-tag">piep</span><span class="gloss">register beep + fox</span></div>
+        <div class="spark"><span class="name">Raschelping</span><span class="sound-tag">raschel+ping</span><span class="gloss">combines the receipt-rustle and notification-ping sounds</span></div>
+        <div class="spark"><span class="name">Wischbon</span><span class="sound-tag">wischen</span><span class="gloss">to swipe/wipe — also the phone swipe gesture; double meaning fits OCR-scan-by-phone</span></div>
+        <div class="spark"><span class="name">Knisterzettel</span><span class="sound-tag">knistern</span><span class="gloss">crackle of paper + Zettel</span></div>
+        <div class="spark"><span class="name">Tapshamster</span><span class="sound-tag">tapsen</span><span class="gloss">to patter softly — sneaking to the fridge at night</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 6. PROVERB MINING ================= -->
+  <section id="proverbs">
+    <div class="section-head">
+      <p class="section-num">Technique 6</p>
+      <h2>Proverb Mining</h2>
+      <p class="section-sub">Old sayings, dug up and repurposed</p>
+    </div>
+
+    <div class="scrap-row">
+      <div class="scrap"><span class="de">"Spare in der Zeit, dann hast du in der Not"</span><span class="en">save in good times</span></div>
+      <div class="scrap gem"><span class="de">"Was ich nicht weiß, macht mich nicht heiß"</span><span class="en">what I don't know doesn't bother me</span></div>
+      <div class="scrap"><span class="de">"Kleinvieh macht auch Mist"</span><span class="en">small things add up</span></div>
+      <div class="scrap"><span class="de">"Wer den Pfennig nicht ehrt, ist des Talers nicht wert"</span><span class="en">respect the penny or you won't deserve the coin</span></div>
+      <div class="scrap"><span class="de">"Der frühe Vogel fängt den Wurm"</span><span class="en">the early bird catches the worm</span></div>
+    </div>
+
+    <div class="insight" style="margin-top:22px;">
+      <span class="label">Insight — the real find</span>
+      The clashing proverb is the gem: the app's entire job is to turn <em>"was ich nicht weiß"</em> into knowing. Strong tagline material, independent of the final name.
+    </div>
+
+    <p class="mined-heading">Ideas mined from these scraps</p>
+    <div class="mined-grid">
+      <div class="mined-chip"><b>Preiswiesel</b><span class="from">Wiesel (weasel, quick/clever) puns on Wissen — from the price-ignorance clash</span></div>
+      <div class="mined-chip"><b>Kleinviehkasse</b><span class="from">built from the small-things-add-up proverb</span></div>
+      <div class="mined-chip"><b>Pfennigfuchs(er)</b><span class="from">existing German word for "penny-pincher" — a ready-made brandable idiom</span></div>
+      <div class="mined-chip"><b>Frühspatz</b><span class="from">built from the early-bird proverb</span></div>
+      <div class="mined-chip"><b>Fangvogel</b><span class="from">built from the early-bird proverb, catching-flavored</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 7. CRANK THE DIAL TO 11 ================= -->
+  <section id="dial-11">
+    <div class="section-head">
+      <p class="section-num">Technique 7 · constraint</p>
+      <h2>Crank the Dial to 11</h2>
+      <p class="section-sub">Push one dimension to an absurd extreme, then keep what survives</p>
+    </div>
+
+    <div class="dial-grid">
+      <div class="dial-card">
+        <div class="dial-title">Cuteness</div>
+        <div class="dial-track"><div class="dial-fill"></div></div>
+        <div class="dial-scale"><span>0</span><span class="eleven">11</span></div>
+        <div class="dial-variants">Hamsterchen, <s>Bönchen</s> <span class="culled-tag">culled — reads as Bohne/bean, confusing</span>, Zettelchen, Körbchen</div>
+        <div class="dial-survivor">Füchslein<small>charming without being cloying</small></div>
+      </div>
+
+      <div class="dial-card">
+        <div class="dial-title">Privacy / secrecy</div>
+        <div class="dial-track"><div class="dial-fill"></div></div>
+        <div class="dial-scale"><span>0</span><span class="eleven">11</span></div>
+        <div class="dial-variants">Tresorfuchs, Geheimkasse</div>
+        <div class="dial-survivor">Schweigehamster<small>the silent hamster — an oddly charming longshot</small></div>
+      </div>
+
+      <div class="dial-card">
+        <div class="dial-title">Germanness / bureaucratic compound</div>
+        <div class="dial-track"><div class="dial-fill"></div></div>
+        <div class="dial-scale"><span>0</span><span class="eleven">11</span></div>
+        <div class="dial-variants">Haushaltseinkaufslistenverwaltungshamster <span class="culled-tag">(deliberate 40-letter joke)</span></div>
+        <div class="dial-survivor">Haushaltshamster<small>the usable piece mined out of the joke</small></div>
+      </div>
+
+      <div class="dial-card">
+        <div class="dial-title">Shortness</div>
+        <div class="dial-track"><div class="dial-fill"></div></div>
+        <div class="dial-scale"><span>0</span><span class="eleven">11</span></div>
+        <div class="dial-variants">Bon, Ham, Zett</div>
+        <div class="dial-survivor">Fux<small>ultra-short playful spelling of Fuchs — could stand alone as a brand token / icon wordmark</small></div>
+      </div>
+    </div>
+
+    <div class="insight">
+      <span class="label">Insight</span>
+      <b>Fux</b> could double as a sub-brand or wordmark, even if a longer compound name is chosen as the primary name.
+    </div>
+  </section>
+
+  <!-- ================= 8. MINI-ROUND: EINKAUFSFUCHS VARIANTS ================= -->
+  <section id="mini-round">
+    <div class="section-head">
+      <p class="section-num">Technique 8 · mini-round</p>
+      <h2>Einkaufsfuchs Feinschliff</h2>
+      <p class="section-sub">Spelling, claim, and icon-shortform for the name the household actually picked</p>
+    </div>
+
+    <div class="insight decision">
+      <span class="label">Decision</span>
+      Chosen direction: <b>Einkaufsfuchs</b> over <b>Bonfuchs</b>. Right now, and across the roadmap, the core function is shopping-list management and store-grouped planning — receipt scanning and price history are a later enhancement on top of that core, not the anchor. The name leads with <em>Einkauf</em>, not <em>Bon</em>.
+    </div>
+
+    <div class="insight">
+      <span class="label">Insight</span>
+      Einkaufsfuchs wasn't in the original shortlist verbatim, but it's the natural next generation of the Fuchs family from Round Robin (Fuchskorb, Vorratsfuchs, Kühlfuchs, Schlaufuchs) — and it quietly recreates the original SGART wordplay in German: <b>Einkauf</b> = Grocery, <b>Fuchs</b> (schlau wie ein Fuchs) = Smart. The most literal German echo of "Smart Grocery" the whole session produced.
+    </div>
+
+    <div class="finetune-wrap">
+      <p class="mined-heading">Schreibweise — spelling variants</p>
+      <div class="mined-grid">
+        <div class="mined-chip"><b>Einkaufsfuchs</b><span class="from">full, formal spelling</span></div>
+        <div class="mined-chip"><b>EinkaufsFuchs</b><span class="from">CamelCase for the logo — visually splits the word into two readable halves</span></div>
+        <div class="mined-chip"><b>Einkaufs-Fuchs</b><span class="from">hyphenated — easier to parse at small sizes</span></div>
+        <div class="mined-chip"><b>Kauffuchs</b><span class="from">contraction dropping "eins" — shorter and punchier, still reads clearly as Einkauf+Fuchs</span></div>
+        <div class="mined-chip"><b>Der Fuchs</b><span class="from">informal shorthand, how people would actually refer to it day-to-day</span></div>
+      </div>
+
+      <p class="mined-heading">Claim — tagline options</p>
+      <div class="mined-grid">
+        <div class="mined-chip"><b>„Schlau einkaufen, gemeinsam.“</b><span class="from">brings back the Fuchs=schlau wordplay explicitly; emphasizes the shared-household angle</span></div>
+        <div class="mined-chip"><b>„Weiß, wo's günstig ist.“</b><span class="from">personifies the fox; teases the future price feature without promising it as a core function</span></div>
+        <div class="mined-chip"><b>„Die Einkaufsliste, die mitdenkt.“</b><span class="from">foregrounds the smart list — today's core function — over the price angle</span></div>
+        <div class="mined-chip"><b>„Nie mehr ohne Butter an der Kasse.“</b><span class="from">pulled straight from PITCH.md's opening hook; concrete and relatable</span></div>
+        <div class="mined-chip"><b>„Einer für alle, eine Liste für alle.“</b><span class="from">Three-Musketeers wordplay, underscoring shared household use</span></div>
+        <div class="mined-chip"><b>„Schlau geplant ist halb gekauft.“</b><span class="from">twist on "well planned is half won" — feels like an existing proverb, the same trick Schlaufuchs uses</span></div>
+      </div>
+
+      <p class="mined-heading">Icon-Kurzform — short-label options</p>
+      <div class="mined-grid">
+        <div class="mined-chip"><b>Fux</b><span class="from">playful short spelling of Fuchs, reused from the Crank-the-Dial round</span></div>
+        <div class="mined-chip"><b>EF</b><span class="from">plain initials — clean but generic/cold, listed as the contrast option</span></div>
+        <div class="mined-chip"><b>Fuxi</b><span class="from">diminutive, very cute/friendly — maybe too playful for the later cost-overview positioning</span></div>
+        <div class="mined-chip"><b>Fuchs-Piktogramm</b><span class="from">a fox pictogram as the actual app icon, with Einkaufsfuchs as the wordmark beside it</span></div>
+        <div class="mined-chip"><b>Kauffux</b><span class="from">mashup of the Kauffuchs contraction and the Fux spelling — fits as a home-screen label under the icon</span></div>
+      </div>
+    </div>
+
+    <div class="insight" style="margin-top:22px;">
+      <span class="label">Insight</span>
+      <b>Einkaufsfuchs</b> is likely too long as a home-screen label under the app icon — iOS/Android truncate past a certain length. <b>Kauffux</b> or <b>Fux</b> should take that slot, while Einkaufsfuchs stays the full brand for the store listing and website.
+    </div>
+  </section>
+
+  <!-- ================= FINAL DECISION ================= -->
+  <section id="final-decision">
+    <div class="synthesis">
+      <div class="section-head">
+        <p class="section-num">✨ Final Decision ✨</p>
+        <h2>The Fox Wins</h2>
+        <p class="section-sub">Seven techniques, one mini-round, one name for the household</p>
+      </div>
+
+      <div class="crown-name">🦊 Einkaufsfuchs</div>
+      <p class="crown-sub">Seven techniques surfaced Hamster, Zettel, Ping, and a proverb clash along the way — in the end, the Fuchs family carried the day.</p>
+
+      <div class="finale-lede">
+        Chosen over <b>Bonfuchs</b>: the core function now and on the roadmap is shopping-list management and store-grouped planning, not receipt or price tracking — so the name leads with <b>Einkauf</b>, not <b>Bon</b>. It also happens to be the cleanest German echo of the app's own origin: <b>Einkauf</b> = Grocery, <b>Fuchs</b> (schlau wie ein Fuchs) = Smart.
+      </div>
+
+      <div class="finale-grid">
+        <div class="finale-card">
+          <div class="finale-card-label">Icon / home-screen label</div>
+          <div class="finale-card-value">Kauffux<small>also: Fux</small></div>
+        </div>
+        <div class="finale-card claim">
+          <div class="finale-card-label">Claim — now</div>
+          <div class="finale-card-value">„Die Einkaufsliste,<br>die mitdenkt.“</div>
+        </div>
+        <div class="finale-card claim future">
+          <div class="finale-card-label">Claim — once the price feature ships</div>
+          <div class="finale-card-value">„Weiß, wo's<br>günstig ist.“</div>
+        </div>
+      </div>
+
+      <p class="shortlist-heading">Also in the running, set aside for Einkaufsfuchs</p>
+      <div class="shortlist">
+        <div class="medal also-ran">🏅 <s>Bonfuchs</s></div>
+        <div class="medal also-ran">🏅 <s>Hamsterbon</s></div>
+        <div class="medal also-ran">🏅 <s>Wieselkiste</s></div>
+        <div class="medal also-ran">🏅 <s>Bibertresor</s></div>
+        <div class="medal also-ran">🏅 <s>Füchslein / Fux</s></div>
+        <div class="medal also-ran">🏅 <s>Kritzelliste</s></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Brainstorming session log — German name for SGART — 2026-09-11
+  </footer>
+
+</div>
+</body>
+</html>
