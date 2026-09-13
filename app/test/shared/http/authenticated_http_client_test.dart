@@ -187,5 +187,230 @@ void main() {
         throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'household.nameRequired')),
       );
     });
+
+    group('refresh-and-retry-once on 401 (optional refreshTokens callback)', () {
+      test('getJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonResponse({'keycloakUserId': 'sub-1'}, 200);
+        });
+        var refreshCallCount = 0;
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async {
+            refreshCallCount++;
+            return true;
+          },
+        );
+
+        final json = await client.getJson('/api/v1/identity/me');
+
+        expect(json['keycloakUserId'], 'sub-1');
+        expect(callCount, 2);
+        expect(refreshCallCount, 1);
+      });
+
+      test('getJson_propagatesTheOriginal401OnceWhenRefreshFailsWithNoSecondRequest', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => false,
+        );
+
+        await expectLater(
+          client.getJson('/api/v1/identity/me'),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'auth.unauthorized')),
+        );
+        expect(callCount, 1);
+      });
+
+      test('getJson_propagatesTheSecond401OnceWhenTheRetriedRequestAlso401sNoLoop', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+        });
+        var refreshCallCount = 0;
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async {
+            refreshCallCount++;
+            return true;
+          },
+        );
+
+        await expectLater(
+          client.getJson('/api/v1/identity/me'),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'auth.unauthorized')),
+        );
+        // Exactly one retry: the first call, one refresh, one retried call — never a loop.
+        expect(callCount, 2);
+        expect(refreshCallCount, 1);
+      });
+
+      test('getJson_neverRetriesWhenNoRefreshCallbackIsSupplied', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+        });
+        final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+
+        await expectLater(
+          client.getJson('/api/v1/identity/me'),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'auth.unauthorized')),
+        );
+        expect(callCount, 1);
+      });
+
+      test('postJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonResponse({'householdId': 'id-1'}, 201);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => true,
+        );
+
+        final json = await client.postJson('/api/v1/households', {'name': 'Familie Muster'});
+
+        expect(json['householdId'], 'id-1');
+        expect(callCount, 2);
+      });
+
+      test('getJsonList_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonArrayResponse([
+            {'householdId': 'id-1', 'name': 'Familie Muster'},
+          ], 200);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => true,
+        );
+
+        final json = await client.getJsonList('/api/v1/households');
+
+        expect(json, hasLength(1));
+        expect(callCount, 2);
+      });
+
+      test('patchJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonResponse(const {}, 204);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => true,
+        );
+
+        await client.patchJson('/api/v1/households/id-1', {'name': 'Neuer Name'});
+
+        expect(callCount, 2);
+      });
+
+      test('putJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonResponse(const {}, 204);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => true,
+        );
+
+        await client.putJson('/api/v1/households/id-1', {'name': 'Neuer Name'});
+
+        expect(callCount, 2);
+      });
+
+      test('deleteJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          if (callCount == 1) {
+            return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'expired'}, 401);
+          }
+          return _jsonResponse(const {}, 204);
+        });
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async => true,
+        );
+
+        await client.deleteJson('/api/v1/households/id-1', {'reason': 'no longer needed'});
+
+        expect(callCount, 2);
+      });
+
+      test('nonAuthUnauthorizedErrorsAreNeverRetried', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          return _jsonResponse(const {'code': 'household.nameRequired', 'message': 'debug'}, 400);
+        });
+        var refreshCallCount = 0;
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'token',
+          refreshTokens: () async {
+            refreshCallCount++;
+            return true;
+          },
+        );
+
+        await expectLater(
+          client.postJson('/api/v1/households', {'name': ''}),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'household.nameRequired')),
+        );
+        expect(callCount, 1);
+        expect(refreshCallCount, 0);
+      });
+    });
   });
 }

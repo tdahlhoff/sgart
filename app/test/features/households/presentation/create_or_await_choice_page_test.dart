@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/auth/presentation/auth_cubit.dart';
+import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/create_or_await_choice_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -8,6 +10,7 @@ import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 
+import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_stores_dependencies.dart';
@@ -20,17 +23,22 @@ void main() {
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeInvitesApi invitesApi;
+    late AuthCubit authCubit;
 
-    setUp(() {
+    setUp(() async {
       householdsApi = FakeHouseholdsApi()..createdHouseholdIdToReturn = 'hh-1';
       householdsCubit =
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
+      authCubit = await buildAuthenticatedAuthCubit();
     });
 
-    tearDown(() => householdsCubit.close());
+    tearDown(() async {
+      await householdsCubit.close();
+      await authCubit.close();
+    });
 
     // The providers sit *below* the MaterialApp's Navigator (as they do in production, created
     // inside FirstRunRouter under the root Navigator). Launching the onboarding wizard must still
@@ -46,7 +54,10 @@ void main() {
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,
-              child: const CreateOrAwaitChoicePage(),
+              child: BlocProvider<AuthCubit>.value(
+                value: authCubit,
+                child: const CreateOrAwaitChoicePage(),
+              ),
             ),
           ),
         );
@@ -98,6 +109,18 @@ void main() {
       // (its AcceptInviteCubit) and HouseholdsCubit (the by-value re-provide, Story 4.2).
       expect(find.byKey(const Key('await-invite-link-field')), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tappingTheSignOutIconSignsOut', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      final button = tester.widget<IconButton>(find.byKey(const Key('sign-out-button')));
+      expect(button.tooltip, 'Abmelden');
+
+      await tester.tap(find.byKey(const Key('sign-out-button')));
+      await tester.pumpAndSettle();
+
+      expect(authCubit.state.status, AuthStatus.unauthenticated);
     });
   });
 }

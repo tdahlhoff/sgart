@@ -181,38 +181,65 @@ void main() {
       },
     );
 
+    // The transparent retry-once-on-401 behavior moved to `AuthenticatedHttpClient` itself (every
+    // authenticated call now benefits, not just `/me`) — see authenticated_http_client_test.dart
+    // for that coverage. `_loadCallerIdentity` now only reacts to the final outcome.
     blocTest<AuthCubit, AuthState>(
-      'bootstrap_refreshesTheAccessTokenAndResumesWhenTheStoredAccessTokenIsExpired',
-      build: () {
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'expired', refreshToken: 'refresh');
-        identityApi.enqueue(const AppException(AppError(code: 'auth.unauthorized', message: 'expired')));
-        identityApi.enqueue(
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test'));
-        oidcClient.refreshedTokensToReturn =
-            const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
-        return buildCubit();
-      },
-      act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test')],
-      verify: (_) {
-        expect(oidcClient.lastRefreshToken, 'refresh');
-        expect(tokenStorage.storedTokens!.accessToken, 'fresh');
-        expect(identityApi.fetchMeCallCount, 2);
-      },
-    );
-
-    blocTest<AuthCubit, AuthState>(
-      'bootstrap_clearsTheSessionWhenTheAccessTokenIsExpiredAndTheRefreshFails',
+      'bootstrap_clearsTheSessionWhenTheIdentityCallIsRejectedAsUnauthorized',
       build: () {
         tokenStorage.storedTokens = const OidcTokens(accessToken: 'expired', refreshToken: 'refresh');
         identityApi.errorToThrow = const AppException(AppError(code: 'auth.unauthorized', message: 'expired'));
-        oidcClient.refreshErrorToThrow = StateError('refresh token revoked');
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
       expect: () => [const AuthState.failure(AppError(code: 'auth.unauthorized', message: 'expired'))],
       verify: (_) => expect(tokenStorage.cleared, isTrue),
     );
+
+    group('tryRefreshTokens (public — wired into AuthenticatedHttpClient as its refresh callback)', () {
+      test('exchangesTheStoredRefreshTokenForAFreshAccessTokenAndReturnsTrue', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
+        final cubit = buildCubit();
+        await cubit.signIn();
+
+        final refreshed = await cubit.tryRefreshTokens();
+
+        expect(refreshed, isTrue);
+        expect(oidcClient.lastRefreshToken, 'refresh');
+        expect(tokenStorage.storedTokens!.accessToken, 'fresh');
+        await cubit.close();
+      });
+
+      test('returnsFalseWhenNoRefreshTokenIsStored', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit();
+        await cubit.signIn();
+
+        final refreshed = await cubit.tryRefreshTokens();
+
+        expect(refreshed, isFalse);
+        await cubit.close();
+      });
+
+      test('returnsFalseWhenTheRefreshCallFails', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        oidcClient.refreshErrorToThrow = StateError('refresh token revoked');
+        final cubit = buildCubit();
+        await cubit.signIn();
+
+        final refreshed = await cubit.tryRefreshTokens();
+
+        expect(refreshed, isFalse);
+        await cubit.close();
+      });
+    });
 
     test('doesNotEmitAfterTheCubitIsClosedMidSignIn', () async {
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');

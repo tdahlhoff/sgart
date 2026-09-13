@@ -81,22 +81,9 @@ class FakeSecureTokenStorage implements SecureTokenStorage {
 class FakeIdentityApi implements IdentityApi {
   CallerIdentity? identityToReturn;
   Object? errorToThrow;
-  int fetchMeCallCount = 0;
-  final List<Object> _responseQueue = [];
-
-  /// Enqueues outcomes ([CallerIdentity] to return, anything else to throw) served in order across
-  /// successive [fetchMe] calls — used to exercise the fail-then-retry refresh path. Takes
-  /// precedence over [identityToReturn]/[errorToThrow] while non-empty.
-  void enqueue(Object outcome) => _responseQueue.add(outcome);
 
   @override
   Future<CallerIdentity> fetchMe() async {
-    fetchMeCallCount++;
-    if (_responseQueue.isNotEmpty) {
-      final outcome = _responseQueue.removeAt(0);
-      if (outcome is CallerIdentity) return outcome;
-      throw outcome;
-    }
     if (errorToThrow != null) throw errorToThrow!;
     return identityToReturn!;
   }

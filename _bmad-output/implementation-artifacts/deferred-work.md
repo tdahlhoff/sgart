@@ -201,6 +201,15 @@
   Covered by `retainSubscription_rejectsASubscriptionThatLandsAfterStop` /
   `..._retainsASubscriptionWhileRunning` unit tests in both fan-out test classes.
 
+## Deferred from: code review of spec-auth-refresh-and-signout-fixes (2026-09-13)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-refresh-and-signout-fixes.md`
+  summary: Concurrent 401s from parallel authenticated calls can each independently call `AuthenticatedHttpClient`'s `refreshTokens` callback with the same, not-yet-updated refresh token; if Keycloak's realm ever enables refresh-token single-use/revocation, the losing call would spuriously see a session-expired error even though the session is fine.
+  evidence: `keycloak/realm-sgart.json` does not set `revokeRefreshToken` (Keycloak's default is `false`, so reuse of a not-yet-rotated refresh token is tolerated today) — could not confirm the actually effective behavior without inspecting the running Keycloak instance. If true, this is a medium-severity, self-healing spurious-sign-out bug that centralizing retry across every authenticated call (rather than only `/me`) makes meaningfully more likely to occur. Settle by checking the realm's effective `revokeRefreshToken` value whenever refresh-token hardening is considered, or add an in-flight-refresh de-dup guard (single shared `Future` reused by concurrent callers) in `AuthenticatedHttpClient`/`AuthCubit.tryRefreshTokens()` if/when that setting changes.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-refresh-and-signout-fixes.md`
+  summary: `_FailurePage` in `app/lib/features/households/presentation/first_run_router.dart` (the households-bootstrap failure screen) always shows the hardcoded generic `householdsLoadFailedError` text regardless of `HouseholdsState.error.code` — so even after this fix, a households-list load that 401s with a dead refresh token shows the generic "couldn't load your households" copy instead of the new session-expired message, and offers no path back to sign-in.
+  evidence: Pre-existing and untouched by this change — `_FailurePage` never called `localizedMessageForErrorCode` for any error code, auth or otherwise, before this diff either. Fix is straightforward (swap the hardcoded `Text` for `localizedMessageForErrorCode(localizations, state.error!.code)`, matching `SignInPage`'s existing pattern) but out of this batch's scope since it wasn't caused by it.
+
 ## Deferred from: code review of 4-6-invite-acceptance-web-fallback (2026-09-10)
 
 - **[LOW] `InviteDeepLinkService` host filter will drop the documented `https` App Links** —

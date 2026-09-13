@@ -105,9 +105,10 @@ class AuthCubit extends Cubit<AuthState> {
   ///
   /// A transient failure (server unreachable) keeps the stored tokens so the next launch can
   /// resume the session — only a definitive rejection wipes them (see [_isRejectedSession]). An
-  /// expired access token (401) is retried once against a fresh token obtained with the stored
-  /// refresh token before it is treated as a rejection.
-  Future<void> _loadCallerIdentity({bool allowRefresh = true}) async {
+  /// expired access token (401) is now retried transparently by [AuthenticatedHttpClient] itself
+  /// (via [tryRefreshTokens], wired in as its refresh callback) — this method sees only the final
+  /// outcome.
+  Future<void> _loadCallerIdentity() async {
     try {
       final identity = await _identityApi.fetchMe();
       _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId, identity.email));
@@ -116,10 +117,6 @@ class AuthCubit extends Cubit<AuthState> {
       unawaited(_registerPushTokenBestEffort());
     } on Object catch (error) {
       final appError = _toAppError(error);
-      if (allowRefresh && appError.code == 'auth.unauthorized' && await _tryRefreshTokens()) {
-        await _loadCallerIdentity(allowRefresh: false);
-        return;
-      }
       if (_isRejectedSession(appError)) {
         await _tokenStorage.clear();
         _tokens = null;
@@ -130,13 +127,23 @@ class AuthCubit extends Cubit<AuthState> {
 
   /// Exchanges the stored refresh token for a fresh access token. Returns whether it succeeded; a
   /// failed refresh (missing/expired refresh token) leaves the caller to treat the 401 as final.
-  Future<bool> _tryRefreshTokens() async {
+  /// Public so it can be wired into [AuthenticatedHttpClient]'s optional refresh callback — every
+  /// authenticated call benefits from the same retry-once behavior, not just `/me`.
+  ///
+  /// Guarded by [_sessionGeneration] exactly like [_registerPushTokenBestEffort]: a refresh that
+  /// resolves after the user has already signed out must not resurrect the ended session by
+  /// re-applying/re-persisting tokens, even though the exchange itself still ran to completion.
+  Future<bool> tryRefreshTokens() async {
     final refreshToken = _tokens?.refreshToken;
     if (refreshToken == null) {
       return false;
     }
+    final refreshedForGeneration = _sessionGeneration;
     try {
       final refreshed = await _oidcClient.refresh(refreshToken);
+      if (_sessionGeneration != refreshedForGeneration) {
+        return true;
+      }
       await _tokenStorage.save(refreshed);
       _tokens = refreshed;
       return true;

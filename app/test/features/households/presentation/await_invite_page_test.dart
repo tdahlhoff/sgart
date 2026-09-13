@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/auth/presentation/auth_cubit.dart';
+import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/await_invite_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -10,6 +12,7 @@ import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
+import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -19,15 +22,20 @@ void main() {
     late FakeInvitesApi invitesApi;
     late FakeHouseholdsApi householdsApi;
     late HouseholdsCubit householdsCubit;
+    late AuthCubit authCubit;
 
-    setUp(() {
+    setUp(() async {
       invitesApi = FakeInvitesApi();
       householdsApi = FakeHouseholdsApi();
       householdsCubit =
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
+      authCubit = await buildAuthenticatedAuthCubit();
     });
 
-    tearDown(() => householdsCubit.close());
+    tearDown(() async {
+      await householdsCubit.close();
+      await authCubit.close();
+    });
 
     Widget buildSubject({InviteLink? initialLink}) => wrapForTesting(
           Navigator(
@@ -36,7 +44,10 @@ void main() {
                 value: invitesApi,
                 child: BlocProvider<HouseholdsCubit>.value(
                   value: householdsCubit,
-                  child: AwaitInvitePage(initialLink: initialLink),
+                  child: BlocProvider<AuthCubit>.value(
+                    value: authCubit,
+                    child: AwaitInvitePage(initialLink: initialLink),
+                  ),
                 ),
               ),
             ),
@@ -103,6 +114,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('await-invite-link-field')), findsNothing);
+    });
+
+    testWidgets('tappingTheSignOutIconSignsOut', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      final button = tester.widget<IconButton>(find.byKey(const Key('sign-out-button')));
+      expect(button.tooltip, 'Abmelden');
+
+      await tester.tap(find.byKey(const Key('sign-out-button')));
+      await tester.pumpAndSettle();
+
+      expect(authCubit.state.status, AuthStatus.unauthenticated);
     });
   });
 }

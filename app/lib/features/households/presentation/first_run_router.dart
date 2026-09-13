@@ -65,6 +65,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _httpClient = AuthenticatedHttpClient(
       dio: _dio,
       accessTokenProvider: () async => authCubit.currentAccessToken,
+      refreshTokens: () => authCubit.tryRefreshTokens(),
     );
     _householdsApi = HttpHouseholdsApi(_httpClient);
     _storesApi = HttpStoresApi(_httpClient);

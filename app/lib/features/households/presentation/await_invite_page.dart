@@ -6,6 +6,7 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../auth/presentation/auth_cubit.dart';
 import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/accept_invite_cubit.dart';
@@ -103,7 +104,22 @@ class _AwaitInviteViewState extends State<_AwaitInviteView> {
         }
       },
       child: Scaffold(
-        appBar: const SgartAppBar(title: 'SGART'),
+        // No household exists yet, so Profil (and its sign-out button) is unreachable — offer the
+        // same AuthCubit.signOut() call here, invoked exactly as the Profil-tab button does (no
+        // confirmation dialog); the icon-only affordance itself is a different widget, not a copy
+        // of that button's full-width labelled appearance. Scoped to this screen and
+        // CreateOrAwaitChoicePage only.
+        appBar: SgartAppBar(
+          title: 'SGART',
+          actions: [
+            IconButton(
+              key: const Key('sign-out-button'),
+              icon: const Icon(Icons.logout),
+              tooltip: localizations.authSignOutButtonLabel,
+              onPressed: () => context.read<AuthCubit>().signOut(),
+            ),
+          ],
+        ),
         body: SafeArea(
           child: BlocBuilder<AcceptInviteCubit, AcceptInviteState>(
             builder: (context, state) {

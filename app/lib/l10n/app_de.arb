@@ -21,6 +21,11 @@
     "description": "Label of the button that signs the person out and clears the local session."
   },
 
+  "authSessionExpiredError": "Deine Sitzung ist abgelaufen, melde dich neu an.",
+  "@authSessionExpiredError": {
+    "description": "Shown instead of the generic fallback when an authenticated call 401s and the refresh token is also invalid/expired (auth.unauthorized)."
+  },
+
   "authSignedInAsLabel": "Angemeldet als {displayName}",
   "@authSignedInAsLabel": {
     "description": "Shown on the authenticated placeholder screen with the live display name from GET /identity/me.",

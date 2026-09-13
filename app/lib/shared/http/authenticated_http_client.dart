@@ -6,13 +6,28 @@ import 'app_exception.dart';
 /// Supplies the current access token for the bearer interceptor, or `null` when signed out.
 typedef AccessTokenProvider = Future<String?> Function();
 
+/// Exchanges the stored refresh token for a fresh access token, returning whether it succeeded.
+/// Supplied by callers that own a session (e.g. `AuthCubit.tryRefreshTokens`) — see
+/// [AuthenticatedHttpClient.refreshTokens].
+///
+/// Must never throw — a failed refresh (missing/expired refresh token, network error) reports
+/// itself by returning `false`. [AuthenticatedHttpClient._withRefreshRetry]'s no-loop guarantee
+/// relies on this: an escaping exception would replace the original `auth.unauthorized` failure
+/// instead of the caller seeing it propagate as-is.
+typedef TokenRefresher = Future<bool> Function();
+
 /// A [Dio]-backed HTTP client for the SGART backend: injects `Authorization: Bearer <token>` on
-/// every request and maps a `{code,message,details}` error body to the client's [AppError] shape
-/// (the REST error-mapping seam deferred from Story 1.3, wired here for the `/me` call).
+/// every request, maps a `{code,message,details}` error body to the client's [AppError] shape
+/// (the REST error-mapping seam deferred from Story 1.3, wired here for the `/me` call), and
+/// retries a request exactly once after a successful refresh when it 401s (see [refreshTokens]).
 ///
 /// Never puts a token in a query, path, or log — only the `Authorization` header carries it.
 class AuthenticatedHttpClient {
-  AuthenticatedHttpClient({required this._dio, required AccessTokenProvider accessTokenProvider}) {
+  AuthenticatedHttpClient({
+    required this._dio,
+    required AccessTokenProvider accessTokenProvider,
+    this.refreshTokens,
+  }) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await accessTokenProvider();
@@ -26,7 +41,44 @@ class AuthenticatedHttpClient {
 
   final Dio _dio;
 
-  Future<Map<String, dynamic>> getJson(String path) async {
+  /// Optional (nullable) — mirrors `AuthCubit.pushNotifications`'s existing "optional dependency"
+  /// precedent, so call sites with no interest in refresh-and-retry (most existing API tests) need
+  /// no changes. When present, a request that 401s is retried exactly once after a successful
+  /// refresh (see [_withRefreshRetry]).
+  final TokenRefresher? refreshTokens;
+
+  Future<Map<String, dynamic>> getJson(String path) {
+    return _withRefreshRetry(() => _getJson(path));
+  }
+
+  Future<List<dynamic>> getJsonList(String path) {
+    return _withRefreshRetry(() => _getJsonList(path));
+  }
+
+  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) {
+    return _withRefreshRetry(() => _postJson(path, body));
+  }
+
+  /// Sends a `PATCH` whose success is a `204 No Content` (a command — no domain body to read).
+  /// Maps a `{code,message,details}` error body to [AppError] exactly as the other verbs do.
+  Future<void> patchJson(String path, Map<String, dynamic> body) {
+    return _withRefreshRetry(() => _patchJson(path, body));
+  }
+
+  /// Sends a `PUT` whose success is a `204 No Content` (a command — no domain body to read). Maps a
+  /// `{code,message,details}` error body to [AppError] exactly as the other verbs do.
+  Future<void> putJson(String path, Map<String, dynamic> body) {
+    return _withRefreshRetry(() => _putJson(path, body));
+  }
+
+  /// Sends a `DELETE` (carrying the command envelope as its body) whose success is a `204 No
+  /// Content` (a command — no domain body to read). Maps a `{code,message,details}` error body to
+  /// [AppError] exactly as the other verbs do.
+  Future<void> deleteJson(String path, Map<String, dynamic> body) {
+    return _withRefreshRetry(() => _deleteJson(path, body));
+  }
+
+  Future<Map<String, dynamic>> _getJson(String path) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(path);
       return response.data ?? const {};
@@ -35,7 +87,7 @@ class AuthenticatedHttpClient {
     }
   }
 
-  Future<List<dynamic>> getJsonList(String path) async {
+  Future<List<dynamic>> _getJsonList(String path) async {
     try {
       final response = await _dio.get<List<dynamic>>(path);
       return response.data ?? const [];
@@ -44,7 +96,7 @@ class AuthenticatedHttpClient {
     }
   }
 
-  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(path, data: body);
       return response.data ?? const {};
@@ -53,9 +105,7 @@ class AuthenticatedHttpClient {
     }
   }
 
-  /// Sends a `PATCH` whose success is a `204 No Content` (a command — no domain body to read).
-  /// Maps a `{code,message,details}` error body to [AppError] exactly as the other verbs do.
-  Future<void> patchJson(String path, Map<String, dynamic> body) async {
+  Future<void> _patchJson(String path, Map<String, dynamic> body) async {
     try {
       await _dio.patch<void>(path, data: body);
     } on DioException catch (exception) {
@@ -63,9 +113,7 @@ class AuthenticatedHttpClient {
     }
   }
 
-  /// Sends a `PUT` whose success is a `204 No Content` (a command — no domain body to read). Maps a
-  /// `{code,message,details}` error body to [AppError] exactly as the other verbs do.
-  Future<void> putJson(String path, Map<String, dynamic> body) async {
+  Future<void> _putJson(String path, Map<String, dynamic> body) async {
     try {
       await _dio.put<void>(path, data: body);
     } on DioException catch (exception) {
@@ -73,14 +121,27 @@ class AuthenticatedHttpClient {
     }
   }
 
-  /// Sends a `DELETE` (carrying the command envelope as its body) whose success is a `204 No
-  /// Content` (a command — no domain body to read). Maps a `{code,message,details}` error body to
-  /// [AppError] exactly as the other verbs do.
-  Future<void> deleteJson(String path, Map<String, dynamic> body) async {
+  Future<void> _deleteJson(String path, Map<String, dynamic> body) async {
     try {
       await _dio.delete<void>(path, data: body);
     } on DioException catch (exception) {
       throw AppException(_mapToAppError(exception));
+    }
+  }
+
+  /// Retries [send] exactly once after a successful [refreshTokens] when it fails with
+  /// `auth.unauthorized` — centralizes the refresh-and-retry that used to live only in
+  /// `AuthCubit._loadCallerIdentity` for the `/me` call, so every authenticated call benefits
+  /// (Story: centralize 401 refresh-and-retry). A second failure — the refresh itself fails, or
+  /// the retried request still 401s — propagates the original [AppException] as-is; no loop.
+  Future<T> _withRefreshRetry<T>(Future<T> Function() send) async {
+    try {
+      return await send();
+    } on AppException catch (exception) {
+      if (exception.error.code == 'auth.unauthorized' && refreshTokens != null && await refreshTokens!()) {
+        return send();
+      }
+      rethrow;
     }
   }
 

@@ -68,5 +68,12 @@ void main() {
       expect(resolved, localizations.storesDuplicateNameError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('authUnauthorizedResolvesToTheSessionExpiredCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'auth.unauthorized');
+
+      expect(resolved, localizations.authSessionExpiredError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }
