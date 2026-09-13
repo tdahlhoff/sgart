@@ -12,9 +12,13 @@ import 'list_detail_state.dart';
 /// Open list detail screen, replacing the Story 2.3 „+ Artikel hinzufügen" button and its
 /// `showItemFormSheet` add path (the sheet remains, but only for editing an existing item). Holds
 /// only the name (Cl. 3 — fast capture is the hero; quantity/note override happens via the
-/// just-added row's existing edit sheet, not here). On focus + non-empty text, an upward suggestion
-/// panel lists matching household suggestions (AC1) plus the always-present "add as new" row (AC3,
-/// mirroring `screen-list-detail.html` State B — there is no room below the field for the panel).
+/// just-added row's existing edit sheet, not here). Pinned at the **bottom** of the list-detail
+/// screen — thumb reach, proximity to the keyboard, and a newly added item (appended to the end of
+/// the list, closest to the field) staying in view are all reasons this stays put rather than
+/// moving to the top (considered and reverted, 2026-09-13). On focus + non-empty text, an upward
+/// suggestion panel lists matching household suggestions (AC1) plus the always-present "add as
+/// new" row (AC3, mirroring `screen-list-detail.html` State B — there is no room below the field
+/// for the panel).
 class FastAddField extends StatefulWidget {
   const FastAddField({super.key, required this.cubit});
 

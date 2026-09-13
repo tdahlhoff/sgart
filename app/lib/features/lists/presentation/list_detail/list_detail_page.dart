@@ -27,9 +27,11 @@ import 'move_target_sheet.dart';
 /// The list detail screen (Story 2.3, AC6; Story 2.5, AC2/AC3/AC4/AC5): the tapped list's items in
 /// creation order, each row showing name · quantity · optional note, with an empty state and
 /// per-row edit/remove affordances. An Open list's only add surface is the persistent fast-add
-/// field at the bottom (AC4) — the Story 2.3 add button/sheet-add path is retired. A Done list opens
-/// read-only — no fast-add field, no suggestion panel, no edit/remove affordances render at all
-/// (AC5). Off-trip there is no check/uncheck/postpone (Epic 3) and no store assignment (Story 2.6).
+/// field pinned at the top (AC4) — the Story 2.3 add button/sheet-add path is retired. "Einkauf
+/// starten"/"Drucken / Teilen" sit in a fixed row at the bottom, below the scrollable item list, so
+/// they stay reachable without scrolling. A Done list opens read-only — no fast-add field, no
+/// suggestion panel, no action-button row, no edit/remove affordances render at all (AC5). Off-trip
+/// there is no check/uncheck/postpone (Epic 3) and no store assignment (Story 2.6).
 /// Reads its [ListDetailCubit] from the enclosing provider (scoped to the list by the caller).
 class ListDetailPage extends StatelessWidget {
   const ListDetailPage({super.key, required this.title});
@@ -110,6 +112,17 @@ class ListDetailPage extends StatelessWidget {
       appBar: SgartAppBar(title: title),
       body: Column(
         children: [
+          BlocBuilder<ListDetailCubit, ListDetailState>(
+            builder: (context, state) {
+              // Non-scrolling header row, not a fixed/overlaying footer — mirrors
+              // `screen-list-detail.html`'s `.listctx` peer-action placement (DESIGN.md §4: tonal
+              // actions are non-sticky). No actions render on a read-only (Done or In-Trip) list.
+              if (state.status != ListDetailStatus.ready || state.isReadOnly) {
+                return const SizedBox.shrink();
+              }
+              return _ActionButtonsBar(state: state, title: title);
+            },
+          ),
           Expanded(
             child: BlocBuilder<ListDetailCubit, ListDetailState>(
               builder: (context, state) {
@@ -194,64 +207,100 @@ class _ReadyBody extends StatelessWidget {
               key: const Key('item-list-action-error'),
             ),
           ],
-          // „Einkauf starten" is offered only on an Open list — hidden on In-Trip and Done alike,
-          // since both key off the same isReadOnly flag (Story 3.1, AC1, AC6, UX-DR7/UX-DR17).
-          if (!state.isReadOnly) ...[
-            const SizedBox(height: SgartShapes.space4),
-            SgartButton(
-              key: const Key('list-detail-start-trip'),
-              label: localizations.tripStartAction,
-              variant: SgartButtonVariant.tonal,
-              onPressed: state.isSubmitting
-                  ? null
-                  : () async {
-                      final selection = await showTripStoreSelectionSheet(
-                        context,
-                        stores: state.stores,
-                        storesApi: context.read<StoresApi>(),
-                        referenceCache: context.read<StoreChainReferenceCache>(),
-                        householdId: cubit.householdId,
-                      );
-                      if (selection == null || selection.isEmpty) {
-                        return;
-                      }
-                      final started = await cubit.startTrip(selection.map((store) => store.storeId).toList());
-                      if (started && context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
-                        // Story 3.2, AC4, Cl. 3 — a started trip now navigates straight to the trip
-                        // screen (3.1 deferred this; it used to end at the toast alone).
-                        // Story 3.4: if the trip was completed, pop list-detail too (the list is now
-                        // Done and can no longer be edited; the lists-view onEditableReturn callback
-                        // handles the archive invalidation + overview refresh).
-                        final completed = await TripScreen.push(
+        ],
+      ),
+    );
+  }
+}
+
+/// „Einkauf starten" and „Drucken / Teilen" side by side in a non-scrolling header row above the
+/// item list (Story 3.1, AC1, AC6; Story 3.5) — reachable without scrolling, mirroring
+/// `screen-list-detail.html`'s `.listctx` peer-action placement. Deliberately *not* a fixed/
+/// overlaying footer: DESIGN.md §4 calls tonal/terminal actions non-sticky, and the sibling
+/// Active-Trip screen spells out why ("List is the hero. No sticky bottom bar.") — a persistent
+/// footer here would read as a commerce checkout bar, which SGART (a coordination tool, not
+/// commerce) deliberately avoids. A flat hairline separates it from the scrollable content below,
+/// matching the design system's flat-forward elevation (hairline, no shadow) rather than a
+/// Material drop shadow. Rendered only on an Open list — hidden on In-Trip and Done alike, since
+/// both key off the same `isReadOnly` flag (UX-DR7/UX-DR17).
+class _ActionButtonsBar extends StatelessWidget {
+  const _ActionButtonsBar({required this.state, required this.title});
+
+  final ListDetailState state;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final cubit = context.read<ListDetailCubit>();
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline, width: SgartShapes.hairline)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SgartButton(
+                key: const Key('list-detail-start-trip'),
+                label: localizations.tripStartAction,
+                variant: SgartButtonVariant.tonal,
+                onPressed: state.isSubmitting
+                    ? null
+                    : () async {
+                        final selection = await showTripStoreSelectionSheet(
                           context,
+                          stores: state.stores,
+                          storesApi: context.read<StoresApi>(),
+                          referenceCache: context.read<StoreChainReferenceCache>(),
                           householdId: cubit.householdId,
-                          listId: cubit.listId,
-                          listTitle: title,
                         );
-                        if (completed == true && context.mounted) {
-                          Navigator.of(context).pop();
+                        if (selection == null || selection.isEmpty) {
+                          return;
                         }
-                      }
-                    },
+                        final started = await cubit.startTrip(selection.map((store) => store.storeId).toList());
+                        if (started && context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
+                          // Story 3.2, AC4, Cl. 3 — a started trip now navigates straight to the trip
+                          // screen (3.1 deferred this; it used to end at the toast alone).
+                          // Story 3.4: if the trip was completed, pop list-detail too (the list is now
+                          // Done and can no longer be edited; the lists-view onEditableReturn callback
+                          // handles the archive invalidation + overview refresh).
+                          final completed = await TripScreen.push(
+                            context,
+                            householdId: cubit.householdId,
+                            listId: cubit.listId,
+                            listTitle: title,
+                          );
+                          if (completed == true && context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        }
+                      },
+              ),
             ),
-            const SizedBox(height: SgartShapes.space2),
-            SgartButton(
-              key: const Key('list-detail-print-share'),
-              label: localizations.printShareAction,
-              variant: SgartButtonVariant.tonal,
-              onPressed: () => showPrintShareSheet(
-                context,
-                title: title,
-                items: state.items,
-                stores: state.stores,
-                storesApi: context.read<StoresApi>(),
-                referenceCache: context.read<StoreChainReferenceCache>(),
+            const SizedBox(width: SgartShapes.space2),
+            Expanded(
+              child: SgartButton(
+                key: const Key('list-detail-print-share'),
+                label: localizations.printShareAction,
+                variant: SgartButtonVariant.tonal,
+                onPressed: () => showPrintShareSheet(
+                  context,
+                  title: title,
+                  items: state.items,
+                  stores: state.stores,
+                  storesApi: context.read<StoresApi>(),
+                  referenceCache: context.read<StoreChainReferenceCache>(),
+                ),
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
