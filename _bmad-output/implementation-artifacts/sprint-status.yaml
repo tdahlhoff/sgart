@@ -41,7 +41,14 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-10 (correct-course: Epic 7 added — self-registration gate before public app-store release, see sprint-change-proposal-2026-09-10.md)
+last_updated: 2026-09-13 (correct-course rev E — Epic 7 repurposed to Frictionless Account Provisioning, required for beta, resequenced before Epic 5; see sprint-change-proposal-2026-09-13.md)
+# correct-course 2026-09-13 (rev E) — Epic 7 REPURPOSED from "Self-Registration & Public Onboarding"
+# (never built) to "Frictionless Account Provisioning" and made REQUIRED FOR BETA, resequenced to run
+# next (before Epic 5; depends only on Epic 1). Browserless custom Direct-Grant login + silent
+# Admin-API provisioning + recovery phrase + opt-in recover-by-email + join-code invites. Supersedes
+# both the 2026-09-10 gate-before-public-release framing AND its magic-link mechanism. Shipped stories
+# 1.4/1.11/4.1/4.2 kept as as-built records with forward-pointers; the rework lands as Epic 7 stories
+# 7.1/7.2/7.5. See sprint-change-proposal-2026-09-13.md (approved, rev E) and epics.md Epic 7.
 # correct-course 2026-09-10 — Epic 7: Self-Registration & Public Onboarding added (backlog, 3 stories),
 # sequenced after Epic 6. Gates the public app-store release; does NOT block the current beta (manual
 # Keycloak Admin Console account creation continues through beta). PRD FR-29 / epics.md FR15. Also
@@ -237,7 +244,7 @@ development_status:
   epic-2-retrospective: done
 
   # Epic 3: Shopping Trips & Print
-  epic-3: in-progress
+  epic-3: done
   3-1-start-a-trip-across-selected-stores: done
   3-2-store-grouped-trip-view-with-assignment-rerouting: done
   3-3-check-off-uncheck-and-postpone-during-a-trip: done
@@ -252,7 +259,7 @@ development_status:
   epic-3-retrospective: done
 
   # Epic 4: Live Collaboration & Membership
-  epic-4: in-progress
+  epic-4: done
   4-1-invite-a-person-by-email: done
   4-2-accept-an-invite-and-join: done
   4-3-membership-roles-governance: done
@@ -260,6 +267,20 @@ development_status:
   4-5-content-free-notifications: done
   4-6-invite-acceptance-web-fallback: done
   epic-4-retrospective: done
+
+  # Epic 7: Frictionless Account Provisioning (repurposed 2026-09-13 rev E, sprint-change-proposal-2026-09-13.md;
+  # was "Self-Registration & Public Onboarding" — never built). **REQUIRED FOR BETA.** Runs next, before
+  # Epic 5; depends only on Epic 1 (an authenticated person). Browserless custom Direct-Grant login +
+  # silent Admin-API provisioning; supersedes shipped 1.4 sign-in transport + 4.1 email invites (see the
+  # forward-pointers in epics.md Stories 1.4/1.11/4.1/4.2).
+  epic-7: backlog
+  7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
+  7-1-silent-account-provisioning-on-first-launch: backlog
+  7-2-recovery-phrase-reveal-and-profile-re-view: backlog
+  7-3-recover-by-email-opt-in: backlog
+  7-4-consent-capture: backlog
+  7-5-invite-by-code-or-link-retire-email-path: backlog
+  epic-7-retrospective: optional
 
   # Epic 5: Offline Resilience & Conflict
   epic-5: backlog
@@ -274,16 +295,6 @@ development_status:
   6-2-erase-my-account-and-data: backlog
   6-3-retention-privacy-guarantee-tests: backlog
   epic-6-retrospective: optional
-
-  # Epic 7: Self-Registration & Public Onboarding (added 2026-09-10, sprint-change-proposal-2026-09-10.md;
-  # revised 2026-09-10 to magic-link + forced-password-set, see same proposal doc's addendum)
-  # Gate before public app-store release, does NOT block beta. Sequenced after Epic 6.
-  epic-7: backlog
-  7-1-self-register-a-new-account-via-magic-link: backlog
-  7-2-passwordless-account-provisioning-at-invite-acceptance: backlog
-  7-3-consent-capture-at-first-authentication: backlog
-  7-4-self-service-password-reset: backlog
-  epic-7-retrospective: optional
 
 action_items:
   - epic: 1
@@ -379,6 +390,14 @@ action_items:
     owner: "Dev"
     status: open
   - epic: 6
-    action: "[Sprint Change Proposal 2026-09-10] Added Epic 7 (Self-Registration & Public Onboarding, FR15/FR-29) after Epic 6 — gate before the public app-store release, does not block beta. Triggered by Timo noticing the invite flow has no path for a brand-new person with no inviter to become authenticated; manual Admin Console account creation continues through beta. See sprint-change-proposal-2026-09-10.md."
+    action: "[Sprint Change Proposal 2026-09-10 — SUPERSEDED by 2026-09-13 rev E] Added Epic 7 (Self-Registration & Public Onboarding, FR15/FR-29) after Epic 6 — gate before the public app-store release, does not block beta. Triggered by Timo noticing the invite flow has no path for a brand-new person with no inviter to become authenticated; manual Admin Console account creation continues through beta. See sprint-change-proposal-2026-09-10.md. NOTE: both the timing (now required-for-beta, resequenced before Epic 5) and the mechanism (now browserless custom Direct-Grant, not magic-link) were superseded 2026-09-13 — see the action item below."
     owner: "PM"
     status: done
+  - epic: 7
+    action: "[Sprint Change Proposal 2026-09-13, rev E — approved] Repurposed Epic 7 to Frictionless Account Provisioning and made it REQUIRED FOR BETA, resequenced before Epic 5. Mechanism: silent Admin-API account creation + browserless custom Direct-Grant authenticator SPI (Story 7.0 spike: impersonation token exchange rejected as legacy Preview+Deprecated in KC 26.7) + device-secret/recovery-phrase + opt-in recover-by-email (pulls in SMTP/SPF/DKIM) + join-code/link invites (EmailHmac/InviteEmailSideStore retired). Shipped stories 1.4/1.11/4.1/4.2 kept as as-built with forward-pointers; rework lands as Epic 7 stories 7.1/7.2/7.5. Docs updated: prd.md FR-29 + scoping, epics.md, ARCHITECTURE-SPINE.md (AD-6 + crypto-shredding notes), this file. Handoff: create-story Epic 7 (7.0 first) when work resumes. See sprint-change-proposal-2026-09-13.md."
+    owner: "PM"
+    status: done
+  - epic: 7
+    action: "[CRITICAL PATH — Epic 7 test coverage, CLAUDE.md §6] ProvisionAccount command state-change test; recover-by-email test (emailed code verifies, re-binds device key; wrong/expired rejected); privacy tests (erasure/export include account + consent record + attached email; retention sweep deletes never-activated accounts; email detachable); rate-limit test on the unauthenticated provisioning endpoint. Green build = backend ./gradlew test (incl. ArchUnit) AND flutter test / flutter analyze."
+    owner: "Dev"
+    status: open

@@ -63,7 +63,7 @@ FR13 (CAP-13): **German-first, i18n-ready UI with locale selection.** The MVP sh
 
 FR14 (CAP-14): **Data-subject rights: erasure & export.** A person's personal data can be located, exported (in a portable form), and erased on request; erasure destroys the Identity-ACL mapping, scrubs read models and device/offline caches, and deletes the Keycloak account, leaving only unlinkable pseudonyms in the event log with no personal data recoverable; erasure, export, and retention each have explicit tests. *(CLAUDE.md §5; PRD data-protection)*
 
-FR15 (CAP-15): **Self-registration for the public phase.** A person with no existing account can register from the app — reached via a visible "Register" link/button on the login screen, opened in-app through the same AppAuth surface used for sign-in. First-time authentication is **passwordless (magic link)**; immediately after that first login the person is **forced to set a real password** (the magic-link email may since be deleted and can't be relied on as a recurring credential). The **same magic-link + forced-password mechanism provisions an invitee's account at invite-accept time** — a brand-new invitee never goes through a separate registration step at all. Registration/first-login also captures explicit acceptance of the privacy notice/terms before any personal data beyond the account is processed; self-service password reset is included for later. Gates the public app-store release; not required for the MVP/beta curated cohort. *(PRD FR-29)*
+FR15 (CAP-15): **Frictionless account provisioning.** On first launch a person gets a real, usable account with **zero required input** — no email, username, or password. The app generates a device-side secret in the platform secure enclave, the backend silently creates a Keycloak account bound to it (Admin API), and the person is signed in via a **browserless native login** (a custom Direct-Grant authenticator verifies a device-signed challenge — no browser surface, no Keycloak-hosted page, no password grant/ROPC). At first Household creation/join a one-time **recovery phrase** (an encoding of the device secret) is shown and is re-viewable from the profile; entering it on another device reconstructs the secret and signs back in. Optionally attaching an **email** enables an opt-in, email-only **"recover by email"** fallback (emailed one-time code, entered natively) — additive to the phrase, never a replacement. Consent to the privacy notice/terms is captured at first Household creation/join. **Required for beta**, not a public-release-only gate. *(PRD FR-29)*
 
 ### NonFunctional Requirements
 
@@ -83,7 +83,7 @@ NFR6: **Clean Code + binding ubiquitous language.** No abbreviations; names refl
 
 NFR7: **Mobile-first.** iOS + Android via Flutter/BLoC; web exists only as an invite-acceptance fallback in v1, never as a daily client.
 
-NFR8: **Curated cohort through MVP/beta; solo is first-class.** MVP and the beta onboard a friends-&-family cohort with manually created accounts; self-registration (FR15/Epic 7) is required before any public app-store release, not an open-ended deferral. A household of one is fully supported alongside multi-person households.
+NFR8: **Solo is first-class from day one.** The curated-cohort framing no longer describes account creation: every person, beta included, gets a working account via frictionless provisioning (FR15/Epic 7) with no manual step and no required personal data. A household of one is fully supported alongside multi-person households.
 
 NFR9: **Sync reliability & eventual consistency.** Live changes appear within a few seconds under normal connectivity; the client auto-reconnects and reconciles after a drop; offline replay is idempotent (no double-apply); read models are eventually consistent and the UI must tolerate that.
 
@@ -146,7 +146,7 @@ UX-DR22: **Store picker component** — a reusable store selector used for item 
 
 ### Deferred (out of MVP — not decomposed into stories)
 
-Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-based routing); analytics dashboard; configurable notification settings & receipt-scanned notifications; list duplicate/template (fast-follow); geolocation store discovery; additional UI languages & multi-market StoreChain data; full web client; crypto-shredding implementation; **Trip pause/resume (permanently dropped, not deferred)**. The `priceintelligence` module is reserved (empty) in the scaffold but nothing is built for it. **Self-registration is not in this open-ended list** — it is scheduled and specced as Epic 7 (FR15), gated before the public app-store release, not an open-ended deferral.
+Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-based routing); analytics dashboard; configurable notification settings & receipt-scanned notifications; list duplicate/template (fast-follow); geolocation store discovery; additional UI languages & multi-market StoreChain data; full web client; crypto-shredding implementation; **Trip pause/resume (permanently dropped, not deferred)**. The `priceintelligence` module is reserved (empty) in the scaffold but nothing is built for it. **Account provisioning is not in this open-ended list** — it is frictionless and in scope from the first beta build (Epic 7, FR15), required for beta, not an open-ended deferral.
 
 ### FR Coverage Map
 
@@ -166,7 +166,7 @@ Receipts & OCR; price intelligence (Product, Price Observation, pinning, price-b
 | FR12 | Content-free notifications | Epic 4 |
 | FR13 | German-first / locale | Epic 1 |
 | FR14 | Erasure & export | Epic 6 |
-| FR15 | Self-registration | Epic 7 |
+| FR15 | Frictionless account provisioning | Epic 7 |
 
 *All 15 FRs mapped. NFRs and ARs are foundational and realized primarily in Epic 1 (scaffold,
 paradigm, identity, localization layer, design system), then upheld across every epic per the
@@ -235,11 +235,13 @@ event log (guarded by the last-Admin invariant); export, erasure, and retention 
 **FRs covered:** FR14.
 *(UX-DR15; realizes AD-5/AD-6/AD-7, NFR2.)*
 
-### Epic 7: Self-Registration & Public Onboarding
-A person with no existing account can register themselves, verify their email, and accept the
-privacy notice — the gate that must clear before SGART leaves the curated friends-&-family cohort
-for public app-store distribution. Does not block beta.
-**FRs covered:** FR15.
+### Epic 7: Frictionless Account Provisioning
+Every person gets a real, usable account on first launch with zero required input — silent
+Admin-API account creation plus a browserless native login (custom Direct-Grant authenticator over a
+device-signed challenge), a one-time recovery phrase shown at first Household creation/join, and an
+opt-in email-only "recover by email" fallback. Consent is captured at the first-household moment.
+**Required for beta; sequenced immediately after Epic 1** (every later epic assumes an authenticated
+person). **FRs covered:** FR15.
 
 ---
 
@@ -307,6 +309,8 @@ So that the app is fully German today and translatable later without code change
 **Then** it arrives as `{code, message, details}` and the client shows localized copy keyed by `code` (never the raw `message`).
 
 ### Story 1.4: Sign in with Keycloak & resolve membership identity
+
+> **⚠ Sign-in transport superseded by Epic 7 (sprint-change 2026-09-13 rev E):** shipped with Keycloak AppAuth (browser); replaced by the browserless custom Direct-Grant login in Story 7.1. This story's AC records what was built.
 
 As a person,
 I want to sign in through the household's Keycloak,
@@ -454,6 +458,8 @@ So that the app speaks my language and formats values the way I expect.
 **Then** language and currency/date/number/quantity formatting update without a reinstall.
 
 ### Story 1.11: Personal profile screen
+
+> **⚠ Extended by Epic 7 (sprint-change 2026-09-13 rev E):** the profile screen gains a re-viewable "recovery phrase" row (Story 7.2) and an opt-in "attach email for recovery" action (Story 7.3). This story's AC records what was built.
 
 As a member,
 I want a personal profile screen,
@@ -717,6 +723,8 @@ here (Epics 1–3 are the solo-capable substrate). *(FR2, FR7, FR12.)*
 
 ### Story 4.1: Invite a person by email
 
+> **⚠ Superseded by Epic 7 (sprint-change 2026-09-13 rev E):** invites move to join-code/link and the email/HMAC path (`EmailHmac`, `InviteEmailSideStore`) is retired in Story 7.5. This story's AC records what was built.
+
 As a member,
 I want to invite someone by email,
 So that we can share the household's lists.
@@ -736,6 +744,8 @@ So that we can share the household's lists.
 **Then** it is **rejected** (already a member) — no invite is created.
 
 ### Story 4.2: Accept an invite and join
+
+> **⚠ Extended by Epic 7 (sprint-change 2026-09-13 rev E):** a "type a join code" entry path is added alongside the link/deep-link path in Story 7.5 (no handler change — accept is still on `(householdId, inviteId)` + the caller's JWT). This story's AC records what was built.
 
 As an invited person,
 I want to open my invite link and join,
@@ -959,92 +969,141 @@ So that personal data isn't kept indefinitely and the guarantees can't silently 
 
 ---
 
-## Epic 7: Self-Registration & Public Onboarding
+## Epic 7: Frictionless Account Provisioning
 
-Before SGART leaves the curated friends-&-family cohort for public app-store distribution, a
-person with no existing account and no inviter can create one — and a person who **is** invited by
-email never has to register separately at all. Both paths authenticate for the first time via a
-**passwordless magic link**, then are **forced to set a real password immediately after** (the
-magic-link email may since be deleted, so it can't be relied on as a recurring credential).
-Self-service password reset closes the same gap for existing/beta accounts later. **Gate before
-public release**, not required for beta. *(FR15/FR-29.)*
+Every person gets a real, usable account on first launch with **zero required input** — silent
+Admin-API account creation plus a **browserless native login** (a custom Direct-Grant authenticator
+verifies a device-signed challenge; no browser surface, no Keycloak-hosted page, no password grant).
+A one-time **recovery phrase** is shown at first Household creation/join and is re-viewable from the
+profile; optionally attaching an **email** enables an opt-in, email-only "recover by email" fallback.
+Consent is captured at the first-household moment. Invites move to a **join code / link** and the
+email/HMAC path is retired. **Required for beta; sequenced immediately after Epic 1** (every later
+epic assumes an authenticated person). Supersedes the 2026-09-10 magic-link mechanism.
+*(FR15/FR-29; sprint-change 2026-09-13 rev E.)*
 
-### Story 7.1: Self-register a new account via magic link
+### Story 7.0 (spike): Choose the browserless token mechanism — RESOLVED 2026-09-13
 
-As a person with no SGART account and no inviter,
-I want to create one myself with just my email,
-So that I can start using SGART without waiting on someone to invite or provision me.
-
-**Acceptance Criteria:**
-
-**Given** a fresh app install, first launch, no session
-**When** the login screen is shown
-**Then** it displays a visible "Registrieren" link/button next to sign-in — discoverable without any out-of-band instruction (FR15).
-
-**Given** that link
-**When** a person with no account taps it and enters their email
-**Then** Keycloak emails a one-time sign-in (magic) link; no password is requested at this step.
-
-**Given** that magic link
-**When** the person opens it
-**Then** they are authenticated **in-app** (the existing AppAuth/in-app-browser surface from Story 1.4) — this both authenticates them and verifies the email, with no separate "Verify Email" step needed.
-
-**Given** a person authenticated for the first time via magic link *(this account and Story 7.2's both land here)*
-**When** they reach the app
-**Then** they are **forced to set a real password** before doing anything else (Keycloak's "Update Password" required action) — the magic-link email cannot be relied on for future logins.
-
-**Given** the password is set
-**When** the flow completes
-**Then** the person lands in the existing FR-1 create/await-invite routing — no new post-registration flow is built.
-
-### Story 7.2: Passwordless account provisioning at invite acceptance
-
-As an invited person with no existing SGART account,
-I want to just open my invite link and get in,
-So that I never have to fill out a separate registration form before joining the household that invited me.
+Time-boxed spike against Keycloak 26.7. **Outcome: a custom Direct-Grant authenticator SPI** (a
+device-signed challenge verified Keycloak-side). Impersonation token exchange was rejected (legacy
+`token-exchange:v1`, Preview + Deprecated in 26.7; Standard Token Exchange v2 is GA but cannot change
+subject); server-side ROPC was rejected (deprecated grant). **(b) is locked.**
 
 **Acceptance Criteria:**
 
-**Given** an invite email whose address has **no existing SGART/Keycloak account**
-**When** the invitee opens the invite link
-**Then** the same magic-link mechanism as Story 7.1 provisions their account against that email — the invite link itself is their onboarding, with no separate "register first, then accept" detour.
+**Given** a Keycloak account created via the Admin API
+**When** the app authenticates through the custom Direct-Grant flow with a device-signed challenge
+**Then** it receives a valid JWT accepted at `adapter.in` — with no browser surface and no password/ROPC.
 
-**Given** that first magic-link authentication
-**When** it succeeds
-**Then** the same forced "Update Password" step from Story 7.1 applies before the invite-accept completes.
+**Given** the realm config
+**When** the mechanism is deployed
+**Then** `sgart-app` has `directAccessGrantsEnabled: true` with the custom Direct Grant flow bound, and `sgart-admin` has `manage-users` (no impersonation/token-exchange permission).
 
-**Given** an invite email whose address **already has** an account (existing SGART user, or already mid-registration)
-**When** they open the invite link
-**Then** the existing accept-invite flow (Story 4.2) applies unchanged — this story only covers the brand-new-invitee case.
+### Story 7.1: Silent account provisioning on first launch
 
-### Story 7.3: Consent capture at first authentication
+As a person opening SGART for the first time,
+I want a working account with no setup,
+So that I can start using the app immediately.
+
+> *(Supersedes Story 1.4's AppAuth sign-in transport.)*
+
+**Acceptance Criteria:**
+
+**Given** a fresh install with no stored session
+**When** the app starts
+**Then** it generates a device-side secret in the platform secure enclave, calls the backend's unauthenticated provisioning endpoint to create a Keycloak account (Admin API — no email/username shown or requested), and signs in via the Story 7.0 custom Direct-Grant flow — **before** the create/await-invite choice (Story 1.6) is shown, with no intervening screen and no browser surface.
+
+**Given** the provisioning endpoint (unauthenticated by nature)
+**When** it is called
+**Then** it is IP-based rate-limited server-side for beta; device attestation (Play Integrity / DeviceCheck) is a named fast-follow before public release.
+
+**Given** a silently-provisioned account that never creates/joins a household and attaches no recovery email
+**When** its retention TTL elapses
+**Then** a server-side sweep deletes it (GDPR storage limitation).
+
+### Story 7.2: Recovery phrase reveal and profile re-view
+
+As a person with a silently provisioned account,
+I want a way to recognize and recover my account,
+So that I can use SGART on another device or after reinstalling, and understand what I'd lose if I don't.
+
+> *(Extends Story 1.11's profile screen.)*
+
+**Acceptance Criteria:**
+
+**Given** a person's first household is created or joined
+**When** that completes
+**Then** a one-time screen shows their recovery phrase (a human-readable encoding of the device secret) with an explicit warning that losing it — without an attached recovery email — means unrecoverable loss of the account and its household data.
+
+**Given** the profile screen (Story 1.11)
+**When** a person opens it
+**Then** their recovery phrase is shown again on demand, read from the device's secure local storage — never re-fetched from the server.
+
+**Given** a phrase entered on a different device or after reinstall
+**When** submitted on the native sign-in screen
+**Then** the app reconstructs the device secret from it and signs the person into their existing account via the Story 7.0 flow — pure native UI, no browser.
+
+### Story 7.3: Recover by email (opt-in)
+
+As a person who would rather not rely solely on remembering my recovery phrase,
+I want to optionally attach an email address and use it to get back in,
+So that I have a friendlier fallback if I lose the phrase or switch devices.
+
+**Acceptance Criteria:**
+
+**Given** the profile screen
+**When** a person chooses to attach an email address
+**Then** the backend sets it on the Keycloak account via the Admin API and confirms ownership with a one-time code sent to that address (entered natively) — no Keycloak-hosted page and no browser. **Email-only — no password.**
+
+**Given** an account with a confirmed email
+**When** the person taps "recover by email" on a different device (or after reinstall)
+**Then** the backend emails a one-time code, the person enters it on a native screen, and on success the backend re-binds a fresh device key to the same account — signed back in, browserless.
+
+**Given** the recovery phrase
+**When** an email is or isn't attached
+**Then** the phrase remains a fully working recovery path — email is additive, never a replacement.
+
+**Given** an attached email (personal data, CLAUDE.md §5)
+**When** the person requests erasure/export (Epic 6) or chooses to detach it
+**Then** the email is included in erasure/export and can be detached — collected only on explicit action, for the single purpose of recovery.
+
+> *Note: this opt-in feature is why beta needs transactional-email/SMTP delivery (SPF/DKIM) on the netcup stack (ADR-0002); it is isolated to this feature — the zero-input core (7.1/7.2) never sends email.*
+
+### Story 7.4: Consent capture
 
 As the operator,
-I want explicit, revocable consent captured before any personal data beyond the account is processed,
-So that both self-registration and invite-provisioned accounts have a documented GDPR lawful basis.
+I want explicit, revocable consent captured before household data (personal data under CLAUDE.md §5) is processed,
+So that frictionless provisioning has a documented GDPR lawful basis.
 
 **Acceptance Criteria:**
 
-**Given** a person authenticating for the first time via either Story 7.1 or Story 7.2's magic-link flow
-**When** they complete the forced password-set step
-**Then** they must also explicitly accept the privacy notice/terms (Keycloak's "Terms and Conditions" required action) before proceeding — no silent/implied consent.
+**Given** a person creating or joining their first household
+**When** that screen is shown
+**Then** they must explicitly accept the privacy notice/terms before continuing — consent is attached to this moment, when the first household personal data is processed.
 
 **Given** an accepted consent record
-**When** the person later requests erasure (Epic 6)
-**Then** the consent timestamp is included in what gets erased/exported — no orphaned consent record survives erasure.
+**When** the person later requests erasure/export (Epic 6)
+**Then** the consent record is included in what gets erased/exported.
 
-### Story 7.4: Self-service password reset
+> *Note (lawful basis): the silent account shell created at first launch (a random pseudonymous id + a device-bound credential, no email/name) relies on a documented legitimate-interest basis (providing the service the person just opened); no household personal data is processed before the consent moment.*
 
-As a registered person,
-I want to reset my own password,
-So that a forgotten password doesn't require contacting the operator.
+### Story 7.5: Invite by code or link; retire the email invite path
+
+As a member,
+I want to invite people with a join code or link instead of by email,
+So that inviting works without collecting anyone's email.
+
+> *(Supersedes Story 4.1; extends Story 4.2 with a code-entry surface.)*
 
 **Acceptance Criteria:**
 
-**Given** the sign-in screen
-**When** a person requests a password reset
-**Then** Keycloak's self-service reset flow (`resetPasswordAllowed: true`) sends a reset email without operator involvement.
+**Given** a household
+**When** any member generates an invite
+**Then** it is shown as a **join code** and a **link** — two representations of the same `InviteId` (same aggregate, 7-day TTL, single-use "already consumed" semantics); either can be shared via the OS-native share sheet (`share_plus`). The invite carries no email.
 
-**Given** the beta's manually created accounts
-**When** Epic 7 ships
-**Then** existing testers can also use self-service reset going forward — this is not registration-only.
+**Given** the email/HMAC invite path (`MemberInvited` HMAC, `EmailHmac`, `InviteEmailSideStore`, the duplicate-pending-by-HMAC and already-a-member-by-email checks)
+**When** this story ships
+**Then** it is **retired** — no email is collected or hashed anywhere in the invite path; a person already a member of the target household is prevented from re-joining via membership state at accept time.
+
+**Given** a join code or link
+**When** the invitee enters the code on a native join screen, or opens the link (deep link, or web fallback if the app isn't installed)
+**Then** they join via the existing `AcceptInviteHandler` unchanged — accept is on `(householdId, inviteId)` plus the caller's own JWT.
