@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
-import '../../households/data/active_household_store.dart';
 import '../../households/presentation/first_run_router.dart';
 import '../../settings/presentation/locale_auth_bridge.dart';
 import '../data/account_provisioning_api.dart';
@@ -52,7 +51,6 @@ class AuthGate extends StatelessWidget {
       ),
       tokenStorage: tokenStorage,
       identityApi: HttpIdentityApi(httpClient),
-      activeHouseholdStore: const SharedPreferencesActiveHouseholdStore(),
     );
     return cubit;
   }

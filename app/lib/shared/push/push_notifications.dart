@@ -17,7 +17,10 @@ abstract class PushNotifications {
   /// token.
   Future<void> register();
 
-  /// Unregisters this device's token (`DELETE /api/v1/devices/{token}`) — call on sign-out (AC5).
+  /// Unregisters this device's token (`DELETE /api/v1/devices/{token}`) — originally called on
+  /// sign-out (AC5); `AuthCubit` no longer has a sign-out action (Story 7.1 code review: the
+  /// device credential is permanent), so no current call site invokes this. Kept for whatever
+  /// eventually ends a session (e.g. a future "forget this device" action).
   Future<void> unregister();
 
   /// Incoming content-free pushes, surfaced while the app is foregrounded. A backgrounded/killed

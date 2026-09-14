@@ -15,7 +15,7 @@ class BackendDeviceRegistrationClient {
     await _httpClient.postJson('/api/v1/devices', {'token': token, 'platform': platform});
   }
 
-  /// Unregisters this device's token — the sign-out path. The token goes in the request body, not
+  /// Unregisters this device's token — for whatever eventually ends a session. The token goes in the request body, not
   /// the URL path: it is an opaque, person-linked identifier (AD-6) that must not leak into
   /// server/proxy access logs, and a raw token in a path segment would also break on tokens
   /// containing `/`.

@@ -5,7 +5,6 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
-import '../../auth/presentation/auth_cubit.dart';
 import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
@@ -26,22 +25,7 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
 
     return Scaffold(
-      // No household exists yet, so Profil (and its sign-out button) is unreachable — offer the
-      // same AuthCubit.signOut() call here, invoked exactly as the Profil-tab button does (no
-      // confirmation dialog); the icon-only affordance itself is a different widget, not a copy of
-      // that button's full-width labelled appearance. Scoped to this screen and AwaitInvitePage
-      // only; the onboarding wizard is deferred.
-      appBar: SgartAppBar(
-        title: 'SGART',
-        actions: [
-          IconButton(
-            key: const Key('sign-out-button'),
-            icon: const Icon(Icons.logout),
-            tooltip: localizations.authSignOutButtonLabel,
-            onPressed: () => context.read<AuthCubit>().signOut(),
-          ),
-        ],
-      ),
+      appBar: const SgartAppBar(title: 'SGART'),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -15,10 +15,4 @@ abstract interface class OidcClient {
   /// interaction, so a session survives the short access-token lifespan. Throws when the refresh
   /// token is itself expired or revoked.
   Future<OidcTokens> refresh(String refreshToken);
-
-  /// Revokes the Keycloak session via the stored refresh token where the transport supports it
-  /// (Keycloak's logout endpoint accepts a public client's `refresh_token`, no `id_token_hint`
-  /// needed since there is no browser session to end). Sign-out clears the local tokens
-  /// regardless of whether this call succeeds (AC3).
-  Future<void> endSession({required String? refreshToken});
 }

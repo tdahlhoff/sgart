@@ -8,7 +8,6 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
-import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_push_notifications.dart';
 
 void main() {
@@ -36,20 +35,17 @@ void main() {
     late FakeOidcClient oidcClient;
     late FakeSecureTokenStorage tokenStorage;
     late FakeIdentityApi identityApi;
-    late FakeActiveHouseholdStore activeHouseholdStore;
 
     setUp(() {
       oidcClient = FakeOidcClient();
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi();
-      activeHouseholdStore = FakeActiveHouseholdStore();
     });
 
     AuthCubit buildCubit() => AuthCubit(
           oidcClient: oidcClient,
           tokenStorage: tokenStorage,
           identityApi: identityApi,
-          activeHouseholdStore: activeHouseholdStore,
         );
 
     test('startsUnauthenticated', () {
@@ -85,63 +81,6 @@ void main() {
         const AuthState.inProgress(),
         const AuthState.failure(AppError(code: 'identity.notAMember', message: 'debug')),
       ],
-      verify: (_) => expect(tokenStorage.cleared, isTrue),
-    );
-
-    blocTest<AuthCubit, AuthState>(
-      'signOut_clearsStorageEndsTheSsoSessionAndReturnsToUnauthenticated',
-      build: () {
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
-        return buildCubit();
-      },
-      act: (cubit) async {
-        await cubit.bootstrap();
-        await cubit.signOut();
-      },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
-      verify: (_) {
-        expect(tokenStorage.cleared, isTrue);
-        expect(oidcClient.endSessionCalled, isTrue);
-        expect(oidcClient.lastEndSessionRefreshToken, 'refresh-token');
-      },
-    );
-
-    blocTest<AuthCubit, AuthState>(
-      'signOutClearsTheStoredActiveHousehold',
-      build: () {
-        activeHouseholdStore.activeId = 'household-1';
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
-        return buildCubit();
-      },
-      act: (cubit) async {
-        await cubit.bootstrap();
-        await cubit.signOut();
-      },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
-      verify: (_) {
-        expect(activeHouseholdStore.cleared, isTrue);
-        expect(activeHouseholdStore.activeId, isNull);
-      },
-    );
-
-    blocTest<AuthCubit, AuthState>(
-      'signOut_stillClearsLocalTokensWhenEndingTheSsoSessionFails',
-      build: () {
-        oidcClient.endSessionErrorToThrow = StateError('network down');
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
-        return buildCubit();
-      },
-      act: (cubit) async {
-        await cubit.bootstrap();
-        await cubit.signOut();
-      },
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'), const AuthState.unauthenticated()],
       verify: (_) => expect(tokenStorage.cleared, isTrue),
     );
 
@@ -277,7 +216,6 @@ void main() {
             oidcClient: oidcClient,
             tokenStorage: tokenStorage,
             identityApi: identityApi,
-            activeHouseholdStore: activeHouseholdStore,
             pushNotifications: pushNotifications,
           );
 
@@ -306,16 +244,6 @@ void main() {
         await cubit.close();
       });
 
-      test('signOut_unregistersTheDeviceToken', () async {
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
-        final cubit = buildCubitWithPush();
-
-        await cubit.signOut();
-
-        expect(pushNotifications.unregisterCallCount, 1);
-        await cubit.close();
-      });
-
       test('worksWithNoPushNotificationsDependencyAtAll', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn =
@@ -323,7 +251,6 @@ void main() {
         final cubit = buildCubit(); // no pushNotifications injected
 
         await cubit.signIn();
-        await cubit.signOut();
 
         await cubit.close();
       });

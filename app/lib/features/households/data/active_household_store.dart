@@ -5,9 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// on an abstraction and tests inject an in-memory fake — no real device storage in a unit test
 /// (CLAUDE.md §6).
 ///
-/// **DSGVO:** the stored id references household membership (personal data), so it is cleared on
-/// sign-out (see [AuthCubit.signOut]) and covered by AD-7's device-cache purge on erasure — a fresh
-/// sign-in on the same device must never inherit the previous person's active household.
+/// **DSGVO:** the stored id references household membership (personal data), so [clear] exists
+/// for a future identity switch on the same device (e.g. Story 7.2/7.3's recovery-phrase import)
+/// and is covered by AD-7's device-cache purge on erasure — a newly-recovered identity on the same
+/// device must never inherit the previous identity's active household. `AuthCubit` has no sign-out
+/// action (Story 7.1 code review: the device credential is permanent, so there is nothing to clear
+/// on today's only trigger) and does not call [clear] itself.
 abstract interface class ActiveHouseholdStore {
   Future<String?> readActive();
 

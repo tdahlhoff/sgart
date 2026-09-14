@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
-import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/settings/presentation/locale_cubit.dart';
 import 'package:sgart/features/settings/presentation/locale_settings_page.dart';
 import 'package:sgart/features/settings/presentation/profile_screen.dart';
@@ -13,7 +12,6 @@ import 'package:sgart/l10n/gen/app_localizations.dart';
 import 'package:sgart/theme/sgart_theme.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
-import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_settings_dependencies.dart';
 
 void main() {
@@ -34,7 +32,6 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
-        activeHouseholdStore: FakeActiveHouseholdStore(),
       );
       await authCubit.signIn();
       // LocaleCubit sits above MaterialApp in production (main.dart) — provided the same way here
@@ -100,21 +97,10 @@ void main() {
       expect(find.byType(LocaleSettingsPage), findsOneWidget);
     });
 
-    testWidgets('signingOutFromProfilClearsTheSession', (tester) async {
-      await tester.pumpWidget(buildSubject());
-
-      await tester.tap(find.byKey(const Key('sign-out-button')));
-      await tester.pumpAndSettle();
-
-      expect(tokenStorage.cleared, isTrue);
-      expect(authCubit.state.status, AuthStatus.unauthenticated);
-    });
-
     testWidgets('interactiveRowsMeetTheFortyEightPixelMinimumTapTarget', (tester) async {
       await tester.pumpWidget(buildSubject());
 
       expect(tester.getSize(find.byKey(const Key('profile-locale-row'))).height, greaterThanOrEqualTo(48));
-      expect(tester.getSize(find.byKey(const Key('sign-out-button'))).height, greaterThanOrEqualTo(48));
     });
 
     testWidgets('rendersWithoutOverflowAtAnElevatedTextScale', (tester) async {

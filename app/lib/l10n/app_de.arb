@@ -11,11 +11,6 @@
     "description": "Short supporting copy under the sign-in heading, explaining what SGART is while the silent sign-in runs."
   },
 
-  "authSignOutButtonLabel": "Abmelden",
-  "@authSignOutButtonLabel": {
-    "description": "Label of the button that signs the person out and clears the local session."
-  },
-
   "authRetryButtonLabel": "Erneut versuchen",
   "@authRetryButtonLabel": {
     "description": "Label of the button that retries the silent sign-in after it failed (Story 7.1) — auth-scoped so it stays independent of the households feature's own retry copy."
@@ -1084,11 +1079,6 @@
   "profileNotificationsInfo": "Du bekommst Hinweise zu Einladungen, Listenänderungen und Einkäufen. Inhalte werden nie mitgeschickt. In dieser Version fest eingestellt.",
   "@profileNotificationsInfo": {
     "description": "Info-only body text explaining the fixed MVP notification defaults — no toggle, no backend (Story 1.11, AC2; NotificationSettingsUpdated reserved-not-built)."
-  },
-
-  "profileAccountSectionLabel": "Konto",
-  "@profileAccountSectionLabel": {
-    "description": "Section heading on the Profil screen above the Abmelden action (Story 1.11, AC2)."
   },
 
   "printShareAction": "Drucken / Teilen",

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/auth_state.dart';
@@ -42,15 +41,6 @@ class ProfileScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: SgartShapes.space2),
             child: Text(localizations.profileNotificationsInfo, key: const Key('profile-notifications-info')),
-          ),
-          const Divider(height: SgartShapes.space4 * 2),
-          Text(localizations.profileAccountSectionLabel, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: SgartShapes.space2),
-          SgartButton(
-            key: const Key('sign-out-button'),
-            label: localizations.authSignOutButtonLabel,
-            variant: SgartButtonVariant.secondary,
-            onPressed: () => context.read<AuthCubit>().signOut(),
           ),
         ],
       ),

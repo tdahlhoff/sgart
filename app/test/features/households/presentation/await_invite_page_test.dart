@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
-import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/await_invite_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -114,18 +113,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('await-invite-link-field')), findsNothing);
-    });
-
-    testWidgets('tappingTheSignOutIconSignsOut', (tester) async {
-      await tester.pumpWidget(buildSubject());
-
-      final button = tester.widget<IconButton>(find.byKey(const Key('sign-out-button')));
-      expect(button.tooltip, 'Abmelden');
-
-      await tester.tap(find.byKey(const Key('sign-out-button')));
-      await tester.pumpAndSettle();
-
-      expect(authCubit.state.status, AuthStatus.unauthenticated);
     });
   });
 }

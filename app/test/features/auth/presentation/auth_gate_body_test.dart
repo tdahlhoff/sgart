@@ -7,7 +7,6 @@ import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_gate.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
-import '../../../support/fake_households_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
@@ -25,7 +24,6 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
-        activeHouseholdStore: FakeActiveHouseholdStore(),
       );
     });
 
@@ -46,7 +44,6 @@ void main() {
       await tester.pumpWidget(buildSubject());
 
       expect(find.byKey(const Key('sign-in-progress-indicator')), findsOneWidget);
-      expect(find.text('Abmelden'), findsNothing);
     });
 
     testWidgets('switchesAwayFromTheSignInGateOnceSignedIn', (tester) async {

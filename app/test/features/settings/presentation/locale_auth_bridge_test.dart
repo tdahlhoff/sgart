@@ -10,7 +10,6 @@ import 'package:sgart/features/settings/presentation/locale_cubit.dart';
 import 'package:sgart/features/settings/presentation/locale_state.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
-import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_settings_dependencies.dart';
 
 void main() {
@@ -18,7 +17,6 @@ void main() {
     late FakeOidcClient oidcClient;
     late FakeSecureTokenStorage tokenStorage;
     late FakeIdentityApi identityApi;
-    late FakeActiveHouseholdStore activeHouseholdStore;
     late FakeLocalePreferenceStore localeStore;
     late LocaleCubit localeCubit;
 
@@ -26,7 +24,6 @@ void main() {
       oidcClient = FakeOidcClient();
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi();
-      activeHouseholdStore = FakeActiveHouseholdStore();
       localeStore = FakeLocalePreferenceStore();
       localeCubit = LocaleCubit(localeStore);
     });
@@ -35,7 +32,6 @@ void main() {
           oidcClient: oidcClient,
           tokenStorage: tokenStorage,
           identityApi: identityApi,
-          activeHouseholdStore: activeHouseholdStore,
         );
 
     // LocaleCubit provided above MaterialApp (as in the app root); the bridge sits below, in the
@@ -72,7 +68,6 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
-        activeHouseholdStore: activeHouseholdStore,
       );
       addTearDown(authCubit.close);
       await tester.pumpWidget(build(authCubit));
@@ -88,21 +83,25 @@ void main() {
       expect(localeCubit.state, const ExplicitLocale(Locale('de', 'AT')));
     });
 
-    testWidgets('resetsToDeviceDefaultAndClearsTheStoredLocaleOnSignOut', (tester) async {
-      tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
-      identityApi.identityToReturn =
-          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
-      final authCubit = buildAuthCubit();
+    // AuthCubit no longer has a sign-out action (Story 7.1 code review — the device credential is
+    // permanent, so there is no working "signed out" state to return to); this drives the bridge's
+    // own reaction to an `unauthenticated` transition directly via `_ControllableAuthCubit`, the way
+    // `reAppliesTheLocaleWhenAnotherUserSignsInWithoutAnInterveningSignOut` already does above.
+    testWidgets('resetsToDeviceDefaultAndClearsTheStoredLocaleWhenAuthGoesUnauthenticated', (tester) async {
+      localeStore.seed('sub-1', 'de-CH');
+      final authCubit = _ControllableAuthCubit(
+        oidcClient: oidcClient,
+        tokenStorage: tokenStorage,
+        identityApi: identityApi,
+      );
       addTearDown(authCubit.close);
       await tester.pumpWidget(build(authCubit));
 
-      await authCubit.bootstrap();
+      authCubit.emitState(const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test'));
       await tester.pumpAndSettle();
-      // The signed-in member picks Switzerland, which the bridge-driven cubit persists for sub-1.
-      await localeCubit.select(const ExplicitLocale(Locale('de', 'CH')));
-      expect(localeStore.storedTagFor('sub-1'), 'de-CH');
+      expect(localeCubit.state, const ExplicitLocale(Locale('de', 'CH')));
 
-      await authCubit.signOut();
+      authCubit.emitState(const AuthState.unauthenticated());
       await tester.pumpAndSettle();
 
       expect(localeCubit.state, const SystemLocale());
@@ -119,7 +118,6 @@ class _ControllableAuthCubit extends AuthCubit {
     required super.oidcClient,
     required super.tokenStorage,
     required super.identityApi,
-    required super.activeHouseholdStore,
   });
 
   void emitState(AuthState state) => emit(state);

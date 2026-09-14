@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../../../shared/push/push_notifications.dart';
-import '../../households/data/active_household_store.dart';
 import '../data/identity_api.dart';
 import '../data/oidc_client.dart';
 import '../data/oidc_tokens.dart';
@@ -13,46 +12,44 @@ import '../data/secure_token_storage.dart';
 import 'auth_state.dart';
 
 /// Drives sign-in (Story 7.1: silent device-account provisioning + a browserless Direct-Grant
-/// exchange, superseding Story 1.4's Authorization Code + PKCE browser flow), token storage, the
-/// post-login identity call, and sign-out (AC1, AC2, AC3). Depends only on the
-/// [OidcClient]/[SecureTokenStorage]/[IdentityApi]/[ActiveHouseholdStore] interfaces so tests never
-/// touch real cryptography, device storage, or network.
+/// exchange, superseding Story 1.4's Authorization Code + PKCE browser flow), token storage, and
+/// the post-login identity call (AC1, AC2). Depends only on the
+/// [OidcClient]/[SecureTokenStorage]/[IdentityApi] interfaces so tests never touch real
+/// cryptography, device storage, or network.
+///
+/// There is deliberately no sign-out here any more: the device credential [OidcClient.signIn]
+/// provisions is permanent (only an app reinstall/data wipe clears it), so a person cannot
+/// meaningfully leave their session — [bootstrap] would just silently re-derive and re-sign-in as
+/// the same identity on the next launch. The removed sign-out UI (Story 7.1 code review) left no
+/// working "signed out" resting state for a person to land in.
 ///
 /// [pushNotifications] is optional (Story 4.5, AC5) — most existing call sites (and most tests)
 /// have no interest in push registration, mirroring `HouseholdShell`'s guarded-optional
 /// `eventStreamFactory`. When present: registers the device token once sign-in resolves to an
-/// authenticated session, and unregisters it on sign-out.
+/// authenticated session.
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit({
     required this._oidcClient,
     required this._tokenStorage,
     required this._identityApi,
-    required this._activeHouseholdStore,
     this._pushNotifications,
   }) : super(const AuthState.unauthenticated());
 
   final OidcClient _oidcClient;
   final SecureTokenStorage _tokenStorage;
   final IdentityApi _identityApi;
-  final ActiveHouseholdStore _activeHouseholdStore;
   final PushNotifications? _pushNotifications;
 
   OidcTokens? _tokens;
-
-  /// Bumped on every sign-out so a best-effort device-token registration that was started on
-  /// sign-in but resolves *after* the user signs out can detect that its session ended and undo
-  /// itself — otherwise the in-flight `register()` would re-create a live token row for a
-  /// signed-out device (Story 4.5, AC5).
-  int _sessionGeneration = 0;
 
   /// The access token the bearer interceptor attaches, or `null` when signed out. This cubit owns
   /// the in-memory session, so the HTTP client reads it from here instead of decrypting secure
   /// storage on every request.
   String? get currentAccessToken => _tokens?.accessToken;
 
-  /// Resumes a session from previously stored tokens, or — the first launch, or any relaunch
-  /// after sign-out — silently provisions the device's account and signs in with no input and no
-  /// browser surface (Story 7.1, AC1). Called once when the app starts; this is what makes the
+  /// Resumes a session from previously stored tokens, or — on first launch, or any relaunch with
+  /// no stored session — silently provisions the device's account and signs in with no input and
+  /// no browser surface (Story 7.1, AC1). Called once when the app starts; this is what makes the
   /// create/await-invite choice (Story 1.6) the very first thing a person ever sees, with no
   /// intervening sign-in screen.
   Future<void> bootstrap() async {
@@ -80,36 +77,6 @@ class AuthCubit extends Cubit<AuthState> {
     } on Object catch (error) {
       _safeEmit(AuthState.failure(_toAppError(error)));
     }
-  }
-
-  /// Wipes local tokens and returns to the unauthenticated gate even when ending the Keycloak SSO
-  /// session fails (AC3) — a subsequent protected call then has no bearer and is rejected. Also
-  /// clears the on-device last-active household so a later sign-in on the same device never
-  /// inherits the previous person's active household (DSGVO / AD-7, Story 1.7 Clarification B).
-  Future<void> signOut() async {
-    _sessionGeneration++;
-    try {
-      await _pushNotifications?.unregister();
-    } on Object {
-      // Best-effort (Story 4.5, AC5) — local sign-out must still succeed even when the
-      // unregister call fails; a stale token on the backend self-heals via the transport's
-      // invalid-token prune (AC5) the next time a push actually targets it.
-    }
-    try {
-      await _oidcClient.endSession(refreshToken: _tokens?.refreshToken);
-    } on Object {
-      // Local sign-out must still succeed.
-    }
-    try {
-      await _tokenStorage.clear();
-      await _activeHouseholdStore.clear();
-    } on Object {
-      // A device-storage failure must not strand the session on the authenticated shell: the
-      // in-memory token is still dropped and we return to the gate below, and a stale on-device
-      // value is re-checked (still-in-list) and re-cleared on the next launch/sign-out.
-    }
-    _tokens = null;
-    _safeEmit(const AuthState.unauthenticated());
   }
 
   /// Calls the backend identity endpoint and reflects the outcome in the state.
@@ -140,21 +107,13 @@ class AuthCubit extends Cubit<AuthState> {
   /// failed refresh (missing/expired refresh token) leaves the caller to treat the 401 as final.
   /// Public so it can be wired into [AuthenticatedHttpClient]'s optional refresh callback — every
   /// authenticated call benefits from the same retry-once behavior, not just `/me`.
-  ///
-  /// Guarded by [_sessionGeneration] exactly like [_registerPushTokenBestEffort]: a refresh that
-  /// resolves after the user has already signed out must not resurrect the ended session by
-  /// re-applying/re-persisting tokens, even though the exchange itself still ran to completion.
   Future<bool> tryRefreshTokens() async {
     final refreshToken = _tokens?.refreshToken;
     if (refreshToken == null) {
       return false;
     }
-    final refreshedForGeneration = _sessionGeneration;
     try {
       final refreshed = await _oidcClient.refresh(refreshToken);
-      if (_sessionGeneration != refreshedForGeneration) {
-        return true;
-      }
       await _tokenStorage.save(refreshed);
       _tokens = refreshed;
       return true;
@@ -177,15 +136,8 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> _registerPushTokenBestEffort() async {
-    final registeredForGeneration = _sessionGeneration;
     try {
       await _pushNotifications?.register();
-      if (_sessionGeneration != registeredForGeneration) {
-        // The user signed out while this registration was in flight; its sign-out unregister ran
-        // before the token existed, so undo the now-orphaned registration for the signed-out
-        // device (Story 4.5, AC5).
-        await _pushNotifications?.unregister();
-      }
     } on Object {
       // See the call site's comment — never let a push-registration failure surface as a sign-in
       // failure.

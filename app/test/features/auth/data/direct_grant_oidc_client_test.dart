@@ -80,23 +80,6 @@ void main() {
 
       expect(tokens.refreshToken, 'rotated-refresh');
     });
-
-    test('endSession_postsToTheLogoutEndpointWithTheRefreshToken', () async {
-      adapter.responseJson = '';
-
-      await client.endSession(refreshToken: 'a-refresh-token');
-
-      expect(adapter.lastRequestPath, KeycloakConfig.logoutEndpoint);
-      final sentForm = adapter.lastRequestBody as Map;
-      expect(sentForm['refresh_token'], 'a-refresh-token');
-      expect(sentForm['client_id'], 'sgart-app');
-    });
-
-    test('endSession_isANoOpWhenThereIsNoRefreshToken', () async {
-      await client.endSession(refreshToken: null);
-
-      expect(adapter.fetchCallCount, 0);
-    });
   });
 }
 

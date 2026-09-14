@@ -12,5 +12,4 @@ abstract final class KeycloakConfig {
   static const String clientId = 'sgart-app';
 
   static const String tokenEndpoint = '$issuer/protocol/openid-connect/token';
-  static const String logoutEndpoint = '$issuer/protocol/openid-connect/logout';
 }

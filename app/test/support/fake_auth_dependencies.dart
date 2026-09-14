@@ -5,8 +5,6 @@ import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/data/secure_token_storage.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 
-import 'fake_households_dependencies.dart';
-
 /// Builds a real [AuthCubit] over fakes and drives it to an authenticated state carrying
 /// [displayName]/[email] — for widget tests that need an ancestor `AuthCubit` (e.g. the Profil
 /// identity header, Story 1.11) without touching real OIDC/storage/network (CLAUDE.md §6). Data is
@@ -22,7 +20,6 @@ Future<AuthCubit> buildAuthenticatedAuthCubit({
     identityApi: FakeIdentityApi()
       ..identityToReturn =
           CallerIdentity(keycloakUserId: keycloakUserId, displayName: displayName, email: email),
-    activeHouseholdStore: FakeActiveHouseholdStore(),
   );
   await cubit.signIn();
   return cubit;
@@ -35,9 +32,6 @@ class FakeOidcClient implements OidcClient {
   OidcTokens? refreshedTokensToReturn;
   Object? signInErrorToThrow;
   Object? refreshErrorToThrow;
-  Object? endSessionErrorToThrow;
-  bool endSessionCalled = false;
-  String? lastEndSessionRefreshToken;
   String? lastRefreshToken;
 
   @override
@@ -51,13 +45,6 @@ class FakeOidcClient implements OidcClient {
     lastRefreshToken = refreshToken;
     if (refreshErrorToThrow != null) throw refreshErrorToThrow!;
     return refreshedTokensToReturn!;
-  }
-
-  @override
-  Future<void> endSession({required String? refreshToken}) async {
-    endSessionCalled = true;
-    lastEndSessionRefreshToken = refreshToken;
-    if (endSessionErrorToThrow != null) throw endSessionErrorToThrow!;
   }
 }
 

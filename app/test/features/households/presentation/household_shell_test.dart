@@ -175,7 +175,6 @@ void main() {
       expect(find.text('anna@example.test'), findsOneWidget);
       expect(find.text('Sprache & Region'), findsOneWidget);
       expect(find.text('Benachrichtigungen'), findsOneWidget);
-      expect(find.byKey(const Key('sign-out-button')), findsOneWidget);
     });
 
     testWidgets('theListenTabShowsTheRealListsViewAndEinkaufShowsTheActiveTripsIndex', (tester) async {

@@ -71,20 +71,6 @@ class DirectGrantOidcClient implements OidcClient {
     return OidcTokens(accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken ?? refreshToken);
   }
 
-  @override
-  Future<void> endSession({required String? refreshToken}) async {
-    if (refreshToken == null) {
-      return;
-    }
-    // Keycloak's logout endpoint revokes a public client's session from just its refresh_token —
-    // no id_token_hint needed, since there is no browser session to end (AC6).
-    await _dio.post<void>(
-      KeycloakConfig.logoutEndpoint,
-      data: {'client_id': KeycloakConfig.clientId, 'refresh_token': refreshToken},
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-  }
-
   OidcTokens _tokensFrom(Map<String, dynamic> body) {
     return OidcTokens(
       accessToken: body['access_token'] as String,
