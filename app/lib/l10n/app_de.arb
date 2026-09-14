@@ -36,6 +36,55 @@
     "description": "Shown on the authenticated placeholder screen when the token carries no display name (neither name nor preferred_username claim), instead of a trailing blank."
   },
 
+  "recoveryPhraseRevealTitle": "Wiederherstellungsphrase",
+  "@recoveryPhraseRevealTitle": {
+    "description": "Title of the shared recovery-phrase reveal page (Story 7.2, AC1/AC2), reached from the choice screen's save action and Profil's re-view row."
+  },
+
+  "recoveryPhraseRevealWarning": "Bewahre diese 24 Wörter an einem sicheren Ort auf. Nur damit kannst du dein Konto auf einem anderen Gerät oder nach einer Neuinstallation wiederherstellen. Gehen sie verloren, sind dein Konto und die Daten deines Haushalts unwiederbringlich verloren.",
+  "@recoveryPhraseRevealWarning": {
+    "description": "Plain-German warning on the recovery-phrase reveal page stating the consequence of losing the phrase, without mentioning the not-yet-built email backup (Story 7.2, AC1, Dev Notes Q&A default)."
+  },
+
+  "recoveryPhraseRevealLoadError": "Die Wiederherstellungsphrase konnte nicht geladen werden. Bitte versuche es erneut.",
+  "@recoveryPhraseRevealLoadError": {
+    "description": "Shown on the recovery-phrase reveal page when reading the phrase from secure local storage fails, instead of a spinner that never resolves (Story 7.2, AC1, code review 2026-09-14)."
+  },
+
+  "recoveryPhraseWordSemanticLabel": "Wort {number}: {word}",
+  "@recoveryPhraseWordSemanticLabel": {
+    "description": "Accessibility label for one numbered word chip on the recovery-phrase reveal page, so a screen reader announces the position and word clearly (Story 7.2, AC1/AC2 a11y).",
+    "placeholders": {
+      "number": { "type": "int" },
+      "word": { "type": "String" }
+    }
+  },
+
+  "recoveryPhraseRestoreTitle": "Konto wiederherstellen",
+  "@recoveryPhraseRestoreTitle": {
+    "description": "Title of the recovery-phrase entry form (Story 7.2, AC3)."
+  },
+
+  "recoveryPhraseRestoreSubtitle": "Gib die 24 Wörter deiner Wiederherstellungsphrase ein, um dein bestehendes Konto auf diesem Gerät anzumelden.",
+  "@recoveryPhraseRestoreSubtitle": {
+    "description": "Short supporting copy on the recovery-phrase entry form explaining what it does."
+  },
+
+  "recoveryPhraseRestoreFieldLabel": "Wiederherstellungsphrase (24 Wörter)",
+  "@recoveryPhraseRestoreFieldLabel": {
+    "description": "Label of the single, forgiving multiline field the 24-word phrase is entered into (Story 7.2, AC3, Dev Notes Q&A default)."
+  },
+
+  "recoveryPhraseRestoreSubmitButtonLabel": "Wiederherstellen",
+  "@recoveryPhraseRestoreSubmitButtonLabel": {
+    "description": "Label of the button that submits the entered recovery phrase."
+  },
+
+  "recoveryPhraseRestoreInvalidPhraseError": "Diese Wiederherstellungsphrase ist ungültig. Bitte überprüfe die 24 Wörter.",
+  "@recoveryPhraseRestoreInvalidPhraseError": {
+    "description": "Shown inline on the recovery-phrase entry form when the phrase fails BIP39 validation (auth.invalidRecoveryPhrase) — wrong word count, an unknown word, or a failed checksum."
+  },
+
   "unitPiece": "Stück",
   "@unitPiece": {
     "description": "Unit label for a single countable item."
@@ -94,6 +143,16 @@
   "householdsAwaitInviteChoiceButtonLabel": "Auf Einladung warten",
   "@householdsAwaitInviteChoiceButtonLabel": {
     "description": "Label of the button that leads to the accept-invite screen."
+  },
+
+  "householdsSaveRecoveryPhraseActionLabel": "Wiederherstellungsphrase sichern",
+  "@householdsSaveRecoveryPhraseActionLabel": {
+    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-phrase reveal page (Story 7.2, AC1, D-A/D-B)."
+  },
+
+  "householdsRecoverAccountActionLabel": "Konto wiederherstellen",
+  "@householdsRecoverAccountActionLabel": {
+    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-phrase entry form (Story 7.2, AC3, D-D) — the only recovery entry point, since Profil is unreachable with zero households."
   },
 
   "householdsAwaitInviteHeading": "Einladung annehmen",
@@ -1059,6 +1118,16 @@
   "tripPostponeEmptyTargets": "Keine andere offene Liste.",
   "@tripPostponeEmptyTargets": {
     "description": "Shown in the postpone target sheet when the household has no other Open list (Story 3.3, AC4)."
+  },
+
+  "profileAccountSectionLabel": "Konto",
+  "@profileAccountSectionLabel": {
+    "description": "Section heading on the Profil screen grouping account/security rows (Story 7.2, AC2)."
+  },
+
+  "profileRecoveryPhraseRowLabel": "Wiederherstellungsphrase",
+  "@profileRecoveryPhraseRowLabel": {
+    "description": "Row on the Profil screen that re-opens the recovery-phrase reveal page, any number of times (Story 7.2, AC2, D-C)."
   },
 
   "profileDisplaySectionLabel": "Darstellung",

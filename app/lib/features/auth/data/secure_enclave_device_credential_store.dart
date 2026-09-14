@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'device_credential.dart';
 import 'device_credential_store.dart';
+import 'recovery_phrase.dart';
 
 /// Real [DeviceCredentialStore] backed by `flutter_secure_storage` (Android Keystore / iOS
 /// Keychain, Story 7.1 §2) — the 256-bit entropy is the device's actual secret, generated once
@@ -28,6 +29,20 @@ class SecureEnclaveDeviceCredentialStore implements DeviceCredentialStore {
   Future<DeviceCredential> loadOrCreate() async {
     final entropy = await _loadOrGenerateEntropy();
     return DeviceCredential.fromEntropy(entropy);
+  }
+
+  @override
+  Future<List<String>> recoveryPhrase() async {
+    final entropy = await _loadOrGenerateEntropy();
+    return RecoveryPhrase.wordsFromEntropy(entropy);
+  }
+
+  @override
+  Future<void> restoreFromPhrase(List<String> words) async {
+    // Validate before writing anything — an InvalidRecoveryPhrase here propagates straight to the
+    // caller with the current entropy left untouched (AC3, fail fast).
+    final entropy = RecoveryPhrase.entropyFromWords(words);
+    await _storage.write(key: _entropyKey, value: base64Encode(entropy));
   }
 
   Future<Uint8List> _loadOrGenerateEntropy() async {

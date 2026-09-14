@@ -10,6 +10,7 @@ import 'package:sgart/features/settings/presentation/locale_cubit.dart';
 import 'package:sgart/features/settings/presentation/locale_state.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_settings_dependencies.dart';
 
 void main() {
@@ -32,6 +33,8 @@ void main() {
           oidcClient: oidcClient,
           tokenStorage: tokenStorage,
           identityApi: identityApi,
+          deviceCredentialStore: FakeDeviceCredentialStore(),
+          activeHouseholdStore: FakeActiveHouseholdStore(),
         );
 
     // LocaleCubit provided above MaterialApp (as in the app root); the bridge sits below, in the
@@ -68,6 +71,8 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
+        deviceCredentialStore: FakeDeviceCredentialStore(),
+        activeHouseholdStore: FakeActiveHouseholdStore(),
       );
       addTearDown(authCubit.close);
       await tester.pumpWidget(build(authCubit));
@@ -93,6 +98,8 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
+        deviceCredentialStore: FakeDeviceCredentialStore(),
+        activeHouseholdStore: FakeActiveHouseholdStore(),
       );
       addTearDown(authCubit.close);
       await tester.pumpWidget(build(authCubit));
@@ -118,6 +125,8 @@ class _ControllableAuthCubit extends AuthCubit {
     required super.oidcClient,
     required super.tokenStorage,
     required super.identityApi,
+    required super.deviceCredentialStore,
+    required super.activeHouseholdStore,
   });
 
   void emitState(AuthState state) => emit(state);

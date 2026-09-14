@@ -5,6 +5,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/auth_state.dart';
+import '../../auth/presentation/recovery_phrase_reveal_page.dart';
 import 'locale_settings_page.dart';
 
 /// The Profil tab body (Story 1.11, AC2): a member's personal-only settings — no household
@@ -25,6 +26,15 @@ class ProfileScreen extends StatelessWidget {
         children: [
           _IdentityHeader(displayName: authState.displayName, email: authState.email),
           const SizedBox(height: SgartShapes.space4),
+          Text(localizations.profileAccountSectionLabel, style: Theme.of(context).textTheme.labelLarge),
+          ListTile(
+            key: const Key('profile-recovery-phrase-row'),
+            leading: const Icon(Icons.key_outlined),
+            title: Text(localizations.profileRecoveryPhraseRowLabel),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => openRecoveryPhraseRevealPage(context),
+          ),
+          const Divider(height: SgartShapes.space4 * 2),
           Text(localizations.profileDisplaySectionLabel, style: Theme.of(context).textTheme.labelLarge),
           ListTile(
             key: const Key('profile-locale-row'),

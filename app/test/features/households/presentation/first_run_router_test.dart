@@ -202,6 +202,8 @@ void main() {
           oidcClient: oidcClient,
           tokenStorage: FakeSecureTokenStorage(),
           identityApi: identityApi,
+          deviceCredentialStore: FakeDeviceCredentialStore(),
+          activeHouseholdStore: FakeActiveHouseholdStore(),
         );
 
         // Offered before sign-in — mirrors a deep link opened while the app is at the sign-in gate.

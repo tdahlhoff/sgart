@@ -45,6 +45,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'governance.notPermitted' => localizations.membersGovernanceNotPermittedError,
     'membership.lastAdmin' => localizations.membersLastAdminError,
     'auth.unauthorized' => localizations.authSessionExpiredError,
+    'auth.invalidRecoveryPhrase' => localizations.recoveryPhraseRestoreInvalidPhraseError,
     _ => localizations.errorGenericFallback,
   };
 }

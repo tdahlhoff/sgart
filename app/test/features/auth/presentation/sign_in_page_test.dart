@@ -10,6 +10,7 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_households_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
@@ -27,6 +28,8 @@ void main() {
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
         identityApi: identityApi,
+        deviceCredentialStore: FakeDeviceCredentialStore(),
+        activeHouseholdStore: FakeActiveHouseholdStore(),
       );
     });
 

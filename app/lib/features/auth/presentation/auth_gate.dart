@@ -4,9 +4,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
+import '../../households/data/active_household_store.dart';
 import '../../households/presentation/first_run_router.dart';
 import '../../settings/presentation/locale_auth_bridge.dart';
 import '../data/account_provisioning_api.dart';
+import '../data/device_credential_store.dart';
 import '../data/direct_grant_oidc_client.dart';
 import '../data/flutter_secure_token_storage.dart';
 import '../data/identity_api.dart';
@@ -24,15 +26,24 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => _buildAuthCubit()..bootstrap(),
-      // Bridges sign-in/sign-out to the ancestor LocaleCubit (above MaterialApp) — see
-      // [LocaleAuthBridge] for why the coupling runs upward from inside this subtree.
-      child: const LocaleAuthBridge(child: AuthGateBody()),
+    // Lifted out of DirectGrantOidcClient's own construction (Story 7.2) so the recovery-phrase
+    // reveal/recovery UI reached from FirstRunRouter's subtree can read the *same*
+    // DeviceCredentialStore instance the sign-in flow uses. The store is stateless over fixed
+    // keys, so correctness never depended on a single instance — but one provided instance keeps
+    // the wiring honest and tests injectable (CLAUDE.md §6).
+    const deviceCredentialStore = SecureEnclaveDeviceCredentialStore();
+    return RepositoryProvider<DeviceCredentialStore>.value(
+      value: deviceCredentialStore,
+      child: BlocProvider(
+        create: (_) => _buildAuthCubit(deviceCredentialStore)..bootstrap(),
+        // Bridges sign-in/sign-out to the ancestor LocaleCubit (above MaterialApp) — see
+        // [LocaleAuthBridge] for why the coupling runs upward from inside this subtree.
+        child: const LocaleAuthBridge(child: AuthGateBody()),
+      ),
     );
   }
 
-  AuthCubit _buildAuthCubit() {
+  AuthCubit _buildAuthCubit(DeviceCredentialStore deviceCredentialStore) {
     const SecureTokenStorage tokenStorage = FlutterSecureTokenStorage();
     final dio = Dio(BaseOptions(baseUrl: BackendConfig.baseUrl));
     // The cubit owns the live session, so the bearer interceptor reads its in-memory token rather
@@ -46,11 +57,13 @@ class AuthGate extends StatelessWidget {
     );
     cubit = AuthCubit(
       oidcClient: DirectGrantOidcClient(
-        deviceCredentialStore: const SecureEnclaveDeviceCredentialStore(),
+        deviceCredentialStore: deviceCredentialStore,
         accountProvisioningApi: HttpAccountProvisioningApi(httpClient),
       ),
       tokenStorage: tokenStorage,
       identityApi: HttpIdentityApi(httpClient),
+      deviceCredentialStore: deviceCredentialStore,
+      activeHouseholdStore: const SharedPreferencesActiveHouseholdStore(),
     );
     return cubit;
   }

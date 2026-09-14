@@ -75,5 +75,12 @@ void main() {
       expect(resolved, localizations.authSessionExpiredError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('authInvalidRecoveryPhraseResolvesToItsOwnCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'auth.invalidRecoveryPhrase');
+
+      expect(resolved, localizations.recoveryPhraseRestoreInvalidPhraseError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }

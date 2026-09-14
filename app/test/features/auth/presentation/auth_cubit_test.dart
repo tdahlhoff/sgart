@@ -1,13 +1,17 @@
+import 'dart:typed_data';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
+import 'package:sgart/features/auth/data/recovery_phrase.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_push_notifications.dart';
 
 void main() {
@@ -35,17 +39,23 @@ void main() {
     late FakeOidcClient oidcClient;
     late FakeSecureTokenStorage tokenStorage;
     late FakeIdentityApi identityApi;
+    late FakeDeviceCredentialStore deviceCredentialStore;
+    late FakeActiveHouseholdStore activeHouseholdStore;
 
     setUp(() {
       oidcClient = FakeOidcClient();
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi();
+      deviceCredentialStore = FakeDeviceCredentialStore();
+      activeHouseholdStore = FakeActiveHouseholdStore();
     });
 
     AuthCubit buildCubit() => AuthCubit(
           oidcClient: oidcClient,
           tokenStorage: tokenStorage,
           identityApi: identityApi,
+          deviceCredentialStore: deviceCredentialStore,
+          activeHouseholdStore: activeHouseholdStore,
         );
 
     test('startsUnauthenticated', () {
@@ -216,6 +226,8 @@ void main() {
             oidcClient: oidcClient,
             tokenStorage: tokenStorage,
             identityApi: identityApi,
+            deviceCredentialStore: deviceCredentialStore,
+            activeHouseholdStore: activeHouseholdStore,
             pushNotifications: pushNotifications,
           );
 
@@ -253,6 +265,52 @@ void main() {
         await cubit.signIn();
 
         await cubit.close();
+      });
+    });
+
+    group('recoverFromPhrase (Story 7.2, AC3, D-E)', () {
+      final recoveryWords = RecoveryPhrase.wordsFromEntropy(Uint8List(32));
+
+      blocTest<AuthCubit, AuthState>(
+        'recoverFromPhrase_withValidPhrase_signsInAndClearsActiveHousehold',
+        build: () {
+          activeHouseholdStore.activeId = 'throwaway-household';
+          oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+          identityApi.identityToReturn = const CallerIdentity(
+              keycloakUserId: 'sub-recovered', displayName: 'Anna Recovered', email: 'anna@example.test');
+          return buildCubit();
+        },
+        act: (cubit) => cubit.recoverFromPhrase(recoveryWords),
+        expect: () => [
+          const AuthState.inProgress(),
+          const AuthState.authenticated('Anna Recovered', 'sub-recovered', 'anna@example.test'),
+        ],
+        verify: (_) {
+          expect(deviceCredentialStore.lastRestoredWords, recoveryWords);
+          expect(activeHouseholdStore.cleared, isTrue);
+          expect(tokenStorage.storedTokens!.accessToken, 'access');
+        },
+      );
+
+      test('recoverFromPhrase_withInvalidPhrase_throwsAndLeavesTheGlobalAuthStateUntouched', () async {
+        deviceCredentialStore.restoreErrorToThrow = const InvalidRecoveryPhrase();
+        final cubit = buildCubit();
+        addTearDown(cubit.close);
+        final emittedStates = <AuthState>[];
+        final subscription = cubit.stream.listen(emittedStates.add);
+
+        await expectLater(
+          cubit.recoverFromPhrase(const ['not', 'a', 'valid', 'phrase']),
+          throwsA(isA<InvalidRecoveryPhrase>()),
+        );
+
+        // AC3: an invalid phrase changes nothing — no inProgress/failure emit (which would tear
+        // down the current session), no active-household clear, and no sign-in attempt. The caller
+        // (RecoverAccountPage) shows the error inline instead.
+        expect(emittedStates, isEmpty);
+        expect(activeHouseholdStore.cleared, isFalse);
+        expect(tokenStorage.storedTokens, isNull);
+        await subscription.cancel();
       });
     });
   });

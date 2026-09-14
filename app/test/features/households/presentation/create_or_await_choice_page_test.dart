@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
+import 'package:sgart/features/auth/presentation/recover_account_page.dart';
+import 'package:sgart/features/auth/presentation/recovery_phrase_reveal_page.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/create_or_await_choice_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -22,6 +25,7 @@ void main() {
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeInvitesApi invitesApi;
+    late FakeDeviceCredentialStore deviceCredentialStore;
     late AuthCubit authCubit;
 
     setUp(() async {
@@ -31,6 +35,7 @@ void main() {
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
+      deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
       authCubit = await buildAuthenticatedAuthCubit();
     });
 
@@ -50,6 +55,7 @@ void main() {
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
               RepositoryProvider<InvitesApi>.value(value: invitesApi),
+              RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,
@@ -107,6 +113,29 @@ void main() {
       // The accept-invite screen built without a ProviderNotFoundException — it reached InvitesApi
       // (its AcceptInviteCubit) and HouseholdsCubit (the by-value re-provide, Story 4.2).
       expect(find.byKey(const Key('await-invite-link-field')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // Test Manifest: choiceScreen_savePhraseAction_opensRevealPage (Story 7.2, AC1, D-A/D-B).
+    testWidgets('choosingSaveRecoveryPhraseOpensTheRevealPageWithoutEscapingItsProviders', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('save-recovery-phrase-choice-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecoveryPhraseRevealPage), findsOneWidget);
+      expect(find.byKey(const Key('recovery-phrase-word-1')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('choosingRecoverAccountOpensTheRecoveryEntryFormWithoutEscapingItsProviders', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('recover-account-choice-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecoverAccountPage), findsOneWidget);
+      expect(find.byKey(const Key('recover-account-phrase-field')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

@@ -4,9 +4,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/account_provisioning_api.dart';
 import 'package:sgart/features/auth/data/device_credential.dart';
-import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/direct_grant_oidc_client.dart';
 import 'package:sgart/features/auth/data/keycloak_config.dart';
+
+import '../../../support/fake_auth_dependencies.dart';
 
 void main() {
   group('DirectGrantOidcClient', () {
@@ -17,7 +18,7 @@ void main() {
 
     setUp(() async {
       deviceCredentialStore = FakeDeviceCredentialStore(
-        await DeviceCredential.fromEntropy(Uint8List(32)),
+        credential: await DeviceCredential.fromEntropy(Uint8List(32)),
       );
       accountProvisioningApi = FakeAccountProvisioningApi();
       adapter = FakeHttpClientAdapter();
@@ -80,16 +81,31 @@ void main() {
 
       expect(tokens.refreshToken, 'rotated-refresh');
     });
+
+    // Test Manifest: recoveryPaths_sendNoEntropyOrPrivateKeyOverTheNetwork (Story 7.2, AC4) — the
+    // recovery half of the guarantee. This is DirectGrantOidcClient's own request-assembly, run
+    // unchanged after a recovery import (Dev Notes crux: recovery reuses signIn() verbatim), so
+    // proving it here covers the sign-in DirectGrantOidcClient issues on the recovery path too. The
+    // reveal half needs no test here: RecoveryPhraseRevealPage never constructs a Dio/HTTP client
+    // at all (see recovery_phrase_reveal_page_test.dart), so it cannot make a network call by
+    // construction.
+    test('signIn_sendsOnlyThePublicKeyAndSignedChallenge_neverTheEntropyOrPhraseWords', () async {
+      adapter.responseJson = '{"access_token":"access-1"}';
+
+      await client.signIn();
+
+      final sentForm = adapter.lastRequestBody as Map;
+      // The wire contract itself has no field for entropy/phrase words — DeviceCredential's own
+      // API makes leaking them structurally impossible (only publicKeyBase64Url/sign() are
+      // exposed). Pinning the exact key set is the regression guard: a future field could only be
+      // added here by a deliberate change, not by an accidental new export off DeviceCredential.
+      expect(
+        sentForm.keys,
+        unorderedEquals(<String>['grant_type', 'client_id', 'username', 'timestamp', 'nonce', 'signed_challenge']),
+      );
+      expect(sentForm['username'], deviceCredentialStore.credential.publicKeyBase64Url);
+    });
   });
-}
-
-class FakeDeviceCredentialStore implements DeviceCredentialStore {
-  FakeDeviceCredentialStore(this.credential);
-
-  final DeviceCredential credential;
-
-  @override
-  Future<DeviceCredential> loadOrCreate() async => credential;
 }
 
 class FakeAccountProvisioningApi implements AccountProvisioningApi {

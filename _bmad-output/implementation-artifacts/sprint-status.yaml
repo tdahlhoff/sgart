@@ -41,7 +41,22 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-14 (Story 7.1 — implemented, reviewed (8 patch fixes applied, 1 deferred), status: review)
+last_updated: 2026-09-14 (Story 7.2 — reviewed (6 patches applied, 1 deferred), status: done)
+# Story 7.2 ready-for-dev (create-story, Opus 4.8) 2026-09-14 — Epic 7's 2nd build story: recovery-phrase
+# reveal/re-view + restore. **CLIENT-ONLY** (no backend/Keycloak/event/command/migration) — 7.1 already
+# built every primitive (RecoveryPhrase encoder, enclave device secret, DirectGrantOidcClient); 7.2 adds
+# the UI + the one missing inverse (phrase→entropy, via bip39 validateMnemonic/mnemonicToEntropy already
+# present). Timo locked (2026-09-14): D-A reveal on CreateOrAwaitChoicePage (SUPERSEDES rev-E proposal §5
+# decision 3's "reveal at first household create/join" — the choice screen is the guaranteed 0-household
+# gateway for both create+join, so no shell-transition hook / one-time flag needed); D-B button→shared
+# RecoveryPhraseRevealPage (not inline 24 words); D-C re-view row in Profil (Story 1.11); D-D recovery
+# entry as a 3rd action on the choice screen (Profil unreachable at 0 households; supersedes proposal
+# AC3's stale "sign-in screen" wording); D-E recovery = identity swap through the existing AuthGate
+# inProgress→authenticated re-mount (clears ActiveHouseholdStore per AD-7 — the exact 7.1-anticipated
+# clear() caller); D-F throwaway shell left to 7.1's 14-day retention sweep; D-G no clipboard copy;
+# D-H client-only green build = flutter test + analyze. 3 non-blocking Qs (warning wording; input shape
+# single-field vs word-boxes; clipboard). NOT run: dev-story (per review-gate: stop and ask before dev).
+# Baseline last-green ≈ Flutter 665 (7.1 sign-out removal, e66dccb).
 # correct-course 2026-09-13 (rev E) — Epic 7 REPURPOSED from "Self-Registration & Public Onboarding"
 # (never built) to "Frictionless Account Provisioning" and made REQUIRED FOR BETA, resequenced to run
 # next (before Epic 5; depends only on Epic 1). Browserless custom Direct-Grant login + silent
@@ -276,7 +291,7 @@ development_status:
   epic-7: in-progress
   7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
   7-1-silent-account-provisioning-on-first-launch: review
-  7-2-recovery-phrase-reveal-and-profile-re-view: backlog
+  7-2-recovery-phrase-reveal-and-profile-re-view: done
   7-3-recover-by-email-opt-in: backlog
   7-4-consent-capture: backlog
   7-5-invite-by-code-or-link-retire-email-path: backlog

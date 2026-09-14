@@ -34,6 +34,10 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   bloc_test: ^10.0.0
+  # Story 7.2: the package-provided in-memory FlutterSecureStoragePlatform fake — lets
+  # SecureEnclaveDeviceCredentialStore's recovery-phrase tests swap the real Keychain/Keystore
+  # backend for an in-memory one (CLAUDE.md §6) without depending on it only transitively.
+  flutter_secure_storage_platform_interface: ^2.1.0
 
 flutter:
   uses-material-design: true

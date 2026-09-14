@@ -229,3 +229,20 @@
   `AcceptInviteCubit.accept` re-parses it; a `:` in either id would break the round-trip. Not
   reachable today (invite ids are opaque UUIDs). Cleaner design: pass the `InviteLink` through to an
   `accept(InviteLink)` path instead of re-serializing to a string (Boy-Scout, small cubit-API change).
+
+## Deferred from: code review of story-7.2 (2026-09-14)
+
+- **[LOW] AuthGate composition-root wiring is untested** — `auth_gate.dart:26`. The real `AuthGate`
+  (which now provides `RepositoryProvider<DeviceCredentialStore>` and wires
+  `SharedPreferencesActiveHouseholdStore` into the cubit) is never pumped in any test; each consumer
+  test injects its own provider, so removing the wrapper would crash the recovery entry points
+  (Profil row, choice-screen save/recover buttons) at runtime with a green suite. Not cheaply
+  widget-testable — `AuthGate.build()` builds a real Dio/HTTP stack, the enclave store, and calls
+  `bootstrap()`. A thin composition-root smoke test (or a widget test over a seam-extracted builder)
+  would close the gap.
+
+- **[MEDIUM] Recovery-phrase reveal screen has no screen-capture/recording protection** —
+  `recovery_phrase_reveal_page.dart`. `RecoveryPhraseRevealPage` displays the full 24-word BIP39
+  master secret as plain text with no `FLAG_SECURE` (Android) / screen-capture guard (CLAUDE.md §5
+  security-by-default). Deferred: adds a platform channel/package — track as focused security
+  hardening across all secret-display surfaces (reveal page, and any future receipt/PII screens).

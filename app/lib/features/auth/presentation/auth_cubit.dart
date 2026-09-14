@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../../../shared/push/push_notifications.dart';
+import '../../households/data/active_household_store.dart';
+import '../data/device_credential_store.dart';
 import '../data/identity_api.dart';
 import '../data/oidc_client.dart';
 import '../data/oidc_tokens.dart';
@@ -32,12 +34,22 @@ class AuthCubit extends Cubit<AuthState> {
     required this._oidcClient,
     required this._tokenStorage,
     required this._identityApi,
+    required this._deviceCredentialStore,
+    required this._activeHouseholdStore,
     this._pushNotifications,
   }) : super(const AuthState.unauthenticated());
 
   final OidcClient _oidcClient;
   final SecureTokenStorage _tokenStorage;
   final IdentityApi _identityApi;
+
+  /// The device credential's entropy/recovery-phrase primitives (Story 7.2) — [recoverFromPhrase]
+  /// is the only method that touches this; every other flow keeps going through [_oidcClient].
+  final DeviceCredentialStore _deviceCredentialStore;
+
+  /// Cleared on a successful recovery (AD-7, D-E) so a recovered identity on a shared/reused
+  /// device never inherits the throwaway account's active-household selection.
+  final ActiveHouseholdStore _activeHouseholdStore;
   final PushNotifications? _pushNotifications;
 
   OidcTokens? _tokens;
@@ -77,6 +89,27 @@ class AuthCubit extends Cubit<AuthState> {
     } on Object catch (error) {
       _safeEmit(AuthState.failure(_toAppError(error)));
     }
+  }
+
+  /// Imports [words] as the device's entropy and swaps to the identity it belongs to (Story 7.2,
+  /// AC3, D-E) — an identity swap through the existing `AuthGate` state machine: going
+  /// `inProgress → authenticated` re-mounts `FirstRunRouter`, which re-bootstraps
+  /// `HouseholdsCubit` for whichever identity is now signed in, with no bespoke re-routing.
+  ///
+  /// Validation happens *first*, before any state is emitted: [DeviceCredentialStore.restoreFromPhrase]
+  /// throws `InvalidRecoveryPhrase` (writing nothing) on an invalid phrase, and this method lets it
+  /// propagate untouched. So an invalid phrase changes neither the enclave nor the app-wide auth
+  /// state — the current session stays mounted and the caller shows the error inline (AC3 "changes
+  /// nothing"; code review 2026-09-14). Only a *valid* phrase clears the active-household selection
+  /// and re-signs-in via [signIn], which emits `inProgress → authenticated`: `loadOrCreate`
+  /// re-derives the *same* username/keypair the imported entropy always derived, so the Direct-Grant
+  /// exchange lands back in the existing account — `provision()` is an idempotent no-op there (Story
+  /// 7.1 AC3). Any non-phrase failure (a secure-storage write error) also propagates before an emit,
+  /// so it can never strand the UI mid-swap.
+  Future<void> recoverFromPhrase(List<String> words) async {
+    await _deviceCredentialStore.restoreFromPhrase(words);
+    await _activeHouseholdStore.clear();
+    await signIn();
   }
 
   /// Calls the backend identity endpoint and reflects the outcome in the state.

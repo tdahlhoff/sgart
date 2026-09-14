@@ -38,4 +38,38 @@ void main() {
       expect(first, isNot(second));
     });
   });
+
+  group('RecoveryPhrase.entropyFromWords (Story 7.2, AC3)', () {
+    test('entropyFromWords_roundTripsWithWordsFromEntropy', () {
+      final entropy = Uint8List.fromList(List<int>.generate(32, (index) => index));
+      final words = RecoveryPhrase.wordsFromEntropy(entropy);
+
+      final reconstructedEntropy = RecoveryPhrase.entropyFromWords(words);
+
+      expect(reconstructedEntropy, entropy);
+    });
+
+    test('entropyFromWords_withInvalidChecksum_throwsInvalidRecoveryPhrase', () {
+      final words = RecoveryPhrase.wordsFromEntropy(Uint8List(32));
+      // Swapping the last (checksum-bearing) word for another valid wordlist word almost always
+      // breaks the checksum without changing the word count or introducing an unknown word — an
+      // isolated test of the checksum rule, distinct from the wrong-length/unknown-word cases.
+      final tamperedWords = [...words.sublist(0, 23), 'zoo'];
+
+      expect(() => RecoveryPhrase.entropyFromWords(tamperedWords), throwsA(isA<InvalidRecoveryPhrase>()));
+    });
+
+    test('entropyFromWords_withWrongWordCount_throwsInvalidRecoveryPhrase', () {
+      final tooFewWords = RecoveryPhrase.wordsFromEntropy(Uint8List(32)).sublist(0, 12);
+
+      expect(() => RecoveryPhrase.entropyFromWords(tooFewWords), throwsA(isA<InvalidRecoveryPhrase>()));
+    });
+
+    test('entropyFromWords_withAnUnknownWord_throwsInvalidRecoveryPhrase', () {
+      final words = RecoveryPhrase.wordsFromEntropy(Uint8List(32));
+      final wordsWithUnknownWord = [...words.sublist(0, 23), 'notabip39word'];
+
+      expect(() => RecoveryPhrase.entropyFromWords(wordsWithUnknownWord), throwsA(isA<InvalidRecoveryPhrase>()));
+    });
+  });
 }
