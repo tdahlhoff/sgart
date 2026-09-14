@@ -5,10 +5,12 @@
 # Local secrets / environment
 .env
 
-# Backend — Gradle / Java
+# Backend — Gradle / Java (the root module and every subproject, e.g. backend/keycloak-authenticator/)
 backend/.gradle/
 backend/build/
 backend/bin/
+backend/*/build/
+backend/*/bin/
 
 # Flutter / Dart client
 app/.dart_tool/

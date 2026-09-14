@@ -7,9 +7,11 @@ import '../../../shared/http/backend_config.dart';
 import '../../households/data/active_household_store.dart';
 import '../../households/presentation/first_run_router.dart';
 import '../../settings/presentation/locale_auth_bridge.dart';
-import '../data/app_auth_oidc_client.dart';
+import '../data/account_provisioning_api.dart';
+import '../data/direct_grant_oidc_client.dart';
 import '../data/flutter_secure_token_storage.dart';
 import '../data/identity_api.dart';
+import '../data/secure_enclave_device_credential_store.dart';
 import '../data/secure_token_storage.dart';
 import 'auth_cubit.dart';
 import 'auth_state.dart';
@@ -44,7 +46,10 @@ class AuthGate extends StatelessWidget {
       refreshTokens: () => cubit.tryRefreshTokens(),
     );
     cubit = AuthCubit(
-      oidcClient: const AppAuthOidcClient(),
+      oidcClient: DirectGrantOidcClient(
+        deviceCredentialStore: const SecureEnclaveDeviceCredentialStore(),
+        accountProvisioningApi: HttpAccountProvisioningApi(httpClient),
+      ),
       tokenStorage: tokenStorage,
       identityApi: HttpIdentityApi(httpClient),
       activeHouseholdStore: const SharedPreferencesActiveHouseholdStore(),

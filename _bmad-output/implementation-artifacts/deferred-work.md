@@ -210,6 +210,12 @@
   summary: `_FailurePage` in `app/lib/features/households/presentation/first_run_router.dart` (the households-bootstrap failure screen) always shows the hardcoded generic `householdsLoadFailedError` text regardless of `HouseholdsState.error.code` — so even after this fix, a households-list load that 401s with a dead refresh token shows the generic "couldn't load your households" copy instead of the new session-expired message, and offers no path back to sign-in.
   evidence: Pre-existing and untouched by this change — `_FailurePage` never called `localizedMessageForErrorCode` for any error code, auth or otherwise, before this diff either. Fix is straightforward (swap the hardcoded `Text` for `localizedMessageForErrorCode(localizations, state.error!.code)`, matching `SignInPage`'s existing pattern) but out of this batch's scope since it wasn't caused by it.
 
+## Deferred from: code review of 7-1-silent-account-provisioning-on-first-launch (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/7-1-silent-account-provisioning-on-first-launch.md`
+  summary: No test proves a signature produced by the real Flutter `cryptography` package's Ed25519 implementation verifies against the JVM's `KeyFactory`/`Signature` `"Ed25519"` path this story's authenticator uses — every existing test round-trips within one side's own crypto stack (Dart-signs/Dart-verifies in `device_credential_test.dart`; JVM-signs/JVM-verifies in `DeviceSignedChallengeVerifierTest.java` and `DeviceSignedChallengeAcceptanceTest.java`).
+  evidence: Verification-gap review finding, filed pre-verified with disposition `defer`. If the Dart `cryptography` package's raw public-key or signature byte encoding ever diverged from what the JVM verifier expects (a library version bump, or an implementation quirk in `newKeyPairFromSeed`/`sign`), every real device's sign-in would fail silently despite a fully green CI build (`backend/./gradlew test` and `flutter test` both stay green since neither side's tests cross the boundary). Ed25519's RFC 8032 wire format is standardized enough that the practical risk is low, and closing it needs either a hardcoded Dart-generated test vector added to `DeviceSignedChallengeVerifierTest`, or a real Flutter-driven E2E run against the Testcontainers Keycloak in `DeviceSignedChallengeAcceptanceTest` — both real but non-trivial additions.
+
 ## Deferred from: code review of 4-6-invite-acceptance-web-fallback (2026-09-10)
 
 - **[LOW] `InviteDeepLinkService` host filter will drop the documented `https` App Links** —

@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-13 (correct-course rev E — Epic 7 repurposed to Frictionless Account Provisioning, required for beta, resequenced before Epic 5; see sprint-change-proposal-2026-09-13.md)
+last_updated: 2026-09-14 (Story 7.1 — implemented, reviewed (8 patch fixes applied, 1 deferred), status: review)
 # correct-course 2026-09-13 (rev E) — Epic 7 REPURPOSED from "Self-Registration & Public Onboarding"
 # (never built) to "Frictionless Account Provisioning" and made REQUIRED FOR BETA, resequenced to run
 # next (before Epic 5; depends only on Epic 1). Browserless custom Direct-Grant login + silent
@@ -273,9 +273,9 @@ development_status:
   # Epic 5; depends only on Epic 1 (an authenticated person). Browserless custom Direct-Grant login +
   # silent Admin-API provisioning; supersedes shipped 1.4 sign-in transport + 4.1 email invites (see the
   # forward-pointers in epics.md Stories 1.4/1.11/4.1/4.2).
-  epic-7: backlog
+  epic-7: in-progress
   7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
-  7-1-silent-account-provisioning-on-first-launch: backlog
+  7-1-silent-account-provisioning-on-first-launch: review
   7-2-recovery-phrase-reveal-and-profile-re-view: backlog
   7-3-recover-by-email-opt-in: backlog
   7-4-consent-capture: backlog

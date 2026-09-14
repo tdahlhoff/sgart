@@ -37,7 +37,7 @@ class FakeOidcClient implements OidcClient {
   Object? refreshErrorToThrow;
   Object? endSessionErrorToThrow;
   bool endSessionCalled = false;
-  String? lastEndSessionIdToken;
+  String? lastEndSessionRefreshToken;
   String? lastRefreshToken;
 
   @override
@@ -54,9 +54,9 @@ class FakeOidcClient implements OidcClient {
   }
 
   @override
-  Future<void> endSession({required String? idToken}) async {
+  Future<void> endSession({required String? refreshToken}) async {
     endSessionCalled = true;
-    lastEndSessionIdToken = idToken;
+    lastEndSessionRefreshToken = refreshToken;
     if (endSessionErrorToThrow != null) throw endSessionErrorToThrow!;
   }
 }

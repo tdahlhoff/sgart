@@ -8,26 +8,57 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
+  "directGrantFlow": "sgart-device-direct-grant",
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"publicKey\",\"displayName\":\"Device public key (Story 7.1, D-D)\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  },
+  "authenticationFlows": [
+    {
+      "alias": "sgart-device-direct-grant",
+      "description": "Story 7.1: browserless Direct-Grant sign-in verifying an Ed25519-signed device challenge (backend/keycloak-authenticator) instead of a password.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "sgart-device-signed-challenge",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
   "clients": [
     {
       "clientId": "sgart-app",
       "name": "SGART Flutter app",
-      "description": "Public native client — Authorization Code + PKCE, no client secret on the device (NFR4).",
+      "description": "Public native client — browserless Direct-Grant sign-in verifying a device-signed Ed25519 challenge (Story 7.1, supersedes the Authorization Code + PKCE browser flow); no client secret on the device (NFR4), no password.",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",
-      "standardFlowEnabled": true,
+      "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": [
-        "de.sgart.app://oauth/callback"
-      ],
+      "redirectUris": [],
       "webOrigins": [],
-      "attributes": {
-        "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "de.sgart.app://oauth/callback"
-      },
       "protocolMappers": [
         {
           "name": "sgart-backend-audience",
@@ -79,7 +110,7 @@
     {
       "clientId": "sgart-admin",
       "name": "SGART Keycloak Admin lookup (dev)",
-      "description": "Confidential client-credentials client for the Story 4.6 (D4) Keycloak Admin email→user lookup. Local/dev only (SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true). Production provisioning is a documented follow-up (docs/first-real-world-test.md).",
+      "description": "Confidential client-credentials client for the Keycloak Admin email lookup (4.6) and account create/delete (7.1). Dev only — see docs/first-real-world-test.md before production use.",
       "enabled": true,
       "publicClient": false,
       "protocol": "openid-connect",
@@ -143,7 +174,7 @@
       "enabled": true,
       "serviceAccountClientId": "sgart-admin",
       "clientRoles": {
-        "realm-management": ["view-users"]
+        "realm-management": ["view-users", "manage-users"]
       }
     }
   ]

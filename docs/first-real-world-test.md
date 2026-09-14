@@ -180,17 +180,21 @@ flutter install                   # installs the debug APK; launch it from the a
 
 ## Part 5 — Use it
 
-1. On the phone, open **sgart** (installed as "sgart"). Tap through to sign in.
-2. A browser tab opens Keycloak. Sign in with a **synthetic dev user**:
-   - `anna@example.test` / `anna-dev-password`
-   - `ben@example.test` / `ben-dev-password`
-   - `carla@example.test` / `carla-dev-password` — a third seeded user, kept household-free so
-     signing in as her reliably reaches the create/await-invite first-run choice screen even
-     after `anna`/`ben` both already have households.
-3. The browser redirects back into the app via `de.sgart.app://oauth/callback` and you land in the
-   app. Create a household, add a shopping list, etc.
-4. **Test live sync (Story 4.4):** install on a second device (or sign in as `ben` in the emulator)
-   in the same household and watch changes appear in real time.
+1. On the phone, open **sgart** (installed as "sgart"). It signs in **silently** (Story 7.1) — no
+   email, username, password, or browser tab: the app generates a device secret in the secure
+   enclave, the backend creates a Keycloak account bound to its public key, and the app signs in
+   via the custom Direct-Grant flow, all before anything is shown. You land straight on the
+   create/await-invite choice.
+2. Create a household, add a shopping list, etc.
+3. **Test live sync (Story 4.4) / multi-person households:** each install/device silently
+   provisions its **own**, distinct account — there is no "sign in as a different seeded user"
+   anymore (that was Story 1.4's password-based flow, removed in 7.1; recovering the *same*
+   account on a second device via the recovery phrase is Story 7.2, not yet built). To get a
+   second device into the same household, use the in-app **invite** flow (Story 4.6): create the
+   household on the first device, send an invite, and accept it from the second device/install.
+   The `anna`/`ben`/`carla` synthetic users seeded in `keycloak/realm-sgart.json` still exist for
+   backend-only manual testing (e.g. a direct Admin API call), but the app itself has no UI path
+   left that signs in with a password.
 
 ---
 
@@ -359,6 +363,49 @@ real. For production: provision a **separate** confidential client with only the
 realm-management role (least privilege — never reuse `sgart-admin`'s dev secret,
 `local-dev-only-keycloak-admin-secret-change-me`) and set
 `SGART_IDENTITY_KEYCLOAK_ADMIN_BASE_URL`/`_REALM`/`_CLIENT_ID`/`_CLIENT_SECRET` to match.
+
+### Silent account provisioning (Story 7.1): the custom SPI, rate limiting, and the admin secret
+
+**Deploying the custom Direct-Grant authenticator SPI.** The device-signed-challenge sign-in
+(`POST /realms/sgart/protocol/openid-connect/token`, `grant_type=password` repurposed for a
+signature — never an actual password) is verified by `backend/keycloak-authenticator`, a *separate*
+Gradle module (not a dependency of the backend app, F2) packaged as a provider JAR. Build it before
+`docker compose up` — `docker-compose.yml` mounts `backend/keycloak-authenticator/build/libs` into
+`/opt/keycloak/providers`, and `start-dev` auto-rebuilds Keycloak's optimized image on boot when it
+detects a new/changed provider (slower first start only):
+
+```bash
+cd ~/projects/sgart/backend
+./gradlew :keycloak-authenticator:jar
+cd ~/projects/sgart
+docker compose up -d keycloak   # or the full stack — the mount only matters for this container
+```
+
+Forgetting this step is easy to spot: `sgart-app`'s Direct Grant flow (`sgart-device-direct-grant`,
+`keycloak/realm-sgart.json`) references the authenticator by its provider id
+(`sgart-device-signed-challenge`); if the JAR isn't loaded, Keycloak fails to build the flow at
+startup and logs an error rather than silently accepting logins.
+
+**Rate limiting (AC7) — a documented seam, not yet live.** `POST /api/v1/accounts` is the one
+unauthenticated write endpoint in the app (D-E, `SecurityConfig`) — reachable by anyone who can
+reach the backend, by design (an account must exist before there is anything to authenticate with).
+Its abuse-surface mitigation is **IP-based rate limiting at the TLS reverse proxy** (ADR-0002), not
+application code (KISS; a beta-scope decision). That proxy does not exist yet (see "Why local, even
+though a netcup vHost now exists" at the top of this guide) — until it does, this endpoint has **no
+rate limit at all** in any real deployment. Known limits of the eventual IP-based approach, stated
+up front so they are not mistaken for a future bug: **CGNAT/IP rotation** means a single bad actor
+can spread requests across many apparent source IPs (a speed bump, not a wall), and a shared-IP
+network (campus Wi-Fi, CGNAT mobile carriers) can see legitimate users share a rate-limit bucket.
+**Device attestation** (Play Integrity / DeviceCheck) is a named post-beta fast-follow that
+meaningfully raises the bar here — explicitly out of scope for this story.
+
+**The `sgart-admin` secret.** Story 7.1 adds `manage-users` to `sgart-admin`'s `realm-management`
+service-account roles (alongside 4.6's `view-users`) so `KeycloakAdminCreateAccount` can create and
+delete real accounts — which makes the checked-in dev placeholder secret
+(`local-dev-only-keycloak-admin-secret-change-me`, `keycloak/realm-sgart.json`) more urgent to
+replace than it was for the read-only D4 lookup. Do not ship real account creation against the
+placeholder secret; provision a real secret (a secrets manager, or at minimum an environment
+variable never committed) before enabling `SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` outside dev.
 
 ---
 

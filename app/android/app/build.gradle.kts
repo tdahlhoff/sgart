@@ -36,9 +36,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // flutter_appauth's redirect intent-filter reads this placeholder (Story 1.4) — must
-        // match the custom scheme in the Keycloak client's redirect URI and KeycloakConfig.
-        manifestPlaceholders["appAuthRedirectScheme"] = "de.sgart.app"
     }
 
     signingConfigs {

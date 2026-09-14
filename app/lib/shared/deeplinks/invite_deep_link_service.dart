@@ -5,12 +5,12 @@ import '../../features/invites/data/invite_link.dart';
 /// Surfaces the OS deep link `de.sgart.app://invite?h=<householdId>&i=<inviteId>` as parsed
 /// [InviteLink]s (Story 4.6, D2/AC1): the cold-start initial link and a stream of subsequent ones.
 ///
-/// Host-scoped to `invite` (the crux, AC1/AC8): `flutter_appauth` registers a redirect receiver for
-/// the whole `de.sgart.app` scheme, using host `oauth` (`de.sgart.app://oauth/callback`). Every link
-/// this service sees is filtered by `uri.host == 'invite'` before being handed to
-/// [InviteLink.tryParse], so an OAuth callback link is dropped here even if the platform ever
-/// surfaces it through the same channel — the two receivers never contend in Dart. A malformed
-/// invite link (unparseable/missing ids) is silently dropped too — no crash, no spurious accept.
+/// Host-scoped to `invite` (the crux, AC1/AC8): the `de.sgart.app` scheme is shared with other
+/// links on the same scheme (previously `flutter_appauth`'s now-removed `oauth` redirect host,
+/// Story 7.1). Every link this service sees is filtered by `uri.host == 'invite'` before being
+/// handed to [InviteLink.tryParse], so a link on any other host is dropped here even if the
+/// platform ever surfaces it through the same channel. A malformed invite link (unparseable/
+/// missing ids) is silently dropped too — no crash, no spurious accept.
 class InviteDeepLinkService {
   InviteDeepLinkService({
     required Future<Uri?> Function() getInitialLink,

@@ -1,17 +1,23 @@
 package de.sgart.identity.adapter.out;
 
+import de.sgart.identity.application.CreateAccount;
+import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
+import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.PruneDeviceToken;
 import de.sgart.identity.application.RegisterDeviceToken;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
+import de.sgart.identity.application.SweepNeverActivatedAccounts;
 import de.sgart.identity.application.UnregisterDeviceToken;
 import de.sgart.identity.domain.DeviceTokenRepository;
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.identity.domain.ProvisionedAccountRepository;
 import java.time.Clock;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -112,5 +118,69 @@ public class IdentityBeansConfig {
     ResolveHouseholdPushTargets resolveHouseholdPushTargets(
             MemberMappingRepository memberMappingRepository, DeviceTokenRepository deviceTokenRepository) {
         return new ResolveHouseholdPushTargets(memberMappingRepository, deviceTokenRepository);
+    }
+
+    @Bean
+    ProvisionedAccountRepository provisionedAccountRepository(JdbcClient jdbcClient) {
+        return new JdbcProvisionedAccountRepository(jdbcClient);
+    }
+
+    @Bean
+    ProvisionAccount provisionAccount(
+            CreateAccount createAccount, ProvisionedAccountRepository provisionedAccountRepository, Clock clock) {
+        return new ProvisionAccount(createAccount, provisionedAccountRepository, clock);
+    }
+
+    @Bean
+    SweepNeverActivatedAccounts sweepNeverActivatedAccounts(
+            ProvisionedAccountRepository provisionedAccountRepository,
+            MemberMappingRepository memberMappingRepository,
+            DeleteAccount deleteAccount,
+            Clock clock,
+            @Value("${sgart.identity.provisioning.retention-days}") long retentionDays) {
+        return new SweepNeverActivatedAccounts(
+                provisionedAccountRepository, memberMappingRepository, deleteAccount, clock, Duration.ofDays(retentionDays));
+    }
+
+    /**
+     * The real Story 7.1 Admin adapter for both {@link CreateAccount} and {@link DeleteAccount} —
+     * one Keycloak "manage an account" class implementing both ports (DRY over the shared
+     * client-credentials token fetch). Active only when {@code
+     * sgart.identity.keycloak-admin.enabled=true}; shares that flag and its base-url/realm/
+     * client-id/client-secret with the Story 4.6 lookup adapter below (both talk to the same
+     * {@code sgart-admin} confidential client). Building the {@link RestClient} performs no I/O.
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "true")
+    KeycloakAdminCreateAccount keycloakAdminCreateAccount(
+            @Value("${sgart.identity.keycloak-admin.base-url}") String baseUrl,
+            @Value("${sgart.identity.keycloak-admin.realm}") String realm,
+            @Value("${sgart.identity.keycloak-admin.client-id}") String clientId,
+            @Value("${sgart.identity.keycloak-admin.client-secret}") String clientSecret) {
+        return new KeycloakAdminCreateAccount(RestClient.builder().baseUrl(baseUrl).build(), realm, clientId, clientSecret);
+    }
+
+    /**
+     * The wired defaults — active whenever the Keycloak Admin adapter above is not (the same
+     * gating as {@link #deferredFindHouseholdMemberByEmail()}, for the same reason).
+     */
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
+    DeferredCreateAccount deferredCreateAccount() {
+        return new DeferredCreateAccount();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
+    DeferredDeleteAccount deferredDeleteAccount() {
+        return new DeferredDeleteAccount();
     }
 }

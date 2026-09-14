@@ -60,8 +60,7 @@ void main() {
     blocTest<AuthCubit, AuthState>(
       'signIn_authenticatesAndStoresTheTokensOnSuccess',
       build: () {
-        oidcClient.tokensToReturn =
-            const OidcTokens(accessToken: 'access', refreshToken: 'refresh', idToken: 'id');
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn = const CallerIdentity(
             keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
         return buildCubit();
@@ -92,7 +91,7 @@ void main() {
     blocTest<AuthCubit, AuthState>(
       'signOut_clearsStorageEndsTheSsoSessionAndReturnsToUnauthenticated',
       build: () {
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
         identityApi.identityToReturn =
             const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
         return buildCubit();
@@ -105,7 +104,7 @@ void main() {
       verify: (_) {
         expect(tokenStorage.cleared, isTrue);
         expect(oidcClient.endSessionCalled, isTrue);
-        expect(oidcClient.lastEndSessionIdToken, 'id-token');
+        expect(oidcClient.lastEndSessionRefreshToken, 'refresh-token');
       },
     );
 
@@ -113,7 +112,7 @@ void main() {
       'signOutClearsTheStoredActiveHousehold',
       build: () {
         activeHouseholdStore.activeId = 'household-1';
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
         identityApi.identityToReturn =
             const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
         return buildCubit();
@@ -133,7 +132,7 @@ void main() {
       'signOut_stillClearsLocalTokensWhenEndingTheSsoSessionFails',
       build: () {
         oidcClient.endSessionErrorToThrow = StateError('network down');
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
         identityApi.identityToReturn =
             const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
         return buildCubit();
@@ -158,11 +157,25 @@ void main() {
       expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test')],
     );
 
+    // Test Manifest: firstLaunch_provisionsAndSignsInWithNoBrowserSurface (Story 7.1, AC1) — on a
+    // fresh install (no stored tokens), bootstrap() silently drives OidcClient.signIn() (which, in
+    // production, provisions the device account and signs in via the Direct-Grant flow) straight
+    // to the authenticated state, with no separate user-initiated step and no browser-shaped API
+    // in [OidcClient]'s signature at all.
     blocTest<AuthCubit, AuthState>(
-      'bootstrap_staysUnauthenticatedWhenNoTokensAreStored',
-      build: buildCubit,
+      'bootstrap_silentlyProvisionsAndSignsInWhenNoTokensAreStored',
+      build: () {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
+        identityApi.identityToReturn = const CallerIdentity(
+            keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+        return buildCubit();
+      },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [],
+      expect: () => [
+        const AuthState.inProgress(),
+        const AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test'),
+      ],
+      verify: (_) => expect(tokenStorage.storedTokens!.accessToken, 'access'),
     );
 
     blocTest<AuthCubit, AuthState>(
@@ -294,7 +307,7 @@ void main() {
       });
 
       test('signOut_unregistersTheDeviceToken', () async {
-        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id-token');
+        tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh-token');
         final cubit = buildCubitWithPush();
 
         await cubit.signOut();

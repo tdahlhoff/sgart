@@ -15,7 +15,6 @@ dependencies:
     sdk: flutter
   flutter_bloc: ^9.1.1
   intl: ^0.20.2
-  flutter_appauth: ^12.0.2
   app_links: ^7.1.1
   flutter_secure_storage: ^11.0.0
   dio: ^5.11.0
@@ -24,6 +23,11 @@ dependencies:
   shared_preferences: ^2.3.2
   printing: ^5.15.0
   pdf: ^3.13.0
+  # Story 7.1: the silent-provisioning device credential — a deterministic Ed25519 keypair (native
+  # JVM support server-side; this is the Flutter/client-side signer) and its BIP39 recovery-phrase
+  # encoding (not shown to the person until Story 7.2).
+  cryptography: ^2.9.0
+  bip39: ^1.0.6
 
 dev_dependencies:
   flutter_test:

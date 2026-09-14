@@ -96,6 +96,12 @@ sgart:
       realm: ${SGART_IDENTITY_KEYCLOAK_ADMIN_REALM:sgart}
       client-id: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_ID:sgart-admin}
       client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET}
+    # Silent account provisioning (Story 7.1, D-C, AC5): a never-activated shell — a Keycloak
+    # account with no MemberMapping and no attached email — is swept (Keycloak account + row both
+    # deleted) this many days after it was provisioned. The GDPR storage-limitation control.
+    provisioning:
+      retention-days: ${SGART_IDENTITY_PROVISIONING_RETENTION_DAYS:14}
+      sweep-cron: ${SGART_IDENTITY_PROVISIONING_SWEEP_CRON:0 0 3 * * *}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;

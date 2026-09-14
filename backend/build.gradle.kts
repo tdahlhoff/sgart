@@ -55,3 +55,15 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Story 7.1 (F2/AC2): the Testcontainers acceptance test that mounts the SPI provider JAR into a
+// real Keycloak container needs that JAR built first — a task dependency, not a project
+// dependency, so the SPI module still never sits on the backend app's compile/runtime classpath.
+// The directory (not a hardcoded, version-suffixed filename) is passed through so the test can
+// locate whichever single JAR the module actually produced.
+tasks.test {
+    dependsOn(":keycloak-authenticator:jar")
+    systemProperty(
+        "sgart.test.keycloakAuthenticatorJarDir",
+        project(":keycloak-authenticator").layout.buildDirectory.dir("libs").get().asFile.absolutePath)
+}

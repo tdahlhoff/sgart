@@ -45,7 +45,7 @@ void main() {
     testWidgets('showsTheSignInGateWhenUnauthenticated', (tester) async {
       await tester.pumpWidget(buildSubject());
 
-      expect(find.text('Anmelden'), findsOneWidget);
+      expect(find.byKey(const Key('sign-in-progress-indicator')), findsOneWidget);
       expect(find.text('Abmelden'), findsNothing);
     });
 
@@ -55,11 +55,13 @@ void main() {
           const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
       await tester.pumpWidget(buildSubject());
 
-      await tester.tap(find.byKey(const Key('sign-in-button')));
+      // No button to tap (Story 7.1, AC1: zero input) — sign-in is driven by AuthCubit.bootstrap()
+      // in the real app; this test drives it directly to prove AuthGateBody's own state-switching.
+      await cubit.signIn();
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Anmelden'), findsNothing);
+      expect(find.byKey(const Key('sign-in-progress-indicator')), findsNothing);
       expect(find.text('authenticated-placeholder'), findsOneWidget);
     });
   });

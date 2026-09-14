@@ -3,6 +3,7 @@ package de.sgart.identity.adapter.in.security;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.Customizer;
@@ -23,6 +24,16 @@ import org.springframework.security.web.SecurityFilterChain;
  * <p>Every request under {@code /api/v1/**} requires a valid Keycloak-signed JWT; signature,
  * issuer, and audience are checked by {@link #jwtDecoder(String, String, String)} (AC1). No
  * session is created — the bearer token is the only credential per request.
+ *
+ * <p><strong>The one deliberate exception (Story 7.1, D-E, AC4):</strong> {@code POST
+ * /api/v1/accounts} is permitted unauthenticated — silent account provisioning must run before any
+ * credential exists. Spring matches {@code authorizeHttpRequests} matchers in declaration order, so
+ * this exact method+path permit MUST stay above the blanket {@code /api/v1/**}.authenticated() rule
+ * below it — reordering would 401 provisioning, and widening the matcher (e.g. dropping the
+ * {@code HttpMethod.POST} restriction, or loosening the path) would open up more than intended.
+ * This is the single unauthenticated <em>write</em> surface in the app; its abuse-surface
+ * mitigation is IP-based rate limiting at the TLS reverse proxy (ADR-0002), documented as a beta
+ * seam in {@code docs/first-real-world-test.md} (AC7) since that proxy is not yet deployed.
  */
 @Configuration
 @EnableWebSecurity
@@ -33,6 +44,7 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.POST, "/api/v1/accounts").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));

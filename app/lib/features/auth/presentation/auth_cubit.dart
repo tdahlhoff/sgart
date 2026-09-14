@@ -12,10 +12,11 @@ import '../data/oidc_tokens.dart';
 import '../data/secure_token_storage.dart';
 import 'auth_state.dart';
 
-/// Drives sign-in (Authorization Code + PKCE), token storage, the post-login identity call, and
-/// sign-out (AC1, AC2, AC3). Depends only on the
+/// Drives sign-in (Story 7.1: silent device-account provisioning + a browserless Direct-Grant
+/// exchange, superseding Story 1.4's Authorization Code + PKCE browser flow), token storage, the
+/// post-login identity call, and sign-out (AC1, AC2, AC3). Depends only on the
 /// [OidcClient]/[SecureTokenStorage]/[IdentityApi]/[ActiveHouseholdStore] interfaces so tests never
-/// touch a real OIDC library, device storage, or network.
+/// touch real cryptography, device storage, or network.
 ///
 /// [pushNotifications] is optional (Story 4.5, AC5) — most existing call sites (and most tests)
 /// have no interest in push registration, mirroring `HouseholdShell`'s guarded-optional
@@ -49,16 +50,26 @@ class AuthCubit extends Cubit<AuthState> {
   /// storage on every request.
   String? get currentAccessToken => _tokens?.accessToken;
 
-  /// Resumes a session from previously stored tokens, if any. Called once when the app starts.
+  /// Resumes a session from previously stored tokens, or — the first launch, or any relaunch
+  /// after sign-out — silently provisions the device's account and signs in with no input and no
+  /// browser surface (Story 7.1, AC1). Called once when the app starts; this is what makes the
+  /// create/await-invite choice (Story 1.6) the very first thing a person ever sees, with no
+  /// intervening sign-in screen.
   Future<void> bootstrap() async {
     final storedTokens = await _tokenStorage.read();
     if (storedTokens == null) {
+      await signIn();
       return;
     }
     _tokens = storedTokens;
     await _loadCallerIdentity();
   }
 
+  /// Runs [OidcClient.signIn] (silent provisioning + the browserless Direct-Grant exchange, Story
+  /// 7.1) and reflects the outcome in the state. Called by [bootstrap] on every launch with no
+  /// stored session; also the retry action a failure screen offers (e.g. after a transient network
+  /// failure) — there is no separate manual "sign in" trigger, since there is nothing for a person
+  /// to enter.
   Future<void> signIn() async {
     _safeEmit(const AuthState.inProgress());
     try {
@@ -85,7 +96,7 @@ class AuthCubit extends Cubit<AuthState> {
       // invalid-token prune (AC5) the next time a push actually targets it.
     }
     try {
-      await _oidcClient.endSession(idToken: _tokens?.idToken);
+      await _oidcClient.endSession(refreshToken: _tokens?.refreshToken);
     } on Object {
       // Local sign-out must still succeed.
     }

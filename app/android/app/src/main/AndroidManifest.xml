@@ -3,10 +3,6 @@
         android:label="sgart"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <!-- Deliberately no android:taskAffinity="" on MainActivity below: it breaks
-             flutter_appauth's RedirectUriReceiverActivity rejoining this activity's task after
-             Keycloak sign-in, which fails silently with "AppAuth: No stored state - unable to
-             handle response" (flutter_appauth README, "No Redirect to app after login"). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,11 +23,10 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Story 4.6 (D2, AC1/AC8): the invite deep link, host-scoped so it never collides
-                 with flutter_appauth's OAuth redirect receiver on the same de.sgart.app scheme
-                 (registered separately via manifestPlaceholders["appAuthRedirectScheme"] in
-                 build.gradle.kts, host "oauth"). Android routes by scheme+host, so the two
-                 intent-filters do not fight over the same URI. -->
+            <!-- Story 4.6 (D2, AC1/AC8): the invite deep link, host-scoped to "invite" on the
+                 de.sgart.app scheme. Previously also shared with flutter_appauth's OAuth redirect
+                 receiver (host "oauth"), removed in Story 7.1 — Android routes by scheme+host, so
+                 a future host on this scheme still would not collide with this filter. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>

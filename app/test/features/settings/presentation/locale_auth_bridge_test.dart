@@ -89,7 +89,7 @@ void main() {
     });
 
     testWidgets('resetsToDeviceDefaultAndClearsTheStoredLocaleOnSignOut', (tester) async {
-      tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', idToken: 'id');
+      tokenStorage.storedTokens = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
       identityApi.identityToReturn =
           const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
       final authCubit = buildAuthCubit();

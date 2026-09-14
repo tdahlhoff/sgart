@@ -3,22 +3,22 @@
 
   "authSignInHeading": "Willkommen bei SGART",
   "@authSignInHeading": {
-    "description": "Heading shown on the sign-in gate before a person has authenticated."
+    "description": "Heading shown while the app silently provisions the device's account and signs in (Story 7.1) — no input, no browser, so this is only ever a brief loading moment, never a screen someone acts on."
   },
 
   "authSignInSubtitle": "Die gemeinsame Einkaufsliste für deinen Haushalt: Alle sehen live, was gebraucht wird — ob am Handy oder auf dem ausgedruckten Zettel im Laden.",
   "@authSignInSubtitle": {
-    "description": "Short supporting copy under the sign-in heading, explaining what SGART is before the person signs in."
-  },
-
-  "authSignInButtonLabel": "Anmelden",
-  "@authSignInButtonLabel": {
-    "description": "Label of the button that starts the Keycloak Authorization Code + PKCE sign-in flow."
+    "description": "Short supporting copy under the sign-in heading, explaining what SGART is while the silent sign-in runs."
   },
 
   "authSignOutButtonLabel": "Abmelden",
   "@authSignOutButtonLabel": {
     "description": "Label of the button that signs the person out and clears the local session."
+  },
+
+  "authRetryButtonLabel": "Erneut versuchen",
+  "@authRetryButtonLabel": {
+    "description": "Label of the button that retries the silent sign-in after it failed (Story 7.1) — auth-scoped so it stays independent of the households feature's own retry copy."
   },
 
   "authSessionExpiredError": "Deine Sitzung ist abgelaufen, melde dich neu an.",

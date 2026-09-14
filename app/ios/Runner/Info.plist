@@ -49,8 +49,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- flutter_appauth's OIDC redirect (Story 1.4) — must match the custom scheme in the
-	     Keycloak client's redirect URI and KeycloakConfig. -->
+	<!-- The invite deep link's custom URL scheme (Story 4.6, D2; app_links) — de.sgart.app://invite.
+	     Previously shared with flutter_appauth's now-removed OIDC redirect (Story 7.1); iOS has no
+	     per-host intent-filter split like Android's AndroidManifest.xml, so app_links alone routes
+	     by path/host at the Dart layer. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

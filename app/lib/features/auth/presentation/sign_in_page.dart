@@ -9,8 +9,10 @@ import '../../../theme/tokens/sgart_shapes.dart';
 import 'auth_cubit.dart';
 import 'auth_state.dart';
 
-/// The unauthenticated entry point: starts the Keycloak Authorization Code + PKCE flow. Shown
-/// again (with an error) if a previous sign-in or session-resume attempt failed.
+/// The pre-authentication gate (Story 7.1, AC1): a brief loading moment while the app silently
+/// provisions the device's account and signs in — no email, username, or password to enter, and no
+/// browser surface, so there is deliberately no "sign in" button here. Shown again (with an error
+/// and a retry action) only if that silent attempt fails, e.g. the backend is unreachable.
 class SignInPage extends StatelessWidget {
   const SignInPage({super.key});
 
@@ -60,14 +62,18 @@ class SignInPage extends StatelessWidget {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: SgartShapes.space4),
-                      ],
-                      SgartButton(
-                        key: const Key('sign-in-button'),
-                        label: localizations.authSignInButtonLabel,
-                        onPressed: state.status == AuthStatus.inProgress
-                            ? null
-                            : () => context.read<AuthCubit>().signIn(),
-                      ),
+                        SgartButton(
+                          key: const Key('sign-in-retry-button'),
+                          label: localizations.authRetryButtonLabel,
+                          onPressed: () => context.read<AuthCubit>().signIn(),
+                        ),
+                      ] else
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: SgartShapes.space4),
+                          child: Center(
+                            child: CircularProgressIndicator(key: Key('sign-in-progress-indicator')),
+                          ),
+                        ),
                     ],
                   ),
                 ),

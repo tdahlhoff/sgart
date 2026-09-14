@@ -2,6 +2,8 @@ package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.identity.application.CreateAccount;
+import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,55 @@ class IdentityBeansConfigTest {
         @Test
         void wiresKeycloakAdapter() {
             assertThat(findHouseholdMemberByEmail).isInstanceOf(KeycloakAdminFindHouseholdMemberByEmail.class);
+        }
+    }
+
+    /**
+     * Story 7.1: {@link CreateAccount}/{@link DeleteAccount} share the same {@code
+     * sgart.identity.keycloak-admin.enabled} gate as {@link FindHouseholdMemberByEmail} above — the
+     * default profile must wire the {@code Deferred*} stand-ins so no admin credentials are needed.
+     */
+    @SpringBootTest
+    @Nested
+    class AccountProvisioningKeycloakAdminDisabledByDefault {
+
+        @Autowired
+        private CreateAccount createAccount;
+
+        @Autowired
+        private DeleteAccount deleteAccount;
+
+        @Test
+        void wiresDeferredImplementations() {
+            assertThat(createAccount).isInstanceOf(DeferredCreateAccount.class);
+            assertThat(deleteAccount).isInstanceOf(DeferredDeleteAccount.class);
+        }
+    }
+
+    @SpringBootTest
+    @Nested
+    class AccountProvisioningKeycloakAdminEnabled {
+
+        @Autowired
+        private CreateAccount createAccount;
+
+        @Autowired
+        private DeleteAccount deleteAccount;
+
+        @DynamicPropertySource
+        static void keycloakAdminEnabled(DynamicPropertyRegistry registry) {
+            registry.add("sgart.identity.keycloak-admin.enabled", () -> "true");
+            registry.add("sgart.identity.keycloak-admin.base-url", () -> "http://keycloak.example");
+            registry.add("sgart.identity.keycloak-admin.realm", () -> "sgart");
+            registry.add("sgart.identity.keycloak-admin.client-id", () -> "sgart-admin");
+            registry.add("sgart.identity.keycloak-admin.client-secret", () -> "admin-secret");
+        }
+
+        @Test
+        void wiresTheSameKeycloakAdapterForBothPorts() {
+            assertThat(createAccount).isInstanceOf(KeycloakAdminCreateAccount.class);
+            assertThat(deleteAccount).isInstanceOf(KeycloakAdminCreateAccount.class);
+            assertThat(createAccount).isSameAs(deleteAccount);
         }
     }
 }

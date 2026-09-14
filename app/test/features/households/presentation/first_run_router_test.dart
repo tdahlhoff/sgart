@@ -231,11 +231,13 @@ void main() {
         await tester.pump();
 
         // Still at the sign-in gate — the pending link has not been touched yet.
-        expect(find.text('Anmelden'), findsOneWidget);
+        expect(find.byKey(const Key('sign-in-progress-indicator')), findsOneWidget);
         expect(invitesApi.acceptCallCount, 0);
         expect(pendingInviteLinkCubit.state, isNotNull);
 
-        await tester.tap(find.byKey(const Key('sign-in-button')));
+        // No button to tap (Story 7.1, AC1: zero input) — drive the same silent sign-in
+        // AuthCubit.bootstrap() would run automatically in the real app.
+        await signedOutAuthCubit.signIn();
         await tester.pumpAndSettle();
         await cubit.bootstrap();
         await tester.pumpAndSettle();

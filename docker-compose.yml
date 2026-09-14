@@ -61,6 +61,12 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
       - ./keycloak/realm-sgart.json:/opt/keycloak/data/import/realm-sgart.json:ro
+      # Story 7.1: the custom Direct-Grant authenticator SPI provider JAR (backend/keycloak-
+      # authenticator). Build it BEFORE `docker compose up`:
+      #   cd backend && ./gradlew :keycloak-authenticator:jar
+      # start-dev auto-detects a new/changed provider and rebuilds on boot (slower first start);
+      # not built here as part of `docker compose up` itself (KISS — one more moving part avoided).
+      - ./backend/keycloak-authenticator/build/libs:/opt/keycloak/providers:ro
     ports:
       - "8080:8080"   # Keycloak HTTP (dev)
       - "9000:9000"   # management port — health & metrics
