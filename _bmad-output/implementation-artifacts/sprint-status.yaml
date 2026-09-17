@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-17 (Story 7.3 — round-2 code review of applied patches, 1 patch applied (widget test), status: done)
+last_updated: 2026-09-17 (Stories 7.1 + 7.3 marked done — 7.1 finished, 7.3 round-2 review + 1 patch applied)
 # Story 7.3 ready-for-dev (create-story, Opus 4.8) 2026-09-15 — Epic 7's 3rd build story: opt-in
 # "recover by email" fallback. **FULL-STACK** (backend + app), unlike client-only 7.2. Fed by the
 # architect design note (epic-7-story-7.3-recover-by-email-design.md) with all four forks pre-resolved
@@ -307,7 +307,7 @@ development_status:
   # forward-pointers in epics.md Stories 1.4/1.11/4.1/4.2).
   epic-7: in-progress
   7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
-  7-1-silent-account-provisioning-on-first-launch: review
+  7-1-silent-account-provisioning-on-first-launch: done
   7-2-recovery-phrase-reveal-and-profile-re-view: done
   7-3-recover-by-email-opt-in: done
   7-4-consent-capture: backlog
