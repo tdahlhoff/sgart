@@ -6,6 +6,7 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../consent/presentation/consent_cubit.dart';
 import '../../households/data/household_summary.dart';
 import '../../households/data/households_api.dart';
 import '../../households/presentation/create_household_cubit.dart';
@@ -122,8 +123,23 @@ class _OnboardingWizardViewState extends State<_OnboardingWizardView> {
         appBar: const SgartAppBar(title: 'SGART'),
         body: SafeArea(
           child: BlocListener<CreateHouseholdCubit, CreateHouseholdState>(
-            listenWhen: (previous, current) => current.status == CreateHouseholdStatus.success,
-            listener: (context, state) => _onHouseholdCreated(state.household!),
+            listenWhen: (previous, current) =>
+                current.status == CreateHouseholdStatus.success ||
+                (current.status == CreateHouseholdStatus.failure && current.error?.code == 'consent.required'),
+            listener: (context, state) {
+              if (state.status == CreateHouseholdStatus.success) {
+                _onHouseholdCreated(state.household!);
+              } else {
+                // Story 7.4, AC3: a stale client (consent recorded locally but not server-side, or
+                // a notice-version bump since this screen loaded) is rejected 409 consent.required.
+                // Never show this as a generic inline error — reload the gate's status (guarded:
+                // present only when reached through the real ConsentGatedChoicePage ancestor, see
+                // CreateOrAwaitChoicePage._openOnboarding) and pop back to the first-run gateway,
+                // which now renders ConsentGatePage again instead of the choice screen.
+                tryReadConsentCubit(context)?.load();
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+            },
             child: switch (_step) {
               _OnboardingStep.name => _NameStep(
                   controller: _nameController,

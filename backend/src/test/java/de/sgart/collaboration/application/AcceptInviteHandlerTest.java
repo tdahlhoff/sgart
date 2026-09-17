@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.application.command.AcceptInviteHandler;
+import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InviteAlreadyConsumedApplicationException;
 import de.sgart.collaboration.application.exception.InviteExpiredApplicationException;
 import de.sgart.collaboration.application.exception.InviteNotFoundApplicationException;
@@ -60,7 +61,11 @@ class AcceptInviteHandlerTest {
     private final StreamId streamId = StreamId.forHousehold(householdId);
 
     private AcceptInviteHandler handler(Clock clock) {
-        return new AcceptInviteHandler(eventStore, issueMemberIdentity, sideStore, clock);
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, sideStore, clock, alwaysConsentingGate());
+    }
+
+    private static ConsentGate alwaysConsentingGate() {
+        return keycloakUserId -> true;
     }
 
     private AcceptInviteHandler handler() {
@@ -75,6 +80,20 @@ class AcceptInviteHandlerTest {
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         sideStore.store(inviteId, NormalizedEmail.fromRaw("anna@example.com"));
         return inviteId;
+    }
+
+    @Test
+    void acceptInvite_withoutRecordedConsent_isRejectedWith409ConsentRequired() {
+        InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
+        AcceptInviteHandler handler = new AcceptInviteHandler(
+                eventStore, issueMemberIdentity, sideStore, Clock.fixed(FIXED_NOW, ZoneOffset.UTC), never -> false);
+
+        assertThatThrownBy(() -> handler.handle(
+                        "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(ConsentRequiredException.class);
+
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
+        assertThat(mappingRepository.findMemberId(new KeycloakUserId("anna-sub"), householdId)).isEmpty();
     }
 
     @Test
@@ -238,7 +257,8 @@ class AcceptInviteHandlerTest {
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
                 sideStore,
-                Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+                Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                alwaysConsentingGate());
 
         assertThatThrownBy(() -> handler.handle(
                         "loser-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
@@ -266,7 +286,8 @@ class AcceptInviteHandlerTest {
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
                 sideStore,
-                Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+                Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                alwaysConsentingGate());
         assertThatThrownBy(() -> handler.handle(
                         "anna-sub", householdId.toString(), secondInviteId.toString(), CommandId.generate().toString()))
                 .isInstanceOf(ConcurrencyConflictException.class);
@@ -284,7 +305,8 @@ class AcceptInviteHandlerTest {
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
                 sideStore,
-                Clock.fixed(FIXED_NOW.plus(Duration.ofDays(8)), ZoneOffset.UTC));
+                Clock.fixed(FIXED_NOW.plus(Duration.ofDays(8)), ZoneOffset.UTC),
+                alwaysConsentingGate());
 
         assertThatThrownBy(() -> handler.handle(
                         "expired-caller-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))

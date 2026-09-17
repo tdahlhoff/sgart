@@ -1,6 +1,8 @@
 package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.ConsentGate;
+import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.domain.Household;
@@ -27,10 +29,12 @@ public final class CreateHouseholdHandler {
 
     private final EventStore eventStore;
     private final IssueMemberIdentity issueMemberIdentity;
+    private final ConsentGate consentGate;
 
-    public CreateHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity) {
+    public CreateHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
+        this.consentGate = Objects.requireNonNull(consentGate, "consentGate must not be null");
     }
 
     /**
@@ -44,9 +48,15 @@ public final class CreateHouseholdHandler {
      *     opaque {@code 500}. The same {@code rawCommandId} on a retry converges on one household.
      * @throws InvalidHouseholdNameException if {@code rawName} fails the domain invariant
      * @throws InvalidCommandEnvelopeException if {@code rawCommandId} is missing or not a UUID
+     * @throws ConsentRequiredException if the caller has no recorded consent (AC3, D-B) — checked
+     *     first, before any state change (fail-fast).
      */
     public HouseholdId handle(String keycloakUserId, String rawName, String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
+
+        if (!consentGate.hasRecordedConsent(keycloakUserId)) {
+            throw new ConsentRequiredException("Caller has not recorded consent for processing household data");
+        }
 
         CommandId commandId = CommandFieldTranslations.toCommandId(rawCommandId);
         HouseholdName name = CommandFieldTranslations.toHouseholdName(rawName);

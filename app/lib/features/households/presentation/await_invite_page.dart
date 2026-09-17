@@ -6,6 +6,7 @@ import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../consent/presentation/consent_cubit.dart';
 import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/accept_invite_cubit.dart';
@@ -16,17 +17,27 @@ import 'households_cubit.dart';
 /// route boundary (the `ProviderNotFoundException` lesson, Story 4.2) — the one call site both
 /// [CreateOrAwaitChoicePage]'s manual "I have an invite" choice and [FirstRunRouterBody]'s Story
 /// 4.6 deep-link routing use, so the two entry points can never drift into separate accept paths
-/// (AC3, DRY).
+/// (AC3, DRY). Also re-provides the ancestor [ConsentCubit] when one exists (mirrors
+/// `CreateOrAwaitChoicePage._openOnboarding`), so a stale-client `409 consent.required` on accept
+/// can reload the gate and pop back to it (Story 7.4 review) — guarded-optional because a
+/// standalone test harness, or the already-gated deep-link path with no `ConsentCubit` ancestor,
+/// must not crash.
 void openAwaitInvitePage(BuildContext context, {InviteLink? initialLink}) {
   final invitesApi = context.read<InvitesApi>();
   final householdsCubit = context.read<HouseholdsCubit>();
+  final consentCubit = tryReadConsentCubit(context);
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => RepositoryProvider<InvitesApi>.value(
         value: invitesApi,
         child: BlocProvider<HouseholdsCubit>.value(
           value: householdsCubit,
-          child: AwaitInvitePage(initialLink: initialLink),
+          child: consentCubit == null
+              ? AwaitInvitePage(initialLink: initialLink)
+              : BlocProvider<ConsentCubit>.value(
+                  value: consentCubit,
+                  child: AwaitInvitePage(initialLink: initialLink),
+                ),
         ),
       ),
     ),
@@ -99,6 +110,14 @@ class _AwaitInviteViewState extends State<_AwaitInviteView> {
           // by mint, without waiting on the projector (Dev Notes — mirrors CreateHousehold's
           // route-on-response approach).
           context.read<HouseholdsCubit>().bootstrap();
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        } else if (state.status == AcceptInviteStatus.failure && state.error?.code == 'consent.required') {
+          // Story 7.4 review: a stale client (consent recorded locally but not server-side, or a
+          // notice-version bump since this screen was reached) is rejected 409 consent.required.
+          // Never show this as a generic inline error — reload the gate's status when reachable
+          // (guarded-optional, see openAwaitInvitePage) and pop back so the gate is shown again
+          // (mirrors OnboardingWizardPage's create-side recovery).
+          tryReadConsentCubit(context)?.load();
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
       },

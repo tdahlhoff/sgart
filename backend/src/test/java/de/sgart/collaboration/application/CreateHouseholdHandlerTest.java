@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.collaboration.application.command.CreateHouseholdHandler;
+import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
 import de.sgart.collaboration.domain.HouseholdName;
@@ -31,12 +32,42 @@ class CreateHouseholdHandlerTest {
 
     private static final String RAW_KEYCLOAK_USER_ID = "anna-sub";
 
+    private static ConsentGate alwaysConsentingGate() {
+        return keycloakUserId -> true;
+    }
+
+    @Test
+    void createHousehold_withoutRecordedConsent_isRejectedWith409ConsentRequired() {
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
+        CreateHouseholdHandler handler =
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), never -> false);
+
+        assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString()))
+                .isInstanceOf(ConsentRequiredException.class);
+
+        assertThat(mappingRepository.householdIdsFor(new KeycloakUserId(RAW_KEYCLOAK_USER_ID))).isEmpty();
+    }
+
+    @Test
+    void createHousehold_withRecordedConsent_succeeds() {
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
+        CreateHouseholdHandler handler =
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
+
+        HouseholdId householdId =
+                handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
+
+        assertThat(eventStore.readStream(StreamId.forHousehold(householdId))).hasSize(2);
+    }
+
     @Test
     void handle_issuesAMemberIdThatFlowsIntoMemberJoinedAndReturnsTheNewHouseholdId() {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository));
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
 
         HouseholdId householdId =
                 handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
@@ -56,7 +87,7 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository));
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
 
         HouseholdId firstHouseholdId =
                 handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
@@ -73,7 +104,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsABlankNameWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()));
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "   ", CommandId.generate().toString()))
                 .isInstanceOf(InvalidHouseholdNameException.class)
@@ -84,7 +115,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAnOverLongNameWithItsOwnCodeNotNameRequired() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()));
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
         String tooLong = "x".repeat(HouseholdName.MAX_LENGTH + 1);
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, tooLong, CommandId.generate().toString()))
@@ -96,7 +127,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAMissingCommandIdWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()));
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", null))
                 .isInstanceOf(InvalidCommandEnvelopeException.class)
@@ -107,7 +138,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAMalformedCommandIdWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()));
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", "not-a-uuid"))
                 .isInstanceOf(InvalidCommandEnvelopeException.class)
@@ -120,7 +151,7 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository));
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
         String commandId = CommandId.generate().toString();
 
         HouseholdId firstResult = handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", commandId);

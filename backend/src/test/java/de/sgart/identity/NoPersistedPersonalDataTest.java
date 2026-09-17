@@ -120,6 +120,23 @@ class NoPersistedPersonalDataTest {
         assertThat(sql).contains("keycloak_user_id");
     }
 
+    /**
+     * Story 7.4, AC2/AC5: the consent record is keyed by the pseudonymous {@code
+     * keycloak_user_id} alone and carries no email/name/IP column — only {@code notice_version} +
+     * {@code accepted_at} (AD-6, data minimization).
+     */
+    @Test
+    void noPersistedPersonalData_accountConsentHoldsNoPii() {
+        Path migration = Path.of("src/main/resources/db/migration/V20__account_consent.sql");
+        String sql = withoutSqlComments(readFile(migration)).toLowerCase(Locale.ROOT);
+
+        assertThat(sql).doesNotContain("email");
+        assertThat(sql).doesNotContain("display_name");
+        assertThat(sql).doesNotContain("displayname");
+        assertThat(sql).doesNotContain("ip_address");
+        assertThat(sql).contains("keycloak_user_id");
+    }
+
     /** Strips {@code -- ...} line comments so prose mentioning "email"/"display name" (like this
      * very migration's own explanatory header) never trips the column-name check below it. */
     private static String withoutSqlComments(String sql) {

@@ -14,7 +14,9 @@ import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.identity.adapter.out.InMemoryAccountConsentRepository;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
@@ -26,8 +28,10 @@ import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
 import de.sgart.shared.support.InMemoryEventStore;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -59,6 +63,9 @@ class HouseholdControllerTest {
     @Autowired
     private MemberMappingRepository mappingRepository;
 
+    @Autowired
+    private AccountConsentRepository accountConsentRepository;
+
     @TestConfiguration
     static class InMemoryAdaptersConfig {
 
@@ -73,6 +80,26 @@ class HouseholdControllerTest {
         MemberMappingRepository testMemberMappingRepository() {
             return new InMemoryMemberMappingRepository();
         }
+
+        @Bean
+        @Primary
+        AccountConsentRepository testAccountConsentRepository() {
+            return new InMemoryAccountConsentRepository();
+        }
+    }
+
+    /**
+     * Every {@code create_*} test below exercises {@code CreateHouseholdHandler}, which now gates
+     * on recorded consent (Story 7.4, AC3) — pre-record it for the callers those tests use, so this
+     * file keeps proving AC1/AC2 unchanged. {@link #create_withoutRecordedConsent_returns409ConsentRequired()}
+     * is the one test that deliberately leaves a caller unconsented.
+     */
+    @BeforeEach
+    void recordConsentForTheCallersTheseTestsUse() {
+        InMemoryAccountConsentRepository repository = (InMemoryAccountConsentRepository) accountConsentRepository;
+        repository.clear();
+        repository.record(new KeycloakUserId("anna-sub"), "2026-beta-1", Instant.now());
+        repository.record(new KeycloakUserId("ben-sub"), "2026-beta-1", Instant.now());
     }
 
     @Test
@@ -123,6 +150,16 @@ class HouseholdControllerTest {
                         .content("{\"commandId\":\"%s\"}".formatted(UUID.randomUUID())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("household.nameRequired"));
+    }
+
+    @Test
+    void create_withoutRecordedConsent_returns409ConsentRequired() throws Exception {
+        mockMvc.perform(post("/api/v1/households")
+                        .with(jwt().jwt(jwt -> jwt.subject("never-consented-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRequestBody("Familie Muster")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("consent.required"));
     }
 
     @Test

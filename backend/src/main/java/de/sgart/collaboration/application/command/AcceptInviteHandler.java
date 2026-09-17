@@ -1,7 +1,9 @@
 package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.application.CommandFieldTranslations;
+import de.sgart.collaboration.application.ConsentGate;
 import de.sgart.collaboration.application.InviteEmailSideStore;
+import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InviteAlreadyConsumedApplicationException;
 import de.sgart.collaboration.application.exception.InviteExpiredApplicationException;
 import de.sgart.collaboration.application.exception.InviteNotFoundApplicationException;
@@ -62,17 +64,20 @@ public final class AcceptInviteHandler {
     private final IssueMemberIdentity issueMemberIdentity;
     private final InviteEmailSideStore inviteEmailSideStore;
     private final Clock clock;
+    private final ConsentGate consentGate;
 
     public AcceptInviteHandler(
             EventStore eventStore,
             IssueMemberIdentity issueMemberIdentity,
             InviteEmailSideStore inviteEmailSideStore,
-            Clock clock) {
+            Clock clock,
+            ConsentGate consentGate) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
         this.inviteEmailSideStore =
                 Objects.requireNonNull(inviteEmailSideStore, "inviteEmailSideStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.consentGate = Objects.requireNonNull(consentGate, "consentGate must not be null");
     }
 
     /**
@@ -86,9 +91,15 @@ public final class AcceptInviteHandler {
      *     (410, AC3)
      * @throws InviteAlreadyConsumedApplicationException if the invite was already accepted by
      *     someone else (409, AC5)
+     * @throws ConsentRequiredException if the caller has no recorded consent (409 {@code
+     *     consent.required}, Story 7.4 AC3, D-B) — checked first, before any state change.
      */
     public void handle(String keycloakUserId, String rawHouseholdId, String rawInviteId, String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
+
+        if (!consentGate.hasRecordedConsent(keycloakUserId)) {
+            throw new ConsentRequiredException("Caller has not recorded consent for processing household data");
+        }
 
         CommandId commandId = CommandFieldTranslations.toCommandId(rawCommandId);
         HouseholdId householdId = CommandFieldTranslations.toHouseholdId(rawHouseholdId);

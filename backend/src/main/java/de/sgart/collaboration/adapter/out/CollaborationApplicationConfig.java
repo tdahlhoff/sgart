@@ -1,5 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
+import de.sgart.collaboration.application.ConsentGate;
 import de.sgart.collaboration.application.InviteEmailHasher;
 import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.InviteLinkFactory;
@@ -51,6 +52,7 @@ import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
+import de.sgart.identity.application.GetConsentStatus;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -74,8 +76,14 @@ import org.springframework.core.env.Profiles;
 public class CollaborationApplicationConfig {
 
     @Bean
-    CreateHouseholdHandler createHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity) {
-        return new CreateHouseholdHandler(eventStore, issueMemberIdentity);
+    ConsentGate consentGate(GetConsentStatus getConsentStatus) {
+        return new IdentityConsentGate(getConsentStatus);
+    }
+
+    @Bean
+    CreateHouseholdHandler createHouseholdHandler(
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate) {
+        return new CreateHouseholdHandler(eventStore, issueMemberIdentity, consentGate);
     }
 
     @Bean
@@ -266,8 +274,9 @@ public class CollaborationApplicationConfig {
             EventStore eventStore,
             IssueMemberIdentity issueMemberIdentity,
             InviteEmailSideStore inviteEmailSideStore,
-            Clock clock) {
-        return new AcceptInviteHandler(eventStore, issueMemberIdentity, inviteEmailSideStore, clock);
+            Clock clock,
+            ConsentGate consentGate) {
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, inviteEmailSideStore, clock, consentGate);
     }
 
     @Bean

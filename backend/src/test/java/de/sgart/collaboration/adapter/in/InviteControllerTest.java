@@ -16,8 +16,10 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteView;
+import de.sgart.identity.adapter.out.InMemoryAccountConsentRepository;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
+import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -74,6 +77,9 @@ class InviteControllerTest {
     @Autowired
     private FakeFindHouseholdMemberByEmail findHouseholdMemberByEmail;
 
+    @Autowired
+    private AccountConsentRepository accountConsentRepository;
+
     @TestConfiguration
     static class InMemoryAdaptersConfig {
 
@@ -87,6 +93,12 @@ class InviteControllerTest {
         @Primary
         MemberMappingRepository testMemberMappingRepository() {
             return new InMemoryMemberMappingRepository();
+        }
+
+        @Bean
+        @Primary
+        AccountConsentRepository testAccountConsentRepository() {
+            return new InMemoryAccountConsentRepository();
         }
 
         @Bean
@@ -148,6 +160,22 @@ class InviteControllerTest {
         @Override
         public Optional<MemberId> forHousehold(String email, HouseholdId householdId) {
             return Optional.ofNullable(existingMembersByEmail.get(email));
+        }
+    }
+
+    /**
+     * {@code accept_*} tests below exercise {@code AcceptInviteHandler}, which now gates on
+     * recorded consent (Story 7.4, AC3) — pre-record it for the joiners those tests use, so this
+     * file keeps proving AC1/AC3/AC4/AC6 unchanged.
+     * {@link #accept_withoutRecordedConsent_returns409ConsentRequired()} is the one test that
+     * deliberately leaves a joiner unconsented.
+     */
+    @BeforeEach
+    void recordConsentForTheJoinersTheseTestsUse() {
+        InMemoryAccountConsentRepository repository = (InMemoryAccountConsentRepository) accountConsentRepository;
+        repository.clear();
+        for (String joiner : List.of("joiner-sub", "first-joiner-sub", "second-joiner-sub")) {
+            repository.record(new KeycloakUserId(joiner), "2026-beta-1", Instant.now());
         }
     }
 
@@ -260,6 +288,30 @@ class InviteControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(acceptRequestBody()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void accept_withoutRecordedConsent_returns409ConsentRequired() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = InviteId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        AggregateVersion loadedVersion = household.version();
+        household.invitePerson(
+                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
+                inviteId,
+                new EmailHmac("hmac-1"),
+                Instant.now(),
+                CommandId.generate());
+        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("never-consented-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("consent.required"));
     }
 
     @Test

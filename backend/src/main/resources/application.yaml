@@ -140,6 +140,12 @@ sgart:
     mail:
       enabled: ${SGART_IDENTITY_MAIL_ENABLED:false}
       from: ${SGART_IDENTITY_MAIL_FROM:no-reply@sgart.example}
+    # Consent capture (Story 7.4, D-D/D-E): the single source of the current privacy-notice/terms
+    # version. GET /api/v1/consent returns it so the client never hard-codes it — bumping it is a
+    # one-line deploy, not an app release (design §8 F2). A plain string, compared for equality
+    # (F1) — no ordered parsing.
+    consent:
+      notice-version: ${SGART_IDENTITY_CONSENT_NOTICE_VERSION:2026-beta-1}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;

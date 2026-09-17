@@ -1458,5 +1458,30 @@
   "accountRecoveryCodeInvalidError": "Der Code ist ungültig oder abgelaufen. Bitte versuche es erneut.",
   "@accountRecoveryCodeInvalidError": {
     "description": "Localized copy for the account.recoveryCodeInvalid error code (Story 7.3, AC1/AC2) — deliberately generic (never distinguishes wrong/expired/exhausted, mirroring the server's no-enumeration discipline)."
+  },
+
+  "consentGateHeading": "Bevor es losgeht",
+  "@consentGateHeading": {
+    "description": "Heading of ConsentGatePage (Story 7.4, AC1) — shown before the first household create/join."
+  },
+
+  "consentGateBody": "Um einen Haushalt zu erstellen oder einer Einladung zu folgen, verarbeiten wir Daten zu deiner Haushaltsmitgliedschaft. Das geschieht nur mit deiner Zustimmung.",
+  "@consentGateBody": {
+    "description": "Short explanatory body text of ConsentGatePage (Story 7.4, AC1, design §8 F3) — the legal copy itself is drafted separately before beta; this is placeholder-but-honest short copy."
+  },
+
+  "consentGateNoticeLinkLabel": "Datenschutzhinweis lesen",
+  "@consentGateNoticeLinkLabel": {
+    "description": "Label of the link to the hosted privacy notice on ConsentGatePage (Story 7.4, design §3, §8 F3)."
+  },
+
+  "consentGateAcceptButtonLabel": "Zustimmen und fortfahren",
+  "@consentGateAcceptButtonLabel": {
+    "description": "Label of the explicit accept action on ConsentGatePage (Story 7.4, AC1)."
+  },
+
+  "consentRequiredError": "Bitte stimme dem Datenschutzhinweis zu, bevor du fortfährst.",
+  "@consentRequiredError": {
+    "description": "Localized copy for the consent.required error code (Story 7.4, AC3) — surfaced when a stale client's create/accept is rejected server-side."
   }
 }

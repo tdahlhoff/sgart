@@ -103,5 +103,12 @@ void main() {
       expect(resolved, localizations.accountRecoveryCodeInvalidError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('consentRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'consent.required');
+
+      expect(resolved, localizations.consentRequiredError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }

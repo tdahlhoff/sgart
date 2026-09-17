@@ -9,6 +9,7 @@ import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/recover_account_page.dart';
 import '../../auth/presentation/recover_by_email_page.dart';
 import '../../auth/presentation/recovery_phrase_reveal_page.dart';
+import '../../consent/presentation/consent_cubit.dart';
 import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
@@ -119,6 +120,12 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
     final storesApi = context.read<StoresApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
     final invitesApi = context.read<InvitesApi>();
+    // Re-provided only when this page is reached through the real ConsentGatedChoicePage ancestor
+    // (production) — a standalone test harness that pushes this page directly has no ConsentCubit
+    // above it, and must not crash (guarded-optional read, mirrors
+    // FirstRunRouterBody's PendingInviteLinkCubitResolver). Story 7.4, AC3: lets the wizard's
+    // name step reload consent status and surface the gate again on a 409 consent.required.
+    final consentCubit = tryReadConsentCubit(context);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MultiRepositoryProvider(
@@ -130,7 +137,12 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
           ],
           child: BlocProvider<HouseholdsCubit>.value(
             value: householdsCubit,
-            child: const OnboardingWizardPage(),
+            child: consentCubit == null
+                ? const OnboardingWizardPage()
+                : BlocProvider<ConsentCubit>.value(
+                    value: consentCubit,
+                    child: const OnboardingWizardPage(),
+                  ),
           ),
         ),
       ),

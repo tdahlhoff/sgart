@@ -89,6 +89,22 @@ class HexagonalArchitectureTest {
                             + "published application ports, never its domain (AD-2)");
 
     /**
+     * Story 7.4, design §4 — the {@code ConsentGate} crossing. {@code collaboration.application}
+     * must reach consent only through its own {@code ConsentGate} port; the identity-delegating
+     * adapter, {@code IdentityConsentGate}, lives in {@code collaboration.adapter.out} precisely so
+     * this rule (a specialization of {@link #collaborationApplicationDoesNotReachIntoIdentityDomain})
+     * catches a regression that imported {@code identity} internals into {@code
+     * collaboration.application} directly instead of through the port.
+     */
+    @ArchTest
+    static final ArchRule collaborationReachesConsentOnlyThroughItsOwnPort =
+            noClasses()
+                    .that().resideInAPackage("de.sgart.collaboration.application..")
+                    .should().dependOnClassesThat().resideInAnyPackage("de.sgart.identity.domain..", "de.sgart.identity.adapter..")
+                    .as("collaboration.application must reach identity's consent status only through "
+                            + "its own ConsentGate port, never identity's domain or adapters (AD-1/AD-2)");
+
+    /**
      * AD-1 — the shared kernel is pure. The cross-context write-side envelope ({@code Command},
      * {@code DomainEvent}, the {@code EventStore} port, {@code EventSourcedAggregate}, the ids) must
      * never absorb a framework, persistence, event-store, or adapter type — so the real KurrentDB

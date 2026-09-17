@@ -49,6 +49,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,
     'account.recoveryEmailInvalid' => localizations.accountRecoveryEmailInvalidError,
     'account.recoveryCodeInvalid' => localizations.accountRecoveryCodeInvalidError,
+    'consent.required' => localizations.consentRequiredError,
     _ => localizations.errorGenericFallback,
   };
 }

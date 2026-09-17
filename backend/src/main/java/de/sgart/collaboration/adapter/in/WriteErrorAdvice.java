@@ -1,6 +1,7 @@
 package de.sgart.collaboration.adapter.in;
 
 import de.sgart.collaboration.application.exception.AlreadyAHouseholdMemberApplicationException;
+import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.DuplicateItemApplicationException;
 import de.sgart.collaboration.application.exception.DuplicatePendingInviteApplicationException;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
@@ -106,6 +107,13 @@ class WriteErrorAdvice {
     @ExceptionHandler(GovernanceNotPermittedApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleGovernanceNotPermitted(GovernanceNotPermittedApplicationException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(ConsentRequiredException.class)
+    ResponseEntity<ErrorDescriptor> handleConsentRequired(ConsentRequiredException exception) {
+        // 409, not 403 (which reads as an auth failure) — a stale client recovers by showing the
+        // consent screen again (Story 7.4, AC3, D-B).
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(ConcurrencyConflictException.class)

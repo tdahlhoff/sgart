@@ -5,6 +5,7 @@ import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_gate.dart';
+import 'package:sgart/features/consent/data/consent_api.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/await_invite_page.dart';
 import 'package:sgart/features/households/presentation/first_run_router.dart';
@@ -17,6 +18,7 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
+import '../../../support/fake_consent_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
@@ -27,6 +29,7 @@ void main() {
     late FakeHouseholdsApi householdsApi;
     late HouseholdsCubit cubit;
     late AuthCubit authCubit;
+    late FakeConsentApi consentApi;
 
     late FakeActiveHouseholdStore activeHouseholdStore;
 
@@ -37,6 +40,12 @@ void main() {
       // The shell's Profil tab reads AuthCubit at build time (Story 1.11) — provide an
       // authenticated ancestor even for tests that only exercise the household-count routing.
       authCubit = await buildAuthenticatedAuthCubit();
+      // These tests exercise HouseholdsCubit's own routing, not the consent gate (Story 7.4) —
+      // pre-accept the current version so the 0-household branch renders CreateOrAwaitChoicePage
+      // exactly as it did before 7.4 added the gate in front of it.
+      consentApi = FakeConsentApi()
+        ..statusToReturn =
+            const ConsentStatus(accepted: true, acceptedVersion: '2026-beta-1', currentVersion: '2026-beta-1');
     });
 
     tearDown(() async {
@@ -49,7 +58,10 @@ void main() {
             value: authCubit,
             child: RepositoryProvider<ShoppingListsApi>.value(
               value: FakeShoppingListsApi(),
-              child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              child: RepositoryProvider<ConsentApi>.value(
+                value: consentApi,
+                child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              ),
             ),
           ),
         );
@@ -58,7 +70,7 @@ void main() {
       householdsApi.householdsToReturn = const [];
       await tester.pumpWidget(buildSubject());
       await cubit.bootstrap();
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('create-household-choice-button')), findsOneWidget);
       expect(find.byKey(const Key('await-invite-choice-button')), findsOneWidget);
@@ -126,6 +138,7 @@ void main() {
     late AuthCubit authCubit;
     late FakeActiveHouseholdStore activeHouseholdStore;
     late FakeInvitesApi invitesApi;
+    late FakeConsentApi consentApi;
     late PendingInviteLinkCubit pendingInviteLinkCubit;
 
     setUp(() async {
@@ -134,6 +147,11 @@ void main() {
       cubit = HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
       authCubit = await buildAuthenticatedAuthCubit();
       invitesApi = FakeInvitesApi();
+      // These tests exercise deep-link routing, not the consent gate (Story 7.4) — pre-accept the
+      // current version so the gate never blocks.
+      consentApi = FakeConsentApi()
+        ..statusToReturn =
+            const ConsentStatus(accepted: true, acceptedVersion: '2026-beta-1', currentVersion: '2026-beta-1');
       pendingInviteLinkCubit = PendingInviteLinkCubit();
     });
 
@@ -148,11 +166,14 @@ void main() {
             value: authCubit,
             child: RepositoryProvider<ShoppingListsApi>.value(
               value: FakeShoppingListsApi(),
-              child: RepositoryProvider<InvitesApi>.value(
-                value: invitesApi,
-                child: BlocProvider<PendingInviteLinkCubit>.value(
-                  value: pendingInviteLinkCubit,
-                  child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+              child: RepositoryProvider<ConsentApi>.value(
+                value: consentApi,
+                child: RepositoryProvider<InvitesApi>.value(
+                  value: invitesApi,
+                  child: BlocProvider<PendingInviteLinkCubit>.value(
+                    value: pendingInviteLinkCubit,
+                    child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
+                  ),
                 ),
               ),
             ),
@@ -177,7 +198,7 @@ void main() {
     testWidgets('aLinkOfferedWhileAlreadyMountedDrivesTheAcceptFlowToo', (tester) async {
       await tester.pumpWidget(buildSubject());
       await cubit.bootstrap();
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('create-household-choice-button')), findsOneWidget);
 
       pendingInviteLinkCubit.offer(const InviteLink(householdId: 'household-2', inviteId: 'invite-2'));
@@ -214,14 +235,17 @@ void main() {
             value: signedOutAuthCubit,
             child: RepositoryProvider<ShoppingListsApi>.value(
               value: FakeShoppingListsApi(),
-              child: RepositoryProvider<InvitesApi>.value(
-                value: invitesApi,
-                child: BlocProvider<PendingInviteLinkCubit>.value(
-                  value: pendingInviteLinkCubit,
-                  child: BlocProvider<HouseholdsCubit>.value(
-                    value: cubit,
-                    child: AuthGateBody(
-                      authenticatedBuilder: (_) => const FirstRunRouterBody(),
+              child: RepositoryProvider<ConsentApi>.value(
+                value: consentApi,
+                child: RepositoryProvider<InvitesApi>.value(
+                  value: invitesApi,
+                  child: BlocProvider<PendingInviteLinkCubit>.value(
+                    value: pendingInviteLinkCubit,
+                    child: BlocProvider<HouseholdsCubit>.value(
+                      value: cubit,
+                      child: AuthGateBody(
+                        authenticatedBuilder: (_) => const FirstRunRouterBody(),
+                      ),
                     ),
                   ),
                 ),
@@ -249,6 +273,32 @@ void main() {
         expect(pendingInviteLinkCubit.state, isNull);
 
         await signedOutAuthCubit.close();
+      },
+    );
+
+    // Test Manifest: Story 7.4 review — the deep-link accept path is gated on consent too.
+    testWidgets(
+      'aLinkOfferedWhenConsentIsNotYetRecorded_showsTheConsentGateBeforeDrivingTheAcceptFlow',
+      (tester) async {
+        consentApi.statusToReturn =
+            const ConsentStatus(accepted: false, acceptedVersion: null, currentVersion: '2026-beta-1');
+        pendingInviteLinkCubit.offer(const InviteLink(householdId: 'household-1', inviteId: 'invite-1'));
+
+        await tester.pumpWidget(buildSubject());
+        await cubit.bootstrap();
+        await tester.pumpAndSettle();
+
+        // Gated: not auto-accepted, and the invite link is held pending consent.
+        expect(invitesApi.acceptCallCount, 0);
+        expect(find.byKey(const Key('consent-gate-heading')), findsOneWidget);
+        expect(find.byType(AwaitInvitePage), findsNothing);
+
+        await tester.tap(find.byKey(const Key('consent-gate-accept-button')));
+        await tester.pumpAndSettle();
+
+        // Consented — now the deferred accept flow runs with the held link.
+        expect(invitesApi.lastAcceptedHouseholdId, 'household-1');
+        expect(invitesApi.lastAcceptedInviteId, 'invite-1');
       },
     );
   });

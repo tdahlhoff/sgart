@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +11,9 @@ import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
+import '../../consent/data/consent_api.dart';
+import '../../consent/presentation/consent_gated_await_invite_page.dart';
+import '../../consent/presentation/consent_gated_choice_page.dart';
 import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/pending_invite_link_cubit.dart';
@@ -22,7 +27,6 @@ import '../../trips/data/trips_api.dart';
 import '../data/active_household_store.dart';
 import '../data/households_api.dart';
 import 'await_invite_page.dart';
-import 'create_or_await_choice_page.dart';
 import 'household_selection_page.dart';
 import 'household_shell.dart';
 import 'households_cubit.dart';
@@ -46,6 +50,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final AuthenticatedHttpClient _httpClient;
   late final HouseholdsApi _householdsApi;
+  late final ConsentApi _consentApi;
   late final StoresApi _storesApi;
   late final InvitesApi _invitesApi;
   late final MembersApi _membersApi;
@@ -68,6 +73,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
       refreshTokens: () => authCubit.tryRefreshTokens(),
     );
     _householdsApi = HttpHouseholdsApi(_httpClient);
+    _consentApi = HttpConsentApi(_httpClient);
     _storesApi = HttpStoresApi(_httpClient);
     _invitesApi = HttpInvitesApi(_httpClient);
     _membersApi = HttpMembersApi(_httpClient);
@@ -90,6 +96,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         // The household shell reads this to open its per-household live-sync SSE stream (Story 4.4).
         RepositoryProvider<AuthenticatedHttpClient>.value(value: _httpClient),
         RepositoryProvider<HouseholdsApi>.value(value: _householdsApi),
+        // The 0-household gateway's consent gate reads this (Story 7.4, AC1).
+        RepositoryProvider<ConsentApi>.value(value: _consentApi),
         // Stores management + every future inline store picker reads these; provided here (where
         // HouseholdsApi is) so the manage screen and pickers can `context.read` them (Story 1.8).
         RepositoryProvider<StoresApi>.value(value: _storesApi),
@@ -131,7 +139,7 @@ typedef PendingInviteLinkCubitResolver = PendingInviteLinkCubit? Function(BuildC
 /// [FirstRunRouter] only mounts once authenticated, so this is where a link offered to
 /// [PendingInviteLinkCubit] while signed out finally gets consumed — this class already owns the
 /// `InvitesApi`/`HouseholdsCubit` [openAwaitInvitePage] needs, so no second accept path is built
-/// (DRY, mirrors [CreateOrAwaitChoicePage]'s "I have an invite" choice).
+/// (DRY, mirrors `CreateOrAwaitChoicePage`'s "I have an invite" choice).
 class FirstRunRouterBody extends StatelessWidget {
   const FirstRunRouterBody({super.key, this.pendingInviteLinkCubitResolver = _defaultPendingInviteLinkCubitResolver});
 
@@ -154,7 +162,7 @@ class FirstRunRouterBody extends StatelessWidget {
       builder: (context, state) {
         return switch (state.status) {
           HouseholdsStatus.loading => const _LoadingPage(),
-          HouseholdsStatus.needsChoice => const CreateOrAwaitChoicePage(),
+          HouseholdsStatus.needsChoice => const ConsentGatedChoicePage(),
           HouseholdsStatus.shell => HouseholdShell(
               activeHousehold: state.activeHousehold!,
               households: state.households!,
@@ -202,6 +210,36 @@ class _PendingInviteLinkRouterState extends State<_PendingInviteLinkRouter> {
     }
     final link = widget.cubit.consume();
     if (link != null) {
+      unawaited(_routeToAcceptFlow(link));
+    }
+  }
+
+  /// This is the one accept path that reaches [AwaitInvitePage] without first passing through the
+  /// 0-household gateway's [ConsentGatedChoicePage] (Story 4.6's deep-link/cold-start routing), so
+  /// it must check consent itself rather than assume it was already gated (Story 7.4 review,
+  /// AC1/AC3 completeness).
+  Future<void> _routeToAcceptFlow(InviteLink link) async {
+    final consentApi = context.read<ConsentApi>();
+    final ConsentStatus status;
+    try {
+      status = await consentApi.getStatus();
+    } on Object {
+      // The consent pre-check failed (e.g. offline on a cold-start deep link). The link is already
+      // consumed, so it must never be dropped: open the gated accept route anyway — its own
+      // ConsentCubit re-loads the status and surfaces a retry (ConsentFailurePage) on failure, the
+      // same recovery the 0-household gateway's gate gives (Story 7.4 review). Going straight to
+      // openAwaitInvitePage instead would reach the accept screen ungated on a failed check.
+      if (mounted) {
+        openConsentGatedAwaitInvitePage(context, link: link);
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    if (status.needsConsent) {
+      openConsentGatedAwaitInvitePage(context, link: link);
+    } else {
       openAwaitInvitePage(context, initialLink: link);
     }
   }

@@ -255,3 +255,43 @@
 ## Deferred from: code review of 7-3-recover-by-email-opt-in — D1 hardening (2026-09-16)
 
 - **`confirmAndRebind` partial-failure compensation** [backend/src/main/java/de/sgart/identity/application/ConfirmEmailRecovery.java] — Timo accepted the risk for now (2026-09-16, infra-failure-only, rare) with an inline documenting comment. Follow-up hardening: on `rebind` failure after the throwaway is already deleted, either best-effort re-provision the throwaway or surface a clean 4xx and keep the RECOVER code row so the device can retry, plus a mid-sequence-failure test. Today a rebind failure mid-sequence bricks the device (authenticates into nothing).
+
+## Deferred from: 7-4-consent-capture (2026-09-17)
+
+- **Epic 6 erasure/export checklist pointer (design §6, AC5)** — `account_consent`
+  [backend/src/main/resources/db/migration/V20__account_consent.sql] joins the erasure checklist
+  next to the `provisioned_account` shell row: Epic 6's erasure use case must call
+  `AccountConsentRepository.deleteFor(keycloakUserId)` alongside the Keycloak-account delete (7.4
+  provides `deleteFor`; Epic 6 wires it — same division of labor as the 7.1 shell row). Epic 6's
+  export bundle must also include `{ noticeVersion, acceptedAt }` from `GetConsentStatus`/the
+  repository. Design §7: "revoke consent" and "erase me" are one mechanism — Epic 6 must not build
+  a separate withdrawn-but-retained state.
+
+## Deferred from: code review of 7-4-consent-capture (2026-09-17)
+
+- **No retention period for `account_consent` (CLAUDE.md §5 storage limitation)** —
+  [backend/src/main/resources/db/migration/V20__account_consent.sql] the consent row is kept
+  indefinitely with no expiry/retention note, and the AC2-mandated single-row upsert overwrites prior
+  consent history. Settle the retention + audit-history policy (append-only consent log vs. single
+  current row) at the Epic 6 erasure/export design, not as a 7.4 patch.
+- **`AccountConsentRepository.deleteFor` unwired/untested for right-to-erasure** —
+  [backend/src/main/java/de/sgart/identity/domain/AccountConsentRepository.java] 7.4 provides the hook
+  and unit-tests the repo method; nothing calls it and no test proves the consent row is removed on
+  account erasure. Epic 6 wires it (matches AC5); tracked alongside the existing Epic-4 GDPR
+  erasure/export open items.
+- **Privacy-notice link + legal copy (AC1, design §3/§8 F3)** —
+  [app/lib/features/consent/presentation/consent_gate_page.dart] `noticeUrl = 'sgart.example/privacy'`
+  is a scheme-less, non-tappable placeholder. Before beta: host the real privacy notice/terms, replace
+  the placeholder URL, wire a URL launcher so the notice is reachable from the consent screen, and drop
+  in the drafted legal copy. Informed consent needs the notice reachable — beta cannot ship with a
+  non-openable notice. (Accepted as a placeholder for the 7.4 in-review scope, 2026-09-17.)
+
+## Deferred from: code review of 7-4-consent-capture — round 2 (2026-09-17)
+
+- **Consent withdrawal is not "as easy as" giving it — GDPR Art 7(3)** — [design §7; Epic 6] the only
+  removal path is `AccountConsentRepository.deleteFor`, which routes through Epic 6 *full-account
+  erasure* (locked decision D-C: revocation = erasure, no separate withdrawn state). Giving consent is a
+  single tap; withdrawing it means deleting the whole account. GDPR Art 7(3) requires withdrawal be as
+  easy as giving — full-account deletion may not satisfy that. Re-confirm with Timo at the Epic 6
+  erasure/revocation design whether a lighter in-app "withdraw consent" affordance is needed. (Round-1
+  already tracked the retention policy and the inert notice link, above — not re-listed here.)

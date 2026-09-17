@@ -9,6 +9,8 @@ import de.sgart.identity.application.DetachRecoveryEmail;
 import de.sgart.identity.application.FindAccountByEmail;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.GetAccountDetails;
+import de.sgart.identity.application.GetConsentStatus;
+import de.sgart.identity.application.RecordConsent;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ProvisionAccount;
@@ -24,6 +26,7 @@ import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.application.SetAccountEmail;
 import de.sgart.identity.application.SweepNeverActivatedAccounts;
 import de.sgart.identity.application.UnregisterDeviceToken;
+import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.DeviceTokenRepository;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.MemberMappingRepository;
@@ -329,5 +332,32 @@ public class IdentityBeansConfig {
                 provisionedAccountRepository,
                 rebindAccountCredential,
                 clock);
+    }
+
+    // --- Story 7.4: consent capture -----------------------------------------------------------
+
+    @Bean
+    AccountConsentRepository accountConsentRepository(JdbcClient jdbcClient) {
+        return new JdbcAccountConsentRepository(jdbcClient);
+    }
+
+    /**
+     * {@code sgart.identity.consent.notice-version} (design §8 F2, D-E) is the single source of
+     * the current notice version — a bump is a one-line deploy, never an app release. Shared by
+     * both {@link RecordConsent} (what it stamps) and {@link GetConsentStatus} (what it reports).
+     */
+    @Bean
+    RecordConsent recordConsent(
+            AccountConsentRepository accountConsentRepository,
+            Clock clock,
+            @Value("${sgart.identity.consent.notice-version}") String currentNoticeVersion) {
+        return new RecordConsent(accountConsentRepository, clock, currentNoticeVersion);
+    }
+
+    @Bean
+    GetConsentStatus getConsentStatus(
+            AccountConsentRepository accountConsentRepository,
+            @Value("${sgart.identity.consent.notice-version}") String currentNoticeVersion) {
+        return new GetConsentStatus(accountConsentRepository, currentNoticeVersion);
     }
 }
