@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.ProvisionedAccount;
@@ -16,8 +17,10 @@ import org.slf4j.LoggerFactory;
  * {@code ProvisionedAccount} shell — Keycloak account and row alike — once it has sat unactivated
  * past the retention TTL. "Activated" is <strong>derived</strong>, never stored (DRY, mirrors
  * {@link de.sgart.identity.domain.ProvisionedAccount}'s own doc): a shell is activated the moment a
- * {@link MemberMappingRepository} row exists for its {@link KeycloakUserId} — an activated account
- * is kept regardless of age.
+ * {@link MemberMappingRepository} row exists for its {@link KeycloakUserId}, <strong>or</strong>
+ * (Story 7.3, design §7, D-G) the account carries a <em>confirmed</em> Keycloak email — checked
+ * live via {@link GetAccountDetails}, never a stored SGART bool. An activated account is kept
+ * regardless of age; an unconfirmed-attach shell is still swept past the TTL.
  *
  * <p>Triggered by a scheduled adapter ({@code adapter.in.ScheduledAccountRetentionSweep}, F4); this
  * service is called directly by tests so the assertion never waits on a cron (Testing standards,
@@ -30,6 +33,8 @@ public final class SweepNeverActivatedAccounts {
     private final ProvisionedAccountRepository provisionedAccountRepository;
     private final MemberMappingRepository memberMappingRepository;
     private final DeleteAccount deleteAccount;
+    private final GetAccountDetails getAccountDetails;
+    private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final Clock clock;
     private final Duration retentionPeriod;
 
@@ -37,6 +42,8 @@ public final class SweepNeverActivatedAccounts {
             ProvisionedAccountRepository provisionedAccountRepository,
             MemberMappingRepository memberMappingRepository,
             DeleteAccount deleteAccount,
+            GetAccountDetails getAccountDetails,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
             Clock clock,
             Duration retentionPeriod) {
         this.provisionedAccountRepository =
@@ -44,6 +51,9 @@ public final class SweepNeverActivatedAccounts {
         this.memberMappingRepository =
                 Objects.requireNonNull(memberMappingRepository, "memberMappingRepository must not be null");
         this.deleteAccount = Objects.requireNonNull(deleteAccount, "deleteAccount must not be null");
+        this.getAccountDetails = Objects.requireNonNull(getAccountDetails, "getAccountDetails must not be null");
+        this.emailRecoveryCodeStore =
+                Objects.requireNonNull(emailRecoveryCodeStore, "emailRecoveryCodeStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.retentionPeriod = Objects.requireNonNull(retentionPeriod, "retentionPeriod must not be null");
     }
@@ -63,6 +73,7 @@ public final class SweepNeverActivatedAccounts {
             try {
                 deleteAccount.delete(account.keycloakUserId());
                 provisionedAccountRepository.delete(account.keycloakUserId());
+                emailRecoveryCodeStore.deleteAll(account.keycloakUserId());
             } catch (RuntimeException deletionFailed) {
                 log.error(
                         "SweepNeverActivatedAccounts: failed to delete never-activated account {} — "
@@ -74,6 +85,13 @@ public final class SweepNeverActivatedAccounts {
     }
 
     private boolean isNeverActivated(KeycloakUserId keycloakUserId) {
-        return memberMappingRepository.householdIdsFor(keycloakUserId).isEmpty();
+        if (!memberMappingRepository.householdIdsFor(keycloakUserId).isEmpty()) {
+            return false;
+        }
+        return !hasConfirmedEmail(keycloakUserId);
+    }
+
+    private boolean hasConfirmedEmail(KeycloakUserId keycloakUserId) {
+        return getAccountDetails.findById(keycloakUserId).map(AccountDetails::emailVerified).orElse(false);
     }
 }

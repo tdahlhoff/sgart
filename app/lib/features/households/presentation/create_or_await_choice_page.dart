@@ -7,6 +7,7 @@ import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/recover_account_page.dart';
+import '../../auth/presentation/recover_by_email_page.dart';
 import '../../auth/presentation/recovery_phrase_reveal_page.dart';
 import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
@@ -87,6 +88,15 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
                     label: localizations.householdsRecoverAccountActionLabel,
                     variant: SgartButtonVariant.tonal,
                     onPressed: () => _openRecoverAccount(context),
+                  ),
+                  const SizedBox(height: SgartShapes.space2),
+                  // Story 7.3, AC2: a second, equally quiet fallback — peer to the phrase-based
+                  // recovery above, for a person who attached an email on another device.
+                  SgartButton(
+                    key: const Key('recover-by-email-choice-button'),
+                    label: localizations.householdsRecoverByEmailActionLabel,
+                    variant: SgartButtonVariant.tonal,
+                    onPressed: () => openRecoverByEmailPage(context),
                   ),
                 ],
               ),

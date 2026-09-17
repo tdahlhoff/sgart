@@ -9,11 +9,23 @@ void main() {
         'keycloakUserId': 'sub-1',
         'displayName': 'Anna Testperson',
         'email': 'anna@example.test',
+        'emailVerified': true,
       });
 
       expect(identity.keycloakUserId, 'sub-1');
       expect(identity.displayName, 'Anna Testperson');
       expect(identity.email, 'anna@example.test');
+      expect(identity.emailVerified, isTrue);
+    });
+
+    test('defaultsEmailVerifiedToFalseWhenTheFieldIsAbsent', () {
+      final identity = CallerIdentity.fromJson(const {
+        'keycloakUserId': 'sub-1',
+        'displayName': 'Anna Testperson',
+        'email': 'anna@example.test',
+      });
+
+      expect(identity.emailVerified, isFalse);
     });
 
     test('throwsAMappedAppExceptionWhenAFieldIsMissingInsteadOfARawTypeError', () {

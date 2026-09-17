@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/features/auth/data/account_email_api.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
@@ -13,6 +14,7 @@ import 'package:sgart/features/settings/presentation/profile_screen.dart';
 import 'package:sgart/l10n/gen/app_localizations.dart';
 import 'package:sgart/theme/sgart_theme.dart';
 
+import '../../../support/fake_account_email_api.dart';
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_settings_dependencies.dart';
@@ -51,25 +53,29 @@ void main() {
       await localeCubit.close();
     });
 
-    Widget buildSubject({TextScaler textScaler = TextScaler.noScaling}) => BlocProvider<AuthCubit>.value(
+    Widget buildSubject({TextScaler textScaler = TextScaler.noScaling, AccountEmailApi? accountEmailApi}) =>
+        BlocProvider<AuthCubit>.value(
           value: authCubit,
           child: BlocProvider<LocaleCubit>.value(
             value: localeCubit,
             child: RepositoryProvider<DeviceCredentialStore>.value(
               value: deviceCredentialStore,
-              child: MaterialApp(
-                theme: SgartTheme.light(),
-                localizationsDelegates: const [
-                  AppLocalizations.delegate,
-                  GlobalMaterialLocalizations.delegate,
-                  GlobalWidgetsLocalizations.delegate,
-                  GlobalCupertinoLocalizations.delegate,
-                ],
-                supportedLocales: AppLocalizations.supportedLocales,
-                home: Builder(
-                  builder: (context) => MediaQuery(
-                    data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-                    child: const Scaffold(body: ProfileScreen()),
+              child: _maybeProvideAccountEmailApi(
+                accountEmailApi,
+                child: MaterialApp(
+                  theme: SgartTheme.light(),
+                  localizationsDelegates: const [
+                    AppLocalizations.delegate,
+                    GlobalMaterialLocalizations.delegate,
+                    GlobalWidgetsLocalizations.delegate,
+                    GlobalCupertinoLocalizations.delegate,
+                  ],
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  home: Builder(
+                    builder: (context) => MediaQuery(
+                      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+                      child: const Scaffold(body: ProfileScreen()),
+                    ),
                   ),
                 ),
               ),
@@ -130,5 +136,104 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
+
+    // Test Manifest: profileRecoveryEmailSection_attachConfirmDetach_updatesState (Story 7.3, AC1).
+    group('the E-Mail-Wiederherstellung section', () {
+      testWidgets('startsNotAttachedWhenTheAuthCubitCarriesNoEmail', (tester) async {
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: '');
+        await authCubit.signIn();
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+
+        expect(find.byKey(const Key('profile-recovery-email-add-button')), findsOneWidget);
+      });
+
+      testWidgets('attachThenConfirm_movesTheRowToConfirmed', (tester) async {
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: '');
+        await authCubit.signIn();
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.tap(find.byKey(const Key('profile-recovery-email-add-button')));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('add-recovery-email-field')), 'anna@example.test');
+        await tester.tap(find.byKey(const Key('add-recovery-email-submit-button')));
+        await tester.pumpAndSettle();
+
+        expect(accountEmailApi.attachedEmails, ['anna@example.test']);
+        await tester.enterText(find.byKey(const Key('confirm-email-code-field')), '042817');
+        await tester.tap(find.byKey(const Key('confirm-email-code-submit-button')));
+        await tester.pumpAndSettle();
+
+        expect(accountEmailApi.confirmedCodes, ['042817']);
+        // Both pushed pages popped, landing back on Profil with the confirmed state visible.
+        expect(find.byKey(const Key('add-recovery-email-field')), findsNothing);
+        expect(find.text('Bestätigt'), findsOneWidget);
+        expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
+      });
+
+      testWidgets('seedsPendingConfirmationWhenTheAuthCubitEmailIsUnverified', (tester) async {
+        // Story 7.3 review finding: an attached-but-unconfirmed email must not read "Bestätigt" on
+        // relaunch (only a Keycloak-confirmed `emailVerified` earns that label).
+        identityApi.identityToReturn = const CallerIdentity(
+            keycloakUserId: 'sub-1',
+            displayName: 'Anna Testperson',
+            email: 'anna@example.test',
+            emailVerified: false);
+        await authCubit.signIn();
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+
+        expect(find.text('Bestätigung ausstehend'), findsOneWidget);
+        expect(find.text('Bestätigt'), findsNothing);
+      });
+
+      testWidgets('seedsConfirmedWhenTheAuthCubitEmailIsVerified', (tester) async {
+        identityApi.identityToReturn = const CallerIdentity(
+            keycloakUserId: 'sub-1',
+            displayName: 'Anna Testperson',
+            email: 'anna@example.test',
+            emailVerified: true);
+        await authCubit.signIn();
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+
+        expect(find.text('Bestätigt'), findsOneWidget);
+      });
+
+      testWidgets('detach_returnsToNotAttachedAfterConfirmation', (tester) async {
+        identityApi.identityToReturn = const CallerIdentity(
+            keycloakUserId: 'sub-1',
+            displayName: 'Anna Testperson',
+            email: 'anna@example.test',
+            emailVerified: true);
+        await authCubit.signIn();
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('profile-recovery-email-detach-button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('profile-recovery-email-detach-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(accountEmailApi.detachCallCount, 1);
+        expect(find.byKey(const Key('profile-recovery-email-add-button')), findsOneWidget);
+      });
+    });
   });
+}
+
+// No AccountEmailApi ancestor when a test doesn't care about the recovery-email section —
+// ProfileScreen's own guarded resolver then falls through to its inert stand-in.
+Widget _maybeProvideAccountEmailApi(AccountEmailApi? accountEmailApi, {required Widget child}) {
+  if (accountEmailApi == null) return child;
+  return RepositoryProvider<AccountEmailApi>.value(value: accountEmailApi, child: child);
 }

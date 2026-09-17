@@ -9,17 +9,29 @@ class AuthState {
 
   const AuthState.inProgress() : this._(AuthStatus.inProgress);
 
-  const AuthState.authenticated(String displayName, String keycloakUserId, String email)
-      : this._(
+  const AuthState.authenticated(
+    String displayName,
+    String keycloakUserId,
+    String email, {
+    bool emailVerified = false,
+  }) : this._(
           AuthStatus.authenticated,
           displayName: displayName,
           keycloakUserId: keycloakUserId,
           email: email,
+          emailVerified: emailVerified,
         );
 
   const AuthState.failure(AppError error) : this._(AuthStatus.failure, error: error);
 
-  const AuthState._(this.status, {this.displayName, this.keycloakUserId, this.email, this.error});
+  const AuthState._(
+    this.status, {
+    this.displayName,
+    this.keycloakUserId,
+    this.email,
+    this.emailVerified = false,
+    this.error,
+  });
 
   final AuthStatus status;
   final String? displayName;
@@ -31,6 +43,11 @@ class AuthState {
   /// The caller's email, read live from the identity call for the Profil identity header (Story
   /// 1.11) — never persisted (AD-6).
   final String? email;
+
+  /// Whether [email] is Keycloak-confirmed (Story 7.3 review finding) — the Profil screen's
+  /// recovery-email section seeds `pending`/`confirmed` from this instead of guessing from
+  /// non-empty [email] alone.
+  final bool emailVerified;
   final AppError? error;
 
   @override
@@ -40,8 +57,9 @@ class AuthState {
       other.displayName == displayName &&
       other.keycloakUserId == keycloakUserId &&
       other.email == email &&
+      other.emailVerified == emailVerified &&
       other.error == error;
 
   @override
-  int get hashCode => Object.hash(status, displayName, keycloakUserId, email, error);
+  int get hashCode => Object.hash(status, displayName, keycloakUserId, email, emailVerified, error);
 }

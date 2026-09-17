@@ -1318,5 +1318,145 @@
   "membersLastAdminError": "Der letzte Admin kann den Haushalt nicht verlassen, entfernt oder degradiert werden.",
   "@membersLastAdminError": {
     "description": "Localized copy for the membership.lastAdmin error code (Story 4.3, AC5) — the at-least-one-Admin invariant."
+  },
+
+  "profileRecoveryEmailSectionLabel": "E-Mail-Wiederherstellung",
+  "@profileRecoveryEmailSectionLabel": {
+    "description": "Section heading on the Profil screen for the optional email recovery fallback (Story 7.3, AC1)."
+  },
+
+  "profileRecoveryEmailNotAttachedLabel": "Keine E-Mail hinterlegt",
+  "@profileRecoveryEmailNotAttachedLabel": {
+    "description": "Row subtitle when no recovery email is attached yet (Story 7.3, AC1)."
+  },
+
+  "profileRecoveryEmailPendingLabel": "Bestätigung ausstehend",
+  "@profileRecoveryEmailPendingLabel": {
+    "description": "Row subtitle after attaching an email but before confirming the code (Story 7.3, AC1)."
+  },
+
+  "profileRecoveryEmailConfirmedLabel": "Bestätigt",
+  "@profileRecoveryEmailConfirmedLabel": {
+    "description": "Row subtitle once the recovery email is confirmed (Story 7.3, AC1)."
+  },
+
+  "profileRecoveryEmailAddAction": "E-Mail hinzufügen",
+  "@profileRecoveryEmailAddAction": {
+    "description": "Action label that opens AddRecoveryEmailPage (Story 7.3, AC1)."
+  },
+
+  "profileRecoveryEmailDetachAction": "Entfernen",
+  "@profileRecoveryEmailDetachAction": {
+    "description": "Action label that detaches the recovery email (Story 7.3, AC4)."
+  },
+
+  "profileRecoveryEmailDetachConfirmTitle": "E-Mail entfernen?",
+  "@profileRecoveryEmailDetachConfirmTitle": {
+    "description": "Title of the confirmation dialog before detaching the recovery email (Story 7.3, AC4)."
+  },
+
+  "profileRecoveryEmailDetachConfirmMessage": "Ohne E-Mail bleibt die Wiederherstellungsphrase dein einziger Weg zurück in dein Konto.",
+  "@profileRecoveryEmailDetachConfirmMessage": {
+    "description": "Body of the confirmation dialog before detaching the recovery email (Story 7.3, AC4)."
+  },
+
+  "addRecoveryEmailTitle": "E-Mail hinzufügen",
+  "@addRecoveryEmailTitle": {
+    "description": "Title of AddRecoveryEmailPage (Story 7.3, AC1)."
+  },
+
+  "addRecoveryEmailFieldLabel": "E-Mail-Adresse",
+  "@addRecoveryEmailFieldLabel": {
+    "description": "Label of the email field on AddRecoveryEmailPage (Story 7.3, AC1)."
+  },
+
+  "addRecoveryEmailSubtitle": "Wir senden dir einen 6-stelligen Bestätigungscode an diese Adresse.",
+  "@addRecoveryEmailSubtitle": {
+    "description": "Short supporting copy on AddRecoveryEmailPage explaining what happens next (Story 7.3, AC1)."
+  },
+
+  "addRecoveryEmailSubmitButtonLabel": "Code senden",
+  "@addRecoveryEmailSubmitButtonLabel": {
+    "description": "Label of the button that submits the entered email on AddRecoveryEmailPage (Story 7.3, AC1)."
+  },
+
+  "confirmEmailCodeTitle": "Code bestätigen",
+  "@confirmEmailCodeTitle": {
+    "description": "Title of ConfirmEmailCodePage (Story 7.3, AC1)."
+  },
+
+  "confirmEmailCodeSubtitle": "Gib den 6-stelligen Code ein, den wir dir per E-Mail geschickt haben.",
+  "@confirmEmailCodeSubtitle": {
+    "description": "Short supporting copy on ConfirmEmailCodePage (Story 7.3, AC1)."
+  },
+
+  "confirmEmailCodeFieldLabel": "Bestätigungscode",
+  "@confirmEmailCodeFieldLabel": {
+    "description": "Label of the code field on ConfirmEmailCodePage (Story 7.3, AC1)."
+  },
+
+  "confirmEmailCodeSubmitButtonLabel": "Bestätigen",
+  "@confirmEmailCodeSubmitButtonLabel": {
+    "description": "Label of the button that submits the entered code on ConfirmEmailCodePage (Story 7.3, AC1)."
+  },
+
+  "householdsRecoverByEmailActionLabel": "Per E-Mail wiederherstellen",
+  "@householdsRecoverByEmailActionLabel": {
+    "description": "Quiet, non-competing action on the first-run choice screen that opens RecoverByEmailPage (Story 7.3, AC2), peer to householdsRecoverAccountActionLabel's phrase-based path."
+  },
+
+  "recoverByEmailTitle": "Per E-Mail wiederherstellen",
+  "@recoverByEmailTitle": {
+    "description": "Title of RecoverByEmailPage (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailEmailStepSubtitle": "Gib die E-Mail-Adresse ein, die du bei deinem bestehenden Konto hinterlegt hast.",
+  "@recoverByEmailEmailStepSubtitle": {
+    "description": "Supporting copy on RecoverByEmailPage's first (email) step (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailFieldLabel": "E-Mail-Adresse",
+  "@recoverByEmailFieldLabel": {
+    "description": "Label of the email field on RecoverByEmailPage's first step (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailRequestButtonLabel": "Code anfordern",
+  "@recoverByEmailRequestButtonLabel": {
+    "description": "Label of the button that requests a recovery code on RecoverByEmailPage (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailCodeStepSubtitle": "Gib den 6-stelligen Code ein, den wir dir per E-Mail geschickt haben, falls die Adresse bei einem Konto hinterlegt ist.",
+  "@recoverByEmailCodeStepSubtitle": {
+    "description": "Supporting copy on RecoverByEmailPage's second (code) step — deliberately non-committal about whether the email matched (D-H, no enumeration)."
+  },
+
+  "recoverByEmailCodeFieldLabel": "Bestätigungscode",
+  "@recoverByEmailCodeFieldLabel": {
+    "description": "Label of the code field on RecoverByEmailPage's second step (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailConfirmButtonLabel": "Wiederherstellen",
+  "@recoverByEmailConfirmButtonLabel": {
+    "description": "Label of the button that confirms the code and triggers the R1 rebind on RecoverByEmailPage (Story 7.3, AC2)."
+  },
+
+  "recoveryPhraseFreshAfterEmailRecoveryWarning": "Deine vorherige Wiederherstellungsphrase gilt nicht mehr. Sichere diese neue Phrase.",
+  "@recoveryPhraseFreshAfterEmailRecoveryWarning": {
+    "description": "Distinct warning shown on RecoveryPhraseRevealPage immediately after a successful email recovery (Story 7.3, AC3, D-I) — replaces recoveryPhraseRevealWarning for this one entry point."
+  },
+
+  "accountRecoveryEmailRequiredError": "Bitte eine E-Mail-Adresse eingeben.",
+  "@accountRecoveryEmailRequiredError": {
+    "description": "Localized copy for the account.recoveryEmailRequired error code (Story 7.3, AC1)."
+  },
+
+  "accountRecoveryEmailInvalidError": "Bitte eine gültige E-Mail-Adresse eingeben.",
+  "@accountRecoveryEmailInvalidError": {
+    "description": "Localized copy for the account.recoveryEmailInvalid error code (Story 7.3, AC1)."
+  },
+
+  "accountRecoveryCodeInvalidError": "Der Code ist ungültig oder abgelaufen. Bitte versuche es erneut.",
+  "@accountRecoveryCodeInvalidError": {
+    "description": "Localized copy for the account.recoveryCodeInvalid error code (Story 7.3, AC1/AC2) — deliberately generic (never distinguishes wrong/expired/exhausted, mirroring the server's no-enumeration discipline)."
   }
 }

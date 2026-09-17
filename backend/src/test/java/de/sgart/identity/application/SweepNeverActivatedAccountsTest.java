@@ -2,18 +2,20 @@ package de.sgart.identity.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
+import de.sgart.identity.application.RecoveryEmailTestSupport.FakeGetAccountDetails;
+import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAccount;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.HashSet;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,12 +32,43 @@ class SweepNeverActivatedAccountsTest {
             new InMemoryProvisionedAccountRepository();
     private final InMemoryMemberMappingRepository memberMappingRepository = new InMemoryMemberMappingRepository();
     private final RecordingDeleteAccount deleteAccount = new RecordingDeleteAccount();
+    private final FakeGetAccountDetails getAccountDetails = new FakeGetAccountDetails();
+    private final InMemoryEmailRecoveryCodeStore emailRecoveryCodeStore = new InMemoryEmailRecoveryCodeStore();
     private final SweepNeverActivatedAccounts sweep = new SweepNeverActivatedAccounts(
             provisionedAccountRepository,
             memberMappingRepository,
             deleteAccount,
+            getAccountDetails,
+            emailRecoveryCodeStore,
             Clock.fixed(NOW, ZoneOffset.UTC),
             RETENTION_PERIOD);
+
+    @Test
+    void sweep_keepsAccountWithConfirmedEmail() {
+        KeycloakUserId confirmedEmail = new KeycloakUserId("confirmed-email");
+        provisionedAccountRepository.recordIfAbsent(confirmedEmail, NOW.minus(Duration.ofDays(100)));
+        getAccountDetails.confirmedEmailFor(confirmedEmail);
+
+        sweep.sweep();
+
+        assertThat(provisionedAccountRepository.contains(confirmedEmail)).isTrue();
+        assertThat(deleteAccount.deletedIds).isEmpty();
+    }
+
+    @Test
+    void sweep_deletesUnconfirmedAttachShellPastTtl_andItsCodeRows() {
+        KeycloakUserId unconfirmedAttach = new KeycloakUserId("unconfirmed-attach");
+        provisionedAccountRepository.recordIfAbsent(unconfirmedAttach, NOW.minus(Duration.ofDays(15)));
+        getAccountDetails.unconfirmedEmailFor(unconfirmedAttach);
+        emailRecoveryCodeStore.store(
+                unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+
+        sweep.sweep();
+
+        assertThat(provisionedAccountRepository.contains(unconfirmedAttach)).isFalse();
+        assertThat(deleteAccount.deletedIds).containsExactly(unconfirmedAttach);
+        assertThat(emailRecoveryCodeStore.find(unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+    }
 
     @Test
     void retentionSweep_deletesNeverActivatedAccountPastTtl() {
@@ -70,14 +103,5 @@ class SweepNeverActivatedAccountsTest {
 
         assertThat(provisionedAccountRepository.contains(recentlyProvisioned)).isTrue();
         assertThat(deleteAccount.deletedIds).isEmpty();
-    }
-
-    private static final class RecordingDeleteAccount implements DeleteAccount {
-        private final Set<KeycloakUserId> deletedIds = new HashSet<>();
-
-        @Override
-        public void delete(KeycloakUserId keycloakUserId) {
-            deletedIds.add(keycloakUserId);
-        }
     }
 }

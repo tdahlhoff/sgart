@@ -112,6 +112,17 @@ class AuthCubit extends Cubit<AuthState> {
     await signIn();
   }
 
+  /// Swaps identity after a successful server-side R1 rebind (Story 7.3, AC2/AC3, design §1.1):
+  /// the caller (`RecoverByEmailPage`) has already driven `AccountEmailApi.confirmRecovery` to a
+  /// `204`, which rebound the device's *existing* credential onto the recovered account — no new
+  /// key handling needed here, unlike [recoverFromPhrase]. This just re-runs [signIn] with that
+  /// same credential (now authenticating into the recovered account) and clears the active
+  /// household (AD-7), mirroring [recoverFromPhrase]'s identity-swap sequencing exactly.
+  Future<void> recoverFromEmailRebind() async {
+    await _activeHouseholdStore.clear();
+    await signIn();
+  }
+
   /// Calls the backend identity endpoint and reflects the outcome in the state.
   ///
   /// A transient failure (server unreachable) keeps the stored tokens so the next launch can
@@ -122,7 +133,12 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> _loadCallerIdentity() async {
     try {
       final identity = await _identityApi.fetchMe();
-      _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId, identity.email));
+      _safeEmit(AuthState.authenticated(
+        identity.displayName,
+        identity.keycloakUserId,
+        identity.email,
+        emailVerified: identity.emailVerified,
+      ));
       // Best-effort (Story 4.5, AC5) — a failed registration must never fail the sign-in itself;
       // the app already works fully without a device token, it just misses background pushes.
       unawaited(_registerPushTokenBestEffort());

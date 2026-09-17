@@ -27,6 +27,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     // JWT resource-server validation for the identity context's adapter.in (Story 1.4, AD-5).
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    // SMTP for Story 7.3's recover-by-email codes — the one Epic-7 feature that sends email.
+    // Config-gated (sgart.identity.mail.enabled): building the sender performs no I/O, so no build
+    // needs a live SMTP server (see IdentityBeansConfig's Deferred… no-op default).
+    implementation("org.springframework.boot:spring-boot-starter-mail")
     // PostgreSQL read side (Story 1.6): durable Identity ACL mapping + household read model.
     // Plain SQL + JdbcClient, not JPA — read models are simple projections (Clarification 3).
     implementation("org.springframework.boot:spring-boot-starter-jdbc")

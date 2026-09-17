@@ -246,3 +246,12 @@
   master secret as plain text with no `FLAG_SECURE` (Android) / screen-capture guard (CLAUDE.md §5
   security-by-default). Deferred: adds a platform channel/package — track as focused security
   hardening across all secret-display surfaces (reveal page, and any future receipt/PII screens).
+
+## Deferred from: code review of 7-3-recover-by-email-opt-in (2026-09-16)
+
+- **Attach with an already-registered email → possible 500 + enumeration** [backend/src/main/java/de/sgart/identity/application/AttachRecoveryEmail.java] — maybe-false, would be medium. `setEmail`'s Admin-API PUT has no 4xx handler; if the Keycloak realm enforces unique emails, attaching an address already on another account errors → unmapped 500 that also differs from the 202 success path (an enumeration oracle on the authenticated attach endpoint). Settle by checking the realm's duplicate-email / login-with-email setting; if duplicates are allowed there is no error but the ambiguous-lookup (`findByEmail length != 1 → empty`) breakage applies instead.
+- **No throttling on `attach` / `requestRecoveryCode`** [backend/src/main/java/de/sgart/identity/adapter/in/AccountController.java] — pre-existing architectural posture: rate limiting is delegated to the ADR-0002 gateway seam, not enforced in app code. Until that seam exists, an attacker who knows a victim address can spam their inbox and repeatedly reset the code TTL / 5-attempt counter (the store upserts `attempts = 0`).
+
+## Deferred from: code review of 7-3-recover-by-email-opt-in — D1 hardening (2026-09-16)
+
+- **`confirmAndRebind` partial-failure compensation** [backend/src/main/java/de/sgart/identity/application/ConfirmEmailRecovery.java] — Timo accepted the risk for now (2026-09-16, infra-failure-only, rare) with an inline documenting comment. Follow-up hardening: on `rebind` failure after the throwaway is already deleted, either best-effort re-provision the throwaway or surface a clean 4xx and keep the RECOVER code row so the device can retry, plus a mid-sequence-failure test. Today a rebind failure mid-sequence bricks the device (authenticates into nothing).

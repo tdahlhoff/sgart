@@ -82,5 +82,26 @@ void main() {
       expect(resolved, localizations.recoveryPhraseRestoreInvalidPhraseError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
+
+    test('accountRecoveryEmailRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryEmailRequired');
+
+      expect(resolved, localizations.accountRecoveryEmailRequiredError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
+    test('accountRecoveryEmailInvalidResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryEmailInvalid');
+
+      expect(resolved, localizations.accountRecoveryEmailInvalidError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
+    test('accountRecoveryCodeInvalidResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryCodeInvalid');
+
+      expect(resolved, localizations.accountRecoveryCodeInvalidError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
   });
 }

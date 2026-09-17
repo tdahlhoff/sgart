@@ -407,6 +407,28 @@ replace than it was for the read-only D4 lookup. Do not ship real account creati
 placeholder secret; provision a real secret (a secrets manager, or at minimum an environment
 variable never committed) before enabling `SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` outside dev.
 
+### Recover by email (Story 7.3): SGART's own SMTP send + the code HMAC secret
+
+The one Epic-7 feature that sends email. `AttachRecoveryEmail`/`RequestEmailRecoveryCode` send
+their 6-digit one-time codes over SGART's **own** SMTP (never a Keycloak-hosted verify-email/
+reset-credentials link — the AC forbids a browser page), via `JavaMailSenderRecoveryCodeEmail`
+(`spring-boot-starter-mail`), config-gated exactly like the Keycloak Admin adapter above:
+`SGART_IDENTITY_MAIL_ENABLED=true` (default `false`) selects it over the `DeferredSendRecoveryCodeEmail`
+no-op, so `./gradlew test`/CI/local dev never need a live SMTP server. Set `SGART_IDENTITY_MAIL_FROM`
+and the standard `spring.mail.*` properties (`SGART_SMTP_HOST`/`_PORT`/`_USERNAME`/`_PASSWORD`) to a
+real netcup mailbox once its outbound mail-block is removed and **SPF/DKIM** are configured on the
+sending domain (same prerequisite as the invite-email delivery seam above) — sending recovery codes
+from an unauthenticated domain will land in spam or be rejected outright.
+
+Also set `SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET` to a real per-deployment secret (never the
+checked-in dev placeholder, `local-dev-only-email-recovery-hmac-secret-change-me`) before enabling
+either the mail adapter or the Keycloak Admin adapter outside dev — `HmacSha256RecoveryCodeHasher`
+fails context startup on a blank secret, mirroring the invite-email HMAC secret's guard.
+
+The recovery/rebind endpoints add no new unauthenticated surface (D-C) and inherit the same
+IP-based rate-limiting seam (ADR-0002) documented above for `POST /api/v1/accounts`; the per-code
+15-minute TTL and 5-attempt cap are this story's own abuse-resistance layer in the meantime.
+
 ---
 
 ## Alternatives to this USB path

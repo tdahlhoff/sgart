@@ -13,13 +13,17 @@ import '../data/device_credential_store.dart';
 /// would otherwise miss them entirely. One shared helper for both entry points — the choice screen's
 /// "save" action (AC1) and Profil's re-view row (AC2) — mirroring [openAwaitInvitePage] (DRY,
 /// CLAUDE.md §1/§8).
-void openRecoveryPhraseRevealPage(BuildContext context) {
+/// @param isFreshAfterEmailRecovery Story 7.3, AC3/design §1.1: `true` only right after a
+///     successful email recovery's R1 rebind, where the reveal shows a *freshly issued* phrase and
+///     must say so plainly — the previous phrase (deriving the old device's key) no longer works
+///     (D-I: the phrase capability persists across recoveries, a specific phrase string does not).
+void openRecoveryPhraseRevealPage(BuildContext context, {bool isFreshAfterEmailRecovery = false}) {
   final deviceCredentialStore = context.read<DeviceCredentialStore>();
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => RepositoryProvider<DeviceCredentialStore>.value(
         value: deviceCredentialStore,
-        child: const RecoveryPhraseRevealPage(),
+        child: RecoveryPhraseRevealPage(isFreshAfterEmailRecovery: isFreshAfterEmailRecovery),
       ),
     ),
   );
@@ -33,7 +37,10 @@ void openRecoveryPhraseRevealPage(BuildContext context) {
 /// only, never fetched from or sent to the server (AC1/AC2/AC4) — and this page makes no network
 /// call of its own. No copy action (D-G): the numbered words are for manual transcription only.
 class RecoveryPhraseRevealPage extends StatefulWidget {
-  const RecoveryPhraseRevealPage({super.key});
+  const RecoveryPhraseRevealPage({super.key, this.isFreshAfterEmailRecovery = false});
+
+  /// See [openRecoveryPhraseRevealPage]'s parameter doc.
+  final bool isFreshAfterEmailRecovery;
 
   @override
   State<RecoveryPhraseRevealPage> createState() => _RecoveryPhraseRevealPageState();
@@ -82,7 +89,9 @@ class _RecoveryPhraseRevealPageState extends State<RecoveryPhraseRevealPage> {
               padding: const EdgeInsets.all(SgartShapes.cardPadding),
               children: [
                 Text(
-                  localizations.recoveryPhraseRevealWarning,
+                  widget.isFreshAfterEmailRecovery
+                      ? localizations.recoveryPhraseFreshAfterEmailRecoveryWarning
+                      : localizations.recoveryPhraseRevealWarning,
                   key: const Key('recovery-phrase-warning'),
                 ),
                 const SizedBox(height: SgartShapes.space4),

@@ -41,7 +41,24 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-14 (Story 7.2 — reviewed (6 patches applied, 1 deferred), status: done)
+last_updated: 2026-09-17 (Story 7.3 — round-2 code review of applied patches, 1 patch applied (widget test), status: done)
+# Story 7.3 ready-for-dev (create-story, Opus 4.8) 2026-09-15 — Epic 7's 3rd build story: opt-in
+# "recover by email" fallback. **FULL-STACK** (backend + app), unlike client-only 7.2. Fed by the
+# architect design note (epic-7-story-7.3-recover-by-email-design.md) with all four forks pre-resolved
+# with Timo: A=R1 rebind (delete throwaway A2 → PUT A1.username:=U2, publicKey:=K2; preserves A1's
+# KeycloakUserId; keycloak-authenticator SPI untouched), B=recovery endpoints authenticated as the
+# throwaway JWT (no new open endpoint / no SecurityConfig permit rule), C=6-digit numeric · 15min ·
+# 5 attempts · HMAC-SHA256 stored (mirrors HmacSha256InviteEmailHasher), D=sweep's confirmed-email
+# check is DERIVED via Admin get-user (not a stored bool). Adds V19 email_recovery_code table (PII-free,
+# keyed by KeycloakUserId, no email column — joins NoPersistedPersonalDataTest whitelist),
+# SendRecoveryCodeEmail port + JavaMailSender adapter + Deferred no-op (config-gated on
+# sgart.identity.mail.enabled; real SMTP+SPF/DKIM = docs/first-real-world-test.md deploy seam, CI needs
+# no SMTP), Admin set-email/rebind/find-by-email capabilities on KeycloakAdminCreateAccount, 5 new
+# AccountController endpoints + AccountErrorAdvice handlers, sweep confirmed-email check, spring-boot-
+# starter-mail (SB 4.1.0). App: AddRecoveryEmailPage/ConfirmEmailCodePage/RecoverByEmailPage + Profil
+# "E-Mail-Wiederherstellung" section; recover-by-email swaps identity via signIn()→clear active
+# household→reveal FRESH phrase (reuses RecoveryPhraseRevealPage; old phrase dies by design, AC relaxed
+# per D-I). Email = personal data on the Keycloak account ONLY (AD-6). Green build names BOTH suites.
 # Story 7.2 ready-for-dev (create-story, Opus 4.8) 2026-09-14 — Epic 7's 2nd build story: recovery-phrase
 # reveal/re-view + restore. **CLIENT-ONLY** (no backend/Keycloak/event/command/migration) — 7.1 already
 # built every primitive (RecoveryPhrase encoder, enclave device secret, DirectGrantOidcClient); 7.2 adds
@@ -292,7 +309,7 @@ development_status:
   7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
   7-1-silent-account-provisioning-on-first-launch: review
   7-2-recovery-phrase-reveal-and-profile-re-view: done
-  7-3-recover-by-email-opt-in: backlog
+  7-3-recover-by-email-opt-in: done
   7-4-consent-capture: backlog
   7-5-invite-by-code-or-link-retire-email-path: backlog
   epic-7-retrospective: optional

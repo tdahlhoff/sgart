@@ -106,6 +106,20 @@ class NoPersistedPersonalDataTest {
                 .doesNotContain("email");
     }
 
+    /**
+     * Story 7.3, AC4: the one-time-code table is keyed by the pseudonymous {@code keycloak_user_id}
+     * alone and carries no email column — the raw recovery email lives only on the Keycloak
+     * account (AD-6), never in this SGART-owned store.
+     */
+    @Test
+    void emailRecoveryCodeTable_carriesNoEmailColumn() {
+        Path migration = Path.of("src/main/resources/db/migration/V19__email_recovery_code.sql");
+        String sql = withoutSqlComments(readFile(migration)).toLowerCase(Locale.ROOT);
+
+        assertThat(sql).doesNotContain("email");
+        assertThat(sql).contains("keycloak_user_id");
+    }
+
     /** Strips {@code -- ...} line comments so prose mentioning "email"/"display name" (like this
      * very migration's own explanatory header) never trips the column-name check below it. */
     private static String withoutSqlComments(String sql) {

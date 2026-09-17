@@ -23,9 +23,14 @@ class IdentityController {
     @GetMapping("/me")
     IdentityResponse me(@AuthenticationPrincipal Jwt jwt) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
-        return new IdentityResponse(caller.keycloakUserId(), caller.displayName(), caller.email());
+        return new IdentityResponse(
+                caller.keycloakUserId(), caller.displayName(), caller.email(), caller.emailVerified());
     }
 
-    /** Transport DTO — deliberately the exact shape the client's {@code /me} call expects. */
-    record IdentityResponse(String keycloakUserId, String displayName, String email) {}
+    /**
+     * Transport DTO — deliberately the exact shape the client's {@code /me} call expects.
+     * {@code emailVerified} (Story 7.3 review finding) lets the Profil screen tell an unconfirmed
+     * attached email apart from a confirmed one without a separate status query.
+     */
+    record IdentityResponse(String keycloakUserId, String displayName, String email, boolean emailVerified) {}
 }

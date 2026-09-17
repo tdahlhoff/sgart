@@ -1,19 +1,31 @@
 package de.sgart.identity.adapter.out;
 
+import de.sgart.identity.application.AttachRecoveryEmail;
+import de.sgart.identity.application.ConfirmEmailRecovery;
+import de.sgart.identity.application.ConfirmRecoveryEmail;
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
+import de.sgart.identity.application.DetachRecoveryEmail;
+import de.sgart.identity.application.FindAccountByEmail;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
+import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.PruneDeviceToken;
+import de.sgart.identity.application.RebindAccountCredential;
+import de.sgart.identity.application.RecoveryCodeHasher;
 import de.sgart.identity.application.RegisterDeviceToken;
+import de.sgart.identity.application.RequestEmailRecoveryCode;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
+import de.sgart.identity.application.SendRecoveryCodeEmail;
+import de.sgart.identity.application.SetAccountEmail;
 import de.sgart.identity.application.SweepNeverActivatedAccounts;
 import de.sgart.identity.application.UnregisterDeviceToken;
 import de.sgart.identity.domain.DeviceTokenRepository;
+import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import java.time.Clock;
@@ -23,6 +35,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -136,10 +149,18 @@ public class IdentityBeansConfig {
             ProvisionedAccountRepository provisionedAccountRepository,
             MemberMappingRepository memberMappingRepository,
             DeleteAccount deleteAccount,
+            GetAccountDetails getAccountDetails,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
             Clock clock,
             @Value("${sgart.identity.provisioning.retention-days}") long retentionDays) {
         return new SweepNeverActivatedAccounts(
-                provisionedAccountRepository, memberMappingRepository, deleteAccount, clock, Duration.ofDays(retentionDays));
+                provisionedAccountRepository,
+                memberMappingRepository,
+                deleteAccount,
+                getAccountDetails,
+                emailRecoveryCodeStore,
+                clock,
+                Duration.ofDays(retentionDays));
     }
 
     /**
@@ -182,5 +203,131 @@ public class IdentityBeansConfig {
             matchIfMissing = true)
     DeferredDeleteAccount deferredDeleteAccount() {
         return new DeferredDeleteAccount();
+    }
+
+    // --- Story 7.3: recover by email (opt-in) -------------------------------------------------
+    //
+    // No separate @Bean methods wrap keycloakAdminCreateAccount() for SetAccountEmail/
+    // RebindAccountCredential/FindAccountByEmail/GetAccountDetails: Spring already matches that
+    // single bean (declared as the concrete KeycloakAdminCreateAccount type) against every
+    // interface it implements when another @Bean method asks for one, exactly like CreateAccount/
+    // DeleteAccount above — an extra per-interface wrapper method would register the *same*
+    // instance under additional bean names, and once Spring resolves one by its actual runtime
+    // type it becomes an ambiguous extra candidate for every other interface that type implements.
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
+    DeferredSetAccountEmail deferredSetAccountEmail() {
+        return new DeferredSetAccountEmail();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
+    DeferredRebindAccountCredential deferredRebindAccountCredential() {
+        return new DeferredRebindAccountCredential();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
+    DeferredFindAccountByEmail deferredFindAccountByEmail() {
+        return new DeferredFindAccountByEmail();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
+    DeferredGetAccountDetails deferredGetAccountDetails() {
+        return new DeferredGetAccountDetails();
+    }
+
+    @Bean
+    EmailRecoveryCodeStore emailRecoveryCodeStore(JdbcClient jdbcClient) {
+        return new JdbcEmailRecoveryCodeStore(jdbcClient);
+    }
+
+    @Bean
+    RecoveryCodeHasher recoveryCodeHasher(
+            @Value("${sgart.identity.email-recovery.code-hmac-secret}") String secret) {
+        return new HmacSha256RecoveryCodeHasher(secret);
+    }
+
+    /**
+     * The real Story 7.3 SMTP adapter (design §3.1) — active only when {@code
+     * sgart.identity.mail.enabled=true}. Building the {@link JavaMailSender} performs no I/O; only
+     * the first {@code send} reaches an SMTP server.
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "sgart.identity.mail", name = "enabled", havingValue = "true")
+    SendRecoveryCodeEmail javaMailSenderRecoveryCodeEmail(
+            JavaMailSender javaMailSender, @Value("${sgart.identity.mail.from}") String fromAddress) {
+        return new JavaMailSenderRecoveryCodeEmail(javaMailSender, fromAddress);
+    }
+
+    /** The wired default — no build needs an SMTP server (design §3.1, AC6). */
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "sgart.identity.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
+    DeferredSendRecoveryCodeEmail deferredSendRecoveryCodeEmail() {
+        return new DeferredSendRecoveryCodeEmail();
+    }
+
+    @Bean
+    AttachRecoveryEmail attachRecoveryEmail(
+            SetAccountEmail setAccountEmail,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
+            RecoveryCodeHasher recoveryCodeHasher,
+            SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            Clock clock) {
+        return new AttachRecoveryEmail(setAccountEmail, emailRecoveryCodeStore, recoveryCodeHasher, sendRecoveryCodeEmail, clock);
+    }
+
+    @Bean
+    ConfirmRecoveryEmail confirmRecoveryEmail(
+            SetAccountEmail setAccountEmail,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
+            RecoveryCodeHasher recoveryCodeHasher,
+            Clock clock) {
+        return new ConfirmRecoveryEmail(setAccountEmail, emailRecoveryCodeStore, recoveryCodeHasher, clock);
+    }
+
+    @Bean
+    DetachRecoveryEmail detachRecoveryEmail(
+            SetAccountEmail setAccountEmail, EmailRecoveryCodeStore emailRecoveryCodeStore) {
+        return new DetachRecoveryEmail(setAccountEmail, emailRecoveryCodeStore);
+    }
+
+    @Bean
+    RequestEmailRecoveryCode requestEmailRecoveryCode(
+            FindAccountByEmail findAccountByEmail,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
+            RecoveryCodeHasher recoveryCodeHasher,
+            SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            Clock clock) {
+        return new RequestEmailRecoveryCode(
+                findAccountByEmail, emailRecoveryCodeStore, recoveryCodeHasher, sendRecoveryCodeEmail, clock);
+    }
+
+    @Bean
+    ConfirmEmailRecovery confirmEmailRecovery(
+            FindAccountByEmail findAccountByEmail,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
+            RecoveryCodeHasher recoveryCodeHasher,
+            GetAccountDetails getAccountDetails,
+            DeleteAccount deleteAccount,
+            ProvisionedAccountRepository provisionedAccountRepository,
+            RebindAccountCredential rebindAccountCredential,
+            Clock clock) {
+        return new ConfirmEmailRecovery(
+                findAccountByEmail,
+                emailRecoveryCodeStore,
+                recoveryCodeHasher,
+                getAccountDetails,
+                deleteAccount,
+                provisionedAccountRepository,
+                rebindAccountCredential,
+                clock);
     }
 }

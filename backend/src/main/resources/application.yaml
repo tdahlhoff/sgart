@@ -3,6 +3,17 @@ server:
   # different port so `./gradlew bootRun` and `docker compose up` can run side by side.
   port: ${SGART_SERVER_PORT:8081}
 
+management:
+  health:
+    mail:
+      # spring-boot-starter-mail's auto-configured health indicator opens a live SMTP connection
+      # test — but Story 7.3's mail sending is itself config-gated off by default (sgart.identity.
+      # mail.enabled=false), so a reachable SMTP server is never a startup precondition (mirrors
+      # SGART_FLYWAY_ENABLED/SGART_PROJECTOR_AUTOSTART staying off so contextLoads/health stays
+      # green with no live dependency). Off unconditionally: even a real deployment's health check
+      # should not flap on transient SMTP hiccups for a non-critical, best-effort notification path.
+      enabled: false
+
 spring:
   application:
     name: sgart
@@ -34,6 +45,20 @@ spring:
   # Flyway explicitly against their own container instead of relying on this flag.
   flyway:
     enabled: ${SGART_FLYWAY_ENABLED:false}
+  # SGART's own SMTP send for recovery codes (Story 7.3, design §3.1) — only read when
+  # sgart.identity.mail.enabled=true selects the real JavaMailSenderRecoveryCodeEmail adapter;
+  # building this JavaMailSender bean performs no I/O either way.
+  mail:
+    host: ${SGART_SMTP_HOST:localhost}
+    port: ${SGART_SMTP_PORT:587}
+    username: ${SGART_SMTP_USERNAME:}
+    password: ${SGART_SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 # Custom (non-Boot-standard) keys: Boot's resource-server auto-configuration only validates
 # token expiry from jwk-set-uri alone, so the issuer and audience are checked explicitly by the
@@ -102,6 +127,19 @@ sgart:
     provisioning:
       retention-days: ${SGART_IDENTITY_PROVISIONING_RETENTION_DAYS:14}
       sweep-cron: ${SGART_IDENTITY_PROVISIONING_SWEEP_CRON:0 0 3 * * *}
+    # Recover-by-email one-time codes (Story 7.3, D-E): HMAC-SHA256 over the code with a stable
+    # per-deployment secret — mirrors sgart.invite.email-hmac-secret's discipline. No default here:
+    # outside the "dev" profile, a missing SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET fails
+    # context startup rather than silently falling back to a known, committed secret in production.
+    email-recovery:
+      code-hmac-secret: ${SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET}
+    # SGART's own SMTP send for recovery codes (Story 7.3, design §3) — off by default everywhere,
+    # so the hermetic DeferredSendRecoveryCodeEmail stays wired (tests/CI/local dev never need a
+    # live SMTP server). A real deployment that has completed the netcup SMTP + SPF/DKIM setup
+    # (docs/first-real-world-test.md) sets SGART_IDENTITY_MAIL_ENABLED=true to switch adapters.
+    mail:
+      enabled: ${SGART_IDENTITY_MAIL_ENABLED:false}
+      from: ${SGART_IDENTITY_MAIL_FROM:no-reply@sgart.example}
 ---
 # Dev-only defaults (active whenever no other profile is set — see spring.profiles.default above).
 # Local runs, CI, and this test suite all get a working default HMAC secret without configuration;
@@ -117,3 +155,5 @@ sgart:
   identity:
     keycloak-admin:
       client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-only-keycloak-admin-secret-change-me}
+    email-recovery:
+      code-hmac-secret: ${SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET:local-dev-only-email-recovery-hmac-secret-change-me}

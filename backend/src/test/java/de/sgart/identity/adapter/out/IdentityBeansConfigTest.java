@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.FindHouseholdMemberByEmail;
+import de.sgart.identity.application.SendRecoveryCodeEmail;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,6 +104,42 @@ class IdentityBeansConfigTest {
             assertThat(createAccount).isInstanceOf(KeycloakAdminCreateAccount.class);
             assertThat(deleteAccount).isInstanceOf(KeycloakAdminCreateAccount.class);
             assertThat(createAccount).isSameAs(deleteAccount);
+        }
+    }
+
+    /**
+     * Story 7.3, AC6: {@code sgart.identity.mail.enabled} absent/false must wire the no-op — the
+     * context loads and {@code contextLoads}-style guarantees hold with no SMTP server reachable.
+     */
+    @SpringBootTest
+    @Nested
+    class MailSenderDisabledByDefault {
+
+        @Autowired
+        private SendRecoveryCodeEmail sendRecoveryCodeEmail;
+
+        @Test
+        void mailSenderNoOpIsWiredWhenMailDisabled_soContextLoadsWithoutSmtp() {
+            assertThat(sendRecoveryCodeEmail).isInstanceOf(DeferredSendRecoveryCodeEmail.class);
+        }
+    }
+
+    @SpringBootTest
+    @Nested
+    class MailSenderEnabled {
+
+        @Autowired
+        private SendRecoveryCodeEmail sendRecoveryCodeEmail;
+
+        @DynamicPropertySource
+        static void mailEnabled(DynamicPropertyRegistry registry) {
+            registry.add("sgart.identity.mail.enabled", () -> "true");
+            registry.add("sgart.identity.mail.from", () -> "no-reply@sgart.example");
+        }
+
+        @Test
+        void wiresTheRealJavaMailSenderAdapter() {
+            assertThat(sendRecoveryCodeEmail).isInstanceOf(JavaMailSenderRecoveryCodeEmail.class);
         }
     }
 }

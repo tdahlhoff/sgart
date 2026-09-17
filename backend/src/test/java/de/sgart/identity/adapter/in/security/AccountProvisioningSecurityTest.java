@@ -63,4 +63,27 @@ class AccountProvisioningSecurityTest {
         // so an unauthenticated GET is rejected first).
         mockMvc.perform(get("/api/v1/accounts")).andExpect(status().isUnauthorized());
     }
+
+    /**
+     * Story 7.3, AC5/D-C: the recovery endpoints add no unauthenticated surface — they sit under
+     * the blanket {@code /api/v1/**}.authenticated() rule exactly like every other endpoint, and
+     * are reachable only with a (throwaway) JWT.
+     */
+    @Test
+    void recoveryEndpoints_requireAThrowawayJwt_andAddNoUnauthenticatedSurface() throws Exception {
+        mockMvc.perform(post("/api/v1/account/recovery/email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"person@example.com\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"person@example.com\",\"code\":\"042817\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/account/email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"person@example.com\"}"))
+                .andExpect(status().isUnauthorized());
+    }
 }

@@ -46,6 +46,9 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'membership.lastAdmin' => localizations.membersLastAdminError,
     'auth.unauthorized' => localizations.authSessionExpiredError,
     'auth.invalidRecoveryPhrase' => localizations.recoveryPhraseRestoreInvalidPhraseError,
+    'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,
+    'account.recoveryEmailInvalid' => localizations.accountRecoveryEmailInvalidError,
+    'account.recoveryCodeInvalid' => localizations.accountRecoveryCodeInvalidError,
     _ => localizations.errorGenericFallback,
   };
 }

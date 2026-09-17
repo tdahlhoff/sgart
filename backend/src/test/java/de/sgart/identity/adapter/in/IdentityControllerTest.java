@@ -29,12 +29,24 @@ class IdentityControllerTest {
         mockMvc.perform(get("/api/v1/identity/me")
                         .with(jwt().jwt(jwt -> jwt.subject("anna-sub")
                                 .claim("name", "Anna Testperson")
-                                .claim("email", "anna@example.test"))))
+                                .claim("email", "anna@example.test")
+                                .claim("email_verified", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.keycloakUserId").value("anna-sub"))
                 .andExpect(jsonPath("$.displayName").value("Anna Testperson"))
                 .andExpect(jsonPath("$.email").value("anna@example.test"))
+                .andExpect(jsonPath("$.emailVerified").value(true))
                 .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
+    @Test
+    void me_defaultsEmailVerifiedToFalseWhenTheClaimIsAbsent() throws Exception {
+        mockMvc.perform(get("/api/v1/identity/me")
+                        .with(jwt().jwt(jwt -> jwt.subject("carla-sub")
+                                .claim("name", "Carla Testperson")
+                                .claim("email", "carla@example.test"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(false));
     }
 
     @Test
