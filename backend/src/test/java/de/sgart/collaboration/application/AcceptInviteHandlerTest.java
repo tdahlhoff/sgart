@@ -8,7 +8,6 @@ import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InviteAlreadyConsumedApplicationException;
 import de.sgart.collaboration.application.exception.InviteExpiredApplicationException;
 import de.sgart.collaboration.application.exception.InviteNotFoundApplicationException;
-import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.InviteAccepted;
@@ -17,7 +16,6 @@ import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.domain.KeycloakUserId;
-import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.ConcurrencyConflictException;
@@ -32,20 +30,17 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL + in-memory side-store, no
- * framework or persistence (CLAUDE.md §6). Proves the accept command path (AC1–AC5): a valid invite
- * appends {@code InviteAccepted} + {@code MemberJoined} and purges the side-store, an already-member
- * joiner appends only {@code InviteAccepted}, a past-TTL invite is expired-then-rejected (410) with
- * the lazy transition persisted and the side-store purged, an already-expired invite is rejected
- * with nothing appended, an unknown invite is rejected (404) with nothing appended, and a
- * same-{@code commandId} retry converges via the event store's own dedup.
+ * Fast unit test — in-memory {@code EventStore} + in-memory Identity ACL, no framework or
+ * persistence (CLAUDE.md §6). Proves the accept command path (AC1–AC5): a valid invite appends
+ * {@code InviteAccepted} + {@code MemberJoined}, an already-member joiner appends only {@code
+ * InviteAccepted}, a past-TTL invite is expired-then-rejected (410) with the lazy transition
+ * persisted, an already-expired invite is rejected with nothing appended, an unknown invite is
+ * rejected (404) with nothing appended, and a same-{@code commandId} retry converges via the
+ * event store's own dedup.
  */
 class AcceptInviteHandlerTest {
 
@@ -54,14 +49,13 @@ class AcceptInviteHandlerTest {
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
     private final IssueMemberIdentity issueMemberIdentity = new IssueMemberIdentity(mappingRepository);
-    private final FakeInviteEmailSideStore sideStore = new FakeInviteEmailSideStore();
 
     private final HouseholdId householdId = HouseholdId.generate();
     private final MemberId adminMemberId = MemberId.generate();
     private final StreamId streamId = StreamId.forHousehold(householdId);
 
     private AcceptInviteHandler handler(Clock clock) {
-        return new AcceptInviteHandler(eventStore, issueMemberIdentity, sideStore, clock, alwaysConsentingGate());
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, clock, alwaysConsentingGate());
     }
 
     private static ConsentGate alwaysConsentingGate() {
@@ -76,17 +70,16 @@ class AcceptInviteHandlerTest {
         Household household =
                 Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
         InviteId inviteId = InviteId.generate();
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
-        sideStore.store(inviteId, NormalizedEmail.fromRaw("anna@example.com"));
         return inviteId;
     }
 
     @Test
     void acceptInvite_withoutRecordedConsent_isRejectedWith409ConsentRequired() {
         InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
-        AcceptInviteHandler handler = new AcceptInviteHandler(
-                eventStore, issueMemberIdentity, sideStore, Clock.fixed(FIXED_NOW, ZoneOffset.UTC), never -> false);
+        AcceptInviteHandler handler =
+                new AcceptInviteHandler(eventStore, issueMemberIdentity, Clock.fixed(FIXED_NOW, ZoneOffset.UTC), never -> false);
 
         assertThatThrownBy(() -> handler.handle(
                         "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
@@ -97,7 +90,7 @@ class AcceptInviteHandlerTest {
     }
 
     @Test
-    void acceptingAValidInviteAppendsInviteAcceptedAndMemberJoinedAndPurgesTheSideStore() {
+    void acceptingAValidInviteAppendsInviteAcceptedAndMemberJoined() {
         InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
 
         handler().handle("anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString());
@@ -107,11 +100,10 @@ class AcceptInviteHandlerTest {
         assertThat(events.get(3)).isInstanceOf(InviteAccepted.class);
         assertThat(((InviteAccepted) events.get(3)).inviteId()).isEqualTo(inviteId);
         assertThat(events.get(4)).isInstanceOf(MemberJoined.class);
-        assertThat(sideStore.findEmail(inviteId)).isEmpty();
     }
 
     @Test
-    void anAlreadyMemberJoinerAppendsOnlyInviteAcceptedWithNoSecondMemberJoined() {
+    void acceptInvite_whenCallerAlreadyMember_isANoOp_noDuplicateMembership() {
         InviteId firstInviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
         handler().handle("anna-sub", householdId.toString(), firstInviteId.toString(), CommandId.generate().toString());
 
@@ -120,7 +112,7 @@ class AcceptInviteHandlerTest {
         Household forSecondInvite = Household.rehydrate(streamId, eventStore.readStream(streamId));
         AggregateVersion versionBeforeSecondInvite = forSecondInvite.version();
         InviteId secondInviteId = InviteId.generate();
-        forSecondInvite.invitePerson(adminMemberId, secondInviteId, new EmailHmac("hmac-2"), FIXED_NOW, CommandId.generate());
+        forSecondInvite.invitePerson(adminMemberId, secondInviteId, FIXED_NOW, CommandId.generate());
         eventStore.append(versionBeforeSecondInvite, forSecondInvite.uncommittedEvents(), CommandId.generate());
 
         handler().handle("anna-sub", householdId.toString(), secondInviteId.toString(), CommandId.generate().toString());
@@ -133,7 +125,7 @@ class AcceptInviteHandlerTest {
     }
 
     @Test
-    void aPastTtlInviteIsExpiredAndAppendedThenRejectedWith410AndTheSideStoreIsPurged() {
+    void aPastTtlInviteIsExpiredAndAppendedThenRejectedWith410() {
         InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
         Clock muchLaterClock = Clock.fixed(FIXED_NOW.plus(Duration.ofDays(8)), ZoneOffset.UTC);
 
@@ -144,7 +136,6 @@ class AcceptInviteHandlerTest {
         List<DomainEvent> events = eventStore.readStream(streamId);
         assertThat(events).hasSize(4);
         assertThat(events.get(3)).isInstanceOf(InviteExpired.class);
-        assertThat(sideStore.findEmail(inviteId)).isEmpty();
     }
 
     @Test
@@ -223,16 +214,6 @@ class AcceptInviteHandlerTest {
     }
 
     @Test
-    void purgeHappensOnlyAfterASuccessfulAppend() {
-        InviteId inviteId = seedHouseholdWithAPendingInvite(FIXED_NOW);
-
-        handler().handle("anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString());
-
-        assertThat(sideStore.purgeCallCount).isEqualTo(1);
-        assertThat(sideStore.appendWasVisibleOnPurgeCall).isTrue();
-    }
-
-    @Test
     void aRetryWithTheSameCommandIdConvergesViaTheDomainsAcceptedNoOp() {
         // Not an EventStore-dedup test: by the retry, the invite is already ACCEPTED and the
         // joiner already a member, so Household.acceptInvite() no-ops (raises nothing) and append
@@ -256,7 +237,6 @@ class AcceptInviteHandlerTest {
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
-                sideStore,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 alwaysConsentingGate());
 
@@ -265,8 +245,6 @@ class AcceptInviteHandlerTest {
                 .isInstanceOf(ConcurrencyConflictException.class);
 
         assertThat(mappingRepository.findMemberId(new KeycloakUserId("loser-sub"), householdId)).isEmpty();
-        // The losing caller never purged: its append never landed, so the winner's row is untouched.
-        assertThat(sideStore.findEmail(inviteId)).isPresent();
     }
 
     @Test
@@ -278,14 +256,13 @@ class AcceptInviteHandlerTest {
         Household forSecondInvite = Household.rehydrate(streamId, eventStore.readStream(streamId));
         AggregateVersion versionBeforeSecondInvite = forSecondInvite.version();
         InviteId secondInviteId = InviteId.generate();
-        forSecondInvite.invitePerson(adminMemberId, secondInviteId, new EmailHmac("hmac-2"), FIXED_NOW, CommandId.generate());
+        forSecondInvite.invitePerson(adminMemberId, secondInviteId, FIXED_NOW, CommandId.generate());
         eventStore.append(versionBeforeSecondInvite, forSecondInvite.uncommittedEvents(), CommandId.generate());
         MemberId annaMemberId = issueMemberIdentity.provision("anna-sub", householdId).memberId();
 
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
-                sideStore,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 alwaysConsentingGate());
         assertThatThrownBy(() -> handler.handle(
@@ -304,7 +281,6 @@ class AcceptInviteHandlerTest {
         AcceptInviteHandler handler = new AcceptInviteHandler(
                 new AppendConflictingEventStore(eventStore),
                 issueMemberIdentity,
-                sideStore,
                 Clock.fixed(FIXED_NOW.plus(Duration.ofDays(8)), ZoneOffset.UTC),
                 alwaysConsentingGate());
 
@@ -333,35 +309,6 @@ class AcceptInviteHandlerTest {
         @Override
         public List<DomainEvent> readStream(StreamId streamId) {
             return delegate.readStream(streamId);
-        }
-    }
-
-    /** In-memory {@code InviteEmailSideStore} double proving the append-before-purge ordering
-     * (mirrors 4.1's {@code FakeInviteEmailSideStore}): every {@code purge()} call re-checks the
-     * stream for the corresponding consuming event. */
-    private final class FakeInviteEmailSideStore implements InviteEmailSideStore {
-        private final Map<InviteId, NormalizedEmail> emailsByInviteId = new HashMap<>();
-        private int purgeCallCount = 0;
-        private boolean appendWasVisibleOnPurgeCall = true;
-
-        @Override
-        public void store(InviteId inviteId, NormalizedEmail email) {
-            emailsByInviteId.put(inviteId, email);
-        }
-
-        @Override
-        public void purge(InviteId inviteId) {
-            purgeCallCount++;
-            boolean consumingEventVisible = eventStore.readStream(streamId).stream()
-                    .anyMatch(event -> (event instanceof InviteAccepted accepted && accepted.inviteId().equals(inviteId))
-                            || (event instanceof InviteExpired expired && expired.inviteId().equals(inviteId)));
-            appendWasVisibleOnPurgeCall = appendWasVisibleOnPurgeCall && consumingEventVisible;
-            emailsByInviteId.remove(inviteId);
-        }
-
-        @Override
-        public Optional<NormalizedEmail> findEmail(InviteId inviteId) {
-            return Optional.ofNullable(emailsByInviteId.get(inviteId));
         }
     }
 }

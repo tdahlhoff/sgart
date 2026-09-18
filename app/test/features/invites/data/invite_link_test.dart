@@ -56,4 +56,24 @@ void main() {
       expect(InviteLink.tryParse('h=%zz&i=invite-1'), isNull);
     });
   });
+
+  group('InviteLink.codeFor / linkFor (Story 7.5, AC1)', () {
+    test('codeFor builds the colon-form code that tryParse accepts back', () {
+      final code = InviteLink.codeFor(householdId: 'household-1', inviteId: 'invite-1');
+
+      expect(code, 'household-1:invite-1');
+      expect(InviteLink.tryParse(code), const InviteLink(householdId: 'household-1', inviteId: 'invite-1'));
+    });
+
+    test('linkFor builds the same https shape the backend InviteLinkFactory builds, and tryParse accepts it back', () {
+      final link = InviteLink.linkFor(
+        baseUrl: 'http://localhost:8081/invite',
+        householdId: 'household-1',
+        inviteId: 'invite-1',
+      );
+
+      expect(link, 'http://localhost:8081/invite?h=household-1&i=invite-1');
+      expect(InviteLink.tryParse(link), const InviteLink(householdId: 'household-1', inviteId: 'invite-1'));
+    });
+  });
 }

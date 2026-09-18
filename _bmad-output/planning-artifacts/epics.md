@@ -961,7 +961,7 @@ So that personal data isn't kept indefinitely and the guarantees can't silently 
 
 **Given** personal data with a defined retention
 **When** the retention condition is met
-**Then** it is enforced (e.g. an invite's raw email is purged on accept/expiry; device/offline caches are bounded) — no personal data is kept indefinitely (NFR2).
+**Then** it is enforced (e.g. device/offline caches are bounded) — no personal data is kept indefinitely (NFR2). *(As-built note, Story 7.5: the invite path's own retention example — the raw-email side-store purged on accept/expiry — no longer applies; the invite path retired email collection entirely and now holds no personal data to retain or purge.)*
 
 **Given** the privacy guarantees
 **When** the test suite runs

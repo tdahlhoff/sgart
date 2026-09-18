@@ -325,14 +325,44 @@
     "description": "Heading of the invite screen opened from the household-management hub (Story 4.1)."
   },
 
-  "invitesEmailFieldLabel": "E-Mail-Adresse",
-  "@invitesEmailFieldLabel": {
-    "description": "Label of the invite email field on the invite screen (Story 4.1, AC7)."
+  "invitesCreateButtonLabel": "Einladung erstellen",
+  "@invitesCreateButtonLabel": {
+    "description": "Creates a new invite — a join code and link, no email (Story 7.5, AC1)."
   },
 
-  "invitesSendButtonLabel": "Einladung senden",
-  "@invitesSendButtonLabel": {
-    "description": "Sends the invite (Story 4.1, AC1)."
+  "invitesCreatedHeading": "Neue Einladung",
+  "@invitesCreatedHeading": {
+    "description": "Heading over the freshly created invite's code and link (Story 7.5, AC1)."
+  },
+
+  "invitesCodeLabel": "Code",
+  "@invitesCodeLabel": {
+    "description": "Label above the invite's join code (Story 7.5, AC1, D-A)."
+  },
+
+  "invitesLinkLabel": "Link",
+  "@invitesLinkLabel": {
+    "description": "Label above the invite's shareable link (Story 7.5, AC1, D-A)."
+  },
+
+  "invitesShareCodeButtonLabel": "Code teilen",
+  "@invitesShareCodeButtonLabel": {
+    "description": "Opens the OS share sheet for the join code (Story 7.5, AC1, D-D)."
+  },
+
+  "invitesShareLinkButtonLabel": "Link teilen",
+  "@invitesShareLinkButtonLabel": {
+    "description": "Opens the OS share sheet for the invite link (Story 7.5, AC1, D-D)."
+  },
+
+  "invitesCopyButtonLabel": "In die Zwischenablage kopieren",
+  "@invitesCopyButtonLabel": {
+    "description": "Semantics/tooltip label for the copy-to-clipboard icon button next to a code/link (Story 7.5, AC1)."
+  },
+
+  "invitesCopiedSnackBar": "In die Zwischenablage kopiert.",
+  "@invitesCopiedSnackBar": {
+    "description": "Brief confirmation shown after copying the code or link (Story 7.5, AC1)."
   },
 
   "invitesPendingHeading": "Ausstehende Einladungen",
@@ -353,26 +383,6 @@
         "type": "String"
       }
     }
-  },
-
-  "invitesEmailRequiredError": "Bitte eine E-Mail-Adresse eingeben.",
-  "@invitesEmailRequiredError": {
-    "description": "Localized copy for the invite.emailRequired error code."
-  },
-
-  "invitesEmailInvalidError": "Bitte eine gültige E-Mail-Adresse eingeben.",
-  "@invitesEmailInvalidError": {
-    "description": "Localized copy for the invite.emailInvalid error code — used for both the client-side fail-fast check and the server's 400 (Story 4.1, AC7)."
-  },
-
-  "invitesDuplicatePendingError": "Für diese E-Mail-Adresse besteht bereits eine offene Einladung.",
-  "@invitesDuplicatePendingError": {
-    "description": "Localized copy for the invite.duplicatePending error code (Story 4.1, AC2)."
-  },
-
-  "invitesAlreadyAMemberError": "Diese Person ist bereits Mitglied des Haushalts.",
-  "@invitesAlreadyAMemberError": {
-    "description": "Localized copy for the invite.alreadyAMember error code (Story 4.1, AC3)."
   },
 
   "invitesStatusPending": "Ausstehend",
@@ -888,24 +898,14 @@
     "description": "Helper copy under the onboarding invite step."
   },
 
-  "onboardingInviteEmailFieldLabel": "E-Mail-Adresse",
-  "@onboardingInviteEmailFieldLabel": {
-    "description": "Label of the invite email field on the onboarding invite step, which sends a real invite (Story 4.1)."
-  },
-
-  "onboardingInviteSendButtonLabel": "Einladung senden",
-  "@onboardingInviteSendButtonLabel": {
-    "description": "The invite-send action, wired to the real invite endpoint (Story 4.1)."
-  },
-
   "onboardingInvitePrivacyNote": "Nur du und Eingeladene sehen euren Haushalt.",
   "@onboardingInvitePrivacyNote": {
     "description": "Privacy reassurance on the onboarding invite step (AC3)."
   },
 
-  "onboardingInviteFinishButtonLabel": "Später einladen — fertig",
+  "onboardingInviteFinishButtonLabel": "Fertig",
   "@onboardingInviteFinishButtonLabel": {
-    "description": "Finishes onboarding without inviting and lands in the created household — solo is first-class (AC2)."
+    "description": "Finishes the onboarding invite step and lands in the created household — works whether or not the person created an invite here; solo is first-class (AC2)."
   },
 
   "localeSettingsHeading": "Sprache & Region",

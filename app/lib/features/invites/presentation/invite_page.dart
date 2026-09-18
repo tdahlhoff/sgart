@@ -7,10 +7,10 @@ import '../data/invites_api.dart';
 import 'invites_cubit.dart';
 import 'invites_view.dart';
 
-/// The invite screen opened from the manage-household hub (Story 4.1, AC7, „Einladen"): sends an
-/// invite by email and lists the household's pending invites. Creates its own [InvitesCubit] over
-/// the [InvitesApi] provided up the tree, then renders the shared [InvitesView] body (mirrors
-/// `ManageStoresPage`).
+/// The invite screen opened from the manage-household hub (Story 7.5, AC1, „Einladen"): creates an
+/// invite (code + link, no email) and lists the household's pending invites. Creates its own
+/// [InvitesCubit] over the [InvitesApi] provided up the tree, then renders the shared [InvitesView]
+/// body (mirrors `ManageStoresPage`).
 class InvitePage extends StatelessWidget {
   const InvitePage({super.key, required this.householdId});
 

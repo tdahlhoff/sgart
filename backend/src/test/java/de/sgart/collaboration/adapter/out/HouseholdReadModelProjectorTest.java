@@ -7,7 +7,6 @@ import de.sgart.collaboration.application.query.ListMyHouseholds;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.StoreName;
-import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
@@ -184,7 +183,7 @@ class HouseholdReadModelProjectorTest {
         Instant invitedAt = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
 
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), invitedBy,
+                EventId.generate(), householdId, inviteId, invitedBy,
                 HouseholdRole.PARTICIPANT, invitedAt));
 
         assertThat(inviteReadModel.pendingInvitesOf(householdId))
@@ -196,7 +195,7 @@ class HouseholdReadModelProjectorTest {
         HouseholdId householdId = HouseholdId.generate();
         InviteId inviteId = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new InviteExpired(EventId.generate(), householdId, inviteId));
@@ -211,10 +210,10 @@ class HouseholdReadModelProjectorTest {
         InviteId firstInvite = InviteId.generate();
         InviteId secondInvite = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), firstHousehold, firstInvite, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), firstHousehold, firstInvite, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
         projector.project(new MemberInvited(
-                EventId.generate(), secondHousehold, secondInvite, new EmailHmac("hmac-2"), MemberId.generate(),
+                EventId.generate(), secondHousehold, secondInvite, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         assertThat(inviteReadModel.pendingInvitesOf(firstHousehold))
@@ -230,7 +229,7 @@ class HouseholdReadModelProjectorTest {
         HouseholdId householdId = HouseholdId.generate();
         InviteId inviteId = InviteId.generate();
         MemberInvited invited = new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now());
         InviteExpired expired = new InviteExpired(EventId.generate(), householdId, inviteId);
 
@@ -248,7 +247,7 @@ class HouseholdReadModelProjectorTest {
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = clock.instant();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, invitedAt));
 
         clock.advanceBy(de.sgart.collaboration.domain.Invite.TIME_TO_LIVE.plusSeconds(1));
@@ -262,7 +261,7 @@ class HouseholdReadModelProjectorTest {
         InviteId inviteId = InviteId.generate();
         MemberId joiner = MemberId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
@@ -276,7 +275,7 @@ class HouseholdReadModelProjectorTest {
         InviteId inviteId = InviteId.generate();
         MemberId joiner = MemberId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
@@ -294,10 +293,10 @@ class HouseholdReadModelProjectorTest {
         InviteId firstInvite = InviteId.generate();
         InviteId secondInvite = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), firstHousehold, firstInvite, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), firstHousehold, firstInvite, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
         projector.project(new MemberInvited(
-                EventId.generate(), secondHousehold, secondInvite, new EmailHmac("hmac-2"), MemberId.generate(),
+                EventId.generate(), secondHousehold, secondInvite, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new InviteAccepted(EventId.generate(), firstHousehold, firstInvite, MemberId.generate()));
@@ -314,7 +313,7 @@ class HouseholdReadModelProjectorTest {
         InviteId inviteId = InviteId.generate();
         MemberId joiner = MemberId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
         InviteAccepted accepted = new InviteAccepted(EventId.generate(), householdId, inviteId, joiner);
 
@@ -451,7 +450,7 @@ class HouseholdReadModelProjectorTest {
         HouseholdId householdId = HouseholdId.generate();
         InviteId inviteId = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, new EmailHmac("hmac-1"), MemberId.generate(),
+                EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new InviteRevoked(EventId.generate(), householdId, inviteId, MemberId.generate()));
@@ -475,7 +474,7 @@ class HouseholdReadModelProjectorTest {
         projector.project(new StoreAdded(EventId.generate(), householdToDelete, storeId, new StoreName("Edeka"), null));
         InviteId inviteId = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdToDelete, inviteId, new EmailHmac("hmac-1"), adminMemberId,
+                EventId.generate(), householdToDelete, inviteId, adminMemberId,
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new HouseholdDeleted(EventId.generate(), householdToDelete, adminMemberId));

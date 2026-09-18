@@ -78,13 +78,7 @@ sgart:
   # the household read model that first-run routing reads (AC2).
   projector:
     auto-start: ${SGART_PROJECTOR_AUTOSTART:false}
-  # Invite email HMAC secret (Story 4.1, AD-6): a stable per-deployment secret, never a per-invite
-  # salt — the same email must always hash to the same digest for the AC2 duplicate-pending check
-  # to hold. No default here: outside the "dev" profile (see the profile document below), a missing
-  # SGART_INVITE_EMAIL_HMAC_SECRET fails context startup rather than silently falling back to a
-  # known, committed secret in production.
   invite:
-    email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET}
     # Invite link factory (Story 4.6, AC6): the single configurable base URL every invite link is
     # built from — the exact form the deep link, the web fallback page, and InviteLink.tryParse
     # (Flutter) all consume.
@@ -109,8 +103,8 @@ sgart:
     fcm:
       enabled: ${SGART_PUSH_FCM_ENABLED:false}
   identity:
-    # Keycloak Admin email→user lookup (Story 4.6, D4): off by default everywhere, so the hermetic
-    # DeferredFindHouseholdMemberByEmail stays wired (tests/CI/local dev never need admin credentials).
+    # Keycloak Admin account provisioning (Story 7.1/7.3): off by default everywhere, so the
+    # hermetic Deferred* adapters stay wired (tests/CI/local dev never need admin credentials).
     # A real deployment that has completed the manual confidential-admin-client wiring
     # (docs/first-real-world-test) sets SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true to switch adapters.
     # No default for client-secret outside the "dev" profile: enabling this without a real secret
@@ -128,9 +122,9 @@ sgart:
       retention-days: ${SGART_IDENTITY_PROVISIONING_RETENTION_DAYS:14}
       sweep-cron: ${SGART_IDENTITY_PROVISIONING_SWEEP_CRON:0 0 3 * * *}
     # Recover-by-email one-time codes (Story 7.3, D-E): HMAC-SHA256 over the code with a stable
-    # per-deployment secret — mirrors sgart.invite.email-hmac-secret's discipline. No default here:
-    # outside the "dev" profile, a missing SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET fails
-    # context startup rather than silently falling back to a known, committed secret in production.
+    # per-deployment secret. No default here: outside the "dev" profile, a missing
+    # SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET fails context startup rather than silently
+    # falling back to a known, committed secret in production.
     email-recovery:
       code-hmac-secret: ${SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET}
     # SGART's own SMTP send for recovery codes (Story 7.3, design §3) — off by default everywhere,
@@ -156,8 +150,6 @@ spring:
       on-profile: dev
 
 sgart:
-  invite:
-    email-hmac-secret: ${SGART_INVITE_EMAIL_HMAC_SECRET:local-dev-only-invite-hmac-secret-change-me}
   identity:
     keycloak-admin:
       client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-only-keycloak-admin-secret-change-me}

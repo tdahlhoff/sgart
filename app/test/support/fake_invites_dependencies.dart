@@ -5,14 +5,13 @@ import 'package:sgart/features/invites/data/pending_invite.dart';
 class FakeInvitesApi implements InvitesApi {
   List<PendingInvite> pendingInvitesToReturn = const [];
   Object? listPendingInvitesError;
-  Object? sendInviteError;
+  Object? createInviteError;
   Object? acceptInviteError;
 
-  String? lastSentEmail;
-  String? lastSentInviteId;
-  final List<String> sendCommandIds = [];
-  final List<String> sendInviteIds = [];
-  int sendCallCount = 0;
+  String? lastCreatedInviteId;
+  final List<String> createCommandIds = [];
+  final List<String> createInviteIds = [];
+  int createCallCount = 0;
 
   String? lastAcceptedHouseholdId;
   String? lastAcceptedInviteId;
@@ -32,18 +31,12 @@ class FakeInvitesApi implements InvitesApi {
   }
 
   @override
-  Future<void> sendInvite(
-    String householdId, {
-    required String inviteId,
-    required String email,
-    required String commandId,
-  }) async {
-    lastSentEmail = email;
-    lastSentInviteId = inviteId;
-    sendCommandIds.add(commandId);
-    sendInviteIds.add(inviteId);
-    sendCallCount++;
-    if (sendInviteError != null) throw sendInviteError!;
+  Future<void> createInvite(String householdId, {required String inviteId, required String commandId}) async {
+    lastCreatedInviteId = inviteId;
+    createCommandIds.add(commandId);
+    createInviteIds.add(inviteId);
+    createCallCount++;
+    if (createInviteError != null) throw createInviteError!;
   }
 
   @override

@@ -38,6 +38,21 @@ void main() {
     );
 
     blocTest<AcceptInviteCubit, AcceptInviteState>(
+      'acceptInviteCubit_validColonCode_callsAcceptWithHouseholdAndInviteId',
+      build: buildCubit,
+      act: (cubit) => cubit.accept('household-1:invite-1'),
+      expect: () => [
+        const AcceptInviteState.submitting(),
+        const AcceptInviteState.success('household-1'),
+      ],
+      verify: (_) {
+        expect(invitesApi.lastAcceptedHouseholdId, 'household-1');
+        expect(invitesApi.lastAcceptedInviteId, 'invite-1');
+        expect(invitesApi.acceptCallCount, 1);
+      },
+    );
+
+    blocTest<AcceptInviteCubit, AcceptInviteState>(
       'accept_withAMalformedLink_isBlockedClientSideWithNoApiCall',
       build: buildCubit,
       act: (cubit) => cubit.accept('not-a-link-at-all'),

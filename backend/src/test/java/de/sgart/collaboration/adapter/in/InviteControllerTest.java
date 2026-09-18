@@ -7,9 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import de.sgart.collaboration.application.InviteEmailSideStore;
-import de.sgart.collaboration.application.NormalizedEmail;
-import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
@@ -18,7 +15,6 @@ import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteView;
 import de.sgart.identity.adapter.out.InMemoryAccountConsentRepository;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
-import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
@@ -33,10 +29,7 @@ import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
 import de.sgart.shared.support.InMemoryEventStore;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,9 +45,9 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * MockMvc slice over the real {@code InviteController}/handler/{@code ListPendingInvites} wiring,
  * with the durable adapters swapped for in-memory doubles — no live KurrentDB/PostgreSQL. Proves
- * AC1/AC3/AC4/AC6 end-to-end through REST: send ({@code 201}), duplicate-pending ({@code 409}),
- * already-a-member ({@code 409}), non-member ({@code 403}), invalid email ({@code 400}), list
- * pending invites ({@code 200}), and that no response body ever carries the raw email (AD-6).
+ * AC1/AC3/AC6 end-to-end through REST: send ({@code 201}, no email in the request), non-member
+ * ({@code 403}), list pending invites ({@code 200}), and that no response body ever carries an
+ * email field (AD-6).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -73,9 +66,6 @@ class InviteControllerTest {
 
     @Autowired
     private InMemoryInviteReadModel inviteReadModel;
-
-    @Autowired
-    private FakeFindHouseholdMemberByEmail findHouseholdMemberByEmail;
 
     @Autowired
     private AccountConsentRepository accountConsentRepository;
@@ -106,18 +96,6 @@ class InviteControllerTest {
         InMemoryInviteReadModel testInviteReadModel() {
             return new InMemoryInviteReadModel();
         }
-
-        @Bean
-        @Primary
-        InviteEmailSideStore testInviteEmailSideStore() {
-            return new InMemoryInviteEmailSideStore();
-        }
-
-        @Bean
-        @Primary
-        FakeFindHouseholdMemberByEmail testFindHouseholdMemberByEmail() {
-            return new FakeFindHouseholdMemberByEmail();
-        }
     }
 
     /** A read model whose pending-invite list a test can preset, so GET never touches PostgreSQL. */
@@ -130,43 +108,10 @@ class InviteControllerTest {
         }
     }
 
-    static final class InMemoryInviteEmailSideStore implements InviteEmailSideStore {
-        private final Map<InviteId, NormalizedEmail> emailsByInviteId = new HashMap<>();
-
-        @Override
-        public void store(InviteId inviteId, NormalizedEmail email) {
-            emailsByInviteId.put(inviteId, email);
-        }
-
-        @Override
-        public void purge(InviteId inviteId) {
-            emailsByInviteId.remove(inviteId);
-        }
-
-        @Override
-        public Optional<NormalizedEmail> findEmail(InviteId inviteId) {
-            return Optional.ofNullable(emailsByInviteId.get(inviteId));
-        }
-    }
-
-    /** Lets a test opt an email into "already a member" (AC3/E5) without a real Keycloak lookup. */
-    static final class FakeFindHouseholdMemberByEmail implements FindHouseholdMemberByEmail {
-        private final Map<String, MemberId> existingMembersByEmail = new HashMap<>();
-
-        void existingMemberFor(String email, MemberId memberId) {
-            existingMembersByEmail.put(email, memberId);
-        }
-
-        @Override
-        public Optional<MemberId> forHousehold(String email, HouseholdId householdId) {
-            return Optional.ofNullable(existingMembersByEmail.get(email));
-        }
-    }
-
     /**
      * {@code accept_*} tests below exercise {@code AcceptInviteHandler}, which now gates on
      * recorded consent (Story 7.4, AC3) — pre-record it for the joiners those tests use, so this
-     * file keeps proving AC1/AC3/AC4/AC6 unchanged.
+     * file keeps proving AC1/AC3/AC6 unchanged.
      * {@link #accept_withoutRecordedConsent_returns409ConsentRequired()} is the one test that
      * deliberately leaves a joiner unconsented.
      */
@@ -199,38 +144,24 @@ class InviteControllerTest {
         mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("anna@example.com", InviteId.generate().toString())))
+                        .content(inviteRequestBody(InviteId.generate().toString())))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void invite_returns409ForADuplicatePendingInvite() throws Exception {
+    void invite_sameHouseholdTwice_bothReturn201() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
         mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("berta@example.com", InviteId.generate().toString())))
+                        .content(inviteRequestBody(InviteId.generate().toString())))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("berta@example.com", InviteId.generate().toString())))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("invite.duplicatePending"));
-    }
-
-    @Test
-    void invite_returns409ForAnAlreadyAHouseholdMemberEmail() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-        findHouseholdMemberByEmail.existingMemberFor("carla@example.com", MemberId.generate());
-
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("carla@example.com", InviteId.generate().toString())))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("invite.alreadyAMember"));
+                        .content(inviteRequestBody(InviteId.generate().toString())))
+                .andExpect(status().isCreated());
     }
 
     @Test
@@ -240,21 +171,9 @@ class InviteControllerTest {
         mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
                         .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("dora@example.com", InviteId.generate().toString())))
+                        .content(inviteRequestBody(InviteId.generate().toString())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));
-    }
-
-    @Test
-    void invite_rejectsAMalformedEmailWith400() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("not-an-email", InviteId.generate().toString())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("invite.emailInvalid"));
     }
 
     @Test
@@ -263,7 +182,7 @@ class InviteControllerTest {
 
         mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody("eva@example.com", InviteId.generate().toString())))
+                        .content(inviteRequestBody(InviteId.generate().toString())))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -277,7 +196,6 @@ class InviteControllerTest {
         household.invitePerson(
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
                 inviteId,
-                new EmailHmac("hmac-1"),
                 Instant.now(),
                 CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
@@ -300,7 +218,6 @@ class InviteControllerTest {
         household.invitePerson(
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
                 inviteId,
-                new EmailHmac("hmac-1"),
                 Instant.now(),
                 CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
@@ -339,7 +256,6 @@ class InviteControllerTest {
         household.invitePerson(
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
                 inviteId,
-                new EmailHmac("hmac-1"),
                 longAgo,
                 CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
@@ -363,7 +279,6 @@ class InviteControllerTest {
         household.invitePerson(
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
                 inviteId,
-                new EmailHmac("hmac-1"),
                 Instant.now(),
                 CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
@@ -425,7 +340,6 @@ class InviteControllerTest {
         household.invitePerson(
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
                 inviteId,
-                new EmailHmac("hmac-1"),
                 Instant.now(),
                 CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
@@ -447,7 +361,7 @@ class InviteControllerTest {
         AggregateVersion loadedVersion = household.version();
         MemberId adminMemberId =
                 mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow();
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), Instant.now(), CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, Instant.now(), CommandId.generate());
         eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
         MemberId participantMemberId = MemberId.generate();
         eventStore.append(
@@ -480,9 +394,9 @@ class InviteControllerTest {
                 .andExpect(jsonPath("$.code").value("invite.notFound"));
     }
 
-    private static String inviteRequestBody(String email, String inviteId) {
+    private static String inviteRequestBody(String inviteId) {
         return """
-                {"inviteId":"%s","email":"%s","commandId":"%s"}
-                """.formatted(inviteId, email, UUID.randomUUID());
+                {"inviteId":"%s","commandId":"%s"}
+                """.formatted(inviteId, UUID.randomUUID());
     }
 }

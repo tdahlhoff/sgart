@@ -14,7 +14,6 @@ import de.sgart.collaboration.domain.event.MemberPromoted;
 import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
-import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
 import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
@@ -111,20 +110,6 @@ public final class Household extends EventSourcedAggregate {
     }
 
     /**
-     * The ids of every currently-{@code PENDING} invite, per the folded event history — used by
-     * {@link de.sgart.collaboration.application.command.DeleteHouseholdHandler} to purge their raw
-     * email rows from the {@link de.sgart.collaboration.application.InviteEmailSideStore} (AD-6):
-     * revoke and accept already purge on their own invite; a household delete must purge every
-     * invite still pending, or its raw email survives, undiscoverable once the read model is gone.
-     */
-    public List<InviteId> pendingInviteIds() {
-        return pendingInvitesById.entrySet().stream()
-                .filter(entry -> entry.getValue().status() == InviteStatus.PENDING)
-                .map(Map.Entry::getKey)
-                .toList();
-    }
-
-    /**
      * Renames the household (AC3) — an <strong>Admin-only</strong> capability enforced here as a
      * domain invariant, not merely hidden in the UI (AC4): {@code requestedBy} must map to an
      * {@link HouseholdRole#ADMIN} role recorded by a prior {@link MemberJoined}, otherwise a
@@ -202,44 +187,22 @@ public final class Household extends EventSourcedAggregate {
     }
 
     /**
-     * Invites a person by email (Story 4.1, AC1/AC2/AC4/AC5) — membership-gated, not role-gated, like
-     * {@link #addStore}: any member may invite ({@code requireMember}), never Admin-only. The
-     * invitee's already-a-member check (AC3, E5) happens at the application/ACL seam <em>before</em>
-     * this is called — the aggregate has no way to see an email (AD-6) and so cannot enforce it.
-     *
-     * <p>A <strong>non-expired</strong> pending invite to the same {@code emailHmac} is rejected
-     * ({@link DuplicatePendingInviteException}, AC2) — deliberately not a convergent no-op (AD-8,
-     * §3.4). A <strong>past-TTL</strong> pending invite to the same email is the one blocker lazy
-     * housekeeping clears: {@link InviteExpired} is raised for it first (AC5), then the new invite
-     * proceeds. {@code now} is caller-injected (never {@code Instant.now()} here) so expiry stays
-     * deterministic and testable.
+     * Invites a person by join code/link (Story 7.5, AC1) — membership-gated, not role-gated, like
+     * {@link #addStore}: any member may invite ({@code requireMember}), never Admin-only. Multiple
+     * independent pending invites to the same household may coexist — there is no email to dedupe
+     * against (AD-6). The already-a-member prevention happens at accept time (E5, see {@link
+     * #acceptInvite}), not here.
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
-    public void invitePerson(
-            MemberId requestedBy, InviteId inviteId, EmailHmac emailHmac, Instant now, CommandId commandId) {
+    public void invitePerson(MemberId requestedBy, InviteId inviteId, Instant now, CommandId commandId) {
         Objects.requireNonNull(requestedBy, "requestedBy must not be null");
         Objects.requireNonNull(inviteId, "inviteId must not be null");
-        Objects.requireNonNull(emailHmac, "emailHmac must not be null");
         Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
         requireMember(requestedBy);
 
-        for (Map.Entry<InviteId, InviteState> entry : pendingInvitesById.entrySet()) {
-            InviteState invite = entry.getValue();
-            if (invite.status() != InviteStatus.PENDING || !invite.emailHmac().equals(emailHmac)) {
-                continue;
-            }
-            if (invite.isExpiredAt(now)) {
-                raise(new InviteExpired(EventId.generate(), householdId, entry.getKey()));
-            } else {
-                throw new DuplicatePendingInviteException(
-                        "A pending invite to this email already exists in this household");
-            }
-        }
-
-        raise(new MemberInvited(
-                EventId.generate(), householdId, inviteId, emailHmac, requestedBy, HouseholdRole.PARTICIPANT, now));
+        raise(new MemberInvited(EventId.generate(), householdId, inviteId, requestedBy, HouseholdRole.PARTICIPANT, now));
     }
 
     /**
@@ -517,8 +480,7 @@ public final class Household extends EventSourcedAggregate {
             }
             case MemberInvited invited ->
                 pendingInvitesById.put(
-                        invited.inviteId(),
-                        new InviteState(invited.emailHmac(), invited.invitedAt(), InviteStatus.PENDING));
+                        invited.inviteId(), new InviteState(invited.invitedAt(), InviteStatus.PENDING));
             case InviteExpired expired -> {
                 InviteState existing = pendingInvitesById.get(expired.inviteId());
                 if (existing != null) {
@@ -574,14 +536,14 @@ public final class Household extends EventSourcedAggregate {
      * (AC2, AC5). Mirrors {@link StoreState}. {@code invitedAt} plus {@link Invite#TIME_TO_LIVE}
      * decides expiry deterministically — never wall-clock time read here.
      */
-    private record InviteState(EmailHmac emailHmac, Instant invitedAt, InviteStatus status) {
+    private record InviteState(Instant invitedAt, InviteStatus status) {
 
         boolean isExpiredAt(Instant now) {
             return invitedAt.plus(Invite.TIME_TO_LIVE).isBefore(now) || invitedAt.plus(Invite.TIME_TO_LIVE).equals(now);
         }
 
         InviteState withStatus(InviteStatus status) {
-            return new InviteState(emailHmac, invitedAt, status);
+            return new InviteState(invitedAt, status);
         }
     }
 }

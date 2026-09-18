@@ -54,11 +54,10 @@ class InviteController {
             @RequestBody InviteRequest request) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
 
-        // The handler resolves the caller's MemberId (403 if not a member), enforces the
-        // already-a-member seam (409, AC3) and the duplicate-pending/past-TTL invariants (409/AC2,
-        // AC5), and validates the envelope + email (400).
-        invitePersonHandler.handle(
-                caller.keycloakUserId(), householdId, request.inviteId(), request.email(), request.commandId());
+        // The handler resolves the caller's MemberId (403 if not a member) and validates the
+        // envelope (400). No email is collected (Story 7.5, AD-6) — the invite is a bearer
+        // capability over an opaque inviteId, shared as a code or link by the caller.
+        invitePersonHandler.handle(caller.keycloakUserId(), householdId, request.inviteId(), request.commandId());
     }
 
     @PostMapping("/{inviteId}/accept")
@@ -102,8 +101,8 @@ class InviteController {
     }
 
     /** Transport DTO for {@code POST} — the invite command envelope (AR10). {@code inviteId} is the
-     * client-generated id. */
-    record InviteRequest(String inviteId, String email, String commandId) {}
+     * client-generated id; no email field (Story 7.5, AD-6). */
+    record InviteRequest(String inviteId, String commandId) {}
 
     /** Transport DTO for {@code DELETE} — the revoke command envelope (AR10). */
     record RevokeInviteRequest(String commandId) {}

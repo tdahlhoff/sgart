@@ -129,10 +129,8 @@
 
 ## Deferred from: code review of story-4.1 (2026-09-06)
 
-- **Unicode NFC normalization not applied before hashing.** `NormalizedEmail.fromRaw` does `trim().toLowerCase(Locale.ROOT)` only. The same address supplied NFC-composed vs NFD-decomposed (e.g. `café@…`) produces different byte sequences → different HMAC → the AC2 duplicate-pending check misses a genuine duplicate. Not triggered by NFC-emitting clients (the common case); fix is a one-line `Normalizer.normalize(..., Form.NFC)`. [backend/.../application/NormalizedEmail.java:35]
 - **TTL-boundary nanosecond vs microsecond precision divergence.** The domain's `InviteState.isExpiredAt` compares full-nanosecond `Instant`s; the read-model filter goes through PostgreSQL `TIMESTAMPTZ` (microsecond truncation). An `invitedAt` carrying sub-microsecond nanos, queried within the same microsecond as `invitedAt + TTL`, can be classified pending vs expired inconsistently for one tick. Negligible one-microsecond window; the aggregate remains source of truth. [backend/.../adapter/out/JdbcInviteReadModel.java:37]
 - **Reused inviteId on a past-TTL re-invite strands the read-model row.** If a client re-invited the same past-TTL email reusing the *same* `inviteId`, stream order projects `InviteExpired(X)` → status EXPIRED, then `MemberInvited(X)` → `INSERT ... ON CONFLICT DO NOTHING` → no-op, so the resurrected invite never re-appears as pending. Not reachable via the shipped client (the cubit mints a fresh `inviteId` per intent, freshened after success/email-change); pure read-model robustness debt. [backend/.../adapter/out/JdbcInviteReadModel.java:59]
-- **No compensation/outbox for a post-append side-store write failure (D2).** `InvitePersonHandler` appends `MemberInvited` then writes the raw email to the side-store; the ordering is deliberate (append-first avoids leaking PII for an invite that never landed). But if the side-store write throws after a successful append, the invite folds PENDING — blocking any re-invite of that email with a 409 for the full 7-day TTL — with no deliverable address, and the stale-invite purge is skipped. There is no retry/outbox path in 4.1 (the review corrected the javadoc that wrongly claimed "self-heals"). Real fix: a transactional outbox or explicit compensation so the side-store write and the append share a recovery boundary. Low likelihood (requires a DB failure in the sub-millisecond window between append and store). [backend/.../application/command/InvitePersonHandler.java:128]
 
 ## Deferred from: code review of story-4.2 (2026-09-07)
 
@@ -295,3 +293,9 @@
   easy as giving — full-account deletion may not satisfy that. Re-confirm with Timo at the Epic 6
   erasure/revocation design whether a lighter in-app "withdraw consent" affordance is needed. (Round-1
   already tracked the retention policy and the inert notice link, above — not re-listed here.)
+
+## Deferred from: code review of story-7.5 (2026-09-17)
+
+- **`invitePerson` no longer runs the invite-time lazy past-TTL expiry the 7.5 task said to keep.** `Household.invitePerson` now only raises `MemberInvited`; the "Keep the past-TTL lazy-expiry housekeeping (AC5 of 4.1)" task was inseparable from the removed duplicate-by-email loop. No functional harm — expiry is still enforced lazily at accept (`acceptInvite`) and filtered by the read model (`isExpiredAt`); the only effect is that `pendingInvitesById` never sheds never-accepted PENDING entries as `InviteExpired` events. Re-adding a sweep adds complexity for no user-facing benefit. [backend/.../domain/Household.java:198-206]
+- **ADR-0001 (crypto-shredding) is premised on the retired `invite_email_side_store` + duplicate-check HMAC.** ADRs are append-only history; annotate with a superseding note rather than edit. Not in 7.5's AC scope. [docs/adr/0001-*]
+- **`deferred-work.md:133` (reused-inviteId strands read-model row) is now even less reachable.** With invite-time `InviteExpired` housekeeping removed, the `InviteExpired(X)→MemberInvited(X)` sequence can no longer arise from the aggregate. Story 7.5 AC5 deliberately kept lines 133/134; leaving as-is.

@@ -1,14 +1,11 @@
 package de.sgart.collaboration.adapter.in;
 
-import de.sgart.collaboration.application.exception.AlreadyAHouseholdMemberApplicationException;
 import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.DuplicateItemApplicationException;
-import de.sgart.collaboration.application.exception.DuplicatePendingInviteApplicationException;
 import de.sgart.collaboration.application.exception.DuplicateStoreNameApplicationException;
 import de.sgart.collaboration.application.exception.GovernanceNotPermittedApplicationException;
 import de.sgart.collaboration.application.exception.InvalidCommandEnvelopeException;
 import de.sgart.collaboration.application.exception.InvalidHouseholdNameException;
-import de.sgart.collaboration.application.exception.InvalidInviteEmailApplicationException;
 import de.sgart.collaboration.application.exception.InvalidItemNameException;
 import de.sgart.collaboration.application.exception.InvalidItemNoteException;
 import de.sgart.collaboration.application.exception.InvalidItemQuantityException;
@@ -67,21 +64,6 @@ class WriteErrorAdvice {
     @ExceptionHandler(DuplicateStoreNameApplicationException.class)
     ResponseEntity<ErrorDescriptor> handleDuplicateStoreName(DuplicateStoreNameApplicationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
-    }
-
-    @ExceptionHandler(DuplicatePendingInviteApplicationException.class)
-    ResponseEntity<ErrorDescriptor> handleDuplicatePendingInvite(DuplicatePendingInviteApplicationException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
-    }
-
-    @ExceptionHandler(AlreadyAHouseholdMemberApplicationException.class)
-    ResponseEntity<ErrorDescriptor> handleAlreadyAHouseholdMember(AlreadyAHouseholdMemberApplicationException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
-    }
-
-    @ExceptionHandler(InvalidInviteEmailApplicationException.class)
-    ResponseEntity<ErrorDescriptor> handleInvalidInviteEmail(InvalidInviteEmailApplicationException exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
     }
 
     @ExceptionHandler(InviteNotFoundApplicationException.class)

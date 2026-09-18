@@ -6,8 +6,7 @@ import java.util.Optional;
 
 /**
  * The Story 7.3 stand-in for {@link FindAccountByEmail}: never finds a match, since no real
- * Keycloak account exists when the Admin adapter is disabled (mirrors {@link
- * DeferredFindHouseholdMemberByEmail}). Wired whenever {@code
+ * Keycloak account exists when the Admin adapter is disabled. Wired whenever {@code
  * sgart.identity.keycloak-admin.enabled=false} (the default).
  */
 public final class DeferredFindAccountByEmail implements FindAccountByEmail {

@@ -12,6 +12,17 @@ class InviteLink {
   final String householdId;
   final String inviteId;
 
+  /// Builds the shareable colon-form join code (Story 7.5, AC1) — the same string [tryParse]
+  /// accepts back, so a code round-trips through create → share → paste unchanged.
+  static String codeFor({required String householdId, required String inviteId}) =>
+      '$householdId:$inviteId';
+
+  /// Builds the shareable `https` link against [baseUrl] — mirrors the backend's
+  /// `InviteLinkFactory` exactly (`<base-url>?h=<householdId>&i=<inviteId>`), so the app-built link
+  /// and the server-built one are byte-for-byte the same shape.
+  static String linkFor({required String baseUrl, required String householdId, required String inviteId}) =>
+      '$baseUrl?h=$householdId&i=$inviteId';
+
   static InviteLink? tryParse(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {

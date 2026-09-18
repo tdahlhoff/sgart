@@ -2,7 +2,6 @@ package de.sgart.collaboration.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
@@ -371,7 +370,6 @@ class DomainEventJsonCodecTest {
                 EventId.generate(),
                 householdId,
                 InviteId.generate(),
-                new EmailHmac("hmac-of-anna-example-com"),
                 MemberId.generate(),
                 HouseholdRole.PARTICIPANT,
                 Instant.parse("2026-09-06T10:00:00Z"));
@@ -381,24 +379,21 @@ class DomainEventJsonCodecTest {
     }
 
     @Test
-    void memberInvitedJsonPayloadNeverCarriesTheRawEmail() {
-        String hexDigest = "9f2b7a3c4e5d6a1b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7081920a1b2c3";
+    void memberInvitedJsonPayloadCarriesNoEmailOrHmacComponent() {
         MemberInvited event = new MemberInvited(
                 EventId.generate(),
                 householdId,
                 InviteId.generate(),
-                new EmailHmac(hexDigest),
                 MemberId.generate(),
                 HouseholdRole.PARTICIPANT,
                 Instant.parse("2026-09-06T10:00:00Z"));
 
         String json = new String(codec.toJsonBytes(event), java.nio.charset.StandardCharsets.UTF_8);
 
-        // Privacy round-trip guard (AD-6): the wire payload carries only the emailHmac digest —
-        // never an "@"-shaped raw address, and no field named plain "email".
+        // Privacy guard (Story 7.5, AD-6): the invite path collects no email at all, so the wire
+        // payload carries no "@"-shaped raw address and no email-derived field.
         assertThat(json).doesNotContain("@");
-        assertThat(json).contains("emailHmac").contains(hexDigest);
-        assertThat(json).doesNotContain("\"email\"");
+        assertThat(json).doesNotContain("email");
     }
 
     @Test

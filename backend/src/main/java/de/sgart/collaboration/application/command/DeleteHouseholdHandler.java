@@ -1,7 +1,6 @@
 package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.application.CommandFieldTranslations;
-import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.exception.GovernanceNotPermittedApplicationException;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
@@ -12,7 +11,6 @@ import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
-import de.sgart.shared.InviteId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
 import java.util.Objects;
@@ -30,29 +28,19 @@ import java.util.Objects;
  * Household#deleteHousehold} checks the already-deleted no-op before the Admin gate, so the retry
  * still reaches (and re-runs) the retract even if the caller's role changed concurrently in the
  * meantime.
- *
- * <p>Also purges the raw email of every still-{@code PENDING} invite (AD-6): revoke and accept
- * already purge on their own invite, but a household delete otherwise never does, leaving pending
- * invites' raw emails behind — and undiscoverable once {@code invite_read_model} is purged.
  */
 public final class DeleteHouseholdHandler {
 
     private final EventStore eventStore;
     private final ResolveMemberIdentity resolveMemberIdentity;
     private final RetractMembership retractMembership;
-    private final InviteEmailSideStore inviteEmailSideStore;
 
     public DeleteHouseholdHandler(
-            EventStore eventStore,
-            ResolveMemberIdentity resolveMemberIdentity,
-            RetractMembership retractMembership,
-            InviteEmailSideStore inviteEmailSideStore) {
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity, RetractMembership retractMembership) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.resolveMemberIdentity =
                 Objects.requireNonNull(resolveMemberIdentity, "resolveMemberIdentity must not be null");
         this.retractMembership = Objects.requireNonNull(retractMembership, "retractMembership must not be null");
-        this.inviteEmailSideStore =
-                Objects.requireNonNull(inviteEmailSideStore, "inviteEmailSideStore must not be null");
     }
 
     /**
@@ -85,8 +73,5 @@ public final class DeleteHouseholdHandler {
         }
 
         retractMembership.retractHousehold(householdId);
-        for (InviteId pendingInviteId : household.pendingInviteIds()) {
-            inviteEmailSideStore.purge(pendingInviteId);
-        }
     }
 }

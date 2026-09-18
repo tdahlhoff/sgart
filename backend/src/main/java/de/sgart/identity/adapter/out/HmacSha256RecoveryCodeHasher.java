@@ -10,8 +10,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Production {@link RecoveryCodeHasher} (Story 7.3, design §4) — mirrors {@code
- * collaboration.adapter.out.HmacSha256InviteEmailHasher}'s exact pattern: HMAC-SHA256 with a
+ * Production {@link RecoveryCodeHasher} (Story 7.3, design §4): HMAC-SHA256 with a
  * <strong>stable per-deployment</strong> secret, so a leaked {@code email_recovery_code} table
  * can't be brute-forced back to a live code without the server secret. Fails fast at construction
  * if the secret is blank/unconfigured.

@@ -2,7 +2,6 @@ package de.sgart.collaboration.application.command;
 
 import de.sgart.collaboration.application.CommandFieldTranslations;
 import de.sgart.collaboration.application.ConsentGate;
-import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.exception.ConsentRequiredException;
 import de.sgart.collaboration.application.exception.InviteAlreadyConsumedApplicationException;
 import de.sgart.collaboration.application.exception.InviteExpiredApplicationException;
@@ -29,9 +28,8 @@ import java.util.Objects;
  * Orchestrates {@link AcceptInvite} (AC1–AC5): provision the joiner's {@link MemberId} through the
  * Identity ACL <em>before</em> the aggregate can accept or reject (AD-5), let {@link Household}
  * enforce the invite state machine (AC1, AC3, AC4, AC5), persist the provisioned id only on the
- * success path, append, then purge the side-store row (AC2, AD-6). Mirrors {@link
- * InvitePersonHandler}, but accept needs no already-a-member seam and no email — the joiner's
- * identity comes entirely from their own JWT.
+ * success path, then append. Mirrors {@link InvitePersonHandler}, but accept needs no
+ * already-a-member seam and no email — the joiner's identity comes entirely from their own JWT.
  *
  * <p><strong>Provision-then-persist-on-success</strong> (AD-5, DSGVO data-minimization): unlike
  * {@link CreateHouseholdHandler}, which has no post-issue domain-rejection branch, {@code
@@ -52,30 +50,18 @@ import java.util.Objects;
  * IssueMemberIdentity#retract}, guarded by {@link ProvisionedMemberId#freshlyProvisioned()} so an
  * existing member's real mapping is never deleted. (The fully atomic answer — a transactional
  * outbox across the JDBC mapping and the KurrentDB stream — is deferred, mirroring 4.1.)
- *
- * <p><strong>Append-before-purge ordering</strong> (AD-6): the side-store is purged only <em>after</em>
- * a successful append. An orphan side-store row (append ok, purge failed) is harmless and
- * self-corrects on a later purge point; the reverse could strand a still-pending invite's
- * deliverability.
  */
 public final class AcceptInviteHandler {
 
     private final EventStore eventStore;
     private final IssueMemberIdentity issueMemberIdentity;
-    private final InviteEmailSideStore inviteEmailSideStore;
     private final Clock clock;
     private final ConsentGate consentGate;
 
     public AcceptInviteHandler(
-            EventStore eventStore,
-            IssueMemberIdentity issueMemberIdentity,
-            InviteEmailSideStore inviteEmailSideStore,
-            Clock clock,
-            ConsentGate consentGate) {
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, Clock clock, ConsentGate consentGate) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
-        this.inviteEmailSideStore =
-                Objects.requireNonNull(inviteEmailSideStore, "inviteEmailSideStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.consentGate = Objects.requireNonNull(consentGate, "consentGate must not be null");
     }
@@ -133,10 +119,6 @@ public final class AcceptInviteHandler {
                     // 410 regardless, and leave persisting the transition to whichever write landed.
                 }
             }
-            // Purge unconditionally: the invite is dead, so its raw email must go (AD-6), even on
-            // the already-EXPIRED branch and even if an earlier expiry's purge was lost — purge is
-            // idempotent, and there is no other purge point for a terminal EXPIRED invite.
-            inviteEmailSideStore.purge(inviteId);
             throw new InviteExpiredApplicationException(expired.getMessage());
         } catch (InviteNotFoundException notFound) {
             throw new InviteNotFoundApplicationException(notFound.getMessage());
@@ -163,9 +145,5 @@ public final class AcceptInviteHandler {
             }
             throw appendFailed;
         }
-
-        // Only after a successful append: purge the invite's raw-email side-store row (AC2, AD-6).
-        // A no-op re-accept (no events to append) still purges idempotently.
-        inviteEmailSideStore.purge(inviteId);
     }
 }

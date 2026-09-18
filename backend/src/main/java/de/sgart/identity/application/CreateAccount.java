@@ -7,7 +7,7 @@ import de.sgart.identity.domain.KeycloakUserId;
  * public key is bound to, or idempotently reuses the existing one. Published as a plain {@code
  * (String, String) -> KeycloakUserId} contract so the derived-username/public-key shapes stay
  * transport-agnostic; the real Keycloak Admin call lives entirely in {@code
- * adapter.out.KeycloakAdminCreateAccount} (AD-1/AD-2), mirroring {@link FindHouseholdMemberByEmail}.
+ * adapter.out.KeycloakAdminCreateAccount} (AD-1/AD-2).
  *
  * <p>The 7.1 stand-in, {@code DeferredCreateAccount}, stays wired whenever {@code
  * sgart.identity.keycloak-admin.enabled=false} (the default — tests, CI, local dev with no admin

@@ -1,8 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ConsentGate;
-import de.sgart.collaboration.application.InviteEmailHasher;
-import de.sgart.collaboration.application.InviteEmailSideStore;
 import de.sgart.collaboration.application.InviteLinkFactory;
 import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
@@ -51,7 +49,6 @@ import de.sgart.collaboration.domain.readmodel.ItemSuggestionReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
-import de.sgart.identity.application.FindHouseholdMemberByEmail;
 import de.sgart.identity.application.GetConsentStatus;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
@@ -228,17 +225,6 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    InviteEmailHasher inviteEmailHasher(
-            @Value("${sgart.invite.email-hmac-secret}") String emailHmacSecret) {
-        return new HmacSha256InviteEmailHasher(emailHmacSecret);
-    }
-
-    @Bean
-    InviteEmailSideStore inviteEmailSideStore(org.springframework.jdbc.core.simple.JdbcClient jdbcClient) {
-        return new JdbcInviteEmailSideStore(jdbcClient);
-    }
-
-    @Bean
     InviteLinkFactory inviteLinkFactory(@Value("${sgart.invite.base-url}") String baseUrl) {
         return new InviteLinkFactory(baseUrl);
     }
@@ -247,21 +233,11 @@ public class CollaborationApplicationConfig {
     InvitePersonHandler invitePersonHandler(
             EventStore eventStore,
             ResolveMemberIdentity resolveMemberIdentity,
-            FindHouseholdMemberByEmail findHouseholdMemberByEmail,
-            InviteEmailHasher inviteEmailHasher,
-            InviteEmailSideStore inviteEmailSideStore,
             InviteLinkFactory inviteLinkFactory,
             Clock clock,
             Environment environment) {
         return new InvitePersonHandler(
-                eventStore,
-                resolveMemberIdentity,
-                findHouseholdMemberByEmail,
-                inviteEmailHasher,
-                inviteEmailSideStore,
-                inviteLinkFactory,
-                clock,
-                environment.acceptsProfiles(Profiles.of("dev")));
+                eventStore, resolveMemberIdentity, inviteLinkFactory, clock, environment.acceptsProfiles(Profiles.of("dev")));
     }
 
     @Bean
@@ -271,12 +247,8 @@ public class CollaborationApplicationConfig {
 
     @Bean
     AcceptInviteHandler acceptInviteHandler(
-            EventStore eventStore,
-            IssueMemberIdentity issueMemberIdentity,
-            InviteEmailSideStore inviteEmailSideStore,
-            Clock clock,
-            ConsentGate consentGate) {
-        return new AcceptInviteHandler(eventStore, issueMemberIdentity, inviteEmailSideStore, clock, consentGate);
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, Clock clock, ConsentGate consentGate) {
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, clock, consentGate);
     }
 
     @Bean
@@ -303,19 +275,13 @@ public class CollaborationApplicationConfig {
 
     @Bean
     DeleteHouseholdHandler deleteHouseholdHandler(
-            EventStore eventStore,
-            ResolveMemberIdentity resolveMemberIdentity,
-            RetractMembership retractMembership,
-            InviteEmailSideStore inviteEmailSideStore) {
-        return new DeleteHouseholdHandler(eventStore, resolveMemberIdentity, retractMembership, inviteEmailSideStore);
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity, RetractMembership retractMembership) {
+        return new DeleteHouseholdHandler(eventStore, resolveMemberIdentity, retractMembership);
     }
 
     @Bean
-    RevokeInviteHandler revokeInviteHandler(
-            EventStore eventStore,
-            ResolveMemberIdentity resolveMemberIdentity,
-            InviteEmailSideStore inviteEmailSideStore) {
-        return new RevokeInviteHandler(eventStore, resolveMemberIdentity, inviteEmailSideStore);
+    RevokeInviteHandler revokeInviteHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
+        return new RevokeInviteHandler(eventStore, resolveMemberIdentity);
     }
 
     @Bean

@@ -96,8 +96,8 @@ docker compose ps                # wait until postgres, kurrentdb, keycloak are 
 ### 1.2 Run the backend
 
 The backend needs Flyway (Postgres migrations) and the read-model projector switched on for a real
-run — they default to *off* so tests/CI don't need live infra. The dev profile supplies the invite
-HMAC secret automatically.
+run — they default to *off* so tests/CI don't need live infra. The dev profile supplies the
+email-recovery code HMAC secret (Story 7.3) automatically.
 
 ```bash
 cd ~/projects/sgart/backend
@@ -279,9 +279,8 @@ SSE while the app is foregrounded):
 
 Story 4.6 wired every seam that is unit/integration-testable without a production host (locked
 decision D1): the host-scoped `de.sgart.app://invite` deep-link handler, the minimal static
-`/invite` web-fallback page, the config-gated `KeycloakAdminFindHouseholdMemberByEmail` lookup
-(D4), and the single `InviteLinkFactory` (`sgart.invite.base-url`) every entry point builds its
-link from. None of this needs external credentials or a real domain for `flutter test`/`flutter
+`/invite` web-fallback page, and the single `InviteLinkFactory` (`sgart.invite.base-url`) every
+entry point builds its link from. None of this needs external credentials or a real domain for `flutter test`/`flutter
 analyze`/the backend test suite to stay green — it is only needed to verify the **production**
 entry points end-to-end: a browser or another device opening a real invite link, without the app
 already installed via USB/emulator.
@@ -341,29 +340,6 @@ the native app). Update `sgart.invite.base-url`
 (`SGART_INVITE_BASE_URL=https://<domain>/invite`) and the web page's served `authorizeUrl`/
 `tokenUrl` (driven by `sgart.security.jwt.issuer`, already environment-driven) to match.
 
-### SMTP invite-email delivery (needs the mail-unblocked VPS + SPF/DKIM/DMARC)
-
-`InvitePersonHandler` already builds the link via `InviteLinkFactory` and logs it at `INFO` under
-the `dev` profile only (Story 4.6, AC6 — opaque UUIDs, not PII, AD-6). Wiring **delivery** needs
-Keycloak SMTP configured per ADR-0002 §8 (first requires netcup's outbound mail-block removed, plus
-SPF/DKIM/DMARC on the sending domain) *or* a transactional email relay (SendGrid/Postmark/etc.)
-called from a new adapter that reads the `InviteLinkFactory`-built link and the invitee's raw email
-from `InviteEmailSideStore` (the one place it is allowed to live, AD-6) — build this the same way
-D4 wires `KeycloakAdminFindHouseholdMemberByEmail`: a `@ConditionalOnProperty`-gated adapter,
-default off, no admin/SMTP credentials needed for `./gradlew test`.
-
-### Enabling the Keycloak Admin lookup (D4)
-
-Local/dev testing already has a seeded confidential client (`sgart-admin`,
-`keycloak/realm-sgart.json`) with a service-account `view-users` role on `realm-management` — set
-`SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` (default `false`) against the local Keycloak from this
-guide's Part 1 and `KeycloakAdminFindHouseholdMemberByEmail` replaces
-`DeferredFindHouseholdMemberByEmail`; the 4.1 already-a-member check (AC3/E5) then resolves for
-real. For production: provision a **separate** confidential client with only the `view-users`
-realm-management role (least privilege — never reuse `sgart-admin`'s dev secret,
-`local-dev-only-keycloak-admin-secret-change-me`) and set
-`SGART_IDENTITY_KEYCLOAK_ADMIN_BASE_URL`/`_REALM`/`_CLIENT_ID`/`_CLIENT_SECRET` to match.
-
 ### Silent account provisioning (Story 7.1): the custom SPI, rate limiting, and the admin secret
 
 **Deploying the custom Direct-Grant authenticator SPI.** The device-signed-challenge sign-in
@@ -399,11 +375,11 @@ network (campus Wi-Fi, CGNAT mobile carriers) can see legitimate users share a r
 **Device attestation** (Play Integrity / DeviceCheck) is a named post-beta fast-follow that
 meaningfully raises the bar here — explicitly out of scope for this story.
 
-**The `sgart-admin` secret.** Story 7.1 adds `manage-users` to `sgart-admin`'s `realm-management`
-service-account roles (alongside 4.6's `view-users`) so `KeycloakAdminCreateAccount` can create and
-delete real accounts — which makes the checked-in dev placeholder secret
-(`local-dev-only-keycloak-admin-secret-change-me`, `keycloak/realm-sgart.json`) more urgent to
-replace than it was for the read-only D4 lookup. Do not ship real account creation against the
+**The `sgart-admin` secret.** Story 7.1 gives `sgart-admin`'s `realm-management` service account the
+`manage-users` role so `KeycloakAdminCreateAccount` can create and delete real accounts — which
+makes the checked-in dev placeholder secret
+(`local-dev-only-keycloak-admin-secret-change-me`, `keycloak/realm-sgart.json`) urgent to
+replace. Do not ship real account creation against the
 placeholder secret; provision a real secret (a secrets manager, or at minimum an environment
 variable never committed) before enabling `SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` outside dev.
 
@@ -417,13 +393,13 @@ reset-credentials link — the AC forbids a browser page), via `JavaMailSenderRe
 no-op, so `./gradlew test`/CI/local dev never need a live SMTP server. Set `SGART_IDENTITY_MAIL_FROM`
 and the standard `spring.mail.*` properties (`SGART_SMTP_HOST`/`_PORT`/`_USERNAME`/`_PASSWORD`) to a
 real netcup mailbox once its outbound mail-block is removed and **SPF/DKIM** are configured on the
-sending domain (same prerequisite as the invite-email delivery seam above) — sending recovery codes
-from an unauthenticated domain will land in spam or be rejected outright.
+sending domain — sending recovery codes from an unauthenticated domain will land in spam or be
+rejected outright.
 
 Also set `SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET` to a real per-deployment secret (never the
 checked-in dev placeholder, `local-dev-only-email-recovery-hmac-secret-change-me`) before enabling
 either the mail adapter or the Keycloak Admin adapter outside dev — `HmacSha256RecoveryCodeHasher`
-fails context startup on a blank secret, mirroring the invite-email HMAC secret's guard.
+fails context startup on a blank secret.
 
 The recovery/rebind endpoints add no new unauthenticated surface (D-C) and inherit the same
 IP-based rate-limiting seam (ADR-0002) documented above for `POST /api/v1/accounts`; the per-code

@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-17 (Story 7.4 round-2 code review: 4 patches applied+verified → done; both suites green (backend ./gradlew test + flutter test 721/analyze); 3 deferred to Epic 6/pre-beta; 10 rejected)
+last_updated: 2026-09-18 (Story 7.5 — 7 review patches applied; patch-round re-review (Opus 4.8, full 4-layer) → 2 more patches applied (testable base-url guard incl. blank-override reject + card-survives-failed-create test), 8 rejected; both suites re-run green (backend ./gradlew test BUILD SUCCESSFUL, app flutter test 731 + analyze 0) → done)
 # Story 7.3 ready-for-dev (create-story, Opus 4.8) 2026-09-15 — Epic 7's 3rd build story: opt-in
 # "recover by email" fallback. **FULL-STACK** (backend + app), unlike client-only 7.2. Fed by the
 # architect design note (epic-7-story-7.3-recover-by-email-design.md) with all four forks pre-resolved
@@ -311,7 +311,7 @@ development_status:
   7-2-recovery-phrase-reveal-and-profile-re-view: done
   7-3-recover-by-email-opt-in: done
   7-4-consent-capture: done
-  7-5-invite-by-code-or-link-retire-email-path: backlog
+  7-5-invite-by-code-or-link-retire-email-path: done  # dev-story + 7 review patches + patch-round re-review (2 more patches, 8 rejected) all applied 2026-09-18; both suites green
   epic-7-retrospective: optional
 
   # Epic 5: Offline Resilience & Conflict

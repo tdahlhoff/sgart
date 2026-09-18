@@ -17,7 +17,6 @@ import de.sgart.collaboration.domain.event.MemberPromoted;
 import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
-import de.sgart.collaboration.domain.exception.DuplicatePendingInviteException;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
 import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
@@ -303,7 +302,7 @@ class HouseholdTest {
                         new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
 
         household.invitePerson(
-                participantId, InviteId.generate(), new EmailHmac("hmac-1"), Instant.now(), CommandId.generate());
+                participantId, InviteId.generate(), Instant.now(), CommandId.generate());
 
         assertThat(household.uncommittedEvents()).hasSize(1);
         assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
@@ -316,6 +315,7 @@ class HouseholdTest {
         assertNoPersonalDataComponent(HouseholdRenamed.class);
         assertNoPersonalDataComponent(StoreAdded.class);
         assertNoPersonalDataComponent(StoreArchived.class);
+        assertNoPersonalDataComponent(MemberInvited.class);
         assertNoPersonalDataComponent(InviteExpired.class);
         assertNoPersonalDataComponent(InviteAccepted.class);
         assertNoPersonalDataComponent(InviteRevoked.class);
@@ -327,23 +327,21 @@ class HouseholdTest {
     }
 
     @Test
-    void invitePerson_raisesMemberInvitedCarryingTheEmailHmacNotTheEmail() {
+    void invitePerson_raisesMemberInvitedCarryingNoEmailDerivedField() {
         Household household = createdHousehold();
         household.markEventsCommitted();
         InviteId inviteId = InviteId.generate();
-        EmailHmac emailHmac = new EmailHmac("hmac-of-anna-example-com");
         Instant now = Instant.parse("2026-09-06T10:00:00Z");
 
-        household.invitePerson(adminMemberId, inviteId, emailHmac, now, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, now, CommandId.generate());
 
         assertThat(household.uncommittedEvents()).hasSize(1);
         MemberInvited invited = (MemberInvited) household.uncommittedEvents().get(0);
         assertThat(invited.inviteId()).isEqualTo(inviteId);
-        assertThat(invited.emailHmac()).isEqualTo(emailHmac);
         assertThat(invited.invitedBy()).isEqualTo(adminMemberId);
         assertThat(invited.role()).isEqualTo(HouseholdRole.PARTICIPANT);
         assertThat(invited.invitedAt()).isEqualTo(now);
-        assertNoRawEmailComponent(MemberInvited.class);
+        assertNoPersonalDataComponent(MemberInvited.class);
     }
 
     @Test
@@ -357,11 +355,7 @@ class HouseholdTest {
                         new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
 
         household.invitePerson(
-                participantId,
-                InviteId.generate(),
-                new EmailHmac("hmac-1"),
-                Instant.parse("2026-09-06T10:00:00Z"),
-                CommandId.generate());
+                participantId, InviteId.generate(), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
 
         assertThat(household.uncommittedEvents()).hasSize(1);
         assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
@@ -373,61 +367,25 @@ class HouseholdTest {
         MemberId strangerId = MemberId.generate();
 
         assertThatThrownBy(() -> household.invitePerson(
-                        strangerId,
-                        InviteId.generate(),
-                        new EmailHmac("hmac-1"),
-                        Instant.parse("2026-09-06T10:00:00Z"),
-                        CommandId.generate()))
+                        strangerId, InviteId.generate(), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate()))
                 .isInstanceOf(NotAHouseholdMemberException.class);
     }
 
     @Test
-    void invitePerson_withANonExpiredPendingInviteToTheSameEmail_throwsDuplicatePendingInvite() {
-        Household household = createdHousehold();
-        EmailHmac emailHmac = new EmailHmac("hmac-1");
-        Instant firstInviteAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, InviteId.generate(), emailHmac, firstInviteAt, CommandId.generate());
-
-        assertThatThrownBy(() -> household.invitePerson(
-                        adminMemberId,
-                        InviteId.generate(),
-                        emailHmac,
-                        firstInviteAt.plusSeconds(60),
-                        CommandId.generate()))
-                .isInstanceOf(DuplicatePendingInviteException.class);
-    }
-
-    @Test
-    void invitePerson_withAPastTtlPendingInviteToTheSameEmail_raisesInviteExpiredThenMemberInvited() {
-        Household household = createdHousehold();
-        EmailHmac emailHmac = new EmailHmac("hmac-1");
-        InviteId staleInviteId = InviteId.generate();
-        Instant firstInviteAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, staleInviteId, emailHmac, firstInviteAt, CommandId.generate());
-        household.markEventsCommitted();
-
-        Instant pastTtl = firstInviteAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
-        InviteId newInviteId = InviteId.generate();
-        household.invitePerson(adminMemberId, newInviteId, emailHmac, pastTtl, CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(2);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteExpired.class);
-        assertThat(((InviteExpired) household.uncommittedEvents().get(0)).inviteId()).isEqualTo(staleInviteId);
-        assertThat(household.uncommittedEvents().get(1)).isInstanceOf(MemberInvited.class);
-        assertThat(((MemberInvited) household.uncommittedEvents().get(1)).inviteId()).isEqualTo(newInviteId);
-    }
-
-    @Test
-    void invitePerson_toADifferentEmail_isAllowedAlongsideAnExistingPendingInvite() {
+    void invitePerson_sameHouseholdTwice_createsTwoIndependentInvites() {
         Household household = createdHousehold();
         Instant now = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, InviteId.generate(), new EmailHmac("hmac-1"), now, CommandId.generate());
+        InviteId firstInviteId = InviteId.generate();
+        household.invitePerson(adminMemberId, firstInviteId, now, CommandId.generate());
         household.markEventsCommitted();
 
-        household.invitePerson(adminMemberId, InviteId.generate(), new EmailHmac("hmac-2"), now, CommandId.generate());
+        InviteId secondInviteId = InviteId.generate();
+        household.invitePerson(adminMemberId, secondInviteId, now, CommandId.generate());
 
         assertThat(household.uncommittedEvents()).hasSize(1);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
+        MemberInvited invited = (MemberInvited) household.uncommittedEvents().get(0);
+        assertThat(invited.inviteId()).isEqualTo(secondInviteId);
+        assertThat(firstInviteId).isNotEqualTo(secondInviteId);
     }
 
     @Test
@@ -435,7 +393,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
         MemberId joiner = MemberId.generate();
 
@@ -461,7 +419,7 @@ class HouseholdTest {
                         new MemberJoined(EventId.generate(), householdId, existingMember, HouseholdRole.PARTICIPANT)));
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
 
         household.acceptInvite(inviteId, existingMember, invitedAt.plusSeconds(60), CommandId.generate());
@@ -475,7 +433,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
         Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
 
@@ -493,7 +451,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
         Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
         assertThatThrownBy(() -> household.acceptInvite(inviteId, MemberId.generate(), pastTtl, CommandId.generate()))
@@ -522,7 +480,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
         MemberId joiner = MemberId.generate();
         household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(60), CommandId.generate());
@@ -538,7 +496,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
         household.acceptInvite(inviteId, MemberId.generate(), invitedAt.plusSeconds(60), CommandId.generate());
         household.markEventsCommitted();
@@ -768,7 +726,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.markEventsCommitted();
 
         household.revokeInvite(adminMemberId, inviteId, CommandId.generate());
@@ -785,7 +743,7 @@ class HouseholdTest {
         Household household = householdWithAdminAndParticipant(participantId);
         InviteId inviteId = InviteId.generate();
         household.invitePerson(
-                adminMemberId, inviteId, new EmailHmac("hmac-1"), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
+                adminMemberId, inviteId, Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
         household.markEventsCommitted();
 
         assertThatThrownBy(() -> household.revokeInvite(participantId, inviteId, CommandId.generate()))
@@ -808,7 +766,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         household.invitePerson(
-                adminMemberId, inviteId, new EmailHmac("hmac-1"), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
+                adminMemberId, inviteId, Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
         household.revokeInvite(adminMemberId, inviteId, CommandId.generate());
         household.markEventsCommitted();
 
@@ -822,7 +780,7 @@ class HouseholdTest {
         Household household = createdHousehold();
         InviteId inviteId = InviteId.generate();
         Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, new EmailHmac("hmac-1"), invitedAt, CommandId.generate());
+        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
         household.acceptInvite(inviteId, MemberId.generate(), invitedAt.plusSeconds(60), CommandId.generate());
         household.markEventsCommitted();
 
@@ -915,21 +873,5 @@ class HouseholdTest {
                 .noneMatch(name -> name.contains("displayname")
                         || name.contains("email")
                         || name.contains("keycloak"));
-    }
-
-    /**
-     * {@code MemberInvited} is the one event allowed to carry an email-*named* component — but only
-     * the {@code emailHmac} digest, never the raw address (AD-6). Distinct from {@link
-     * #assertNoPersonalDataComponent}, which bans the substring "email" outright: here a component
-     * literally named/containing "email" is only acceptable if it is exactly {@code emailHmac}.
-     */
-    private void assertNoRawEmailComponent(Class<? extends DomainEvent> eventType) {
-        List<String> componentNames = Arrays.stream(eventType.getRecordComponents())
-                .map(RecordComponent::getName)
-                .map(name -> name.toLowerCase(Locale.ROOT))
-                .toList();
-
-        assertThat(componentNames).noneMatch(name -> name.contains("email") && !name.equals("emailhmac"));
-        assertThat(componentNames).contains("emailHmac".toLowerCase(Locale.ROOT));
     }
 }

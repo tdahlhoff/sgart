@@ -55,20 +55,19 @@ void main() {
       await tester.tap(find.byKey(const Key('manage-invites-row')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('invite-email-field')), findsOneWidget);
+      expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
     });
 
-    testWidgets('sendingAnInviteFromTheInvitePageCallsTheBackendAndAppendsAPendingRow', (tester) async {
+    testWidgets('creatingAnInviteFromTheInvitePageCallsTheBackendAndAppendsAPendingRow', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.tap(find.byKey(const Key('manage-invites-row')));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const Key('invite-email-field')), 'anna@example.com');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('invite-send-button')));
+      await tester.tap(find.byKey(const Key('invite-create-button')));
       await tester.pumpAndSettle();
 
-      expect(invitesApi.lastSentEmail, 'anna@example.com');
+      expect(invitesApi.createCallCount, 1);
+      expect(find.byKey(const Key('invite-created-card')), findsOneWidget);
       expect(find.byKey(const Key('invites-pending-empty-state')), findsNothing);
     });
 

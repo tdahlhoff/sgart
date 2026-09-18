@@ -42,79 +42,90 @@ void main() {
       await cubit.close();
     });
 
-    test('sendInvite_onSuccessOptimisticallyAppendsAPendingInviteAndSendsTheTrimmedEmail', () async {
+    test('createInvite_onSuccessOptimisticallyAppendsAPendingInviteAndSurfacesItsCode', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.sendInvite('  anna@example.com  ');
+      await cubit.createInvite();
 
-      expect(invitesApi.lastSentEmail, 'anna@example.com');
+      expect(invitesApi.createCallCount, 1);
       expect(cubit.state.invites, hasLength(1));
+      expect(cubit.state.lastCreatedInviteId, isNotNull);
+      expect(cubit.state.lastCreatedInviteId, invitesApi.lastCreatedInviteId);
       expect(cubit.state.isSubmitting, isFalse);
       expect(cubit.state.actionError, isNull);
       await cubit.close();
     });
 
-    test('sendInvite_surfacesADuplicatePendingRejectionAsAnInlineActionError', () async {
-      invitesApi.sendInviteError =
-          const AppException(AppError(code: 'invite.duplicatePending', message: 'debug'));
+    test('createInvite_sameHouseholdTwice_createsTwoIndependentInvites', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.sendInvite('anna@example.com');
+      await cubit.createInvite();
+      await cubit.createInvite();
 
-      expect(cubit.state.actionError?.code, 'invite.duplicatePending');
+      expect(invitesApi.createCallCount, 2);
+      expect(cubit.state.invites, hasLength(2));
+      expect(invitesApi.createInviteIds.toSet(), hasLength(2));
+      await cubit.close();
+    });
+
+    test('createInvite_surfacesARejectionAsAnInlineActionError', () async {
+      invitesApi.createInviteError = const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
+      final cubit = buildCubit();
+      await cubit.bootstrap();
+
+      await cubit.createInvite();
+
+      expect(cubit.state.actionError?.code, 'identity.notAMember');
       expect(cubit.state.isSubmitting, isFalse);
       expect(cubit.state.invites, isEmpty);
       await cubit.close();
     });
 
-    test('sendInvite_surfacesAnAlreadyAMemberRejectionAsAnInlineActionError', () async {
-      invitesApi.sendInviteError =
-          const AppException(AppError(code: 'invite.alreadyAMember', message: 'debug'));
+    test('createInvite_afterASuccess_aFailedCreatePreservesLastCreatedInviteId', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.sendInvite('berta@example.com');
+      await cubit.createInvite();
+      final firstInviteId = cubit.state.lastCreatedInviteId;
+      expect(firstInviteId, isNotNull);
 
-      expect(cubit.state.actionError?.code, 'invite.alreadyAMember');
+      // A subsequent create that fails must not wipe the earlier invite's shareable card — the
+      // earlier invite is still valid and pending.
+      invitesApi.createInviteError = const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      await cubit.createInvite();
+
+      expect(cubit.state.lastCreatedInviteId, firstInviteId);
+      expect(cubit.state.actionError?.code, 'network.unreachable');
+      expect(cubit.state.isSubmitting, isFalse);
       await cubit.close();
     });
 
-    test('sendInvite_blocksAnImplausibleEmailClientSideWithoutCallingTheApi', () async {
-      final cubit = buildCubit();
-      await cubit.bootstrap();
-
-      await cubit.sendInvite('not-an-email');
-
-      expect(invitesApi.sendCallCount, 0);
-      expect(cubit.state.actionError?.code, 'invite.emailInvalid');
-      await cubit.close();
-    });
-
-    test('sendInvite_isSubmittingGuardIgnoresASecondCallWhileTheFirstIsInFlight', () async {
+    test('createInvite_isSubmittingGuardIgnoresASecondCallWhileTheFirstIsInFlight', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
       // Both calls start synchronously; the first sets isSubmitting before yielding at its first
       // await, so the second observes isSubmitting=true and is a no-op (Epic-2 Action 3 lesson) —
-      // never a second concurrent send.
-      final firstSend = cubit.sendInvite('anna@example.com');
-      final secondSend = cubit.sendInvite('anna@example.com');
-      await Future.wait([firstSend, secondSend]);
+      // never a second concurrent create.
+      final firstCreate = cubit.createInvite();
+      final secondCreate = cubit.createInvite();
+      await Future.wait([firstCreate, secondCreate]);
 
-      expect(invitesApi.sendCallCount, 1);
+      expect(invitesApi.createCallCount, 1);
       await cubit.close();
     });
 
-    test('sendInvite_regeneratesTheCommandIdAfterASuccessfulSend', () async {
+    test('createInvite_mintsAFreshCommandIdAndInviteIdEveryCall', () async {
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.sendInvite('anna@example.com');
-      await cubit.sendInvite('berta@example.com');
+      await cubit.createInvite();
+      await cubit.createInvite();
 
-      expect(invitesApi.sendCommandIds.toSet(), hasLength(2));
+      expect(invitesApi.createCommandIds.toSet(), hasLength(2));
+      expect(invitesApi.createInviteIds.toSet(), hasLength(2));
       await cubit.close();
     });
   });

@@ -1,6 +1,5 @@
 package de.sgart.collaboration.adapter.out;
 
-import de.sgart.collaboration.domain.EmailHmac;
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
@@ -273,7 +272,6 @@ final class DomainEventJsonCodec {
                     invited.eventId().value().toString(),
                     invited.householdId().value().toString(),
                     invited.inviteId().value().toString(),
-                    invited.emailHmac().digest(),
                     invited.invitedBy().value().toString(),
                     invited.role().name(),
                     invited.invitedAt().toString()));
@@ -519,7 +517,6 @@ final class DomainEventJsonCodec {
                         EventId.fromString(payload.eventId()),
                         HouseholdId.fromString(payload.householdId()),
                         InviteId.fromString(payload.inviteId()),
-                        new EmailHmac(payload.emailHmac()),
                         MemberId.fromString(payload.invitedBy()),
                         HouseholdRole.valueOf(payload.role()),
                         Instant.parse(payload.invitedAt()));
@@ -660,15 +657,9 @@ final class DomainEventJsonCodec {
 
     private record TripCompletedPayload(String eventId, String tripId, String householdId, String listId) {}
 
-    /** Carries {@code emailHmac} — never the raw email (AD-6). */
+    /** No email or email-derived field (Story 7.5, AD-6). */
     private record MemberInvitedPayload(
-            String eventId,
-            String householdId,
-            String inviteId,
-            String emailHmac,
-            String invitedBy,
-            String role,
-            String invitedAt) {}
+            String eventId, String householdId, String inviteId, String invitedBy, String role, String invitedAt) {}
 
     private record InviteExpiredPayload(String eventId, String householdId, String inviteId) {}
 

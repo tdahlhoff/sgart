@@ -7,7 +7,7 @@ import de.sgart.collaboration.domain.Household;
  * its TTL — whether the expiry is discovered lazily on this very call (Story 4.2, AC3) or the
  * invite was already {@code EXPIRED} on a prior call. A plain domain exception carrying no
  * client-facing {@code code}/{@code ErrorDescriptor} (AD-1); mirrors {@link
- * DuplicatePendingInviteException}.
+ * InviteAlreadyConsumedException}.
  */
 public final class InviteExpiredException extends RuntimeException {
 

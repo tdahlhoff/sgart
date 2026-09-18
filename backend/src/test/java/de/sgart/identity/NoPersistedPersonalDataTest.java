@@ -54,13 +54,16 @@ class NoPersistedPersonalDataTest {
     }
 
     /**
-     * The one documented exception to the guard below (Story 4.1, locked decision 3, AD-6): the
-     * mutable {@code invite_email_side_store} table is the sole place a raw invite email is
-     * persisted, purgeable by {@code invite_id}. Every other migration — including the new {@code
-     * invite_read_model} — keeps tripping the guard on an email/display-name column; this file is
-     * named, not exempted by pattern, so a future migration cannot accidentally widen the exemption.
+     * The two documented exceptions to the guard below, named individually (not by pattern) so a
+     * future migration cannot accidentally widen the exemption: {@code V13} created the mutable
+     * {@code invite_email_side_store} table (Story 4.1, locked decision 3, AD-6) — the sole place a
+     * raw invite email was ever persisted, purgeable by {@code invite_id}; {@code V21} retires it
+     * (Story 7.5, AD-6) — the invite path collects no email at all now, and the {@code DROP TABLE}
+     * statement necessarily still names the table it is dropping.
      */
     private static final String INVITE_EMAIL_SIDE_STORE_MIGRATION = "V13__invite_email_side_store.sql";
+
+    private static final String INVITE_EMAIL_SIDE_STORE_DROP_MIGRATION = "V21__drop_invite_email_side_store.sql";
 
     /**
      * Extends the guarantee to the durable schema (Story 1.6): every Flyway migration — the
@@ -77,6 +80,7 @@ class NoPersistedPersonalDataTest {
             migrationFiles
                     .filter(path -> path.toString().endsWith(".sql"))
                     .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_MIGRATION))
+                    .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_DROP_MIGRATION))
                     .forEach(path -> {
                         String sql = withoutSqlComments(readFile(path)).toLowerCase(Locale.ROOT);
                         forbiddenColumnNameFragments.forEach(forbidden -> assertThat(sql)

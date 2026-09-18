@@ -22,8 +22,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * Stubbed-HTTP unit test (no live Keycloak, CLAUDE.md §6), mirroring {@link
- * KeycloakAdminFindHouseholdMemberByEmailTest}. Proves the Story 7.1 {@link
+ * Stubbed-HTTP unit test (no live Keycloak, CLAUDE.md §6). Proves the Story 7.1 {@link
  * KeycloakAdminCreateAccount} adapter's create-or-reuse idempotency (AC3) and its delete-is-a-no-op
  * behaviour for the retention sweep (AC5).
  */

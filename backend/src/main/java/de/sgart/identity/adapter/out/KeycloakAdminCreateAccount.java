@@ -28,8 +28,8 @@ import org.springframework.web.client.RestClient;
  * in Story 7.3 with the email + R1-rebind Admin capabilities ({@link SetAccountEmail}, {@link
  * RebindAccountCredential}, {@link FindAccountByEmail}, {@link GetAccountDetails}): creates,
  * deletes, and mutates a Keycloak account via the Admin REST API, client-credentials
- * authenticated. Clones {@code KeycloakAdminFindHouseholdMemberByEmail}'s (Story 4.6) shape
- * exactly — same token fetch, same {@link RestClient}, all Keycloak/HTTP types contained in this
+ * authenticated — same token-fetch shape as every other Keycloak Admin adapter in this package;
+ * all Keycloak/HTTP types are contained in this
  * adapter (AD-1/AD-2). One class implements every port because all of them are the same "manage a
  * Keycloak account" responsibility over the same client-credentials token fetch (DRY, design §10
  * "extend the existing Keycloak Admin adapter, it already holds the token fetch and
