@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -87,6 +88,11 @@ class AuthCubit extends Cubit<AuthState> {
       _tokens = tokens;
       await _loadCallerIdentity();
     } on Object catch (error) {
+      // Logged rather than swallowed silently: sign-in is the very first thing the app does, so a
+      // failure here strands a person on the generic error screen with no diagnostic trail —
+      // exactly the case where field debugging otherwise has nothing to go on.
+      developer.log('Silent provisioning / sign-in failed — showing the retry screen',
+          name: 'sgart.auth', error: error);
       _safeEmit(AuthState.failure(_toAppError(error)));
     }
   }

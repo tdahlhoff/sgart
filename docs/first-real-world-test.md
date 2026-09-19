@@ -101,20 +101,30 @@ docker compose ps                # wait until postgres, kurrentdb, keycloak are 
 ### 1.2 Run the backend
 
 The backend needs Flyway (Postgres migrations) and the read-model projector switched on for a real
-run — they default to *off* so tests/CI don't need live infra. The dev profile supplies the
-email-recovery code HMAC secret (Story 7.3) automatically.
+run — they default to *off* so tests/CI don't need live infra. It also needs the Keycloak Admin
+provisioning adapter switched on: since Story 7.1 the app signs in **only** via silent device-account
+provisioning, which creates a real Keycloak account through this adapter — with it off (the default),
+the no-op `Deferred*` adapter is wired instead, no account is ever created, and the app dies on its
+first launch with a generic "Es ist ein Fehler aufgetreten" error screen. The dev profile supplies
+the admin client secret and the email-recovery code HMAC secret (Story 7.3) automatically.
 
 ```bash
 cd ~/projects/sgart/backend
 SGART_FLYWAY_ENABLED=true \
 SGART_PROJECTOR_AUTOSTART=true \
 SGART_POSTGRES_PASSWORD=sgart_dev_password \
+SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true \
 ./gradlew bootRun
 ```
 
 `SGART_POSTGRES_PASSWORD` must match `.env`'s `POSTGRES_PASSWORD` — `docker compose` reads `.env`
 automatically, but a plain shell invocation of `./gradlew bootRun` does not, and the datasource's
 default password is empty (`application.yaml`), which fails Postgres's SCRAM auth outright.
+
+`SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` is what switches on real account provisioning (see the
+"Silent account provisioning" section below for the admin client + secret detail). Leaving it out is
+the single most common reason a fresh run reaches the app's error screen even though every service is
+healthy — the failure is silent on the backend side, since provisioning simply no-ops.
 
 Leave this running. It listens on **`:8081`**. Sanity check from another WSL shell — or run
 [`scripts/health-check.sh`](../scripts/health-check.sh), which checks all of this (docker compose
