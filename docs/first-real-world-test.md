@@ -84,6 +84,11 @@ Enable USB debugging on the phone: **Settings → About phone → tap Build numb
 
 ## Part 1 — Start the backend stack (WSL2)
 
+> **Shortcut:** [`scripts/start.sh`](../scripts/start.sh) automates all of Part 1 (and the emulator
+> in Part 2/3 + `flutter run`) in one command — infra, backend with the correct flags, emulator, and
+> `adb reverse`. The manual steps below remain the reference for what it does and for a
+> physical-phone run. Tear down with [`scripts/stop.sh`](../scripts/stop.sh).
+
 ### 1.1 Local infrastructure
 
 ```bash

@@ -90,6 +90,28 @@ Run [`scripts/health-check.sh`](scripts/health-check.sh) to check the whole loca
 compose service health, the backend's `/actuator/health`, and Keycloak's realm discovery) in one
 go — the same script this repo's own smoke tests and future deploy checks should reuse.
 
+### One-command local run (WSL2 + Android emulator)
+
+[`scripts/start.sh`](scripts/start.sh) brings up the **entire** dev stack for a hands-on run on the
+local Android emulator — it does, in one command, what
+[`docs/first-real-world-test.md`](docs/first-real-world-test.md) Part 1 describes by hand:
+
+```bash
+scripts/start.sh            # full stack: containers → backend → emulator → flutter run (foreground)
+scripts/start.sh --no-app   # everything ready, but you start the app (e.g. flutter run from your IDE)
+scripts/start.sh --infra    # docker containers only (postgres, kurrentdb, keycloak)
+scripts/stop.sh             # tear down backend + emulator + containers (add --volumes to reset data)
+```
+
+What `start.sh` handles for you: sets the WSL2 toolchain env (`ANDROID_HOME`, Flutter/SDK on `PATH`,
+`DISPLAY=:0`); creates `.env` if missing; builds the Keycloak Direct-Grant SPI jar the container
+mounts; `docker compose up -d --wait`; runs the backend with the mandatory real-run flags — including
+`SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true`, without which silent account provisioning no-ops and the
+app dies on first launch with a generic error; boots the `sgart_pixel` AVD and wires
+`adb reverse` for `:8081`/`:8080`; then `flutter run`. Backend and emulator run in the background
+(logs under `.run/`, which is gitignored); `Ctrl-C` stops only `flutter run`, so use `stop.sh` to
+shut the rest down. The scripts are **dev-only** and assume the local WSL2 + emulator setup.
+
 ### Keycloak dev realm
 
 Keycloak imports the **`sgart`** realm from [`keycloak/realm-sgart.json`](keycloak/realm-sgart.json)

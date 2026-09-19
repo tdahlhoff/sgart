@@ -27,6 +27,9 @@ app/android/*.keystore
 # Docker local volumes
 .docker-data/
 
+# Local run artifacts (scripts/start.sh: backend + emulator logs, pid files)
+.run/
+
 # IDE / OS
 .idea/
 *.iml
