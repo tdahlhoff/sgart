@@ -294,6 +294,42 @@
   erasure/revocation design whether a lighter in-app "withdraw consent" affordance is needed. (Round-1
   already tracked the retention policy and the inert notice link, above — not re-listed here.)
 
+## Fast-follow from: manual test 2026-09-19 — replace the recovery-phrase FORMAT (24 words → short token) [DECIDED]
+
+- **Recovery phrase is a 24-word BIP39 mnemonic; Timo expected a shorter dash-grouped code** (e.g.
+  `HGDHGHSD-DUZG213-SZGZUTF-5D6SD782`). Flagged on seeing the `RecoveryPhraseRevealPage`
+  („Wiederherstellungsphrase") during the 2026-09-19 emulator run — Timo does not recall agreeing to
+  24 words and wants the format **re-decided**, not silently kept.
+  - **Where 24 words came from:** Story 7.1 design decision — *"Recovery phrase = BIP39 24-word
+    (256-bit) mnemonic of the entropy"* (`epic-7-story-7.1-provisioning-design.md` §"Recovery phrase").
+    Implemented in `app/lib/features/auth/data/recovery_phrase.dart` (`bip39` package,
+    `entropyToMnemonic`/`mnemonicToEntropy`); revealed by `recovery_phrase_reveal_page.dart` (Story 7.2),
+    entered on `recover_account_page.dart` (Story 7.2 AC3).
+  - **DECISION (Timo, 2026-09-19): replace the 24-word phrase with a short, single, copy-pasteable
+    recovery token.** Rationale: nobody hand-writes 24 words — the phrase is copy-pasted / stored in a
+    password manager anyway, so BIP39's memorability upside is moot, and a short single string is far more
+    comfortable to copy, store, and paste. SGART is household-grocery data, not a banking app, so lower
+    entropy is acceptable (§5 is satisfied — a deliberate, documented security-vs-usability trade-off, not
+    an oversight). **Exact token shape is open** — a UUID was only Timo's illustrative example; the spec
+    picks the concrete form (UUID, grouped alphanumeric like `XXXX-XXXX-XXXX-XXXX`, base32, …). The fixed
+    requirements are: one short string, copy-pasteable, "enough but not banking-grade" entropy.
+  - **Why it's not a pure re-encoding — the real consequence:** today the 24 words *are* the device's
+    256-bit secret (they seed the Ed25519 keypair). A short token can't hold 256 bits, so the device key
+    must instead be **derived from the recovery token via a KDF**; the effective key entropy then equals
+    the token's own entropy (e.g. ~122 bits for a random UUIDv4) rather than 256. That is still
+    astronomically beyond brute force — more than adequate for this threat model — but it *is* a real
+    reduction, so the change touches the credential seed, not only the display encoding. Whatever shape is
+    chosen, size its entropy deliberately (a sane floor: ≥120 bits). (Optional: append a short checksum so
+    a mistyped token fails fast rather than silently — low priority since the token is copy-pasted.)
+  - **Blast radius:** the encode/decode primitive (`recovery_phrase.dart` → becomes a
+    generate-token + derive-key seam), the reveal page (`recovery_phrase_reveal_page.dart`), the
+    recover-account entry/validation (`recover_account_page.dart`), the device credential seed
+    (`device_credential.dart` + the secure-enclave store — now KDF-derived from the token), and all their
+    tests. The `bip39` dependency can likely be dropped.
+  - **Next step:** write a spec + story for the token format change (token shape, KDF choice, optional
+    checksum, UI copy). No real beta has run and the event store can start from zero, so there is **no
+    migration burden** — cheap to change now. Not to be implemented until Timo says go (feedback-batching).
+
 ## Deferred from: code review of story-7.5 (2026-09-17)
 
 - **`invitePerson` no longer runs the invite-time lazy past-TTL expiry the 7.5 task said to keep.** `Household.invitePerson` now only raises `MemberInvited`; the "Keep the past-TTL lazy-expiry housekeeping (AC5 of 4.1)" task was inseparable from the removed duplicate-by-email loop. No functional harm — expiry is still enforced lazily at accept (`acceptInvite`) and filtered by the read model (`isExpiredAt`); the only effect is that `pendingInvitesById` never sheds never-accepted PENDING entries as `InviteExpired` events. Re-adding a sweep adds complexity for no user-facing benefit. [backend/.../domain/Household.java:198-206]
