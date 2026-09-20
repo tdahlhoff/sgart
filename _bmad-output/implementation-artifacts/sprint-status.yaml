@@ -41,7 +41,10 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-20 (Story 8.2 dev-story + in-session review (Opus 4.8) DONE — Epic 8's 2nd story,
+last_updated: 2026-09-20 (Stories 8.1 + 8.2 flipped review→done after re-verifying the app suite green
+# on the committed state: flutter test 744 pass + analyze 0. Both are app-only (no backend files touched),
+# so the Flutter suite is the meaningful gate. Next up: Story 8.3 (display name at onboarding). Prior:
+# Story 8.2 dev-story + in-session review (Opus 4.8) DONE — Epic 8's 2nd story,
 # F1/BH-2: session never expires on a trusted device. CLIENT-ONLY Flutter (Epic 7 device-credential
 # Direct-Grant SPI + unauthenticated provisioning endpoint already exist). Layers a SILENT
 # device-credential re-auth beneath the shipped OAuth refresh, inside AuthCubit as new
@@ -354,8 +357,8 @@ development_status:
   # IDs, NOT execution order — this runs BEFORE Epics 5 & 6. Execution order: 1→2→3→4→7→8→5→6
   # (see epics.md "Execution order" note). Epic 8 = next up (pre-beta).
   epic-8: in-progress
-  8-1-fix-manage-household-crash-invites-reachable: review
-  8-2-session-never-expires-silent-device-reauth: review
+  8-1-fix-manage-household-crash-invites-reachable: done
+  8-2-session-never-expires-silent-device-reauth: done
   8-3-display-name-at-onboarding-used-everywhere: backlog
   8-4-single-replaceable-household-invite-code: backlog
   8-5-short-recovery-token-instead-of-phrase: backlog
