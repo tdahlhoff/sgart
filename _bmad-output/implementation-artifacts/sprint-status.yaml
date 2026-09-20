@@ -41,9 +41,16 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-20 (Stories 8.1 + 8.2 flipped review→done after re-verifying the app suite green
-# on the committed state: flutter test 744 pass + analyze 0. Both are app-only (no backend files touched),
-# so the Flutter suite is the meaningful gate. Next up: Story 8.3 (display name at onboarding). Prior:
+last_updated: 2026-09-20 (Story 8.3 created + approved → ready-for-dev. Full-stack: per-household nickname
+# (Timo's decision) stored in a NEW identity-context side-store `membership_nickname` (V22), NOT in events;
+# captured at create+join onboarding, edited from Profile, resolved into the roster via the MemberMapping
+# ACL join (no Keycloak Admin on the read path). Deliberate documented AD-6 exception (reconcile
+# NoPersistedPersonalDataTest). Activity-message naming = out of scope (feature doesn't exist; forward-
+# pointer). Crypto-shredding stays Epic 6 per ADR-0001 (discussed 2026-09-20 — nickname is mutable
+# side-store state, not event PII); ADR-0001 note dropped (per-household → per-subject-per-household key
+# scoping). NEXT: dev-story 8.3 (Sonnet per split; review-gate: do NOT auto-run review after dev). Prior:
+# Stories 8.1 + 8.2 flipped review→done after re-verifying the app suite green on the committed state:
+# flutter test 744 pass + analyze 0. Both app-only, Flutter suite the gate. Prior:
 # Story 8.2 dev-story + in-session review (Opus 4.8) DONE — Epic 8's 2nd story,
 # F1/BH-2: session never expires on a trusted device. CLIENT-ONLY Flutter (Epic 7 device-credential
 # Direct-Grant SPI + unauthenticated provisioning endpoint already exist). Layers a SILENT
@@ -359,7 +366,7 @@ development_status:
   epic-8: in-progress
   8-1-fix-manage-household-crash-invites-reachable: done
   8-2-session-never-expires-silent-device-reauth: done
-  8-3-display-name-at-onboarding-used-everywhere: backlog
+  8-3-display-name-at-onboarding-used-everywhere: ready-for-dev
   8-4-single-replaceable-household-invite-code: backlog
   8-5-short-recovery-token-instead-of-phrase: backlog
   8-6-real-recovery-emails-smtp-and-mailpit: backlog

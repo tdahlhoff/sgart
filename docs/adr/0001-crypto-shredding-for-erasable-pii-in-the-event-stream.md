@@ -120,7 +120,11 @@ implementing it any time before that cutover is equivalent in cost.
 
 1. **Key scoping.** Per-data-subject key (so shredding one person never affects another) —
    confirm the subject granularity (person vs. person-per-household, given AD-5's per-household
-   `MemberId`).
+   `MemberId`). *Data point (Story 8.3, 2026-09-20):* the member **nickname** was chosen to be
+   **per-household** (a person can be „Papa" in one household and „Timo" in another), stored
+   subject-per-household in `membership_nickname` keyed by `(keycloakUserId, householdId)`. This is
+   concrete evidence that **per-subject-per-household** is the granularity that matches how personal
+   data actually varies here — carry it into the key-scoping decision.
 2. **Duplicate-check HMAC interaction (AD-6).** The `HMAC(secret, normalizedEmail)` used for the
    no-duplicate-pending-invite invariant is a deterministic, email-derived token with a stable
    per-deployment secret. After a subject is crypto-shredded, that HMAC remains computable and
@@ -144,3 +148,9 @@ implementing it any time before that cutover is equivalent in cost.
   machinery.
 - On completion, delete the `invite_email_side_store` and the `AcceptInviteHandler`
   provision/persist/retract compensation, and convert the identity mapping to a projection.
+- Fold the **`membership_nickname`** store (Story 8.3) into the Epic 6 erasure/export consolidation:
+  it is another subject-scoped, out-of-band personal-data store that composes with this mechanism
+  (shred-by-key or delete-the-row). It is a deliberate, documented AD-6 exception (a low-sensitivity,
+  in-household, self-chosen nickname; never in events) — decide during the Epic 6 spike whether it
+  stays a side-store or becomes a crypto-sharded field once the module exists. Its per-household
+  keying already anticipates per-subject-per-household scoping (see Open question 1).
