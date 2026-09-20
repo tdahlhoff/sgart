@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-18 (Story 7.5 — 7 review patches applied; patch-round re-review (Opus 4.8, full 4-layer) → 2 more patches applied (testable base-url guard incl. blank-override reject + card-survives-failed-create test), 8 rejected; both suites re-run green (backend ./gradlew test BUILD SUCCESSFUL, app flutter test 731 + analyze 0) → done)
+last_updated: 2026-09-20 (Added Epic 8 "Beta Hardening" — 9 backlog stories 8-1..8-9 from manual testing 2026-09-20; see epics.md Epic 8 + implementation-artifacts/manual-test-findings-2026-09-20.md. Epic numbers are stable IDs; execution order 1→2→3→4→7→8→5→6 is separate. Prior — Story 7.5 done 2026-09-18, both suites green flutter 731 + analyze 0.)
 # Story 7.3 ready-for-dev (create-story, Opus 4.8) 2026-09-15 — Epic 7's 3rd build story: opt-in
 # "recover by email" fallback. **FULL-STACK** (backend + app), unlike client-only 7.2. Fed by the
 # architect design note (epic-7-story-7.3-recover-by-email-design.md) with all four forks pre-resolved
@@ -327,6 +327,21 @@ development_status:
   6-2-erase-my-account-and-data: backlog
   6-3-retention-privacy-guarantee-tests: backlog
   epic-6-retrospective: optional
+
+  # Epic 8: Beta Hardening (pre-beta fixes from manual testing 2026-09-20). Epic numbers are stable
+  # IDs, NOT execution order — this runs BEFORE Epics 5 & 6. Execution order: 1→2→3→4→7→8→5→6
+  # (see epics.md "Execution order" note). Epic 8 = next up (pre-beta).
+  epic-8: backlog
+  8-1-fix-manage-household-crash-invites-reachable: backlog
+  8-2-session-never-expires-silent-device-reauth: backlog
+  8-3-display-name-at-onboarding-used-everywhere: backlog
+  8-4-single-replaceable-household-invite-code: backlog
+  8-5-short-recovery-token-instead-of-phrase: backlog
+  8-6-real-recovery-emails-smtp-and-mailpit: backlog
+  8-7-hide-household-selector-on-profile: backlog
+  8-8-fix-live-sync-projector-stream-filter-throw: backlog
+  8-9-provisioning-epic-critical-path-tests: backlog
+  epic-8-retrospective: optional
 
 action_items:
   - epic: 1

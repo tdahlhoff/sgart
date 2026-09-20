@@ -243,6 +243,24 @@ opt-in email-only "recover by email" fallback. Consent is captured at the first-
 **Required for beta; sequenced immediately after Epic 1** (every later epic assumes an authenticated
 person). **FRs covered:** FR15.
 
+### Epic 8: Beta Hardening
+Close the gaps found in the first hands-on emulator test passes before beta. It adds no new product
+scope — it makes the shipped scope beta-ready: make the session effectively permanent on a trusted
+device (silent device-credential re-auth), give each person a human display name used throughout the
+app, fix the household-management crash that blocks invites, simplify invites to a single replaceable
+household code, swap the recovery phrase for a short token, turn on real recovery emails (beta SMTP +
+a local mail catcher), and close two engineering gaps a real multi-user beta exposes (a live-sync
+projector throw and the provisioning epic's missing critical-path tests).
+**Before-beta hardening bucket** — sourced from manual testing 2026-09-20.
+**FRs hardened:** FR15 (BH-2/3/5/6/9), FR2 (BH-1/4/7), FR7 (BH-8).
+
+> **Execution order (decoupled from epic numbers).** Epic numbers are **stable IDs** assigned at
+> creation and never reused or renumbered — they are not a running order (see the 2026-09-20 decision:
+> reordering by number overloads identities and collides in git history). The actual execution
+> sequence is: **1 → 2 → 3 → 4 → 7 (Provisioning) → 8 (Beta Hardening) → 5 (Offline Resilience) →
+> 6 (Data Protection).** Epics 1–4 and 7 are done; **Epic 8 is next** (pre-beta), then 5 and 6 are
+> post-beta. Epic 8's section sits at the end of this file by number, not by when it runs.
+
 ---
 
 ## Epic 1: Foundation, Identity & Household Setup
@@ -1107,3 +1125,215 @@ So that inviting works without collecting anyone's email.
 **Given** a join code or link
 **When** the invitee enters the code on a native join screen, or opens the link (deep link, or web fallback if the app isn't installed)
 **Then** they join via the existing `AcceptInviteHandler` unchanged — accept is on `(householdId, inviteId)` plus the caller's own JWT.
+
+---
+
+## Epic 8: Beta Hardening
+
+Close the pre-beta gaps found in the first hands-on emulator test passes (2026-09-20). No new
+product scope — these make the shipped scope beta-ready. Stories are ordered by priority; BH-1 is a
+blocker that unblocks the invite surface (BH-4/BH-7).
+
+### Story 8.1: Fix the „Haushalt verwalten" crash so invites are reachable
+
+As a member,
+I want „Haushalt verwalten" to open,
+So that I can reach members and invites at all.
+
+**Acceptance Criteria:**
+
+**Given** the household switcher opened from the top-bar selector
+**When** a member taps „Haushalt verwalten"
+**Then** the management hub opens — no `ProviderNotFoundException`, no silent no-op (the tap currently throws because `_openManage` reads `StoresApi`/`StoreChainReferenceCache` that are out of scope).
+
+**Given** the hub
+**When** it opens
+**Then** the „Einladen" (invites) row and the members row are both reachable.
+
+**Given** the regression
+**When** the suite runs
+**Then** a widget test reproduces opening the hub from the top-bar selector and asserts it renders, and the sibling re-provide-across-root-navigator seams are audited for the same gap.
+
+### Story 8.2: Session never expires on a trusted device (silent device-credential re-auth)
+
+As a person using SGART,
+I want to keep working without ever being told my session expired,
+So that the app behaves like the apps I use every day.
+
+**Acceptance Criteria:**
+
+**Given** an expired access token with a still-valid refresh token
+**When** any authenticated call runs
+**Then** it refreshes and retries transparently with no visible message (already shipped in `spec-auth-refresh-and-signout-fixes` — preserved).
+
+**Given** a dead OAuth refresh token on a trusted device (the device credential still present)
+**When** an authenticated call fails auth
+**Then** the app **silently re-authenticates via the device-credential Direct-Grant challenge** and retries the original request — the person sees nothing, no „session expired" message, no „try again" button.
+
+**Given** even device re-authentication fails (credential gone or invalid)
+**When** auth cannot be restored
+**Then** — and only then — the person is shown a clear re-authentication path that actually works (no dead-end screen, no repeated-tap no-op).
+
+**Given** concurrent 401s from parallel calls
+**When** they refresh at once
+**Then** a single in-flight refresh is shared, so a not-yet-rotated refresh token never causes a spurious session-expired (folds in the deferred concurrent-refresh-race item).
+
+**Given** the households-bootstrap failure screen (`_FailurePage`)
+**When** it shows an auth error
+**Then** it uses the correct localized copy and offers a working re-auth path (folds in the deferred hardcoded-error item).
+
+### Story 8.3: Choose a display name at onboarding, used everywhere
+
+As a new person,
+I want to say what I want to be called,
+So that the app and my household see a human name, not a code.
+
+**Acceptance Criteria:**
+
+**Given** first-run onboarding
+**When** a person sets up their account
+**Then** a **required** „Wie möchtest du genannt werden?" step captures a display name before they can proceed (validated: non-blank/whitespace, length-bounded).
+
+**Given** a saved display name
+**When** it is stored
+**Then** it is held as a Keycloak user attribute (**never** in domain events — AR5/NFR2) and populates the existing `displayName`.
+
+**Given** any surface that names a person — Profile header, member lists, invites, and activity messages like „<Name> hat Milch hinzugefügt"
+**When** it renders
+**Then** it shows the display name, resolved from `MemberId` via the live Keycloak/JWT lookup seam (no raw credential id shown).
+
+**Given** the Profile screen
+**When** a person edits their display name
+**Then** the new name applies everywhere it is shown.
+
+**Given** two members choosing the same name
+**When** both are saved
+**Then** both are allowed — no uniqueness enforcement (disambiguation is the users' own choice).
+
+### Story 8.4: Single replaceable household invite code
+
+As a household creator,
+I want one invite code I can share with everyone and replace when I want,
+So that inviting is simple and the code list never grows.
+
+**Acceptance Criteria:**
+
+**Given** a household
+**When** invites are viewed
+**Then** exactly **one** active invite code/link is shown — no list of many codes, no unlimited „create".
+
+**Given** the active code
+**When** any number of people join with it, any number of times
+**Then** it stays valid and unchanged — accept does **not** consume it, and there is **no** TTL auto-expiry.
+
+**Given** the household **creator**
+**When** they tap „Code ersetzen"
+**Then** the old code is instantly invalidated and a new active code is issued; a non-creator cannot replace it (enforced in the `Household` domain via the known creator; the action is hidden/disabled for non-creators).
+
+**Given** a member looking for how to invite
+**When** they view household management
+**Then** the invite entry point is discoverable — a promoted invite action, or a descriptive subtitle under „Haushalt verwalten" (Mitglieder / Einladungen). *(Depends on Story 8.1.)*
+
+### Story 8.5: Short recovery token instead of a 24-word phrase
+
+As a person,
+I want a short, copy-pasteable recovery token,
+So that I don't have to handle a 24-word phrase.
+
+**Acceptance Criteria:**
+
+**Given** first household create/join
+**When** the recovery secret is shown
+**Then** it is a single short, copy-pasteable token (not a 24-word BIP39 mnemonic), optionally with a checksum for mistype-fail-fast.
+
+**Given** the token
+**When** it seeds the device credential
+**Then** the device key is **KDF-derived** from the token (documented entropy floor ≥ 120 bits — a deliberate §5 security-vs-usability trade-off).
+
+**Given** the token entered on another device
+**When** it is submitted
+**Then** the device key is reconstructed and the person signs into their existing account.
+
+**Given** the change
+**When** it ships
+**Then** the `bip39` dependency is dropped and the reveal/recover UI copy is updated. *(No migration burden — the event store can start from zero.)*
+
+### Story 8.6: Real recovery emails — beta SMTP + local mail catcher
+
+As a person,
+I want the recovery email to actually arrive,
+So that recover-by-email works.
+
+**Acceptance Criteria:**
+
+**Given** the beta deployment at netcup
+**When** mail is configured
+**Then** `sgart.identity.mail.enabled=true` with a real SMTP server, from-address, and secret handling (no plaintext credentials); a smoke test confirms a real send (SPF/DKIM per ADR-0002).
+
+**Given** local development
+**When** the stack starts
+**Then** a **Mailpit** container runs, `mail.enabled=true` points at it in the dev profile, `start.sh` wires it, and the recover-by-email flow is testable end-to-end on the emulator (the code is readable in Mailpit's web UI).
+
+**Given** the recovery endpoints
+**When** they are called repeatedly
+**Then** they are rate-limited (or the ADR-0002 gateway seam that provides it is in place), and attaching an already-registered email returns a clean 4xx rather than a 500/enumeration oracle. *(Folds in the deferred 7-3 hardening items.)*
+
+### Story 8.7: Hide the household selector on the Profile tab
+
+As a member,
+I want the Profile tab to be about me, not a household,
+So that the household switcher isn't shown where it doesn't belong.
+
+**Acceptance Criteria:**
+
+**Given** the Profile tab
+**When** it is shown
+**Then** the top-bar household selector is **not** shown (Profil is personal-only — UX-DR6/UX-DR14).
+
+**Given** the Listen and Einkauf tabs
+**When** they are shown
+**Then** the selector still appears (those tabs are household-scoped).
+
+### Story 8.8: Fix the live-sync projector stream-filter throw
+
+As the operator,
+I want the first real live-sync subscription to work,
+So that beta live sync does not throw.
+
+**Acceptance Criteria:**
+
+**Given** the list and trip read-model projectors
+**When** they open a live subscription against KurrentDB
+**Then** the stream filter is built without chaining `addStreamNamePrefix` twice (mirroring Story 4.4's single-regex fanout filter) — no `IllegalStateException: Filter type is already set`.
+
+**Given** the fix
+**When** the suite runs
+**Then** a test exercises a real live-subscription path for both projectors.
+
+### Story 8.9: Provisioning epic (Epic 7) critical-path test coverage
+
+As the developer,
+I want the provisioning epic's required tests,
+So that a green build actually proves the guarantees it claims.
+
+**Acceptance Criteria:**
+
+**Given** `ProvisionAccount`
+**When** it runs
+**Then** a test asserts its state change / emitted outcome.
+
+**Given** recover-by-email
+**When** a code verifies
+**Then** a test asserts the device key re-binds; wrong/expired codes are rejected.
+
+**Given** erasure/export
+**When** they run
+**Then** tests assert they include the account, the consent record, and any attached email; the retention sweep deletes never-activated accounts; and the email is detachable.
+
+**Given** the unauthenticated provisioning endpoint
+**When** it is hit repeatedly
+**Then** a rate-limit test covers it.
+
+**Given** the Definition of Done
+**When** the build is called green
+**Then** it names **both** suites: backend `./gradlew test` (incl. ArchUnit) **and** `flutter test` / `flutter analyze` (CLAUDE.md §6).
