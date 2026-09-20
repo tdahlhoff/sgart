@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/data/households_api.dart';
+import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/households/presentation/manage_household_page.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/invites/data/pending_invite.dart';
@@ -10,6 +11,7 @@ import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/data/members_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
+import 'package:sgart/features/stores/presentation/manage_stores_page.dart';
 
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
@@ -24,6 +26,7 @@ void main() {
     late FakeInvitesApi invitesApi;
     late FakeMembersApi membersApi;
     late FakeHouseholdsApi householdsApi;
+    late HouseholdsCubit householdsCubit;
 
     const household = HouseholdSummary(householdId: 'household-1', name: 'Familie Muster');
 
@@ -34,6 +37,15 @@ void main() {
       membersApi = FakeMembersApi()
         ..membersToReturn = const [MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true)];
       householdsApi = FakeHouseholdsApi();
+      // MembersPage's exit listener reads HouseholdsCubit to re-bootstrap on leave/delete (Story 8.1).
+      householdsCubit = HouseholdsCubit(
+        householdsApi: householdsApi,
+        activeHouseholdStore: FakeActiveHouseholdStore(activeId: household.householdId),
+      );
+    });
+
+    tearDown(() async {
+      await householdsCubit.close();
     });
 
     Widget buildSubject() => wrapForTesting(
@@ -45,7 +57,10 @@ void main() {
               RepositoryProvider<MembersApi>.value(value: membersApi),
               RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
             ],
-            child: const ManageHouseholdPage(household: household),
+            child: BlocProvider<HouseholdsCubit>.value(
+              value: householdsCubit,
+              child: const ManageHouseholdPage(household: household),
+            ),
           ),
         );
 
@@ -89,6 +104,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('member-row-member-1')), findsOneWidget);
+    });
+
+    testWidgets('theStoresRowOpensTheManageStoresPage', (tester) async {
+      await tester.pumpWidget(buildSubject());
+
+      await tester.tap(find.byKey(const Key('manage-stores-row')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ManageStoresPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

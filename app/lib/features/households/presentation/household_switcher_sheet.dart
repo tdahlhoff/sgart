@@ -3,8 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
-import '../../stores/data/store_chain_reference_cache.dart';
-import '../../stores/data/stores_api.dart';
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
 import 'create_household_page.dart';
@@ -91,21 +89,17 @@ class HouseholdSwitcherSheet extends StatelessWidget {
   }
 
   void _openManage(BuildContext context) {
-    // Re-provide the stores dependencies across the root-navigator route boundary so the hub (and
-    // the manage-stores screen it opens) can reach them.
-    final storesApi = context.read<StoresApi>();
-    final referenceCache = context.read<StoreChainReferenceCache>();
+    // Capture the navigator and read the hub route's dependencies before popping the sheet — mirrors
+    // `_switchTo`'s capture-before-pop shape. The dependency reads (inside
+    // `buildManageHouseholdPageRoute`) need the sheet's still-mounted context, so they must happen
+    // before the pop; the push itself must happen after the pop (via the captured navigator) or it
+    // would land underneath the sheet route being popped instead of on top of it. Hands off to the
+    // one place that owns the hub's full re-provide set (Story 8.1: the previous version here
+    // re-provided only two of the five deps the hub subtree needs, crashing on „Einladen"/„Mitglieder").
     final navigator = Navigator.of(context);
+    final manageHouseholdRoute = buildManageHouseholdPageRoute(context, activeHousehold);
     navigator.pop();
-    navigator.push(MaterialPageRoute(
-      builder: (_) => MultiRepositoryProvider(
-        providers: [
-          RepositoryProvider<StoresApi>.value(value: storesApi),
-          RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
-        ],
-        child: ManageHouseholdPage(household: activeHousehold),
-      ),
-    ));
+    navigator.push(manageHouseholdRoute);
   }
 
   void _openRename(BuildContext context) {

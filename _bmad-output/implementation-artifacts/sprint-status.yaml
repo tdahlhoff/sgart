@@ -41,7 +41,17 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-20 (Added Epic 8 "Beta Hardening" — 9 backlog stories 8-1..8-9 from manual testing 2026-09-20; see epics.md Epic 8 + implementation-artifacts/manual-test-findings-2026-09-20.md. Epic numbers are stable IDs; execution order 1→2→3→4→7→8→5→6 is separate. Prior — Story 7.5 done 2026-09-18, both suites green flutter 731 + analyze 0.)
+last_updated: 2026-09-20 (Story 8.1 built + reviewed via bmad-build, Opus review — 1 high finding (missing HouseholdsCubit re-provide, crashed leave/delete through the hub) + 5 low/medium, all routed patch and applied; 2 deferred (duplicate re-provide list, test-scope duplication). App suite green: flutter 737 + analyze 0. Prior — Added Epic 8 "Beta Hardening" — 9 backlog stories 8-1..8-9 from manual testing 2026-09-20; see epics.md Epic 8 + implementation-artifacts/manual-test-findings-2026-09-20.md. Epic numbers are stable IDs; execution order 1→2→3→4→7→8→5→6 is separate.)
+# Story 8.1 ready-for-dev (create-story, Opus 4.8) 2026-09-20 — Epic 8's 1st story (Beta Hardening),
+# a BLOCKER bugfix: „Haushalt verwalten" throws ProviderNotFoundException. Root cause found in code —
+# switcher `_openManage` reads StoresApi/StoreChainReferenceCache from a sheet scope seeded only with
+# HouseholdsApi/HouseholdsCubit (crash before the hub opens); plus a 2nd latent gap — the pushed hub
+# route re-provides only stores deps, so „Einladen"(InvitesApi)/„Mitglieder"(MembersApi) would throw
+# next. Fix = consolidate the repeated re-provide-across-root-navigator lists into one shared helper
+# (mirrors openAwaitInvitePage, DRY), audit sibling seams, + a widget regression test that reproduces
+# the route-boundary provider escape via the real selector→hub path. Flutter presentation-only; no
+# backend/domain change. epic-8-context.md compiled (none existed). Approved & stopped for a fresh
+# dev-story session (Sonnet per usual split).
 # Story 7.3 ready-for-dev (create-story, Opus 4.8) 2026-09-15 — Epic 7's 3rd build story: opt-in
 # "recover by email" fallback. **FULL-STACK** (backend + app), unlike client-only 7.2. Fed by the
 # architect design note (epic-7-story-7.3-recover-by-email-design.md) with all four forks pre-resolved
@@ -331,8 +341,8 @@ development_status:
   # Epic 8: Beta Hardening (pre-beta fixes from manual testing 2026-09-20). Epic numbers are stable
   # IDs, NOT execution order — this runs BEFORE Epics 5 & 6. Execution order: 1→2→3→4→7→8→5→6
   # (see epics.md "Execution order" note). Epic 8 = next up (pre-beta).
-  epic-8: backlog
-  8-1-fix-manage-household-crash-invites-reachable: backlog
+  epic-8: in-progress
+  8-1-fix-manage-household-crash-invites-reachable: review
   8-2-session-never-expires-silent-device-reauth: backlog
   8-3-display-name-at-onboarding-used-everywhere: backlog
   8-4-single-replaceable-household-invite-code: backlog

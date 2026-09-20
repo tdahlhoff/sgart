@@ -11,10 +11,14 @@ import '../../../shared/sync/household_live_sync_controller.dart';
 import '../../../shared/sync/live_sync_status.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../invites/data/invites_api.dart';
 import '../../lists/data/shopping_lists_api.dart';
 import '../../lists/presentation/list_overview/lists_view.dart';
 import '../../lists/presentation/list_overview/shopping_lists_cubit.dart';
+import '../../members/data/members_api.dart';
 import '../../settings/presentation/profile_screen.dart';
+import '../../stores/data/store_chain_reference_cache.dart';
+import '../../stores/data/stores_api.dart';
 import '../../trips/presentation/active_trips_cubit.dart';
 import '../../trips/presentation/active_trips_view.dart';
 import '../data/household_summary.dart';
@@ -254,13 +258,27 @@ class _HouseholdShellState extends State<HouseholdShell> {
   }
 
   void _openSwitcher(BuildContext context) {
-    // Re-provide the api/cubit so the sheet (and the routes it pushes) can reach them.
+    // Re-provide every dependency the sheet's actions transitively need so the sheet (and the
+    // routes it pushes, notably „Haushalt verwalten") can reach them — a sheet pushed on the root
+    // navigator sits above the FirstRunRouter providers, so anything read from a still-in-scope
+    // context here must be carried across (Story 8.1: the previous version only carried
+    // HouseholdsApi/HouseholdsCubit, so the hub's stores/invites/members reads crashed).
     final householdsApi = context.read<HouseholdsApi>();
     final householdsCubit = context.read<HouseholdsCubit>();
+    final storesApi = context.read<StoresApi>();
+    final referenceCache = context.read<StoreChainReferenceCache>();
+    final invitesApi = context.read<InvitesApi>();
+    final membersApi = context.read<MembersApi>();
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => RepositoryProvider<HouseholdsApi>.value(
-        value: householdsApi,
+      builder: (_) => MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
+          RepositoryProvider<StoresApi>.value(value: storesApi),
+          RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+          RepositoryProvider<InvitesApi>.value(value: invitesApi),
+          RepositoryProvider<MembersApi>.value(value: membersApi),
+        ],
         child: BlocProvider<HouseholdsCubit>.value(
           value: householdsCubit,
           child: HouseholdSwitcherSheet(activeHousehold: widget.activeHousehold, households: widget.households),

@@ -12,6 +12,48 @@ import '../../stores/data/stores_api.dart';
 import '../../stores/presentation/manage_stores_page.dart';
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
+import 'households_cubit.dart';
+
+/// Pushes [ManageHouseholdPage] with the full dependency set the hub subtree needs re-provided
+/// across the pushed root-navigator route boundary — `StoresApi`/`StoreChainReferenceCache` for
+/// „Geschäfte", `InvitesApi` for „Einladen", `MembersApi`/`HouseholdsApi`/`HouseholdsCubit` for
+/// „Mitglieder" (the Story 1.6 `ProviderNotFoundException` lesson; `HouseholdsCubit` itself is read
+/// here because `MembersPage`'s exit listener reads it on leave/delete). The single call site the
+/// household switcher uses (Story 8.1), mirroring `openAwaitInvitePage`'s precedent, so the hub's
+/// re-provide list lives in exactly one place and a future row cannot silently miss a dependency.
+void openManageHouseholdPage(BuildContext context, HouseholdSummary household) {
+  Navigator.of(context).push(buildManageHouseholdPageRoute(context, household));
+}
+
+/// The read half of [openManageHouseholdPage], split out so a caller that must close another route
+/// first (the switcher sheet's „Haushalt verwalten" button, which pops itself) can do the
+/// `context.read`s — which need the still-mounted calling context — before popping, then push the
+/// already-built route through a navigator reference captured ahead of time. Popping before reading
+/// would risk reading through a context Flutter is already tearing down; pushing before popping
+/// would land the new route underneath the one being popped instead of on top of it.
+MaterialPageRoute<void> buildManageHouseholdPageRoute(BuildContext context, HouseholdSummary household) {
+  final storesApi = context.read<StoresApi>();
+  final referenceCache = context.read<StoreChainReferenceCache>();
+  final invitesApi = context.read<InvitesApi>();
+  final membersApi = context.read<MembersApi>();
+  final householdsApi = context.read<HouseholdsApi>();
+  final householdsCubit = context.read<HouseholdsCubit>();
+  return MaterialPageRoute(
+    builder: (_) => MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<StoresApi>.value(value: storesApi),
+        RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
+        RepositoryProvider<InvitesApi>.value(value: invitesApi),
+        RepositoryProvider<MembersApi>.value(value: membersApi),
+        RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
+      ],
+      child: BlocProvider<HouseholdsCubit>.value(
+        value: householdsCubit,
+        child: ManageHouseholdPage(household: household),
+      ),
+    ),
+  );
+}
 
 /// The thin „Haushalt verwalten" hub (Story 1.8, grown in Story 4.1): hosts the „Geschäfte" row
 /// that opens [ManageStoresPage] and the „Einladen" row that opens [InvitePage]. Epic 4 continues
@@ -73,11 +115,13 @@ class ManageHouseholdPage extends StatelessWidget {
   void _openMembers(BuildContext context) {
     // Re-provide the member-management dependencies across the root-navigator route boundary, the
     // same way stores/invites do (the Story 1.6 ProviderNotFoundException lesson). HouseholdsCubit
-    // itself is not re-provided — it is already an ancestor of this route (the shell), and the
-    // screen's exit signal reads it via context.read to re-bootstrap after a leave/delete (AC3/AC7).
+    // is re-provided too — this route (and the hub above it) sits on the root Navigator, above
+    // FirstRunRouter's BlocProvider<HouseholdsCubit>, not beneath it, so the screen's exit signal
+    // (context.read to re-bootstrap after a leave/delete, AC3/AC7) would otherwise crash.
     final membersApi = context.read<MembersApi>();
     final householdsApi = context.read<HouseholdsApi>();
     final invitesApi = context.read<InvitesApi>();
+    final householdsCubit = context.read<HouseholdsCubit>();
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => MultiRepositoryProvider(
         providers: [
@@ -85,7 +129,10 @@ class ManageHouseholdPage extends StatelessWidget {
           RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
           RepositoryProvider<InvitesApi>.value(value: invitesApi),
         ],
-        child: MembersPage(household: household),
+        child: BlocProvider<HouseholdsCubit>.value(
+          value: householdsCubit,
+          child: MembersPage(household: household),
+        ),
       ),
     ));
   }

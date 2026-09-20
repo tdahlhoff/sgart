@@ -6,13 +6,54 @@ import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/first_run_router.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
+import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
+import 'package:sgart/features/members/data/member_view.dart';
+import 'package:sgart/features/members/data/members_api.dart';
+import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
+import 'package:sgart/features/stores/data/stores_api.dart';
+import 'package:sgart/features/stores/presentation/manage_stores_page.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_members_dependencies.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
+import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
+
+/// Builds the shell under the same provider set [FirstRunRouter] gives it in production —
+/// `HouseholdsApi`/`HouseholdsCubit`, `ShoppingListsApi`, and the `StoresApi`/
+/// `StoreChainReferenceCache`/`InvitesApi`/`MembersApi` the switcher's „Haushalt verwalten" seam
+/// (and everything it pushes) reads across the route boundary. Story 8.1: the switcher used to be
+/// tested under a narrower scope than production actually gives it, which is exactly how the
+/// `ProviderNotFoundException` crash went unnoticed — every group in this file now reproduces the
+/// real scope so a re-provide seam that drops a dependency fails here, not on a device.
+Widget _buildShellHarness({
+  required AuthCubit authCubit,
+  required HouseholdsApi householdsApi,
+  required HouseholdsCubit householdsCubit,
+  required ShoppingListsApi shoppingListsApi,
+  InvitesApi? invitesApi,
+  MembersApi? membersApi,
+}) =>
+    wrapForTesting(
+      BlocProvider<AuthCubit>.value(
+        value: authCubit,
+        child: MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
+            RepositoryProvider<ShoppingListsApi>.value(value: shoppingListsApi),
+            RepositoryProvider<StoresApi>.value(value: FakeStoresApi()),
+            RepositoryProvider<StoreChainReferenceCache>.value(value: FakeStoreChainReferenceCache()),
+            RepositoryProvider<InvitesApi>.value(value: invitesApi ?? FakeInvitesApi()),
+            RepositoryProvider<MembersApi>.value(value: membersApi ?? FakeMembersApi()),
+          ],
+          child: BlocProvider<HouseholdsCubit>.value(value: householdsCubit, child: const FirstRunRouterBody()),
+        ),
+      ),
+    );
 
 void main() {
   group('HouseholdShell + switcher', () {
@@ -41,17 +82,11 @@ void main() {
     });
 
     // FirstRunRouterBody rebuilds the shell on state change, so a switch is reflected in the header.
-    Widget buildSubject() => wrapForTesting(
-          BlocProvider<AuthCubit>.value(
-            value: authCubit,
-            child: RepositoryProvider<HouseholdsApi>.value(
-              value: householdsApi,
-              child: RepositoryProvider<ShoppingListsApi>.value(
-                value: FakeShoppingListsApi(),
-                child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
-              ),
-            ),
-          ),
+    Widget buildSubject() => _buildShellHarness(
+          authCubit: authCubit,
+          householdsApi: householdsApi,
+          householdsCubit: cubit,
+          shoppingListsApi: FakeShoppingListsApi(),
         );
 
     Future<void> pumpShell(WidgetTester tester) async {
@@ -113,6 +148,125 @@ void main() {
     });
   });
 
+  group('HouseholdShell + manage household hub reachability', () {
+    // Story 8.1 regression: reproduces the route-boundary escape by building the shell under the
+    // full FirstRunRouter-equivalent provider set, then driving the real top-bar selector →
+    // „Haushalt verwalten" path — the only way to catch a re-provide seam that silently drops a
+    // dependency.
+    late FakeHouseholdsApi householdsApi;
+    late FakeInvitesApi invitesApi;
+    late FakeMembersApi membersApi;
+    late HouseholdsCubit cubit;
+    late AuthCubit authCubit;
+
+    const familie = HouseholdSummary(householdId: 'id-1', name: 'Familie Muster');
+    const selfParticipant = MemberView(memberId: 'member-1', role: 'PARTICIPANT', isSelf: true);
+
+    setUp(() async {
+      householdsApi = FakeHouseholdsApi()..householdsToReturn = const [familie];
+      invitesApi = FakeInvitesApi();
+      membersApi = FakeMembersApi()..membersToReturn = const [selfParticipant];
+      cubit = HouseholdsCubit(
+        householdsApi: householdsApi,
+        activeHouseholdStore: FakeActiveHouseholdStore(activeId: 'id-1'),
+      );
+      authCubit = await buildAuthenticatedAuthCubit();
+    });
+
+    tearDown(() async {
+      await cubit.close();
+      await authCubit.close();
+    });
+
+    Widget buildSubject() => _buildShellHarness(
+          authCubit: authCubit,
+          householdsApi: householdsApi,
+          householdsCubit: cubit,
+          shoppingListsApi: FakeShoppingListsApi(),
+          invitesApi: invitesApi,
+          membersApi: membersApi,
+        );
+
+    Future<void> pumpShell(WidgetTester tester) async {
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> openHub(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('switcher-chip')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('switcher-manage-button')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('openingTheManageHouseholdHubFromTheTopBarSelectorRendersTheHubWithoutThrowing',
+        (tester) async {
+      await pumpShell(tester);
+
+      await openHub(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('manage-invites-row')), findsOneWidget);
+      expect(find.byKey(const Key('manage-members-row')), findsOneWidget);
+      expect(find.byKey(const Key('manage-stores-row')), findsOneWidget);
+    });
+
+    testWidgets('theInvitesRowOpensWithoutThrowingAfterReachingTheHubFromTheTopBarSelector', (tester) async {
+      await pumpShell(tester);
+      await openHub(tester);
+
+      await tester.tap(find.byKey(const Key('manage-invites-row')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
+    });
+
+    testWidgets('theMembersRowOpensWithoutThrowingAfterReachingTheHubFromTheTopBarSelector', (tester) async {
+      await pumpShell(tester);
+      await openHub(tester);
+
+      await tester.tap(find.byKey(const Key('manage-members-row')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('member-row-member-1')), findsOneWidget);
+    });
+
+    testWidgets('theStoresRowOpensWithoutThrowingAfterReachingTheHubFromTheTopBarSelector', (tester) async {
+      await pumpShell(tester);
+      await openHub(tester);
+
+      await tester.tap(find.byKey(const Key('manage-stores-row')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ManageStoresPage), findsOneWidget);
+    });
+
+    testWidgets(
+        'leavingTheHouseholdFromTheMembersPageReachedThroughTheHubReturnsToTheShellWithoutThrowing',
+        (tester) async {
+      await pumpShell(tester);
+      await openHub(tester);
+      await tester.tap(find.byKey(const Key('manage-members-row')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('members-leave-button')));
+      await tester.pumpAndSettle();
+      // The confirmation dialog's "confirm" action is the second TextButton rendered.
+      await tester.tap(find.text('Bestätigen'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(membersApi.leaveCallCount, 1);
+      // The exit listener re-bootstraps HouseholdsCubit and pops back to the shell — no
+      // ProviderNotFoundException from the missing HouseholdsCubit re-provide (Story 8.1).
+      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
+    });
+  });
+
   group('HouseholdShell tabs', () {
     late FakeHouseholdsApi householdsApi;
     late FakeShoppingListsApi shoppingListsApi;
@@ -136,17 +290,11 @@ void main() {
       await authCubit.close();
     });
 
-    Widget buildSubject() => wrapForTesting(
-          BlocProvider<AuthCubit>.value(
-            value: authCubit,
-            child: RepositoryProvider<HouseholdsApi>.value(
-              value: householdsApi,
-              child: RepositoryProvider<ShoppingListsApi>.value(
-                value: shoppingListsApi,
-                child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
-              ),
-            ),
-          ),
+    Widget buildSubject() => _buildShellHarness(
+          authCubit: authCubit,
+          householdsApi: householdsApi,
+          householdsCubit: cubit,
+          shoppingListsApi: shoppingListsApi,
         );
 
     Future<void> pumpShell(WidgetTester tester) async {
