@@ -53,7 +53,7 @@ class AuthGate extends StatelessWidget {
     final httpClient = AuthenticatedHttpClient(
       dio: dio,
       accessTokenProvider: () async => cubit.currentAccessToken,
-      refreshTokens: () => cubit.tryRefreshTokens(),
+      refreshTokens: () => cubit.tryReauthenticate(),
     );
     cubit = AuthCubit(
       oidcClient: DirectGrantOidcClient(

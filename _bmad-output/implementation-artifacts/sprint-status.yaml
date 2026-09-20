@@ -41,7 +41,19 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-20 (Story 8.1 built + reviewed via bmad-build, Opus review — 1 high finding (missing HouseholdsCubit re-provide, crashed leave/delete through the hub) + 5 low/medium, all routed patch and applied; 2 deferred (duplicate re-provide list, test-scope duplication). App suite green: flutter 737 + analyze 0. Prior — Added Epic 8 "Beta Hardening" — 9 backlog stories 8-1..8-9 from manual testing 2026-09-20; see epics.md Epic 8 + implementation-artifacts/manual-test-findings-2026-09-20.md. Epic numbers are stable IDs; execution order 1→2→3→4→7→8→5→6 is separate.)
+last_updated: 2026-09-20 (Story 8.2 dev-story + in-session review (Opus 4.8) DONE — Epic 8's 2nd story,
+# F1/BH-2: session never expires on a trusted device. CLIENT-ONLY Flutter (Epic 7 device-credential
+# Direct-Grant SPI + unauthenticated provisioning endpoint already exist). Layers a SILENT
+# device-credential re-auth beneath the shipped OAuth refresh, inside AuthCubit as new
+# tryReauthenticate() wired into AuthenticatedHttpClient's existing refresh callback (auth_gate +
+# first_run_router): refresh fast-path → OidcClient.signIn() (idempotent, re-derives same identity,
+# NO AuthState emit → no flash) → single in-flight guard (folds in deferred concurrent-401 race).
+# Terminal path (Timo 2026-09-20): PROPAGATE + reuse signIn() retry (not a forced route); _FailurePage
+# fixed to resolve localizedMessageForErrorCode + branch action on auth.unauthorized→signIn() vs
+# bootstrap() (folds in deferred _FailurePage-hardcoded item). Proactive refresh OUT (reactive-only per
+# AC). No backend/domain/event/read-model change; app suite = meaningful gate. Approved & stopped for a
+# fresh dev-story session (Sonnet per usual split; review-gate: do NOT auto-run review after dev).
+# Prior — Story 8.1 built + reviewed via bmad-build, Opus review — 1 high finding (missing HouseholdsCubit re-provide, crashed leave/delete through the hub) + 5 low/medium, all routed patch and applied; 2 deferred (duplicate re-provide list, test-scope duplication). App suite green: flutter 737 + analyze 0. Prior — Added Epic 8 "Beta Hardening" — 9 backlog stories 8-1..8-9 from manual testing 2026-09-20; see epics.md Epic 8 + implementation-artifacts/manual-test-findings-2026-09-20.md. Epic numbers are stable IDs; execution order 1→2→3→4→7→8→5→6 is separate.)
 # Story 8.1 ready-for-dev (create-story, Opus 4.8) 2026-09-20 — Epic 8's 1st story (Beta Hardening),
 # a BLOCKER bugfix: „Haushalt verwalten" throws ProviderNotFoundException. Root cause found in code —
 # switcher `_openManage` reads StoresApi/StoreChainReferenceCache from a sheet scope seeded only with
@@ -343,7 +355,7 @@ development_status:
   # (see epics.md "Execution order" note). Epic 8 = next up (pre-beta).
   epic-8: in-progress
   8-1-fix-manage-household-crash-invites-reachable: review
-  8-2-session-never-expires-silent-device-reauth: backlog
+  8-2-session-never-expires-silent-device-reauth: review
   8-3-display-name-at-onboarding-used-everywhere: backlog
   8-4-single-replaceable-household-invite-code: backlog
   8-5-short-recovery-token-instead-of-phrase: backlog

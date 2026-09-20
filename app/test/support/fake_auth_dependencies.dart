@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/device_credential.dart';
 import 'package:sgart/features/auth/data/device_credential_store.dart';
@@ -41,16 +43,28 @@ class FakeOidcClient implements OidcClient {
   Object? signInErrorToThrow;
   Object? refreshErrorToThrow;
   String? lastRefreshToken;
+  int signInCallCount = 0;
+  int refreshCallCount = 0;
+
+  /// Set to make [signIn]/[refresh] pause mid-call until the test resolves it — drives
+  /// `AuthCubit.tryReauthenticate`'s in-flight-sharing test (Story 8.2), where two concurrent
+  /// callers must overlap long enough to prove only one underlying call happened.
+  Completer<void>? signInGate;
+  Completer<void>? refreshGate;
 
   @override
   Future<OidcTokens> signIn() async {
+    signInCallCount++;
+    if (signInGate != null) await signInGate!.future;
     if (signInErrorToThrow != null) throw signInErrorToThrow!;
     return tokensToReturn!;
   }
 
   @override
   Future<OidcTokens> refresh(String refreshToken) async {
+    refreshCallCount++;
     lastRefreshToken = refreshToken;
+    if (refreshGate != null) await refreshGate!.future;
     if (refreshErrorToThrow != null) throw refreshErrorToThrow!;
     return refreshedTokensToReturn!;
   }

@@ -5,6 +5,7 @@ import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_gate.dart';
+import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/consent/data/consent_api.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/presentation/await_invite_page.dart';
@@ -129,6 +130,53 @@ void main() {
 
       expect(find.byKey(const Key('households-load-error')), findsOneWidget);
       expect(find.byKey(const Key('households-retry-button')), findsOneWidget);
+    });
+
+    // Story 8.2, AC5: the terminal case reached only once AuthCubit.tryReauthenticate's silent
+    // re-auth ladder is exhausted — the copy and the action must both differ from a plain load
+    // failure, since retrying the same bootstrap would just 401 again.
+    testWidgets(
+      'theFailurePageShowsTheSessionExpiredCopyAndOffersAWorkingReAuthWhenTheErrorIsUnauthorized',
+      (tester) async {
+        householdsApi.listErrorToThrow =
+            const AppException(AppError(code: 'auth.unauthorized', message: 'expired'));
+        await tester.pumpWidget(buildSubject());
+        await cubit.bootstrap();
+        await tester.pump();
+
+        expect(find.byKey(const Key('households-load-error')), findsOneWidget);
+        expect(find.text('Deine Sitzung ist abgelaufen, melde dich neu an.'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('households-retry-button')));
+        await tester.pumpAndSettle();
+
+        // The action re-ran AuthCubit.signIn() (not HouseholdsCubit.bootstrap()) — proven by the
+        // authenticated AuthCubit going through inProgress and back to authenticated rather than
+        // HouseholdsCubit re-fetching (which would still throw the same auth.unauthorized error).
+        expect(authCubit.state.status, AuthStatus.authenticated);
+        // The households list was fetched exactly once (during the initial bootstrap()) — a
+        // regressed bootstrap()-retry branch would fetch it again, bumping this to 2.
+        expect(householdsApi.listCallCount, 1);
+      },
+    );
+
+    testWidgets('theFailurePageShowsTheGenericCopyAndRetriesBootstrapForANonAuthError', (tester) async {
+      householdsApi.listErrorToThrow =
+          const AppException(AppError(code: 'network.unreachable', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pump();
+
+      expect(find.byKey(const Key('households-load-error')), findsOneWidget);
+      expect(find.text('Deine Sitzung ist abgelaufen, melde dich neu an.'), findsNothing);
+
+      householdsApi.listErrorToThrow = null;
+      householdsApi.householdsToReturn = const [];
+      await tester.tap(find.byKey(const Key('households-retry-button')));
+      await tester.pumpAndSettle();
+
+      // The action re-ran HouseholdsCubit.bootstrap(), which this time succeeds.
+      expect(find.byKey(const Key('create-household-choice-button')), findsOneWidget);
     });
   });
 

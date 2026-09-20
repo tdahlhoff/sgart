@@ -6,14 +6,15 @@ import 'app_exception.dart';
 /// Supplies the current access token for the bearer interceptor, or `null` when signed out.
 typedef AccessTokenProvider = Future<String?> Function();
 
-/// Exchanges the stored refresh token for a fresh access token, returning whether it succeeded.
-/// Supplied by callers that own a session (e.g. `AuthCubit.tryRefreshTokens`) — see
+/// Restores a usable session after a `401`, returning whether it succeeded. Supplied by callers
+/// that own a session (e.g. `AuthCubit.tryReauthenticate`, Story 8.2 — an OAuth-refresh fast path
+/// layered under a silent device-credential re-auth fallback) — see
 /// [AuthenticatedHttpClient.refreshTokens].
 ///
-/// Must never throw — a failed refresh (missing/expired refresh token, network error) reports
-/// itself by returning `false`. [AuthenticatedHttpClient._withRefreshRetry]'s no-loop guarantee
-/// relies on this: an escaping exception would replace the original `auth.unauthorized` failure
-/// instead of the caller seeing it propagate as-is.
+/// Must never throw — a failed re-auth (dead refresh token, dead device credential, network error)
+/// reports itself by returning `false`. [AuthenticatedHttpClient._withRefreshRetry]'s no-loop
+/// guarantee relies on this: an escaping exception would replace the original `auth.unauthorized`
+/// failure instead of the caller seeing it propagate as-is.
 typedef TokenRefresher = Future<bool> Function();
 
 /// A [Dio]-backed HTTP client for the SGART backend: injects `Authorization: Bearer <token>` on

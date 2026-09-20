@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
+import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../shared/http/backend_config.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
@@ -70,7 +71,7 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _httpClient = AuthenticatedHttpClient(
       dio: _dio,
       accessTokenProvider: () async => authCubit.currentAccessToken,
-      refreshTokens: () => authCubit.tryRefreshTokens(),
+      refreshTokens: () => authCubit.tryReauthenticate(),
     );
     _householdsApi = HttpHouseholdsApi(_httpClient);
     _consentApi = HttpConsentApi(_httpClient);
@@ -271,12 +272,25 @@ class _LoadingPage extends StatelessWidget {
   }
 }
 
+/// The households-bootstrap failure screen — reached only once the silent re-auth ladder
+/// ([AuthCubit.tryReauthenticate], Story 8.2) has already been exhausted, so a 401 landing here is
+/// the genuine terminal case (device credential itself gone/invalid). Resolves its copy from the
+/// failed [HouseholdsState.error] via [localizedMessageForErrorCode] instead of a hardcoded
+/// generic message (Story 8.2, folds in the deferred-work item), and branches its action: an
+/// `auth.unauthorized` failure offers a *working* re-auth (`AuthCubit.signIn()`, which reaches the
+/// create/await-invite choice screen and its recovery options) rather than a dead-end retry of the
+/// same bootstrap that will just 401 again; any other error keeps the existing bootstrap retry.
 class _FailurePage extends StatelessWidget {
   const _FailurePage();
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final error = context.watch<HouseholdsCubit>().state.error;
+    final isUnauthorized = error?.code == 'auth.unauthorized';
+    final message = error == null
+        ? localizations.householdsLoadFailedError
+        : localizedMessageForErrorCode(localizations, error.code);
 
     return Scaffold(
       appBar: const SgartAppBar(title: 'SGART'),
@@ -287,12 +301,14 @@ class _FailurePage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(localizations.householdsLoadFailedError, key: const Key('households-load-error')),
+                Text(message, key: const Key('households-load-error')),
                 const SizedBox(height: SgartShapes.space4),
                 SgartButton(
                   key: const Key('households-retry-button'),
                   label: localizations.householdsRetryButtonLabel,
-                  onPressed: () => context.read<HouseholdsCubit>().bootstrap(),
+                  onPressed: isUnauthorized
+                      ? () => context.read<AuthCubit>().signIn()
+                      : () => context.read<HouseholdsCubit>().bootstrap(),
                 ),
               ],
             ),

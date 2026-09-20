@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bloc_test/bloc_test.dart';
@@ -199,6 +200,126 @@ void main() {
         final refreshed = await cubit.tryRefreshTokens();
 
         expect(refreshed, isFalse);
+        await cubit.close();
+      });
+    });
+
+    group('tryReauthenticate (Story 8.2 — wired into AuthenticatedHttpClient as its refresh callback)', () {
+      test('tryReauthenticate_returnsTrueViaRefreshWhenTheRefreshTokenIsValid', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
+        final cubit = buildCubit();
+        await cubit.signIn();
+
+        final result = await cubit.tryReauthenticate();
+
+        expect(result, isTrue);
+        expect(oidcClient.refreshCallCount, 1);
+        expect(oidcClient.signInCallCount, 1); // only the initial signIn() above — no device fallback
+        expect(cubit.currentAccessToken, 'fresh');
+        await cubit.close();
+      });
+
+      test(
+          'tryReauthenticate_silentlyReAuthenticatesViaTheDeviceCredentialWhenTheRefreshTokenIsDead',
+          () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit();
+        await cubit.signIn();
+        oidcClient.refreshErrorToThrow = StateError('refresh token dead');
+        // The device sign-in fallback re-derives the same identity with fresh tokens.
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'device-fresh', refreshToken: 'device-refresh');
+        final emittedStates = <AuthState>[];
+        final subscription = cubit.stream.listen(emittedStates.add);
+
+        final result = await cubit.tryReauthenticate();
+
+        expect(result, isTrue);
+        expect(cubit.currentAccessToken, 'device-fresh');
+        expect(tokenStorage.storedTokens!.accessToken, 'device-fresh');
+        // The whole point: the session stays authenticated with no state churn — no inProgress,
+        // no unauthenticated flash, nothing for the UI to react to.
+        expect(emittedStates, isEmpty);
+        await subscription.cancel();
+        await cubit.close();
+      });
+
+      test('tryReauthenticate_returnsFalseWhenBothTheRefreshAndTheDeviceSignInFail', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit();
+        await cubit.signIn();
+        oidcClient.refreshErrorToThrow = StateError('refresh token dead');
+        oidcClient.signInErrorToThrow = StateError('device credential gone');
+        final emittedStates = <AuthState>[];
+        final subscription = cubit.stream.listen(emittedStates.add);
+
+        final result = await cubit.tryReauthenticate();
+
+        expect(result, isFalse);
+        expect(emittedStates, isEmpty); // tryReauthenticate itself never emits, even on failure
+        await subscription.cancel();
+        await cubit.close();
+      });
+
+      test('tryReauthenticate_sharesASingleInFlightAttemptForConcurrentCallers', () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit();
+        await cubit.signIn();
+        oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
+        oidcClient.refreshGate = Completer<void>();
+
+        final first = cubit.tryReauthenticate();
+        final second = cubit.tryReauthenticate();
+        expect(oidcClient.refreshCallCount, 1); // the second caller never started its own refresh
+        oidcClient.refreshGate!.complete();
+        final results = await Future.wait([first, second]);
+
+        expect(results, [isTrue, isTrue]);
+        expect(oidcClient.refreshCallCount, 1);
+
+        // A later, separate attempt starts fresh (not mistaken for the completed one).
+        oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh-2', refreshToken: 'rotated-2');
+        final third = await cubit.tryReauthenticate();
+        expect(third, isTrue);
+        expect(oidcClient.refreshCallCount, 2);
+        await cubit.close();
+      });
+
+      test(
+          'tryReauthenticate_sharesASingleInFlightAttemptForConcurrentCallersDuringDeviceReAuth',
+          () async {
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+        final cubit = buildCubit();
+        await cubit.signIn();
+        // The refresh token is dead, so both concurrent callers must fall through to the device
+        // sign-in fallback — and still share one in-flight attempt there, not just on the refresh
+        // fast path.
+        oidcClient.refreshErrorToThrow = StateError('refresh token dead');
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'device-fresh', refreshToken: 'device-refresh');
+        oidcClient.signInGate = Completer<void>();
+        final signInCallCountBeforeReauth = oidcClient.signInCallCount; // the initial cubit.signIn() above
+
+        final first = cubit.tryReauthenticate();
+        final second = cubit.tryReauthenticate();
+        await Future<void>.delayed(Duration.zero); // let both callers reach the gated signIn() call
+        // The second caller never started its own device sign-in — only one new call beyond setup.
+        expect(oidcClient.signInCallCount, signInCallCountBeforeReauth + 1);
+        oidcClient.signInGate!.complete();
+        final results = await Future.wait([first, second]);
+
+        expect(results, [isTrue, isTrue]);
+        expect(oidcClient.signInCallCount, signInCallCountBeforeReauth + 1);
+        expect(cubit.currentAccessToken, 'device-fresh');
         await cubit.close();
       });
     });

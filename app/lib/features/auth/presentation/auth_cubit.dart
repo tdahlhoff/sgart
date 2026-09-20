@@ -134,8 +134,8 @@ class AuthCubit extends Cubit<AuthState> {
   /// A transient failure (server unreachable) keeps the stored tokens so the next launch can
   /// resume the session — only a definitive rejection wipes them (see [_isRejectedSession]). An
   /// expired access token (401) is now retried transparently by [AuthenticatedHttpClient] itself
-  /// (via [tryRefreshTokens], wired in as its refresh callback) — this method sees only the final
-  /// outcome.
+  /// (via [tryReauthenticate], wired in as its refresh callback — [tryRefreshTokens] is just that
+  /// method's fast-path step) — this method sees only the final outcome.
   Future<void> _loadCallerIdentity() async {
     try {
       final identity = await _identityApi.fetchMe();
@@ -160,8 +160,9 @@ class AuthCubit extends Cubit<AuthState> {
 
   /// Exchanges the stored refresh token for a fresh access token. Returns whether it succeeded; a
   /// failed refresh (missing/expired refresh token) leaves the caller to treat the 401 as final.
-  /// Public so it can be wired into [AuthenticatedHttpClient]'s optional refresh callback — every
-  /// authenticated call benefits from the same retry-once behavior, not just `/me`.
+  /// The inner fast-path step of [tryReauthenticate], which is what actually gets wired into
+  /// [AuthenticatedHttpClient]'s refresh callback (Story 8.2) — kept public in its own right since
+  /// it stays useful/testable standalone.
   Future<bool> tryRefreshTokens() async {
     final refreshToken = _tokens?.refreshToken;
     if (refreshToken == null) {
@@ -173,6 +174,59 @@ class AuthCubit extends Cubit<AuthState> {
       _tokens = refreshed;
       return true;
     } on Object {
+      return false;
+    }
+  }
+
+  /// The single in-flight re-auth attempt shared by concurrent callers (Story 8.2) — a not-yet-
+  /// rotated refresh token can then never cause two independent callers to race the same refresh
+  /// (or double-run the device sign-in). Cleared once the attempt completes, via an `identical`
+  /// check so a later, separate attempt is never mistaken for a stale one.
+  Future<bool>? _inFlightReauth;
+
+  /// The silent recovery ladder wired into [AuthenticatedHttpClient]'s refresh callback (Story 8.2):
+  /// [tryRefreshTokens] first (the unchanged OAuth-refresh fast path); when the refresh token
+  /// itself is dead, falls back to the browserless device-credential Direct-Grant sign-in
+  /// ([OidcClient.signIn], Story 7.1) to silently re-derive the *same* identity, updating [_tokens]
+  /// in place with **no [AuthState] emitted** — the retried request is the only thing that notices.
+  /// Only when even that sign-in throws does this return `false`, letting the caller's original
+  /// `auth.unauthorized` propagate (the terminal case a failure surface then shows visibly).
+  ///
+  /// Deliberately not `async` itself: the in-flight [Future] is assigned to [_inFlightReauth]
+  /// synchronously before this method returns, so two calls issued back-to-back (no await between
+  /// them) are guaranteed to share the same attempt rather than racing to start two.
+  ///
+  /// Must never throw — [AuthenticatedHttpClient]'s [TokenRefresher] contract requires a failed
+  /// re-auth to report itself by returning `false`.
+  Future<bool> tryReauthenticate() {
+    final inFlight = _inFlightReauth;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final attempt = _performReauthenticate();
+    _inFlightReauth = attempt;
+    unawaited(attempt.whenComplete(() {
+      if (identical(_inFlightReauth, attempt)) {
+        _inFlightReauth = null;
+      }
+    }));
+    return attempt;
+  }
+
+  Future<bool> _performReauthenticate() async {
+    if (await tryRefreshTokens()) {
+      return true;
+    }
+    try {
+      final tokens = await _oidcClient.signIn();
+      await _tokenStorage.save(tokens);
+      _tokens = tokens;
+      return true;
+    } on Object catch (error) {
+      // Logged rather than swallowed silently — see signIn()'s identical rationale: this is the
+      // one diagnostic trail a field failure of the *silent* re-auth ladder leaves behind.
+      developer.log('Silent device-credential re-auth failed — the session will show as expired',
+          name: 'sgart.auth', error: error);
       return false;
     }
   }
