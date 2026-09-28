@@ -1329,9 +1329,14 @@
     "description": "Helper copy under the onboarding nickname step field."
   },
 
-  "profileNicknameSectionLabel": "Dein Name in diesem Haushalt",
+  "profileNicknameSectionLabel": "Dein Name in „{householdName}“",
   "@profileNicknameSectionLabel": {
-    "description": "Section heading on the Profil screen for the active household's self-chosen nickname (Story 8.3)."
+    "description": "Section heading on the Profil screen for the active household's self-chosen nickname, naming the active household (Story 8.3; parameterized Story 8.7 D1).",
+    "placeholders": {
+      "householdName": {
+        "type": "String"
+      }
+    }
   },
 
   "profileNicknameEditAction": "Namen bearbeiten",

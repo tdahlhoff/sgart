@@ -195,7 +195,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               email: authState.email,
             ),
             const SizedBox(height: SgartShapes.space4),
-            Text(localizations.profileNicknameSectionLabel, style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              localizations.profileNicknameSectionLabel(widget.activeHousehold.name),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             ListTile(
               key: const Key('profile-nickname-row'),
               leading: const Icon(Icons.badge_outlined),

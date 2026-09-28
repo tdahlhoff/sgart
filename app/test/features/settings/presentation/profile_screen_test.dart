@@ -123,6 +123,23 @@ void main() {
         expect(find.text('Noch ohne Namen'), findsNWidgets(2)); // the header + the nickname section row
       });
 
+      testWidgets('theSectionLabelNamesTheActiveHouseholdAndUpdatesAfterASwitch', (tester) async {
+        // Story 8.7 D1: the label names the active household instead of the generic
+        // "diesem Haushalt", so it still makes sense once the switcher chip that used to carry
+        // that context is hidden on Profil.
+        const otherHousehold = HouseholdSummary(householdId: 'household-2', name: 'WG Küche');
+
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+        expect(find.text('Dein Name in „Familie Muster“'), findsOneWidget);
+
+        await tester.pumpWidget(buildSubject(household: otherHousehold));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Dein Name in „Familie Muster“'), findsNothing);
+        expect(find.text('Dein Name in „WG Küche“'), findsOneWidget);
+      });
+
       testWidgets('switchingTheActiveHouseholdShowsThatHouseholdsNickname', (tester) async {
         const otherHousehold = HouseholdSummary(householdId: 'household-2', name: 'WG');
         final membersApi = FakeMembersApi()

@@ -96,6 +96,11 @@ class HouseholdShell extends StatefulWidget {
 }
 
 class _HouseholdShellState extends State<HouseholdShell> {
+  /// Profil is personal-only (UX-DR6/UX-DR14, Story 8.7): the household switcher chip is a
+  /// household-scoped control, so it is out of place there — the app bar falls back to a plain
+  /// title on this tab only.
+  static const int _profileTabIndex = 2;
+
   int _selectedTabIndex = 0;
   late ShoppingListsCubit _shoppingListsCubit;
   late ActiveTripsCubit _activeTripsCubit;
@@ -197,19 +202,28 @@ class _HouseholdShellState extends State<HouseholdShell> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: SgartAppBar(
-        title: widget.activeHousehold.name,
-        titleKey: const Key('switcher-chip'),
-        onTitleTap: () => _openSwitcher(context),
-        onTitleTapSemanticLabel: localizations.householdsSwitcherChipTooltip,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: SgartShapes.space4),
-            child: _SyncStatusIndicator(eventStream: _eventStream),
-          ),
-        ],
+    // The sync-status indicator reports the app's connection state, which is useful on every tab
+    // (Story 8.7 code map) — only the switcher chip itself is Profil-specific.
+    final syncStatusActions = [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: SgartShapes.space4),
+        child: _SyncStatusIndicator(eventStream: _eventStream),
       ),
+    ];
+
+    return Scaffold(
+      appBar: _selectedTabIndex == _profileTabIndex
+          ? SgartAppBar(
+              title: localizations.shellTabProfileLabel,
+              actions: syncStatusActions,
+            )
+          : SgartAppBar(
+              title: widget.activeHousehold.name,
+              titleKey: const Key('switcher-chip'),
+              onTitleTap: () => _openSwitcher(context),
+              onTitleTapSemanticLabel: localizations.householdsSwitcherChipTooltip,
+              actions: syncStatusActions,
+            ),
       // Built eagerly for all three tabs so state is preserved when switching (and the Profil
       // identity header can read the ancestor AuthCubit at build time, not just on tap). The
       // ShoppingListsCubit is hoisted above the IndexedStack so the Einkauf tab (ActiveTripsView)

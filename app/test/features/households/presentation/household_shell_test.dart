@@ -351,14 +351,58 @@ void main() {
       expect(find.byKey(const Key('active-trips-empty-state')), findsOneWidget);
     });
 
-    testWidgets('theSwitcherChipStaysVisibleOnEveryTab', (tester) async {
+    testWidgets('theSwitcherChipStaysVisibleAndTappableOnListenAndEinkauf', (tester) async {
       await pumpShell(tester);
 
-      for (final tabKey in ['shell-tab-lists', 'shell-tab-shopping', 'shell-tab-profile']) {
+      for (final tabKey in ['shell-tab-lists', 'shell-tab-shopping']) {
         await tester.tap(find.byKey(Key(tabKey)));
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
+        final chip = find.byKey(const Key('switcher-chip'));
+        expect(chip, findsOneWidget);
+
+        await tester.tap(chip);
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        await tester.tapAt(const Offset(1, 1));
+        await tester.pumpAndSettle();
       }
+    });
+
+    testWidgets('theProfilTabHidesTheSwitcherChipAndShowsThePlainProfilTitle', (tester) async {
+      // Regression test (manual test F4, 2026-09-20): Profil is personal-only, so the
+      // household-scoped switcher chip must not appear there — story 8.7.
+      await pumpShell(tester);
+
+      await tester.tap(find.byKey(const Key('shell-tab-profile')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('switcher-chip')), findsNothing);
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.text('Profil')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('theProfilTabKeepsTheSyncStatusIndicator', (tester) async {
+      await pumpShell(tester);
+
+      await tester.tap(find.byKey(const Key('shell-tab-profile')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('sync-status-indicator')), findsOneWidget);
+    });
+
+    testWidgets('switchingFromListenToProfilAndBackRestoresTheSwitcherChip', (tester) async {
+      await pumpShell(tester);
+      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('shell-tab-profile')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('switcher-chip')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('shell-tab-lists')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('switcher-chip')), findsOneWidget);
     });
   });
 }
