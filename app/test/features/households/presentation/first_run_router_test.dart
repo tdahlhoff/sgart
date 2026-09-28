@@ -15,6 +15,7 @@ import 'package:sgart/features/invites/data/invite_link.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/invites/presentation/pending_invite_link_cubit.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
@@ -22,6 +23,7 @@ import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_consent_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -186,6 +188,7 @@ void main() {
     late AuthCubit authCubit;
     late FakeActiveHouseholdStore activeHouseholdStore;
     late FakeInvitesApi invitesApi;
+    late FakeNicknameApi nicknameApi;
     late FakeConsentApi consentApi;
     late PendingInviteLinkCubit pendingInviteLinkCubit;
 
@@ -195,6 +198,7 @@ void main() {
       cubit = HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
       authCubit = await buildAuthenticatedAuthCubit();
       invitesApi = FakeInvitesApi();
+      nicknameApi = FakeNicknameApi();
       // These tests exercise deep-link routing, not the consent gate (Story 7.4) — pre-accept the
       // current version so the gate never blocks.
       consentApi = FakeConsentApi()
@@ -216,8 +220,11 @@ void main() {
               value: FakeShoppingListsApi(),
               child: RepositoryProvider<ConsentApi>.value(
                 value: consentApi,
-                child: RepositoryProvider<InvitesApi>.value(
-                  value: invitesApi,
+                child: MultiRepositoryProvider(
+                  providers: [
+                    RepositoryProvider<InvitesApi>.value(value: invitesApi),
+                    RepositoryProvider<NicknameApi>.value(value: nicknameApi),
+                  ],
                   child: BlocProvider<PendingInviteLinkCubit>.value(
                     value: pendingInviteLinkCubit,
                     child: BlocProvider<HouseholdsCubit>.value(value: cubit, child: const FirstRunRouterBody()),
@@ -238,6 +245,14 @@ void main() {
       expect(invitesApi.lastAcceptedHouseholdId, 'household-1');
       expect(invitesApi.lastAcceptedInviteId, 'invite-1');
       expect(pendingInviteLinkCubit.state, isNull); // consumed — no re-entrant second route
+      // The join now gates on the required nickname step (Story 8.3) before the accept screen pops
+      // back to the first-run route.
+      expect(find.byKey(const Key('join-nickname-field')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('join-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('join-nickname-submit-button')));
+      await tester.pumpAndSettle();
+
       // The accept screen pops back to the first-run route on success (AwaitInvitePage's own
       // listener) — this proves the same accept path Story 4.2 already ships (AC3, DRY).
       expect(find.byType(AwaitInvitePage), findsNothing);
@@ -254,6 +269,12 @@ void main() {
 
       expect(invitesApi.lastAcceptedHouseholdId, 'household-2');
       expect(invitesApi.lastAcceptedInviteId, 'invite-2');
+      expect(find.byKey(const Key('join-nickname-field')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('join-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('join-nickname-submit-button')));
+      await tester.pumpAndSettle();
+
       expect(find.byType(AwaitInvitePage), findsNothing);
     });
 
@@ -285,8 +306,11 @@ void main() {
               value: FakeShoppingListsApi(),
               child: RepositoryProvider<ConsentApi>.value(
                 value: consentApi,
-                child: RepositoryProvider<InvitesApi>.value(
-                  value: invitesApi,
+                child: MultiRepositoryProvider(
+                  providers: [
+                    RepositoryProvider<InvitesApi>.value(value: invitesApi),
+                    RepositoryProvider<NicknameApi>.value(value: nicknameApi),
+                  ],
                   child: BlocProvider<PendingInviteLinkCubit>.value(
                     value: pendingInviteLinkCubit,
                     child: BlocProvider<HouseholdsCubit>.value(

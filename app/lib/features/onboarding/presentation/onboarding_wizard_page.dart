@@ -15,15 +15,20 @@ import '../../households/presentation/households_cubit.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/invites_cubit.dart';
 import '../../invites/presentation/invites_view.dart';
+import '../../settings/data/nickname_api.dart';
+import '../../settings/presentation/nickname_cubit.dart';
+import '../../settings/presentation/nickname_field.dart';
+import '../../settings/presentation/nickname_state.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
 import '../../stores/presentation/stores_cubit.dart';
 import '../../stores/presentation/stores_management_view.dart';
 
-/// The three wizard steps (Story 1.9, AC1). The welcome/choice (frame 1 of the mockup) stays the
-/// `CreateOrAwaitChoicePage` that launches this wizard, so the counted steps are name → stores →
-/// invite. `_OnboardingStep.index + 1` is the 1-based step number shown to the person.
-enum _OnboardingStep { name, stores, invite }
+/// The four wizard steps (Story 1.9, AC1; nickname added Story 8.3). The welcome/choice (frame 1 of
+/// the mockup) stays the `CreateOrAwaitChoicePage` that launches this wizard, so the counted steps
+/// are name → nickname → stores → invite. `_OnboardingStep.index + 1` is the 1-based step number
+/// shown to the person.
+enum _OnboardingStep { name, nickname, stores, invite }
 
 /// The gentle, one-step-at-a-time onboarding wizard for a person creating their first household
 /// (Story 1.9, UX-DR10 — the Werner path). It **reuses** the shipped paths rather than reinventing
@@ -38,8 +43,9 @@ enum _OnboardingStep { name, stores, invite }
 /// unchanged from AC4/Clarification 1).
 ///
 /// Reached as a pushed route above the `FirstRunRouter` providers, so its dependencies
-/// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache], [InvitesApi]) are
-/// re-provided by value at the push site (the Story 1.6 `ProviderNotFoundException` lesson).
+/// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache], [InvitesApi],
+/// [NicknameApi]) are re-provided by value at the push site (the Story 1.6
+/// `ProviderNotFoundException` lesson).
 class OnboardingWizardPage extends StatelessWidget {
   const OnboardingWizardPage({super.key});
 
@@ -64,31 +70,60 @@ class _OnboardingWizardView extends StatefulWidget {
 
 class _OnboardingWizardViewState extends State<_OnboardingWizardView> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nicknameController = TextEditingController();
+  late final NicknameCubit _nicknameCubit;
   _OnboardingStep _step = _OnboardingStep.name;
   HouseholdSummary? _createdHousehold;
+  bool _isNicknameSet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Built eagerly here (not lazily on first access) — a wizard session that never reaches the
+    // nickname step (e.g. a rejected name) must still be safe to dispose: a lazy `late final`
+    // initializer reading `context` for the first time from `dispose()` hits a deactivated element.
+    _nicknameCubit = NicknameCubit(nicknameApi: context.read<NicknameApi>());
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _nicknameController.dispose();
+    _nicknameCubit.close();
     super.dispose();
   }
 
   void _onHouseholdCreated(HouseholdSummary household) {
     setState(() {
       _createdHousehold = household;
-      _step = _OnboardingStep.stores;
+      _step = _OnboardingStep.nickname;
     });
   }
 
   void _goToStep(_OnboardingStep step) => setState(() => _step = step);
 
+  void _onNicknameSet() {
+    _isNicknameSet = true;
+    _goToStep(_OnboardingStep.stores);
+  }
+
+  /// Any exit once the household exists lands the person in it (Clarification 2, AC2) — but only
+  /// after the required nickname is set (Story 8.3): until then, an exit returns to the nickname
+  /// step instead of entering the household unnamed.
+  void _exitCreatedHousehold() {
+    if (_isNicknameSet) {
+      _finish();
+    } else {
+      _goToStep(_OnboardingStep.nickname);
+    }
+  }
+
   /// „Zurück" on the name step. Before the household exists this pops back to the first-run choice
-  /// (nothing was created). Once it exists, the wizard must never strand it: any exit lands the
-  /// person in the created household instead (Clarification 2 „any exit lands in the created
-  /// household", AC2).
+  /// (nothing was created). Once it exists, the wizard must never strand it — see
+  /// [_exitCreatedHousehold].
   void _handleNameBack() {
     if (_createdHousehold != null) {
-      _finish();
+      _exitCreatedHousehold();
     } else {
       Navigator.of(context).pop();
     }
@@ -111,12 +146,12 @@ class _OnboardingWizardViewState extends State<_OnboardingWizardView> {
     // Until the household is created the wizard pops back to the first-run choice as usual. Once it
     // exists, the Android system back gesture must not drop the person back on the choice screen with
     // a household already created (it would strand it and invite a duplicate) — intercept the pop and
-    // land in the created household instead (Clarification 2, AC2).
+    // land in the created household instead (Clarification 2, AC2), once the nickname is set.
     return PopScope(
       canPop: _createdHousehold == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          _finish();
+          _exitCreatedHousehold();
         }
       },
       child: Scaffold(
@@ -145,12 +180,21 @@ class _OnboardingWizardViewState extends State<_OnboardingWizardView> {
                   controller: _nameController,
                   onBack: _handleNameBack,
                   alreadyCreated: _createdHousehold != null,
-                  onAdvance: () => _goToStep(_OnboardingStep.stores),
+                  onAdvance: () => _goToStep(_OnboardingStep.nickname),
+                ),
+              _OnboardingStep.nickname => BlocProvider<NicknameCubit>.value(
+                  value: _nicknameCubit,
+                  child: _NicknameStep(
+                    household: _createdHousehold!,
+                    controller: _nicknameController,
+                    onNext: _onNicknameSet,
+                    onBack: () => _goToStep(_OnboardingStep.name),
+                  ),
                 ),
               _OnboardingStep.stores => _StoresStep(
                   household: _createdHousehold!,
                   onNext: () => _goToStep(_OnboardingStep.invite),
-                  onBack: () => _goToStep(_OnboardingStep.name),
+                  onBack: () => _goToStep(_OnboardingStep.nickname),
                 ),
               _OnboardingStep.invite => _InviteStep(
                   household: _createdHousehold!,
@@ -300,7 +344,71 @@ class _NameStep extends StatelessWidget {
   }
 }
 
-/// Step 2 — add stores (optional, skippable). Mounts the shared [StoresManagementView] over a
+/// Step 2 — the required nickname (Story 8.3): „Wie möchtest du genannt werden?" gates advancing —
+/// the household already exists at this point, so the `PUT .../nickname` call has somewhere to
+/// write. A rejected nickname (blank/too long, client- or server-side) shows inline without leaving
+/// the step, mirroring [_NameStep].
+class _NicknameStep extends StatelessWidget {
+  const _NicknameStep({
+    required this.household,
+    required this.controller,
+    required this.onNext,
+    required this.onBack,
+  });
+
+  final HouseholdSummary household;
+  final TextEditingController controller;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
+    return BlocListener<NicknameCubit, NicknameState>(
+      listenWhen: (previous, current) => current.status == NicknameStatus.success,
+      listener: (context, state) => onNext(),
+      child: BlocBuilder<NicknameCubit, NicknameState>(
+        builder: (context, state) {
+          final isSubmitting = state.status == NicknameStatus.submitting;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _OnboardingStepHeader(
+                step: _OnboardingStep.nickname,
+                title: localizations.onboardingNicknameStepTitle,
+                help: localizations.onboardingNicknameStepHelp,
+                onBack: onBack,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                  child: NicknameField(
+                    controller: controller,
+                    fieldKey: const Key('onboarding-nickname-field'),
+                    errorKey: const Key('onboarding-nickname-error'),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                child: SgartButton(
+                  key: const Key('onboarding-nickname-next-button'),
+                  label: localizations.onboardingNextButtonLabel,
+                  onPressed: isSubmitting
+                      ? null
+                      : () => context.read<NicknameCubit>().submit(household.householdId, controller.text),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Step 3 — add stores (optional, skippable). Mounts the shared [StoresManagementView] over a
 /// [StoresCubit] scoped to the just-created household — the exact reusable creation path 1.8 built
 /// (AC4). „Weiter" and „Überspringen" both advance; added stores are already persisted by the cubit.
 class _StoresStep extends StatelessWidget {
@@ -355,7 +463,7 @@ class _StoresStep extends StatelessWidget {
   }
 }
 
-/// Step 3 — invite (optional, Story 4.1). „Einladung senden" now sends a real invite via
+/// Step 4 — invite (optional, Story 4.1). „Einladung senden" now sends a real invite via
 /// [InvitesCubit]; a rejection (duplicate-pending, already-a-member, invalid email) shows inline
 /// without leaving the step. „Später einladen — fertig" still finishes onboarding regardless —
 /// solo remains first-class (AC7, unchanged).

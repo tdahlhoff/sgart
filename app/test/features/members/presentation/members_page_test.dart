@@ -70,6 +70,20 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    // Test Manifest: membersPage_nicknameRendering (Story 8.3) — each row shows the resolved
+    // nickname; an unset one shows the neutral fallback, never the raw member id.
+    testWidgets('rendersEachMembersResolvedNicknameAndTheNeutralFallbackForAnUnsetOne', (tester) async {
+      membersApi.membersToReturn = const [
+        MemberView(memberId: 'member-admin', role: 'ADMIN', isSelf: true, nickname: 'Papa'),
+        MemberView(memberId: 'member-participant', role: 'PARTICIPANT', isSelf: false),
+      ];
+      await openMembersPage(tester);
+
+      expect(find.text('Papa (Sie)'), findsOneWidget); // the caller's own row carries the self-marker
+      expect(find.text('Noch ohne Namen'), findsOneWidget);
+      expect(find.text('member-participant'), findsNothing); // never the raw id
+    });
+
     testWidgets('anAdminSeesGovernanceControlsForOtherMembers', (tester) async {
       membersApi.membersToReturn = const [admin, participant];
       await openMembersPage(tester);

@@ -14,10 +14,12 @@ import 'members_cubit.dart';
 import 'members_state.dart';
 
 /// The member-management screen (Story 4.3, AC9): the roster (caller marked „Sie", others by
-/// role). **Admin** sees per-member promote/demote/remove (with confirmations), a **revoke**
-/// action on each pending invite, and a **delete-household** action behind a hard (type-to-confirm)
-/// confirmation. **Participant** sees only „Haushalt verlassen". On a successful self-leave/removal
-/// or household deletion, re-routes via `HouseholdsCubit.bootstrap()`.
+/// role — Story 8.3 adds each member's self-chosen nickname as the row's primary label, with a
+/// neutral fallback for a member who has not set one yet). **Admin** sees per-member
+/// promote/demote/remove (with confirmations), a **revoke** action on each pending invite, and a
+/// **delete-household** action behind a hard (type-to-confirm) confirmation. **Participant** sees
+/// only „Haushalt verlassen". On a successful self-leave/removal or household deletion, re-routes
+/// via `HouseholdsCubit.bootstrap()`.
 class MembersPage extends StatelessWidget {
   const MembersPage({super.key, required this.household});
 
@@ -221,14 +223,18 @@ class _MemberRow extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     final roleLabel =
         member.role == 'ADMIN' ? localizations.membersRoleAdmin : localizations.membersRoleParticipant;
-    final titleLabel = member.isSelf ? localizations.membersSelfLabel : roleLabel;
+    // Story 8.3: the resolved nickname is the row's primary label — a member with no nickname yet
+    // shows the neutral fallback, never the raw member id (I/O matrix). The caller's own row still
+    // adds "(Sie)" so they can tell themselves apart at a glance.
+    final nicknameLabel = member.nickname ?? localizations.membersNicknameFallback;
+    final titleLabel = member.isSelf ? localizations.membersSelfRowTitle(nicknameLabel) : nicknameLabel;
 
     return ListTile(
       key: Key('member-row-${member.memberId}'),
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.person_outline),
       title: Text(titleLabel),
-      subtitle: member.isSelf ? Text(roleLabel) : null,
+      subtitle: Text(roleLabel),
       trailing: isCallerAdmin && !member.isSelf
           ? PopupMenuButton<_MemberAction>(
               key: Key('member-row-${member.memberId}-menu'),

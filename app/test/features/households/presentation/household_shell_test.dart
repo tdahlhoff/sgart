@@ -11,6 +11,7 @@ import 'package:sgart/features/lists/data/shopping_list_summary.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
 import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/data/members_api.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/features/stores/presentation/manage_stores_page.dart';
@@ -19,6 +20,7 @@ import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_members_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/fake_shopping_lists_dependencies.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -49,6 +51,7 @@ Widget _buildShellHarness({
             RepositoryProvider<StoreChainReferenceCache>.value(value: FakeStoreChainReferenceCache()),
             RepositoryProvider<InvitesApi>.value(value: invitesApi ?? FakeInvitesApi()),
             RepositoryProvider<MembersApi>.value(value: membersApi ?? FakeMembersApi()),
+            RepositoryProvider<NicknameApi>.value(value: FakeNicknameApi()),
           ],
           child: BlocProvider<HouseholdsCubit>.value(value: householdsCubit, child: const FirstRunRouterBody()),
         ),
@@ -319,9 +322,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 2);
-      expect(find.text('Anna Testperson'), findsOneWidget);
+      // Story 8.3: the header shows the household nickname (here the unset fallback), never the JWT name.
+      expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+      expect(find.text('Anna Testperson'), findsNothing);
       expect(find.text('anna@example.test'), findsOneWidget);
       expect(find.text('Sprache & Region'), findsOneWidget);
+      // Story 8.3's nickname section pushed the notifications section further down the Profil
+      // ListView, past the default test viewport — scroll it into view before asserting.
+      await tester.scrollUntilVisible(find.text('Benachrichtigungen'), 200, scrollable: find.byType(Scrollable));
       expect(find.text('Benachrichtigungen'), findsOneWidget);
     });
 

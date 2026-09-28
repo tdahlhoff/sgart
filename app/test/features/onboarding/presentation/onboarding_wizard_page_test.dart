@@ -6,6 +6,7 @@ import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/households/presentation/households_state.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
 import 'package:sgart/features/onboarding/presentation/onboarding_wizard_page.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/features/stores/data/store_chain.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
@@ -14,6 +15,7 @@ import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -24,6 +26,7 @@ void main() {
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeInvitesApi invitesApi;
+    late FakeNicknameApi nicknameApi;
 
     const chains = [StoreChain(chainId: 'id-edeka', name: 'Edeka')];
 
@@ -34,6 +37,7 @@ void main() {
       storesApi = FakeStoresApi()..chainsToReturn = chains;
       referenceCache = FakeStoreChainReferenceCache(chains: chains);
       invitesApi = FakeInvitesApi();
+      nicknameApi = FakeNicknameApi();
     });
 
     tearDown(() => householdsCubit.close());
@@ -45,6 +49,7 @@ void main() {
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
               RepositoryProvider<InvitesApi>.value(value: invitesApi),
+              RepositoryProvider<NicknameApi>.value(value: nicknameApi),
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,
@@ -53,9 +58,15 @@ void main() {
           ),
         );
 
+    /// Advances name → nickname, landing on the stores step — the entry point most tests below
+    /// need (they exercise stores/invite, not the nickname step itself, which has its own focused
+    /// tests below).
     Future<void> nameAndAdvance(WidgetTester tester, {String name = 'Rita & Werner'}) async {
       await tester.enterText(find.byKey(const Key('onboarding-name-field')), name);
       await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('onboarding-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('onboarding-nickname-next-button')));
       await tester.pumpAndSettle();
     }
 
@@ -73,16 +84,57 @@ void main() {
       expect(householdsCubit.state.status, isNot(HouseholdsStatus.shell));
     });
 
-    testWidgets('theWizardShowsAThreeStepProgressIndicatorAcrossTheSteps', (tester) async {
+    testWidgets('theWizardShowsAFourStepProgressIndicatorAcrossTheSteps', (tester) async {
       await tester.pumpWidget(buildSubject());
-      expect(find.text('Schritt 1 von 3'), findsOneWidget);
+      expect(find.text('Schritt 1 von 4'), findsOneWidget);
 
-      await nameAndAdvance(tester);
-      expect(find.text('Schritt 2 von 3'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Schritt 2 von 4'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('onboarding-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('onboarding-nickname-next-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Schritt 3 von 4'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
       await tester.pumpAndSettle();
-      expect(find.text('Schritt 3 von 3'), findsOneWidget);
+      expect(find.text('Schritt 4 von 4'), findsOneWidget);
+    });
+
+    testWidgets('theNicknameStepGatesAdvancingAndCallsTheNicknameApiForTheCreatedHousehold',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle();
+
+      // Required: no store step visible yet, still on the nickname step.
+      expect(find.byKey(const Key('onboarding-stores-next-button')), findsNothing);
+
+      await tester.enterText(find.byKey(const Key('onboarding-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('onboarding-nickname-next-button')));
+      await tester.pumpAndSettle();
+
+      expect(nicknameApi.setCalls, [('hh-1', 'Werner')]);
+      expect(find.byKey(const Key('onboarding-stores-next-button')), findsOneWidget);
+    });
+
+    testWidgets('aRejectedNicknameShowsInlineAndDoesNotAdvance', (tester) async {
+      nicknameApi.setNicknameErrorToThrow =
+          const AppException(AppError(code: 'nickname.tooLong', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('onboarding-nickname-field')), 'Werner');
+      await tester.tap(find.byKey(const Key('onboarding-nickname-next-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-nickname-error')), findsOneWidget);
+      expect(find.byKey(const Key('onboarding-stores-next-button')), findsNothing);
     });
 
     testWidgets('skippingStoresAndInviteLandsSoloInTheCreatedHousehold', (tester) async {
@@ -128,7 +180,7 @@ void main() {
 
       expect(find.byKey(const Key('onboarding-name-error')), findsOneWidget);
       // Still on step 1 — the stores step never appeared.
-      expect(find.text('Schritt 1 von 3'), findsOneWidget);
+      expect(find.text('Schritt 1 von 4'), findsOneWidget);
       expect(find.byKey(const Key('onboarding-stores-next-button')), findsNothing);
     });
 
@@ -171,7 +223,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('invite-action-error')), findsOneWidget);
-      expect(find.text('Schritt 3 von 3'), findsOneWidget);
+      expect(find.text('Schritt 4 von 4'), findsOneWidget);
     });
 
     testWidgets('finishStillWorksAfterAFailedInviteAttempt', (tester) async {
@@ -212,22 +264,27 @@ void main() {
       expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
     });
 
-    testWidgets('goingBackFromTheStoresStepReturnsToTheNameStepWithoutCreatingASecondHousehold',
+    testWidgets(
+        'goingBackFromTheStoresStepThroughNicknameReturnsToTheNameStepWithoutCreatingASecondHousehold',
         (tester) async {
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester);
       expect(householdsApi.createCallCount, 1);
 
-      await tester.tap(find.byKey(const Key('onboarding-back-button')));
+      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // stores → nickname
       await tester.pumpAndSettle();
-      expect(find.text('Schritt 1 von 3'), findsOneWidget);
+      expect(find.text('Schritt 2 von 4'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // nickname → name
+      await tester.pumpAndSettle();
+      expect(find.text('Schritt 1 von 4'), findsOneWidget);
 
       // Once the household exists the name step is one-way: re-advancing does NOT create a second
       // household — the wizard already holds the created summary, so „Weiter" just moves forward
       // without re-submitting (Clarification 2 — never re-create/re-name).
       await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
       await tester.pumpAndSettle();
-      expect(find.text('Schritt 2 von 3'), findsOneWidget);
+      expect(find.text('Schritt 2 von 4'), findsOneWidget);
       expect(householdsApi.createCallCount, 1);
       expect(householdsCubit.state.status, isNot(HouseholdsStatus.shell));
     });
@@ -236,9 +293,11 @@ void main() {
         (tester) async {
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester); // household created, now on the stores step
-      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // stores → name
+      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // stores → nickname
       await tester.pumpAndSettle();
-      expect(find.text('Schritt 1 von 3'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // nickname → name
+      await tester.pumpAndSettle();
+      expect(find.text('Schritt 1 von 4'), findsOneWidget);
 
       // „Zurück" from the name step after creation must not drop the person back on the choice
       // screen with the household stranded — it lands them in the created household (Clarification 2).
@@ -246,6 +305,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(householdsCubit.state.status, HouseholdsStatus.shell);
       expect(householdsCubit.state.activeHousehold!.householdId, 'hh-1');
+    });
+
+    testWidgets('backingOutBeforeTheNicknameIsSetReturnsToTheNicknameStepInsteadOfEnteringTheHousehold',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle(); // household created, now on the nickname step
+      await tester.tap(find.byKey(const Key('onboarding-back-button'))); // nickname → name
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('onboarding-back-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-nickname-field')), findsOneWidget);
+      expect(householdsCubit.state.status, isNot(HouseholdsStatus.shell));
+    });
+
+    testWidgets('theSystemBackGestureBeforeTheNicknameIsSetStaysOnTheNicknameStep', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.enterText(find.byKey(const Key('onboarding-name-field')), 'Rita & Werner');
+      await tester.tap(find.byKey(const Key('onboarding-name-next-button')));
+      await tester.pumpAndSettle(); // household created, now on the nickname step
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding-nickname-field')), findsOneWidget);
+      expect(householdsCubit.state.status, isNot(HouseholdsStatus.shell));
     });
 
     testWidgets('theSystemBackGestureAfterCreationLandsInTheCreatedHouseholdRatherThanStranding',

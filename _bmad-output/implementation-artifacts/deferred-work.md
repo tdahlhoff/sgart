@@ -345,6 +345,15 @@
   summary: The production `FirstRunRouter` provider scope is hand-copied independently in three test files (`household_shell_test.dart`, `first_run_router_test.dart`, `household_shell_live_sync_test.dart`) with nothing keeping them in sync.
   evidence: Pre-existing, not touched by Story 8.1. A shared `test/support/` helper (e.g. `wrapWithFirstRunRouterScope`) would make a future provider addition fail loudly in one place instead of drifting across three.
 
+## Deferred from: planning of story-8.3 (2026-09-20)
+
+- **Activity feed „<Name> hat Milch hinzugefügt" is a forward-pointer, not built here.** Story 8.3
+  (per-household nickname) makes a member's chosen display name resolvable (`ResolveMembershipNicknames`),
+  which is the name slot such a feed would need — but no activity feed exists in the app today, and
+  building one is out of Epic 8's "harden shipped behavior" scope (YAGNI, locked decision). If/when an
+  activity feed is built, it composes the events already carrying `MemberId` with this story's nickname
+  resolution port for display.
+
 ## Deferred from: code review of 8-2-session-never-expires-silent-device-reauth (2026-09-20)
 
 - source_spec: `_bmad-output/implementation-artifacts/8-2-session-never-expires-silent-device-reauth.md`
@@ -353,3 +362,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/8-2-session-never-expires-silent-device-reauth.md`
   summary: No test drives a real 401 through the actually-wired `AuthenticatedHttpClient` at either construction site (`auth_gate.dart:56`, `first_run_router.dart:74`) to prove the `tryReauthenticate` device-credential fallback is reachable end-to-end — the unit tests call the cubit method directly, and the transport test uses its own `TokenRefresher` double.
   evidence: Reverting either wiring line to `cubit.tryRefreshTokens()` fails no test, yet would silently un-wire the story's central behavior (a dead refresh token would surface as session-expired instead of silently recovering). Closing this needs an integration-style widget test that pumps a 401→200 through a real Dio MockAdapter and asserts the device `signIn` fallback fired — heavier than this change's unit-level verification. Worth a follow-up integration test rather than blocking the diff.
+
+## Deferred from: code review of 8-3-display-name-at-onboarding-used-everywhere.md (2026-09-28)
+
+- **Nickname data export not implemented.** `membership_nickname` is documented as "exportable" but no data-export mechanism exists in the backend at all. Belongs to Epic 6 (data portability); the export must include this table.
+- **Account-erasure `MembershipNicknameRepository.deleteFor(KeycloakUserId)` has no caller.** Provided + repository-tested; Epic 6 wires the account-erasure trigger (same as `AccountConsentRepository.deleteFor`).
+- **No audit trail for writes to personal data (the nickname).** CLAUDE.md §5 auditability; no personal-data audit mechanism exists project-wide yet — pre-existing gap.

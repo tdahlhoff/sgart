@@ -1,6 +1,7 @@
 package de.sgart.identity.application;
 
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import java.util.Objects;
@@ -15,23 +16,35 @@ import java.util.Objects;
  * sibling to {@link IssueMemberIdentity}'s {@code retract} (a join-failure compensation) — a
  * distinct use case, called from a different trigger (a successful governance command, not a failed
  * join). Never called directly against {@code identity.domain} or the mapping table (AD-2).
+ *
+ * <p>Story 8.3: also drops the de-linked membership's nickname row(s) — the same personal-data
+ * cleanup symmetry {@link MembershipNicknameRepository} keeps with {@link MemberMappingRepository}
+ * (AD-6 rev F).
  */
 public final class RetractMembership {
 
     private final MemberMappingRepository memberMappingRepository;
+    private final MembershipNicknameRepository membershipNicknameRepository;
 
-    public RetractMembership(MemberMappingRepository memberMappingRepository) {
+    public RetractMembership(
+            MemberMappingRepository memberMappingRepository,
+            MembershipNicknameRepository membershipNicknameRepository) {
         this.memberMappingRepository =
                 Objects.requireNonNull(memberMappingRepository, "memberMappingRepository must not be null");
+        this.membershipNicknameRepository =
+                Objects.requireNonNull(membershipNicknameRepository, "membershipNicknameRepository must not be null");
     }
 
     /** De-links a single member's mapping — the leaver's own, or the target of a removal. Idempotent. */
     public void retractMember(HouseholdId householdId, MemberId memberId) {
+        // The nickname row is looked up by the join before deleteMappingByMember removes it.
+        membershipNicknameRepository.deleteForMembership(householdId, memberId);
         memberMappingRepository.deleteMappingByMember(householdId, memberId);
     }
 
     /** De-links every mapping for a deleted household (Story 4.3, AC7). Idempotent. */
     public void retractHousehold(HouseholdId householdId) {
+        membershipNicknameRepository.deleteAllForHousehold(householdId);
         memberMappingRepository.deleteAllMappings(householdId);
     }
 }

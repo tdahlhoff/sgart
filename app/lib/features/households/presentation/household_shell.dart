@@ -226,7 +226,7 @@ class _HouseholdShellState extends State<HouseholdShell> {
               value: _activeTripsCubit,
               child: const ActiveTripsView(),
             ),
-            const ProfileScreen(),
+            ProfileScreen(activeHousehold: widget.activeHousehold),
           ],
         ),
       ),

@@ -7,24 +7,28 @@ import 'package:sgart/features/households/presentation/await_invite_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/invites/data/invite_link.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_consent_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/widget_test_harness.dart';
 
 void main() {
   group('ConsentGatedAwaitInvitePage', () {
     late FakeConsentApi consentApi;
     late FakeInvitesApi invitesApi;
+    late FakeNicknameApi nicknameApi;
     late FakeHouseholdsApi householdsApi;
     late HouseholdsCubit householdsCubit;
 
     setUp(() {
       consentApi = FakeConsentApi();
       invitesApi = FakeInvitesApi();
+      nicknameApi = FakeNicknameApi();
       householdsApi = FakeHouseholdsApi();
       householdsCubit =
           HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: FakeActiveHouseholdStore());
@@ -41,6 +45,7 @@ void main() {
             providers: [
               RepositoryProvider<ConsentApi>.value(value: consentApi),
               RepositoryProvider<InvitesApi>.value(value: invitesApi),
+              RepositoryProvider<NicknameApi>.value(value: nicknameApi),
             ],
             child: BlocProvider<HouseholdsCubit>.value(
               value: householdsCubit,

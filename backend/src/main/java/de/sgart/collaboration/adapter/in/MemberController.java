@@ -6,7 +6,11 @@ import de.sgart.collaboration.application.command.PromoteMemberHandler;
 import de.sgart.collaboration.application.command.RemoveMemberHandler;
 import de.sgart.collaboration.application.query.ListHouseholdMembers;
 import de.sgart.identity.adapter.in.security.AuthenticatedCaller;
+import de.sgart.identity.application.ResolveMembershipNicknames;
+import de.sgart.shared.HouseholdId;
+import de.sgart.shared.MemberId;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -33,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 class MemberController {
 
     private final ListHouseholdMembers listHouseholdMembers;
+    private final ResolveMembershipNicknames resolveMembershipNicknames;
     private final LeaveHouseholdHandler leaveHouseholdHandler;
     private final RemoveMemberHandler removeMemberHandler;
     private final PromoteMemberHandler promoteMemberHandler;
@@ -40,23 +45,40 @@ class MemberController {
 
     MemberController(
             ListHouseholdMembers listHouseholdMembers,
+            ResolveMembershipNicknames resolveMembershipNicknames,
             LeaveHouseholdHandler leaveHouseholdHandler,
             RemoveMemberHandler removeMemberHandler,
             PromoteMemberHandler promoteMemberHandler,
             DemoteMemberHandler demoteMemberHandler) {
         this.listHouseholdMembers = listHouseholdMembers;
+        this.resolveMembershipNicknames = resolveMembershipNicknames;
         this.leaveHouseholdHandler = leaveHouseholdHandler;
         this.removeMemberHandler = removeMemberHandler;
         this.promoteMemberHandler = promoteMemberHandler;
         this.demoteMemberHandler = demoteMemberHandler;
     }
 
+    /**
+     * Story 8.3: each row is enriched with its resolved nickname via the published identity ACL
+     * port ({@link ResolveMembershipNicknames}, AD-2) — a member with no nickname yet carries
+     * {@code null}; the client applies the neutral fallback (never the raw id, I/O matrix).
+     */
     @GetMapping
     List<MemberResponse> list(@AuthenticationPrincipal Jwt jwt, @PathVariable String householdId) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
 
-        return listHouseholdMembers.forHousehold(caller.keycloakUserId(), householdId).stream()
-                .map(member -> new MemberResponse(member.memberId(), member.role(), member.isSelf()))
+        List<ListHouseholdMembers.MemberSummary> members =
+                listHouseholdMembers.forHousehold(caller.keycloakUserId(), householdId);
+        List<MemberId> memberIds = members.stream().map(member -> MemberId.fromString(member.memberId())).toList();
+        Map<MemberId, String> nicknamesByMemberId =
+                resolveMembershipNicknames.resolveFor(HouseholdId.fromString(householdId), memberIds);
+
+        return members.stream()
+                .map(member -> new MemberResponse(
+                        member.memberId(),
+                        member.role(),
+                        member.isSelf(),
+                        nicknamesByMemberId.get(MemberId.fromString(member.memberId()))))
                 .toList();
     }
 
@@ -111,6 +133,10 @@ class MemberController {
      * client-generated {@code commandId} (AR10); no other body content. */
     record GovernanceCommandRequest(String commandId) {}
 
-    /** No email/name in the response (AD-6, decision 5) — id + role + whether this row is the caller. */
-    record MemberResponse(String memberId, String role, boolean isSelf) {}
+    /**
+     * No Keycloak name/email in the response (AD-6, decision 5) — id + role + whether this row is
+     * the caller + the resolved self-chosen {@code nickname} (Story 8.3, AD-6 rev F; {@code null}
+     * when the member has not set one yet — the client applies the neutral fallback).
+     */
+    record MemberResponse(String memberId, String role, boolean isSelf, String nickname) {}
 }

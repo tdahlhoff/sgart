@@ -11,6 +11,7 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.MemberLeft;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
@@ -41,7 +42,9 @@ class LeaveHouseholdHandlerTest {
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
     private final LeaveHouseholdHandler handler = new LeaveHouseholdHandler(
-            eventStore, new ResolveMemberIdentity(mappingRepository), new RetractMembership(mappingRepository));
+            eventStore,
+            new ResolveMemberIdentity(mappingRepository),
+            new RetractMembership(mappingRepository, new InMemoryMembershipNicknameRepository(mappingRepository)));
 
     private final HouseholdId householdId = HouseholdId.generate();
     private final MemberId adminMemberId = MemberId.generate();

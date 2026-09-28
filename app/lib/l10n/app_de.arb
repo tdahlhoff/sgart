@@ -1195,9 +1195,14 @@
     "description": "Heading of the member-management screen (Story 4.3, AC9)."
   },
 
-  "membersSelfLabel": "Sie",
-  "@membersSelfLabel": {
-    "description": "Marks the caller's own row in the member roster — pseudonymous, no name shown (AD-6, decision 5)."
+  "membersSelfRowTitle": "{nickname} (Sie)",
+  "@membersSelfRowTitle": {
+    "description": "Title of the caller's own row in the member roster (Story 8.3): their resolved nickname (or the neutral fallback) plus a self-marker so they can tell themselves apart.",
+    "placeholders": {
+      "nickname": {
+        "type": "String"
+      }
+    }
   },
 
   "membersRoleAdmin": "Admin",
@@ -1318,6 +1323,51 @@
   "membersLastAdminError": "Der letzte Admin kann den Haushalt nicht verlassen, entfernt oder degradiert werden.",
   "@membersLastAdminError": {
     "description": "Localized copy for the membership.lastAdmin error code (Story 4.3, AC5) — the at-least-one-Admin invariant."
+  },
+
+  "membersNicknameFallback": "Noch ohne Namen",
+  "@membersNicknameFallback": {
+    "description": "Neutral fallback shown in the member roster and the Profile header for a member who has not yet set a nickname (Story 8.3) — never the raw credential/MemberId, and deliberately distinct from the „Mitglied“ role label."
+  },
+
+  "nicknameFieldLabel": "Dein Name im Haushalt",
+  "@nicknameFieldLabel": {
+    "description": "Label of the self-chosen per-household nickname field (Story 8.3), shared by the onboarding step and the Profile edit affordance."
+  },
+
+  "nicknameRequiredError": "Bitte gib einen Namen ein.",
+  "@nicknameRequiredError": {
+    "description": "Localized copy for the nickname.required error code (Story 8.3) — a blank/whitespace-only nickname."
+  },
+
+  "nicknameTooLongError": "Der Name ist zu lang.",
+  "@nicknameTooLongError": {
+    "description": "Localized copy for the nickname.tooLong error code (Story 8.3) — over MembershipNickname.MAX_LENGTH characters."
+  },
+
+  "onboardingNicknameStepTitle": "Wie möchtest du genannt werden?",
+  "@onboardingNicknameStepTitle": {
+    "description": "Title of the required onboarding nickname step (Story 8.3), shown in both the create-household wizard and the join-by-invite flow."
+  },
+
+  "onboardingNicknameStepHelp": "So sehen dich die anderen im Haushalt — du kannst das später in deinem Profil ändern.",
+  "@onboardingNicknameStepHelp": {
+    "description": "Helper copy under the onboarding nickname step field."
+  },
+
+  "profileNicknameSectionLabel": "Dein Name in diesem Haushalt",
+  "@profileNicknameSectionLabel": {
+    "description": "Section heading on the Profil screen for the active household's self-chosen nickname (Story 8.3)."
+  },
+
+  "profileNicknameEditAction": "Namen bearbeiten",
+  "@profileNicknameEditAction": {
+    "description": "Action that opens the nickname-edit dialog for the active household (Story 8.3)."
+  },
+
+  "profileNicknameEditDialogTitle": "Namen bearbeiten",
+  "@profileNicknameEditDialogTitle": {
+    "description": "Title of the Profile screen's nickname-edit dialog (Story 8.3)."
   },
 
   "profileRecoveryEmailSectionLabel": "E-Mail-Wiederherstellung",

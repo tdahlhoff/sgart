@@ -11,6 +11,7 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.event.MemberRemoved;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
 import de.sgart.identity.domain.KeycloakUserId;
@@ -42,7 +43,9 @@ class RemoveMemberHandlerTest {
     private final InMemoryEventStore eventStore = new InMemoryEventStore();
     private final InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
     private final RemoveMemberHandler handler = new RemoveMemberHandler(
-            eventStore, new ResolveMemberIdentity(mappingRepository), new RetractMembership(mappingRepository));
+            eventStore,
+            new ResolveMemberIdentity(mappingRepository),
+            new RetractMembership(mappingRepository, new InMemoryMembershipNicknameRepository(mappingRepository)));
 
     private final HouseholdId householdId = HouseholdId.generate();
     private final MemberId adminMemberId = MemberId.generate();
@@ -120,7 +123,8 @@ class RemoveMemberHandlerTest {
         RemoveMemberHandler orderTrackingHandler = new RemoveMemberHandler(
                 orderTrackingEventStore,
                 new ResolveMemberIdentity(orderTrackingRepository),
-                new RetractMembership(orderTrackingRepository));
+                new RetractMembership(
+                        orderTrackingRepository, new InMemoryMembershipNicknameRepository(mappingRepository)));
 
         orderTrackingHandler.handle(
                 ADMIN_SUB, householdId.toString(), participantMemberId.toString(), CommandId.generate().toString());

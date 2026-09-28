@@ -2,7 +2,7 @@
 title: 'Story 8.3: Choose a per-household nickname at onboarding, shown throughout the household'
 type: 'feature'
 created: '2026-09-20'
-status: 'ready-for-dev'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -187,25 +187,25 @@ only as a fallback when unset).
 ## Tasks & Acceptance
 
 **Execution (TDD — write the failing test first for each slice):**
-- [ ] Domain: `MembershipNickname` invariant tests (trims; rejects blank/whitespace/over-length);
+- [x] Domain: `MembershipNickname` invariant tests (trims; rejects blank/whitespace/over-length);
   then the value object.
-- [ ] Application: `SetMembershipNicknameTest` (upserts for a member; rejects a non-member; rejects
+- [x] Application: `SetMembershipNicknameTest` (upserts for a member; rejects a non-member; rejects
   invalid input) + `ResolveMembershipNicknamesTest` (resolves a mix of set/unset members via the
   ACL join) + erasure/de-link tests (`deleteFor` removes all rows for a user;
   `RetractMembership` drops the membership's nickname); then the use cases.
-- [ ] Adapter.out: `JdbcMembershipNicknameRepositoryTest` (Testcontainers-Postgres, mirrors the
+- [x] Adapter.out: `JdbcMembershipNicknameRepositoryTest` (Testcontainers-Postgres, mirrors the
   member-mapping repo test); then the JDBC adapter + `V22` migration.
-- [ ] Adapter.in: controller test for `PUT .../nickname` (own nickname set/updated; 4xx on invalid;
+- [x] Adapter.in: controller test for `PUT .../nickname` (own nickname set/updated; 4xx on invalid;
   identity from JWT only); then the endpoint.
-- [ ] Collaboration: `MemberController` roster test asserting each row carries the resolved nickname
+- [x] Collaboration: `MemberController` roster test asserting each row carries the resolved nickname
   (self + others) with the fallback for unset; then the enrichment.
-- [ ] ArchUnit: add the documented `NoPersistedPersonalDataTest` exemption; confirm hexagonal rules
+- [x] ArchUnit: add the documented `NoPersistedPersonalDataTest` exemption; confirm hexagonal rules
   still pass.
-- [ ] App: `MemberView`/`members_api` parse-nickname tests; members page renders nickname/fallback;
+- [x] App: `MemberView`/`members_api` parse-nickname tests; members page renders nickname/fallback;
   Profile shows + edits the active household's nickname; onboarding gate blocks create/join without
   a valid nickname (both entry points). Then the widgets/cubits.
-- [ ] `deferred-work.md`: record the activity-feed name-slot as a forward-pointer (out of scope).
-- [ ] Architecture note: record the AD-6 nickname exception in the spine / a short design note.
+- [x] `deferred-work.md`: record the activity-feed name-slot as a forward-pointer (out of scope).
+- [x] Architecture note: record the AD-6 nickname exception in the spine / a short design note.
 
 **Acceptance Criteria:**
 - Given first-run onboarding (create **or** join), when a person sets up, then a **required**
@@ -230,6 +230,76 @@ only as a fallback when unset).
   `flutter analyze` (CLAUDE.md §6) — this is a full-stack story, so both are the meaningful gate;
   state which ran.
 
+### Review Findings
+
+_Code review 2026-09-28 (Opus 5.5; Blind Hunter + Edge Case Hunter + Verification Gap + Acceptance Auditor). Decision resolved and all 13 patches applied the same day; the nickname fallback copy is now „Noch ohne Namen"._
+
+- [x] [Review][Decision] Profile header shows the raw credential id when the nickname is unset — `_IdentityHeader(displayName: _nickname ?? authState.displayName)` (`profile_screen.dart:178`) falls back to the JWT name, which for a silently-provisioned account is the `preferred_username` device-credential id — exactly F3. The spec contradicts itself (Approach: "JWT name kept only as a fallback when unset" vs I/O matrix + AC: "never shows the credential id"; Code Map: keep displayName "only as the no-household fallback"). Also flashes the id while the roster loads. **Resolved (Timo 2026-09-28): option 1** — the header shows the nickname or the neutral fallback, never `authState.displayName`; the JWT name remains only for pre-household screens. Applied as a patch.
+- [x] [Review][Patch] Profile keeps the previous household's nickname after a household switch (no `didUpdateWidget`; shell's `IndexedStack` is not re-keyed) — header/row show A's nickname, edit dialog pre-fills A's value but PUTs to B [app/lib/features/settings/presentation/profile_screen.dart:56]
+- [x] [Review][Patch] Create-flow "required" nickname step is skippable — nickname-step back → name step → `_handleNameBack` → `_finish()`, and system back via `PopScope(... _finish())` both land in the household unnamed [app/lib/features/onboarding/presentation/onboarding_wizard_page.dart:108]
+- [x] [Review][Patch] Join-flow nickname step skippable via system/app-bar back — no `PopScope`, pops after a successful accept without `bootstrap()`, member lands back on the choice screen with a stale `HouseholdsCubit` and no nickname [app/lib/features/households/presentation/await_invite_page.dart:135]
+- [x] [Review][Patch] No unit tests for `NicknameCubit` (trim/blank/too-long/re-entrancy/non-AppException → `nickname.unknown`) nor `HttpNicknameApi` (PUT path/body) — CLAUDE.md §6 [app/lib/features/settings/presentation/nickname_cubit.dart]
+- [x] [Review][Patch] No join-flow test for a rejected nickname — `join-nickname-error` shown, join not finished; widening `listenWhen` would go unnoticed [app/test/features/households/presentation/await_invite_page_test.dart]
+- [x] [Review][Patch] Invite-link pre-fill assertion removed; "proven indirectly" is not true (auto-accept reads the link, not the field) — add an auto-accept-fails test asserting the field shows `household-1:invite-1` [app/test/features/households/presentation/await_invite_page_test.dart:120]
+- [x] [Review][Patch] "(Sie)" self-marker built by string concatenation outside ARB and untested (`textContaining('Papa')` passes without it) — make it one ARB message with a `{nickname}` placeholder + assert `Papa (Sie)` [app/lib/features/members/presentation/members_page.dart:233]
+- [x] [Review][Patch] Nickname fallback „Mitglied" equals the participant role label → unset participant renders „Mitglied / Mitglied" — use distinct copy (e.g. „Noch ohne Namen") [app/lib/l10n/app_de.arb:1323]
+- [x] [Review][Patch] `SetMembershipNickname` injects a `Clock` it never reads (adapter stamps `Instant.now()`) — drop the dead dependency [backend/src/main/java/de/sgart/identity/application/SetMembershipNickname.java:24]
+- [x] [Review][Patch] Redundant index `idx_membership_nickname_keycloak_user` duplicates the PK's leading column [backend/src/main/resources/db/migration/V22__membership_nickname.sql:16]
+- [x] [Review][Patch] Redundant `'identity.notAMember' => errorGenericFallback` mapping (same as the `_` default) [app/lib/shared/errors/error_message_resolver.dart]
+- [x] [Review][Patch] GDPR documentation incomplete — lawful basis and retention ("deleted with the membership") not stated anywhere; spine rev F claims the `identity.application` package-info documents the exception but only `identity.domain`'s changed [backend/src/main/java/de/sgart/identity/application/package-info.java]
+- [x] [Review][Patch] AD-6 "documented exemption" is a positive test beside an unchanged guard — the guard only forbids `display_name`/`email`, so `nickname` never tripped it; add `nickname` to the guard with an explicit V22 whitelist [backend/src/test/java/de/sgart/architecture/NoPersistedPersonalDataTest.java]
+- [x] [Review][Defer] Nickname data export not implemented — no export mechanism exists in the backend at all; Javadoc/spine call it "exportable" [backend/src/main/java/de/sgart/identity/domain/MembershipNickname.java] — deferred: pre-existing gap, Epic 6 (data portability)
+- [x] [Review][Defer] Account-erasure `deleteFor(KeycloakUserId)` has no caller [backend/src/main/java/de/sgart/identity/adapter/out/JdbcMembershipNicknameRepository.java] — deferred: Epic 6 wires the erasure trigger (same as `AccountConsentRepository.deleteFor`)
+- [x] [Review][Defer] No audit trail for writes to the nickname (CLAUDE.md §5 auditability) [backend/src/main/java/de/sgart/identity/application/SetMembershipNickname.java] — deferred: pre-existing, no personal-data audit mechanism exists project-wide
+
+**Rejected**
+- `false` — Any domain `IllegalArgumentException` mislabelled `nickname.tooLong`: blank is pre-checked, the only remaining domain rule is the length rule.
+- `false` — `RemoveMemberHandlerTest` wires the nickname repo to the "wrong" mapping repo: the order-tracking repo delegates to the same `mappingRepository`; the test asserts append/de-link order only.
+- `false` — Edited nickname not propagated to an already-loaded roster: spec says "after refresh".
+- `low` — Membership-check/save race and non-transactional `retractMember` (orphan or lost nickname row): needs a concurrent self-edit during removal; fix adds transactions.
+- `low` — Malformed `householdId` → 500: app only sends known UUIDs; documented in notes.
+- `low` — NBSP/zero-width/bidi characters pass validation: households of known people; fix needs normalization logic.
+- `low` — Stale inline error on reopening the edit dialog; Save not disabled while submitting; late roster fetch / cancel-in-flight overwrites: rare races, fixes add state handling.
+- `low` — Test config `(InMemoryMemberMappingRepository)` cast: fails loudly at startup if ever wrong.
+- `low` — 60-char limit duplicated across Dart/Java/SQL without a contract test.
+- `low` — `MembershipNicknameRepository.find` only used by tests; `MemberController` parses `MemberId` twice: cosmetic.
+- `low` — `AuthState.displayName` doc comment wording: subsumed by the Decision above.
+
 ## Implementation Notes
 
-_(filled during dev-story)_
+**2026-09-20, dev-story.** Implemented end-to-end per the Code Map, with a few implementation
+choices worth recording:
+
+- **No dedicated "get my own nickname" read endpoint.** Profile's header/section resolve the
+  caller's own nickname by fetching the household roster via the existing `MembersApi`/
+  `GET .../members` (now nickname-enriched) and finding the `isSelf` row — reusing the published
+  `ResolveMembershipNicknames` read path rather than adding a second, narrower contract (YAGNI).
+- **`MembershipNicknameRepository` gained `deleteForMembership`/`deleteAllForHousehold`** (join
+  through `identity_member_mapping`, since the table is keyed by `keycloakUserId` not `MemberId`)
+  so `RetractMembership` can keep nickname cleanup symmetric with the mapping table's own
+  governance de-link (Story 4.3 pattern) — a constructor change that touched every existing
+  `RetractMembership` call site (handlers + tests).
+- **Onboarding wizard gained a 4th step** (name → **nickname** → stores → invite) in both the
+  create flow (`OnboardingWizardPage`) and the join flow (`AwaitInvitePage`, a single required
+  step shown after a successful accept, before the household is entered) — required, client- and
+  server-validated, mirrors the existing step patterns.
+- **Profile header source:** `_nickname ?? authState.displayName` — the JWT display name is now
+  only the pre-resolution/unset-nickname fallback, per the frozen intent.
+- **`membership_nickname.updated_at`** is stamped by the adapter (`Instant.now()`), not threaded
+  through the domain — it is infrastructure bookkeeping, not a domain invariant.
+
+**Verification:** backend `./gradlew test` (full suite incl. ArchUnit + Testcontainers) green;
+app `flutter test` (752 tests) and `flutter analyze` (0 issues) green. Both suites re-run clean
+after the final edit.
+
+**Left incomplete / risk notes:**
+- The activity-feed name-slot forward-pointer is recorded in `deferred-work.md`, not built (YAGNI,
+  matches Boundaries).
+- `NicknameController`'s `householdId` path segment is parsed via `HouseholdId.fromString`
+  directly (no `CommandFieldTranslations`-style 400 mapping, since that helper lives in
+  `collaboration.application` and importing it would cross the context boundary the wrong way) —
+  a malformed UUID there 500s instead of 400ing. Low risk: the app always sends a UUID it already
+  has locally, never user-typed input.
+- Account-erasure wiring (calling `MembershipNicknameRepository.deleteFor` on account deletion) is
+  provided and unit-tested but not invoked anywhere yet — Epic 6 wires the trigger, matching the
+  established `AccountConsentRepository.deleteFor` / `ProvisionedAccountRepository` precedent.

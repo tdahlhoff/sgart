@@ -5,6 +5,7 @@ import '../../households/presentation/await_invite_page.dart';
 import '../../households/presentation/households_cubit.dart';
 import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
+import '../../settings/data/nickname_api.dart';
 import '../data/consent_api.dart';
 import 'consent_cubit.dart';
 import 'consent_gate_page.dart';
@@ -23,6 +24,7 @@ import 'consent_state.dart';
 void openConsentGatedAwaitInvitePage(BuildContext context, {required InviteLink link}) {
   final consentApi = context.read<ConsentApi>();
   final invitesApi = context.read<InvitesApi>();
+  final nicknameApi = context.read<NicknameApi>();
   final householdsCubit = context.read<HouseholdsCubit>();
   Navigator.of(context).push(
     MaterialPageRoute(
@@ -30,6 +32,8 @@ void openConsentGatedAwaitInvitePage(BuildContext context, {required InviteLink 
         providers: [
           RepositoryProvider<ConsentApi>.value(value: consentApi),
           RepositoryProvider<InvitesApi>.value(value: invitesApi),
+          // The required nickname step after a successful join reads this (Story 8.3).
+          RepositoryProvider<NicknameApi>.value(value: nicknameApi),
         ],
         child: BlocProvider<HouseholdsCubit>.value(
           value: householdsCubit,

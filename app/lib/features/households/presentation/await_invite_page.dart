@@ -11,6 +11,10 @@ import '../../invites/data/invite_link.dart';
 import '../../invites/data/invites_api.dart';
 import '../../invites/presentation/accept_invite_cubit.dart';
 import '../../invites/presentation/accept_invite_state.dart';
+import '../../settings/data/nickname_api.dart';
+import '../../settings/presentation/nickname_cubit.dart';
+import '../../settings/presentation/nickname_field.dart';
+import '../../settings/presentation/nickname_state.dart';
 import 'households_cubit.dart';
 
 /// Pushes [AwaitInvitePage] with the `InvitesApi`/`HouseholdsCubit` re-provided across the pushed
@@ -25,11 +29,16 @@ import 'households_cubit.dart';
 void openAwaitInvitePage(BuildContext context, {InviteLink? initialLink}) {
   final invitesApi = context.read<InvitesApi>();
   final householdsCubit = context.read<HouseholdsCubit>();
+  final nicknameApi = context.read<NicknameApi>();
   final consentCubit = tryReadConsentCubit(context);
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => RepositoryProvider<InvitesApi>.value(
-        value: invitesApi,
+      builder: (_) => MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<InvitesApi>.value(value: invitesApi),
+          // The required nickname step after a successful join reads this (Story 8.3).
+          RepositoryProvider<NicknameApi>.value(value: nicknameApi),
+        ],
         child: BlocProvider<HouseholdsCubit>.value(
           value: householdsCubit,
           child: consentCubit == null
@@ -75,12 +84,24 @@ class _AwaitInviteView extends StatefulWidget {
 
 class _AwaitInviteViewState extends State<_AwaitInviteView> {
   late final _linkController = TextEditingController(text: _rawFormOf(widget.initialLink));
+  late final NicknameCubit _nicknameCubit;
+  final _nicknameController = TextEditingController();
+
+  /// Set once the invite is redeemed (Story 8.3): the join flow's own required nickname step then
+  /// replaces the link form — mirrors the onboarding wizard's stores/invite steps gating on
+  /// `_createdHousehold`. Finishing/bootstrap is deferred until the nickname is set (I/O matrix:
+  /// "Same required nickname step gates the join").
+  String? _joinedHouseholdId;
 
   static String? _rawFormOf(InviteLink? link) => link == null ? null : '${link.householdId}:${link.inviteId}';
 
   @override
   void initState() {
     super.initState();
+    // Built eagerly here (not lazily on first access) — see the mirrored comment in
+    // OnboardingWizardPage: a lazy `late final` initializer reading `context` for the first time
+    // from `dispose()` (a session that never reaches the nickname step) hits a deactivated element.
+    _nicknameCubit = NicknameCubit(nicknameApi: context.read<NicknameApi>());
     final link = widget.initialLink;
     if (link != null) {
       // Deferred to the first frame: `context.read<AcceptInviteCubit>()` needs the BlocProvider
@@ -96,21 +117,43 @@ class _AwaitInviteViewState extends State<_AwaitInviteView> {
   @override
   void dispose() {
     _linkController.dispose();
+    _nicknameController.dispose();
+    _nicknameCubit.close();
     super.dispose();
+  }
+
+  /// Finishes the join: read-your-writes bootstrap + pop back to the first-run router root — the
+  /// same landing the onboarding wizard's `_finish` performs.
+  void _finishJoin() {
+    context.read<HouseholdsCubit>().bootstrap();
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final joinedHouseholdId = _joinedHouseholdId;
+    if (joinedHouseholdId != null) {
+      // The membership already exists here, so leaving (system/app-bar back) would drop the person
+      // on the first-run choice, unnamed and without the bootstrap — the nickname step is required
+      // and only its own submit finishes the join.
+      return PopScope(
+        canPop: false,
+        child: BlocProvider<NicknameCubit>.value(
+          value: _nicknameCubit,
+          child: _JoinNicknameStep(
+            householdId: joinedHouseholdId,
+            controller: _nicknameController,
+            onFinish: _finishJoin,
+          ),
+        ),
+      );
+    }
 
     return BlocListener<AcceptInviteCubit, AcceptInviteState>(
       listener: (context, state) {
         if (state.status == AcceptInviteStatus.success) {
-          // Read-your-writes: the household appears via the Identity ACL's member-mapping written
-          // by mint, without waiting on the projector (Dev Notes — mirrors CreateHousehold's
-          // route-on-response approach).
-          context.read<HouseholdsCubit>().bootstrap();
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          setState(() => _joinedHouseholdId = state.householdId);
         } else if (state.status == AcceptInviteStatus.failure && state.error?.code == 'consent.required') {
           // Story 7.4 review: a stale client (consent recorded locally but not server-side, or a
           // notice-version bump since this screen was reached) is rejected 409 consent.required.
@@ -189,6 +232,77 @@ class _AwaitInviteViewState extends State<_AwaitInviteView> {
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The join flow's required nickname step (Story 8.3): shown once the invite is redeemed, before
+/// the person actually lands in the household — mirrors the onboarding wizard's step chrome
+/// without the multi-step progress indicator (a join is a single gate, not a multi-step wizard).
+class _JoinNicknameStep extends StatelessWidget {
+  const _JoinNicknameStep({required this.householdId, required this.controller, required this.onFinish});
+
+  final String householdId;
+  final TextEditingController controller;
+  final VoidCallback onFinish;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
+    return BlocListener<NicknameCubit, NicknameState>(
+      listenWhen: (previous, current) => current.status == NicknameStatus.success,
+      listener: (context, state) => onFinish(),
+      child: Scaffold(
+        appBar: const SgartAppBar(title: 'SGART'),
+        body: SafeArea(
+          child: BlocBuilder<NicknameCubit, NicknameState>(
+            builder: (context, state) {
+              final isSubmitting = state.status == NicknameStatus.submitting;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: SgartShapes.screenHeaderPadding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          localizations.onboardingNicknameStepTitle,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: SgartShapes.headingGap),
+                        Text(localizations.onboardingNicknameStepHelp, textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                      child: NicknameField(
+                        controller: controller,
+                        fieldKey: const Key('join-nickname-field'),
+                        errorKey: const Key('join-nickname-error'),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(SgartShapes.cardPadding),
+                    child: SgartButton(
+                      key: const Key('join-nickname-submit-button'),
+                      label: localizations.onboardingNextButtonLabel,
+                      onPressed: isSubmitting
+                          ? null
+                          : () => context.read<NicknameCubit>().submit(householdId, controller.text),
                     ),
                   ),
                 ],

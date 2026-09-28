@@ -8,15 +8,23 @@ import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/recovery_phrase_reveal_page.dart';
+import 'package:sgart/features/households/data/household_summary.dart';
+import 'package:sgart/features/members/data/member_view.dart';
+import 'package:sgart/features/members/data/members_api.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/features/settings/presentation/locale_cubit.dart';
 import 'package:sgart/features/settings/presentation/locale_settings_page.dart';
 import 'package:sgart/features/settings/presentation/profile_screen.dart';
 import 'package:sgart/l10n/gen/app_localizations.dart';
+import 'package:sgart/shared/errors/app_error.dart';
+import 'package:sgart/shared/http/app_exception.dart';
 import 'package:sgart/theme/sgart_theme.dart';
 
 import '../../../support/fake_account_email_api.dart';
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
+import '../../../support/fake_members_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/fake_settings_dependencies.dart';
 
 void main() {
@@ -53,13 +61,25 @@ void main() {
       await localeCubit.close();
     });
 
-    Widget buildSubject({TextScaler textScaler = TextScaler.noScaling, AccountEmailApi? accountEmailApi}) =>
+    const activeHousehold = HouseholdSummary(householdId: 'household-1', name: 'Familie Muster');
+
+    Widget buildSubject({
+      TextScaler textScaler = TextScaler.noScaling,
+      AccountEmailApi? accountEmailApi,
+      MembersApi? membersApi,
+      NicknameApi? nicknameApi,
+      HouseholdSummary household = activeHousehold,
+    }) =>
         BlocProvider<AuthCubit>.value(
           value: authCubit,
           child: BlocProvider<LocaleCubit>.value(
             value: localeCubit,
-            child: RepositoryProvider<DeviceCredentialStore>.value(
-              value: deviceCredentialStore,
+            child: MultiRepositoryProvider(
+              providers: [
+                RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
+                RepositoryProvider<MembersApi>.value(value: membersApi ?? FakeMembersApi()),
+                RepositoryProvider<NicknameApi>.value(value: nicknameApi ?? FakeNicknameApi()),
+              ],
               child: _maybeProvideAccountEmailApi(
                 accountEmailApi,
                 child: MaterialApp(
@@ -74,7 +94,7 @@ void main() {
                   home: Builder(
                     builder: (context) => MediaQuery(
                       data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-                      child: const Scaffold(body: ProfileScreen()),
+                      child: Scaffold(body: ProfileScreen(activeHousehold: household)),
                     ),
                   ),
                 ),
@@ -83,11 +103,85 @@ void main() {
           ),
         );
 
-    testWidgets('rendersTheDisplayNameAndEmailFromTheAuthenticatedAuthCubit', (tester) async {
+    testWidgets('rendersTheEmailFromTheAuthenticatedAuthCubitButNeverTheJwtDisplayName', (tester) async {
       await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
 
-      expect(find.text('Anna Testperson'), findsOneWidget);
+      // The JWT name is the raw device-credential id for a silently-provisioned account (F3).
+      expect(find.text('Anna Testperson'), findsNothing);
       expect(find.text('anna@example.test'), findsOneWidget);
+    });
+
+    // Test Manifest: profileScreen_nicknameSection (Story 8.3) — the active household's resolved
+    // nickname is shown (fallback header source, section row, and edit affordance).
+    group('the nickname section', () {
+      testWidgets('showsTheNeutralFallbackInHeaderAndRowWhenTheCallerHasNotSetANicknameYet', (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('profile-nickname-value')), findsOneWidget);
+        expect(find.text('Noch ohne Namen'), findsNWidgets(2)); // the header + the nickname section row
+      });
+
+      testWidgets('switchingTheActiveHouseholdShowsThatHouseholdsNickname', (tester) async {
+        const otherHousehold = HouseholdSummary(householdId: 'household-2', name: 'WG');
+        final membersApi = FakeMembersApi()
+          ..membersByHousehold = const {
+            'household-1': [MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true, nickname: 'Papa')],
+            'household-2': [MemberView(memberId: 'member-2', role: 'ADMIN', isSelf: true, nickname: 'Timo')],
+          };
+        await tester.pumpWidget(buildSubject(membersApi: membersApi));
+        await tester.pumpAndSettle();
+        expect(find.text('Papa'), findsNWidgets(2));
+
+        await tester.pumpWidget(buildSubject(membersApi: membersApi, household: otherHousehold));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Papa'), findsNothing);
+        expect(find.text('Timo'), findsNWidgets(2)); // the header + the nickname section row
+      });
+
+      testWidgets('showsTheResolvedNicknameFromTheMemberRosterAndItBecomesTheHeaderSource', (tester) async {
+        final membersApi = FakeMembersApi()
+          ..membersToReturn = const [
+            MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true, nickname: 'Papa'),
+          ];
+
+        await tester.pumpWidget(buildSubject(membersApi: membersApi));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Papa'), findsNWidgets(2)); // the header + the nickname section row
+      });
+
+      testWidgets('editingTheNicknameCallsTheApiAndUpdatesTheDisplayedValue', (tester) async {
+        final nicknameApi = FakeNicknameApi();
+        await tester.pumpWidget(buildSubject(nicknameApi: nicknameApi));
+
+        await tester.tap(find.byKey(const Key('profile-nickname-edit-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('profile-nickname-field')), 'Timo');
+        await tester.tap(find.byKey(const Key('profile-nickname-save-button')));
+        await tester.pumpAndSettle();
+
+        expect(nicknameApi.setCalls, [('household-1', 'Timo')]);
+        expect(find.byKey(const Key('profile-nickname-field')), findsNothing); // dialog closed
+        expect(find.text('Timo'), findsNWidgets(2)); // the header + the nickname section row
+      });
+
+      testWidgets('aRejectedNicknameShowsInlineAndKeepsTheDialogOpen', (tester) async {
+        final nicknameApi = FakeNicknameApi()
+          ..setNicknameErrorToThrow = const AppException(AppError(code: 'nickname.tooLong', message: 'debug'));
+        await tester.pumpWidget(buildSubject(nicknameApi: nicknameApi));
+
+        await tester.tap(find.byKey(const Key('profile-nickname-edit-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('profile-nickname-field')), 'Timo');
+        await tester.tap(find.byKey(const Key('profile-nickname-save-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('profile-nickname-error')), findsOneWidget);
+        expect(find.byKey(const Key('profile-nickname-field')), findsOneWidget); // dialog stayed open
+      });
     });
 
     testWidgets('showsTheFixedNotificationsInfoWithNoToggle', (tester) async {

@@ -54,7 +54,7 @@ class NoPersistedPersonalDataTest {
     }
 
     /**
-     * The two documented exceptions to the guard below, named individually (not by pattern) so a
+     * The documented exceptions to the guard below, named individually (not by pattern) so a
      * future migration cannot accidentally widen the exemption: {@code V13} created the mutable
      * {@code invite_email_side_store} table (Story 4.1, locked decision 3, AD-6) — the sole place a
      * raw invite email was ever persisted, purgeable by {@code invite_id}; {@code V21} retires it
@@ -66,21 +66,29 @@ class NoPersistedPersonalDataTest {
     private static final String INVITE_EMAIL_SIDE_STORE_DROP_MIGRATION = "V21__drop_invite_email_side_store.sql";
 
     /**
+     * {@code V22} creates {@code membership_nickname} (Story 8.3, AD-6 rev F) — the one table allowed
+     * to hold a person's self-chosen name; its own narrower guarantees are proven by {@link
+     * #noPersistedPersonalData_membershipNicknameIsADocumentedAd6ExceptionForAFreelyChosenName}.
+     */
+    private static final String MEMBERSHIP_NICKNAME_MIGRATION = "V22__membership_nickname.sql";
+
+    /**
      * Extends the guarantee to the durable schema (Story 1.6): every Flyway migration — the
      * Identity ACL mapping table and the household read model alike — must never declare a
-     * display-name/email column (AD-6, "Storage limitation" / "Right to erasure"), except the one
-     * documented AD-6 side-store exception (Story 4.1, locked decision 3).
+     * display-name/nickname/email column (AD-6, "Storage limitation" / "Right to erasure"), except
+     * the individually named, documented AD-6 exceptions above.
      */
     @Test
-    void noFlywayMigrationEverDeclaresADisplayNameOrEmailColumn() {
+    void noFlywayMigrationEverDeclaresADisplayNameNicknameOrEmailColumn() {
         Path migrationsDirectory = Path.of("src/main/resources/db/migration");
-        List<String> forbiddenColumnNameFragments = List.of("display_name", "displayname", "email");
+        List<String> forbiddenColumnNameFragments = List.of("display_name", "displayname", "nickname", "email");
 
         try (var migrationFiles = Files.list(migrationsDirectory)) {
             migrationFiles
                     .filter(path -> path.toString().endsWith(".sql"))
                     .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_MIGRATION))
                     .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_DROP_MIGRATION))
+                    .filter(path -> !path.getFileName().toString().equals(MEMBERSHIP_NICKNAME_MIGRATION))
                     .forEach(path -> {
                         String sql = withoutSqlComments(readFile(path)).toLowerCase(Locale.ROOT);
                         forbiddenColumnNameFragments.forEach(forbidden -> assertThat(sql)
@@ -139,6 +147,45 @@ class NoPersistedPersonalDataTest {
         assertThat(sql).doesNotContain("displayname");
         assertThat(sql).doesNotContain("ip_address");
         assertThat(sql).contains("keycloak_user_id");
+    }
+
+    /**
+     * Story 8.3, AD-6 rev F — the <strong>documented, intentional</strong> exception to this
+     * suite's "no persisted PII" guarantee: a self-chosen, per-household nickname is deliberately
+     * persisted in {@code membership_nickname}. This is not a naming dodge — it is narrowly scoped
+     * and proven here: (1) purpose — a freely-chosen, low-sensitivity in-household display name,
+     * never a copy of the Keycloak {@code name}/{@code email} claim; (2) never in events — the
+     * table lives only in {@code identity} adapters, never referenced by {@code
+     * DomainEventJsonCodec} or any projector; (3) erasable — keyed by {@code keycloak_user_id} for
+     * account erasure ({@link de.sgart.identity.domain.MembershipNicknameRepository#deleteFor})
+     * and by {@code (keycloak_user_id, household_id)} for a membership de-link ({@code
+     * deleteForMembership}), mirroring {@code identity_member_mapping}'s own erasure shape (AD-7).
+     */
+    @Test
+    void noPersistedPersonalData_membershipNicknameIsADocumentedAd6ExceptionForAFreelyChosenName() {
+        Path migration = Path.of("src/main/resources/db/migration/V22__membership_nickname.sql");
+        String sql = withoutSqlComments(readFile(migration)).toLowerCase(Locale.ROOT);
+
+        assertThat(sql)
+                .as("membership_nickname is the one documented AD-6 exception (Story 8.3) — a "
+                        + "self-chosen nickname, never Keycloak's own display name/email claim")
+                .contains("nickname")
+                .contains("keycloak_user_id")
+                .doesNotContain("display_name")
+                .doesNotContain("email");
+
+        ArchRule neverReferencedFromEventCodec = noClasses()
+                .that()
+                .haveFullyQualifiedName("de.sgart.collaboration.adapter.out.DomainEventJsonCodec")
+                .should()
+                .dependOnClassesThat()
+                .haveFullyQualifiedName("de.sgart.identity.domain.MembershipNickname")
+                .as("MembershipNickname (Story 8.3) must never reach the domain-event codec — it is "
+                        + "never written into an event or event-derived projection (AD-5 untouched)");
+        JavaClasses collaborationClasses = new ClassFileImporter()
+                .withImportOption(new DoNotIncludeTests())
+                .importPackages("de.sgart.collaboration", "de.sgart.identity");
+        neverReferencedFromEventCodec.check(collaborationClasses);
     }
 
     /** Strips {@code -- ...} line comments so prose mentioning "email"/"display name" (like this

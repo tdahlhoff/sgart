@@ -12,6 +12,7 @@ import '../../auth/presentation/recovery_phrase_reveal_page.dart';
 import '../../consent/presentation/consent_cubit.dart';
 import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
+import '../../settings/data/nickname_api.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
 import '../../stores/data/stores_api.dart';
 import '../data/households_api.dart';
@@ -110,16 +111,17 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
 
   /// Pushes the guided onboarding wizard (Story 1.9). The push targets the root Navigator, which
   /// sits *above* the providers created in `FirstRunRouter`, so the pushed route would otherwise
-  /// escape them (`ProviderNotFoundException`, the Story 1.6 lesson). Re-provide the five the wizard
+  /// escape them (`ProviderNotFoundException`, the Story 1.6 lesson). Re-provide the six the wizard
   /// reads — `HouseholdsApi`/`HouseholdsCubit` (name step + landing), `StoresApi`/
-  /// `StoreChainReferenceCache` (stores step), and `InvitesApi` (invite step) — by value, the same
-  /// instances this screen already reads.
+  /// `StoreChainReferenceCache` (stores step), `InvitesApi` (invite step), and `NicknameApi` (the
+  /// required nickname step, Story 8.3) — by value, the same instances this screen already reads.
   void _openOnboarding(BuildContext context) {
     final householdsApi = context.read<HouseholdsApi>();
     final householdsCubit = context.read<HouseholdsCubit>();
     final storesApi = context.read<StoresApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
     final invitesApi = context.read<InvitesApi>();
+    final nicknameApi = context.read<NicknameApi>();
     // Re-provided only when this page is reached through the real ConsentGatedChoicePage ancestor
     // (production) — a standalone test harness that pushes this page directly has no ConsentCubit
     // above it, and must not crash (guarded-optional read, mirrors
@@ -134,6 +136,7 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
             RepositoryProvider<StoresApi>.value(value: storesApi),
             RepositoryProvider<StoreChainReferenceCache>.value(value: storeChainReferenceCache),
             RepositoryProvider<InvitesApi>.value(value: invitesApi),
+            RepositoryProvider<NicknameApi>.value(value: nicknameApi),
           ],
           child: BlocProvider<HouseholdsCubit>.value(
             value: householdsCubit,

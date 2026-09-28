@@ -20,15 +20,18 @@ import de.sgart.identity.application.RegisterDeviceToken;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
 import de.sgart.identity.application.ResolveMemberIdentity;
+import de.sgart.identity.application.ResolveMembershipNicknames;
 import de.sgart.identity.application.RetractMembership;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.application.SetAccountEmail;
+import de.sgart.identity.application.SetMembershipNickname;
 import de.sgart.identity.application.SweepNeverActivatedAccounts;
 import de.sgart.identity.application.UnregisterDeviceToken;
 import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.DeviceTokenRepository;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -70,8 +73,28 @@ public class IdentityBeansConfig {
     }
 
     @Bean
-    RetractMembership retractMembership(MemberMappingRepository memberMappingRepository) {
-        return new RetractMembership(memberMappingRepository);
+    RetractMembership retractMembership(
+            MemberMappingRepository memberMappingRepository, MembershipNicknameRepository membershipNicknameRepository) {
+        return new RetractMembership(memberMappingRepository, membershipNicknameRepository);
+    }
+
+    // --- Story 8.3: per-household nickname -----------------------------------------------------
+
+    @Bean
+    MembershipNicknameRepository membershipNicknameRepository(JdbcClient jdbcClient) {
+        return new JdbcMembershipNicknameRepository(jdbcClient);
+    }
+
+    @Bean
+    SetMembershipNickname setMembershipNickname(
+            MembershipNicknameRepository membershipNicknameRepository,
+            ResolveMemberIdentity resolveMemberIdentity) {
+        return new SetMembershipNickname(membershipNicknameRepository, resolveMemberIdentity);
+    }
+
+    @Bean
+    ResolveMembershipNicknames resolveMembershipNicknames(MembershipNicknameRepository membershipNicknameRepository) {
+        return new ResolveMembershipNicknames(membershipNicknameRepository);
     }
 
     @Bean

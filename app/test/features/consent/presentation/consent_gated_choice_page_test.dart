@@ -8,6 +8,7 @@ import 'package:sgart/features/consent/presentation/consent_gated_choice_page.da
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
+import 'package:sgart/features/settings/data/nickname_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
@@ -17,6 +18,7 @@ import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_consent_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/fake_invites_dependencies.dart';
+import '../../../support/fake_nickname_api.dart';
 import '../../../support/fake_stores_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -28,6 +30,7 @@ void main() {
     late FakeStoresApi storesApi;
     late FakeStoreChainReferenceCache referenceCache;
     late FakeInvitesApi invitesApi;
+    late FakeNicknameApi nicknameApi;
     late FakeDeviceCredentialStore deviceCredentialStore;
     late AuthCubit authCubit;
 
@@ -39,6 +42,7 @@ void main() {
       storesApi = FakeStoresApi();
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
+      nicknameApi = FakeNicknameApi();
       deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
       authCubit = await buildAuthenticatedAuthCubit();
     });
@@ -56,6 +60,7 @@ void main() {
               RepositoryProvider<StoresApi>.value(value: storesApi),
               RepositoryProvider<StoreChainReferenceCache>.value(value: referenceCache),
               RepositoryProvider<InvitesApi>.value(value: invitesApi),
+              RepositoryProvider<NicknameApi>.value(value: nicknameApi),
               RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
             ],
             child: BlocProvider<HouseholdsCubit>.value(

@@ -16,10 +16,12 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryAccountConsentRepository;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.domain.AccountConsentRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
@@ -79,6 +81,12 @@ class HouseholdControllerTest {
         @Primary
         MemberMappingRepository testMemberMappingRepository() {
             return new InMemoryMemberMappingRepository();
+        }
+
+        @Bean
+        @Primary
+        MembershipNicknameRepository testMembershipNicknameRepository(MemberMappingRepository memberMappingRepository) {
+            return new InMemoryMembershipNicknameRepository((InMemoryMemberMappingRepository) memberMappingRepository);
         }
 
         @Bean

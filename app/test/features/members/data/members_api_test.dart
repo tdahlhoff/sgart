@@ -58,6 +58,22 @@ void main() {
       expect(result.first.isSelf, isTrue);
     });
 
+    test('listMembers_parsesTheResolvedNicknameAndANullNicknameForAnUnsetMember', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      final adapter = _FakeHttpClientAdapter((options) async => _jsonResponse([
+            {'memberId': 'member-1', 'role': 'ADMIN', 'isSelf': true, 'nickname': 'Papa'},
+            {'memberId': 'member-2', 'role': 'PARTICIPANT', 'isSelf': false, 'nickname': null},
+          ], 200));
+      dio.httpClientAdapter = adapter;
+      final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'token');
+      final api = HttpMembersApi(client);
+
+      final result = await api.listMembers('household-1');
+
+      expect(result.first.nickname, 'Papa');
+      expect(result.last.nickname, isNull);
+    });
+
     test('listMembers_mapsAServerErrorToAnAppException', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
       dio.httpClientAdapter = _FakeHttpClientAdapter(

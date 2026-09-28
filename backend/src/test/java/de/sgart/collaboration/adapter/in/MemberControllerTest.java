@@ -14,9 +14,11 @@ import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.collaboration.domain.readmodel.HouseholdMemberReadModel;
 import de.sgart.collaboration.domain.readmodel.MemberRoleView;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
+import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
+import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventId;
@@ -61,6 +63,9 @@ class MemberControllerTest {
     private MemberMappingRepository mappingRepository;
 
     @Autowired
+    private MembershipNicknameRepository nicknameRepository;
+
+    @Autowired
     private InMemoryHouseholdMemberReadModel memberReadModel;
 
     @TestConfiguration
@@ -76,6 +81,12 @@ class MemberControllerTest {
         @Primary
         MemberMappingRepository testMemberMappingRepository() {
             return new InMemoryMemberMappingRepository();
+        }
+
+        @Bean
+        @Primary
+        MembershipNicknameRepository testMembershipNicknameRepository(MemberMappingRepository memberMappingRepository) {
+            return new InMemoryMembershipNicknameRepository((InMemoryMemberMappingRepository) memberMappingRepository);
         }
 
         @Bean
@@ -128,7 +139,26 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$[0].email").doesNotExist())
                 .andExpect(jsonPath("$[0].memberId").value(adminMemberId.toString()))
                 .andExpect(jsonPath("$[0].isSelf").value(true))
+                .andExpect(jsonPath("$[0].nickname").doesNotExist())
                 .andExpect(jsonPath("$[1].isSelf").value(false));
+    }
+
+    @Test
+    void list_resolvesEachMembersNicknameViaTheIdentityAcl() throws Exception {
+        MemberId adminMemberId = MemberId.generate();
+        MemberId participantMemberId = MemberId.generate();
+        HouseholdId householdId = seedHouseholdWithAdminAndParticipant(adminMemberId, participantMemberId);
+        memberReadModel.members = List.of(
+                new MemberRoleView(adminMemberId, HouseholdRole.ADMIN),
+                new MemberRoleView(participantMemberId, HouseholdRole.PARTICIPANT));
+        nicknameRepository.save(new de.sgart.identity.domain.MembershipNickname(
+                new KeycloakUserId(ADMIN_SUB), householdId, "Papa"));
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/members", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nickname").value("Papa"))
+                .andExpect(jsonPath("$[1].nickname").doesNotExist());
     }
 
     @Test

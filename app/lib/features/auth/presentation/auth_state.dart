@@ -34,6 +34,11 @@ class AuthState {
   });
 
   final AuthStatus status;
+
+  /// The raw JWT `name`/`preferred_username` claim (Story 1.4) — for a silently-provisioned account
+  /// this is the device-credential id. Story 8.3: `ProfileScreen`'s header shows the active
+  /// household's self-chosen nickname (or a neutral fallback) instead; this field remains only for
+  /// the pre-household screens, which have no household context to resolve a nickname against.
   final String? displayName;
 
   /// The caller's Keycloak `sub`, carried so per-user on-device state (e.g. the locale preference,

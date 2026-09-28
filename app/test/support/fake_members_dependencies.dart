@@ -4,6 +4,9 @@ import 'package:sgart/features/members/data/members_api.dart';
 /// Test double for [MembersApi] — no real network in tests (CLAUDE.md §6). Mirrors `FakeInvitesApi`.
 class FakeMembersApi implements MembersApi {
   List<MemberView> membersToReturn = const [];
+
+  /// Per-household rosters, taking precedence over [membersToReturn] for a listed household.
+  Map<String, List<MemberView>> membersByHousehold = const {};
   Object? listMembersError;
   Object? leaveError;
   Object? removeMemberError;
@@ -28,7 +31,7 @@ class FakeMembersApi implements MembersApi {
   @override
   Future<List<MemberView>> listMembers(String householdId) async {
     if (listMembersError != null) throw listMembersError!;
-    return membersToReturn;
+    return membersByHousehold[householdId] ?? membersToReturn;
   }
 
   @override
