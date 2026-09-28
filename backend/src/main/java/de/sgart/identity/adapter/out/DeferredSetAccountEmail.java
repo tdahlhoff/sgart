@@ -11,8 +11,9 @@ import de.sgart.identity.domain.KeycloakUserId;
 public final class DeferredSetAccountEmail implements SetAccountEmail {
 
     @Override
-    public void setEmail(KeycloakUserId keycloakUserId, String email, boolean verified) {
-        // Intentionally empty — see class Javadoc.
+    public boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean verified) {
+        // No real Keycloak account exists to hold a conflicting email — always succeeds.
+        return true;
     }
 
     @Override

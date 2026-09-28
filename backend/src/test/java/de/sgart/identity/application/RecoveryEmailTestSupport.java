@@ -29,6 +29,7 @@ final class RecoveryEmailTestSupport {
     static final class RecordingSetAccountEmail implements SetAccountEmail {
         private final Map<KeycloakUserId, String> emails = new HashMap<>();
         private final Map<KeycloakUserId, Boolean> verified = new HashMap<>();
+        private boolean emailAlreadyHeldByAnotherAccount = false;
 
         String emailFor(KeycloakUserId id) {
             return emails.get(id);
@@ -38,10 +39,19 @@ final class RecoveryEmailTestSupport {
             return verified.get(id);
         }
 
+        /** Story 8.6, D2: the next {@link #setEmail} call behaves like Keycloak's 409 — nothing is set. */
+        void rejectNextSetEmailAsAlreadyTaken() {
+            this.emailAlreadyHeldByAnotherAccount = true;
+        }
+
         @Override
-        public void setEmail(KeycloakUserId keycloakUserId, String email, boolean emailVerified) {
+        public boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean emailVerified) {
+            if (emailAlreadyHeldByAnotherAccount) {
+                return false;
+            }
             emails.put(keycloakUserId, email);
             verified.put(keycloakUserId, emailVerified);
+            return true;
         }
 
         @Override
@@ -53,6 +63,22 @@ final class RecoveryEmailTestSupport {
         public void clearEmail(KeycloakUserId keycloakUserId) {
             emails.remove(keycloakUserId);
             verified.put(keycloakUserId, false);
+        }
+    }
+
+    /** Always allows issuance — the default throttle double for tests not about throttling itself. */
+    static final class AlwaysAllowRecoveryCodeIssuanceThrottle implements RecoveryCodeIssuanceThrottle {
+        @Override
+        public boolean tryIssue(KeycloakUserId targetAccount) {
+            return true;
+        }
+    }
+
+    /** Always denies issuance — proves the throttled-request behavior without a real clock/policy. */
+    static final class AlwaysDenyRecoveryCodeIssuanceThrottle implements RecoveryCodeIssuanceThrottle {
+        @Override
+        public boolean tryIssue(KeycloakUserId targetAccount) {
+            return false;
         }
     }
 

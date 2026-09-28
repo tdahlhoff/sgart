@@ -127,8 +127,25 @@ class KeycloakAdminCreateAccountTest {
                 .andExpect(jsonPath("$.emailVerified").value(false))
                 .andRespond(withNoContent());
 
-        adapter.setEmail(new KeycloakUserId("kc-user-1"), "person@example.com", false);
+        boolean result = adapter.setEmail(new KeycloakUserId("kc-user-1"), "person@example.com", false);
 
+        assertThat(result).isTrue();
+        mockServer.verify();
+    }
+
+    @Test
+    void setEmail_withAddressAlreadyHeldByAnotherAccount_returnsFalseInsteadOfThrowing() {
+        // Story 8.6, D2: Keycloak answers 409 when the email is already on another account —
+        // suppressed like the create-user idempotent-retry case, never an unmapped 500.
+        expectTokenFetch();
+        mockServer
+                .expect(requestTo(BASE_URL + "/admin/realms/" + REALM + "/users/kc-user-1"))
+                .andExpect(method(HttpMethod.PUT))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+
+        boolean result = adapter.setEmail(new KeycloakUserId("kc-user-1"), "taken@example.com", false);
+
+        assertThat(result).isFalse();
         mockServer.verify();
     }
 

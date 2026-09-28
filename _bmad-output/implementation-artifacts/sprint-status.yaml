@@ -368,8 +368,8 @@ development_status:
   8-2-session-never-expires-silent-device-reauth: done
   8-3-display-name-at-onboarding-used-everywhere: done
   8-4-single-replaceable-household-invite-code: done
-  8-5-short-recovery-token-instead-of-phrase: review
-  8-6-real-recovery-emails-smtp-and-mailpit: backlog
+  8-5-short-recovery-token-instead-of-phrase: done
+  8-6-real-recovery-emails-smtp-and-mailpit: done
   8-7-hide-household-selector-on-profile: backlog
   8-8-fix-live-sync-projector-stream-filter-throw: backlog
   8-9-provisioning-epic-critical-path-tests: backlog

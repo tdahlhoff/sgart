@@ -99,8 +99,8 @@ public final class KeycloakAdminCreateAccount
     }
 
     @Override
-    public void setEmail(KeycloakUserId keycloakUserId, String email, boolean verified) {
-        updateUser(keycloakUserId, new UpdateEmailRequest(email, verified));
+    public boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean verified) {
+        return updateUserSuppressing409(keycloakUserId, new UpdateEmailRequest(email, verified));
     }
 
     @Override
@@ -186,6 +186,27 @@ public final class KeycloakAdminCreateAccount
                 .body(requestBody)
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    /**
+     * Story 8.6, D2 (interim): a PUT that sets the email answers {@code 409} when another Keycloak
+     * account already holds that address. Suppressing only that status (the {@link #create}
+     * pattern above) and reporting it back as {@code false} lets {@link
+     * de.sgart.identity.application.AttachRecoveryEmail} answer with a silent {@code 202} instead
+     * of an unmapped {@code 500} — never distinguishing this from success to the caller.
+     */
+    private boolean updateUserSuppressing409(KeycloakUserId keycloakUserId, Object requestBody) {
+        String accessToken = fetchAccessToken();
+        ResponseEntity<Void> response = restClient
+                .put()
+                .uri("/admin/realms/{realm}/users/{id}", realm, keycloakUserId.value())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
+                .retrieve()
+                .onStatus(status -> status.value() == 409, (request, ignoredResponse) -> {})
+                .toBodilessEntity();
+        return response.getStatusCode().value() != 409;
     }
 
     private KeycloakUserId findUserIdByUsername(String username, String accessToken) {

@@ -79,6 +79,21 @@ services:
       retries: 20
       start_period: 30s
 
+  mailpit:
+    # A local SMTP catcher (Story 8.6): the backend's own SMTP send (spring.mail) points here in
+    # local dev via scripts/start.sh, so recovery-code emails can be read in Mailpit's web UI
+    # instead of a real inbox — never enabled in CI/tests (sgart.identity.mail.enabled stays
+    # false there).
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-data:
   kurrentdb-data:

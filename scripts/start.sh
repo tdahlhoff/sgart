@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the whole SGART dev stack for a hands-on run on the local Android emulator:
-#   1. docker compose infra   — postgres, kurrentdb, keycloak (waits until all healthy)
+#   1. docker compose infra   — postgres, kurrentdb, keycloak, mailpit (waits until all healthy)
 #   2. backend                — Spring Boot bootRun with the real-run flags (background, logged)
 #   3. Android emulator       — AVD sgart_pixel, then `adb reverse` for :8081/:8080 (background)
 #   4. flutter run            — foreground, driving the app on the emulator (Ctrl-C to stop it)
@@ -66,11 +66,11 @@ command -v flutter >/dev/null || die "flutter not found (expected ~/tools/flutte
 log "Building Keycloak authenticator SPI jar"
 ( cd "$ROOT/backend" && ./gradlew --quiet :keycloak-authenticator:jar )
 
-log "Starting docker compose infra (postgres, kurrentdb, keycloak) and waiting until healthy"
+log "Starting docker compose infra (postgres, kurrentdb, keycloak, mailpit) and waiting until healthy"
 ( cd "$ROOT" && docker compose up -d --wait ) || die "docker compose failed to reach a healthy state"
 
 if [[ "$MODE" == "infra" ]]; then
-  log "Tier 1 done: docker containers up. (--infra: backend, emulator and flutter run skipped.)"
+  log "Tier 1 done: docker containers up (incl. mailpit — UI at http://localhost:8025). (--infra: backend, emulator and flutter run skipped.)"
   exit 0
 fi
 
@@ -80,6 +80,7 @@ fi
 # the app dies on first launch with a generic error (see docs/first-real-world-test.md Part 1.2).
 if curl -fsS "$BACKEND_HEALTH_URL" 2>/dev/null | grep -q '"status":"UP"'; then
   log "Backend already running on :8081 — leaving it as is"
+  warn "reused backend — mail is only wired to Mailpit if it was started with SGART_IDENTITY_MAIL_ENABLED=true"
 else
   log "Starting backend (bootRun) in the background — logs: $BACKEND_LOG"
   ( cd "$ROOT/backend" && \
@@ -87,10 +88,16 @@ else
     SGART_PROJECTOR_AUTOSTART=true \
     SGART_POSTGRES_PASSWORD=sgart_dev_password \
     SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true \
+    SGART_IDENTITY_MAIL_ENABLED=true \
+    SGART_SMTP_PORT=1025 \
+    SGART_SMTP_AUTH=false \
+    SGART_SMTP_STARTTLS=false \
+    SGART_IDENTITY_MAIL_FROM=no-reply@sgart.local \
     nohup ./gradlew bootRun > "$BACKEND_LOG" 2>&1 & echo $! > "$RUN_DIR/backend.pid" )
   wait_for "backend health ($BACKEND_HEALTH_URL)" 240 \
     bash -c "curl -fsS '$BACKEND_HEALTH_URL' | grep -q '\"status\":\"UP\"'" \
     || die "backend did not become healthy — check $BACKEND_LOG"
+  log "Recovery-code emails land in Mailpit — UI at http://localhost:8025"
 fi
 
 # --- 3. Emulator + adb reverse ----------------------------------------------

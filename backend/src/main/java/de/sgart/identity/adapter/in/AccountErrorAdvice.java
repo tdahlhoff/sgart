@@ -2,6 +2,7 @@ package de.sgart.identity.adapter.in;
 
 import de.sgart.identity.application.InvalidAccountProvisioningException;
 import de.sgart.identity.application.InvalidRecoveryEmailException;
+import de.sgart.identity.application.RecoveryCodeRateLimitedException;
 import de.sgart.identity.application.RecoveryCodeRejectedException;
 import de.sgart.shared.ErrorDescriptor;
 import org.springframework.http.HttpStatus;
@@ -30,5 +31,10 @@ class AccountErrorAdvice {
     @ExceptionHandler(RecoveryCodeRejectedException.class)
     ResponseEntity<ErrorDescriptor> handleRecoveryCodeRejected(RecoveryCodeRejectedException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(RecoveryCodeRateLimitedException.class)
+    ResponseEntity<ErrorDescriptor> handleRecoveryCodeRateLimited(RecoveryCodeRateLimitedException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(exception.errorDescriptor());
     }
 }

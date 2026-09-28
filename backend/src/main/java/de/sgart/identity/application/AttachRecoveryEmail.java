@@ -17,6 +17,7 @@ public final class AttachRecoveryEmail {
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final RecoveryCodeHasher recoveryCodeHasher;
     private final SendRecoveryCodeEmail sendRecoveryCodeEmail;
+    private final RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle;
     private final Clock clock;
 
     public AttachRecoveryEmail(
@@ -24,6 +25,7 @@ public final class AttachRecoveryEmail {
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
             Clock clock) {
         this.setAccountEmail = Objects.requireNonNull(setAccountEmail, "setAccountEmail must not be null");
         this.emailRecoveryCodeStore =
@@ -31,6 +33,8 @@ public final class AttachRecoveryEmail {
         this.recoveryCodeHasher = Objects.requireNonNull(recoveryCodeHasher, "recoveryCodeHasher must not be null");
         this.sendRecoveryCodeEmail =
                 Objects.requireNonNull(sendRecoveryCodeEmail, "sendRecoveryCodeEmail must not be null");
+        this.recoveryCodeIssuanceThrottle =
+                Objects.requireNonNull(recoveryCodeIssuanceThrottle, "recoveryCodeIssuanceThrottle must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -38,13 +42,24 @@ public final class AttachRecoveryEmail {
      * @param keycloakUserId the caller's identity, resolved server-side from the JWT {@code sub}
      *     (AR10, AD-5) — never taken from the request body.
      * @throws InvalidRecoveryEmailException if {@code rawEmail} is missing or not a plausible address.
+     * @throws RecoveryCodeRateLimitedException if the caller's account is over its issuance
+     *     budget (Story 8.6) — checked before any side effect.
      */
     public void attach(String keycloakUserId, String rawEmail) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
         String email = RecoveryEmailValidation.validated(rawEmail);
         KeycloakUserId caller = new KeycloakUserId(keycloakUserId);
 
-        setAccountEmail.setEmail(caller, email, false);
+        if (!recoveryCodeIssuanceThrottle.tryIssue(caller)) {
+            throw new RecoveryCodeRateLimitedException("recovery code issuance rate-limited for this account");
+        }
+
+        // D2 (Story 8.6, interim): the address is already held by another account — Keycloak's PUT
+        // came back 409. Nothing is set, stored, or sent, and the response tells the caller nothing
+        // that distinguishes this from success.
+        if (!setAccountEmail.setEmail(caller, email, false)) {
+            return;
+        }
 
         String code = RecoveryCode.generate();
         emailRecoveryCodeStore.store(

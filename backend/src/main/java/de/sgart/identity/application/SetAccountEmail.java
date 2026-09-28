@@ -10,8 +10,15 @@ import de.sgart.identity.domain.KeycloakUserId;
  */
 public interface SetAccountEmail {
 
-    /** Attach: sets the email with {@code emailVerified := verified} (Story 7.3 attach: {@code false}). */
-    void setEmail(KeycloakUserId keycloakUserId, String email, boolean verified);
+    /**
+     * Attach: sets the email with {@code emailVerified := verified} (Story 7.3 attach: {@code
+     * false}).
+     *
+     * @return {@code false} if the email is already held by another account (Story 8.6, D2 —
+     *     an interim stop-gap ahead of the full ownership-model redesign) and nothing was changed;
+     *     {@code true} otherwise.
+     */
+    boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean verified);
 
     /** Confirm: flips {@code emailVerified := true} without changing the email itself. */
     void markEmailVerified(KeycloakUserId keycloakUserId);

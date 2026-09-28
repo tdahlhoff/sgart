@@ -1484,6 +1484,11 @@
     "description": "Localized copy for the account.recoveryCodeInvalid error code (Story 7.3, AC1/AC2) — deliberately generic (never distinguishes wrong/expired/exhausted, mirroring the server's no-enumeration discipline)."
   },
 
+  "accountRecoveryCodeRateLimitedError": "Zu viele Anfragen. Bitte warte kurz und versuche es erneut.",
+  "@accountRecoveryCodeRateLimitedError": {
+    "description": "Localized copy for the account.recoveryCodeRateLimited error code (Story 8.6) — the attach endpoint's 429 when the account's recovery-code issuance budget is exhausted."
+  },
+
   "consentGateHeading": "Bevor es losgeht",
   "@consentGateHeading": {
     "description": "Heading of ConsentGatePage (Story 7.4, AC1) — shown before the first household create/join."

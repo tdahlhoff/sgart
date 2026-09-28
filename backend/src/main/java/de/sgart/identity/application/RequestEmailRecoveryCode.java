@@ -23,6 +23,7 @@ public final class RequestEmailRecoveryCode {
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final RecoveryCodeHasher recoveryCodeHasher;
     private final SendRecoveryCodeEmail sendRecoveryCodeEmail;
+    private final RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle;
     private final Clock clock;
 
     public RequestEmailRecoveryCode(
@@ -30,6 +31,7 @@ public final class RequestEmailRecoveryCode {
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
             Clock clock) {
         this.findAccountByEmail = Objects.requireNonNull(findAccountByEmail, "findAccountByEmail must not be null");
         this.emailRecoveryCodeStore =
@@ -37,6 +39,8 @@ public final class RequestEmailRecoveryCode {
         this.recoveryCodeHasher = Objects.requireNonNull(recoveryCodeHasher, "recoveryCodeHasher must not be null");
         this.sendRecoveryCodeEmail =
                 Objects.requireNonNull(sendRecoveryCodeEmail, "sendRecoveryCodeEmail must not be null");
+        this.recoveryCodeIssuanceThrottle =
+                Objects.requireNonNull(recoveryCodeIssuanceThrottle, "recoveryCodeIssuanceThrottle must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -46,6 +50,12 @@ public final class RequestEmailRecoveryCode {
 
         Optional<KeycloakUserId> target = findAccountByEmail.findByEmail(email);
         if (target.isEmpty()) {
+            return;
+        }
+
+        // Throttled: stays silent, same as the unknown-email case above — the constant 202 (D-H,
+        // no enumeration) must never distinguish "unknown" from "known but over budget" (Story 8.6).
+        if (!recoveryCodeIssuanceThrottle.tryIssue(target.get())) {
             return;
         }
 

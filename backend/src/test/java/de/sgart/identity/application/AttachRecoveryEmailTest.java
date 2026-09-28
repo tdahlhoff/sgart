@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
+import de.sgart.identity.application.RecoveryEmailTestSupport.AlwaysAllowRecoveryCodeIssuanceThrottle;
+import de.sgart.identity.application.RecoveryEmailTestSupport.AlwaysDenyRecoveryCodeIssuanceThrottle;
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSetAccountEmail;
@@ -17,7 +19,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Fast unit test — pure, in-memory doubles, no framework (CLAUDE.md §6). Proves Story 7.3, AC1:
  * attaching an email sets it unverified and issues a hashed one-time code, and a malformed email
- * is rejected fast.
+ * is rejected fast. Story 8.6 adds: the throttle is checked before any side effect, and a taken
+ * address (D2) stores and sends nothing.
  */
 class AttachRecoveryEmailTest {
 
@@ -30,7 +33,12 @@ class AttachRecoveryEmailTest {
     private final IdentityRecoveryCodeHasher hasher = new IdentityRecoveryCodeHasher();
     private final RecordingSendRecoveryCodeEmail sendRecoveryCodeEmail = new RecordingSendRecoveryCodeEmail();
     private final AttachRecoveryEmail attachRecoveryEmail = new AttachRecoveryEmail(
-            setAccountEmail, emailRecoveryCodeStore, hasher, sendRecoveryCodeEmail, Clock.fixed(NOW, ZoneOffset.UTC));
+            setAccountEmail,
+            emailRecoveryCodeStore,
+            hasher,
+            sendRecoveryCodeEmail,
+            new AlwaysAllowRecoveryCodeIssuanceThrottle(),
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void attachRecoveryEmail_setsUnverifiedEmailAndIssuesCode() {
@@ -51,5 +59,34 @@ class AttachRecoveryEmailTest {
 
         assertThat(setAccountEmail.emailFor(CALLER)).isNull();
         assertThat(emailRecoveryCodeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+    }
+
+    @Test
+    void attachRecoveryEmail_whenThrottled_throwsBeforeAnySideEffect() {
+        AttachRecoveryEmail throttledAttach = new AttachRecoveryEmail(
+                setAccountEmail,
+                emailRecoveryCodeStore,
+                hasher,
+                sendRecoveryCodeEmail,
+                new AlwaysDenyRecoveryCodeIssuanceThrottle(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> throttledAttach.attach(CALLER_ID, "person@example.com"))
+                .isInstanceOf(RecoveryCodeRateLimitedException.class);
+
+        assertThat(setAccountEmail.emailFor(CALLER)).isNull();
+        assertThat(emailRecoveryCodeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
+    }
+
+    @Test
+    void attachRecoveryEmail_withAddressAlreadyHeldByAnotherAccount_storesAndSendsNothing() {
+        setAccountEmail.rejectNextSetEmailAsAlreadyTaken();
+
+        attachRecoveryEmail.attach(CALLER_ID, "person@example.com");
+
+        assertThat(setAccountEmail.emailFor(CALLER)).isNull();
+        assertThat(emailRecoveryCodeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
     }
 }

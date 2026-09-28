@@ -16,6 +16,7 @@ import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.PruneDeviceToken;
 import de.sgart.identity.application.RebindAccountCredential;
 import de.sgart.identity.application.RecoveryCodeHasher;
+import de.sgart.identity.application.RecoveryCodeIssuanceThrottle;
 import de.sgart.identity.application.RegisterDeviceToken;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
@@ -264,14 +265,31 @@ public class IdentityBeansConfig {
         return new DeferredSendRecoveryCodeEmail();
     }
 
+    /**
+     * Story 8.6: bounds recovery-code issuance per target account. In-memory (no new DB table) —
+     * a single, deployment-wide budget shared by both issuing services below, keyed by the
+     * pseudonymous account the code is issued for (never the caller, never the email).
+     */
+    @Bean
+    RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle(Clock clock) {
+        return new InMemoryRecoveryCodeIssuanceThrottle(clock);
+    }
+
     @Bean
     AttachRecoveryEmail attachRecoveryEmail(
             SetAccountEmail setAccountEmail,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
             Clock clock) {
-        return new AttachRecoveryEmail(setAccountEmail, emailRecoveryCodeStore, recoveryCodeHasher, sendRecoveryCodeEmail, clock);
+        return new AttachRecoveryEmail(
+                setAccountEmail,
+                emailRecoveryCodeStore,
+                recoveryCodeHasher,
+                sendRecoveryCodeEmail,
+                recoveryCodeIssuanceThrottle,
+                clock);
     }
 
     @Bean
@@ -295,9 +313,15 @@ public class IdentityBeansConfig {
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
+            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
             Clock clock) {
         return new RequestEmailRecoveryCode(
-                findAccountByEmail, emailRecoveryCodeStore, recoveryCodeHasher, sendRecoveryCodeEmail, clock);
+                findAccountByEmail,
+                emailRecoveryCodeStore,
+                recoveryCodeHasher,
+                sendRecoveryCodeEmail,
+                recoveryCodeIssuanceThrottle,
+                clock);
     }
 
     @Bean

@@ -398,18 +398,30 @@ replace. Do not ship real account creation against the
 placeholder secret; provision a real secret (a secrets manager, or at minimum an environment
 variable never committed) before enabling `SGART_IDENTITY_KEYCLOAK_ADMIN_ENABLED=true` outside dev.
 
-### Recover by email (Story 7.3): SGART's own SMTP send + the code HMAC secret
+### Recover by email (Story 7.3/8.6): SGART's own SMTP send + the code HMAC secret
 
 The one Epic-7 feature that sends email. `AttachRecoveryEmail`/`RequestEmailRecoveryCode` send
 their 6-digit one-time codes over SGART's **own** SMTP (never a Keycloak-hosted verify-email/
 reset-credentials link — the AC forbids a browser page), via `JavaMailSenderRecoveryCodeEmail`
 (`spring-boot-starter-mail`), config-gated exactly like the Keycloak Admin adapter above:
 `SGART_IDENTITY_MAIL_ENABLED=true` (default `false`) selects it over the `DeferredSendRecoveryCodeEmail`
-no-op, so `./gradlew test`/CI/local dev never need a live SMTP server. Set `SGART_IDENTITY_MAIL_FROM`
-and the standard `spring.mail.*` properties (`SGART_SMTP_HOST`/`_PORT`/`_USERNAME`/`_PASSWORD`) to a
-real netcup mailbox once its outbound mail-block is removed and **SPF/DKIM** are configured on the
-sending domain — sending recovery codes from an unauthenticated domain will land in spam or be
-rejected outright.
+no-op, so `./gradlew test`/CI/local dev never need a live SMTP server.
+
+**Locally (Story 8.6): Mailpit, via `scripts/start.sh`.** `docker-compose.yml` runs a `mailpit`
+container (SMTP on `1025`, web UI on `8025`) and `scripts/start.sh` points the backend's SMTP send
+at it (`SGART_IDENTITY_MAIL_ENABLED=true`, `SGART_SMTP_PORT=1025`, `SGART_SMTP_AUTH=false`,
+`SGART_SMTP_STARTTLS=false` — Mailpit accepts plain unauthenticated SMTP with no STARTTLS).
+Nothing to configure by hand: bring the stack up with `scripts/start.sh` (or `--infra`/`--no-app`),
+attach or recover by email on the emulator, and read the 6-digit code at
+**http://localhost:8025**. `plain ./gradlew test`/CI never touch Mailpit — mail stays off by
+default and the `dev` profile does not enable it either.
+
+**In beta/prod: a real netcup mailbox — deferred.** Set `SGART_IDENTITY_MAIL_FROM` and the standard
+`spring.mail.*` properties (`SGART_SMTP_HOST`/`_PORT`/`_USERNAME`/`_PASSWORD`) to a real netcup
+mailbox once its outbound mail-block is removed and **SPF/DKIM** are configured on the sending
+domain — sending recovery codes from an unauthenticated domain will land in spam or be rejected
+outright. This real-SMTP-at-netcup work (plus a real-send smoke test) is explicitly **out of scope**
+for Story 8.6 (D1) and tracked in `deferred-work.md`.
 
 Also set `SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET` to a real per-deployment secret (never the
 checked-in dev placeholder, `local-dev-only-email-recovery-hmac-secret-change-me`) before enabling
@@ -418,7 +430,9 @@ fails context startup on a blank secret.
 
 The recovery/rebind endpoints add no new unauthenticated surface (D-C) and inherit the same
 IP-based rate-limiting seam (ADR-0002) documented above for `POST /api/v1/accounts`; the per-code
-15-minute TTL and 5-attempt cap are this story's own abuse-resistance layer in the meantime.
+15-minute TTL and 5-attempt cap are this story's own abuse-resistance layer, and Story 8.6 adds an
+application-level issuance throttle (≥ 60s between issues, ≤ 5 issues/24h per target account) on
+top, ahead of the reverse-proxy seam.
 
 ---
 

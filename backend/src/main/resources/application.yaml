@@ -56,9 +56,12 @@ spring:
     properties:
       mail:
         smtp:
-          auth: true
+          # Env-overridable (Story 8.6): a real deployment's SMTP requires both (prod defaults
+          # stay secure), but Mailpit (local dev, scripts/start.sh) accepts plain unauthenticated
+          # SMTP with no STARTTLS — SGART_SMTP_AUTH/SGART_SMTP_STARTTLS turn both off there.
+          auth: ${SGART_SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${SGART_SMTP_STARTTLS:true}
 
 # Custom (non-Boot-standard) keys: Boot's resource-server auto-configuration only validates
 # token expiry from jwk-set-uri alone, so the issuer and audience are checked explicitly by the

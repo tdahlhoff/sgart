@@ -104,6 +104,13 @@ void main() {
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 
+    test('accountRecoveryCodeRateLimitedResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryCodeRateLimited');
+
+      expect(resolved, localizations.accountRecoveryCodeRateLimitedError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('consentRequiredResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'consent.required');
 

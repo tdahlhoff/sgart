@@ -46,6 +46,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,
     'account.recoveryEmailInvalid' => localizations.accountRecoveryEmailInvalidError,
     'account.recoveryCodeInvalid' => localizations.accountRecoveryCodeInvalidError,
+    'account.recoveryCodeRateLimited' => localizations.accountRecoveryCodeRateLimitedError,
     'consent.required' => localizations.consentRequiredError,
     'nickname.required' => localizations.nicknameRequiredError,
     'nickname.tooLong' => localizations.nicknameTooLongError,
