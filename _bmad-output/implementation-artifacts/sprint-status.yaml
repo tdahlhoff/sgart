@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-22
-last_updated: 2026-09-28 (Story 8.4 dev-story + review complete: single replaceable household invite code. 3-layer review (Blind Hunter, Edge Case Hunter, Verification Gap) → 4 patches applied (GetActiveInviteCodeTest + ReplaceInviteCodeHandlerTest added incl. commandId-dedup idempotency test, stale Story 4.3 Javadoc fixed, InviteControllerTest FQN→imports, 404-not-yet-projected test added, CreateHousehold retry-safety Javadoc tightened); 2 low findings rejected (defensive canReplace guard, onboarding projector-lag race — both narrow/self-healing); several diff-artifact false findings (untracked new files not shown by plain git diff) refuted. Suites green: backend ./gradlew test incl. ArchUnit; flutter test 762 + analyze 0. Prior — Story 8.3 code review (Opus 5.5, 4 layers) → done: 1 decision (Profile header never shows the JWT name — neutral fallback „Noch ohne Namen") + 13 patches applied (Profile reload on household switch, both onboarding nickname skip-paths closed, missing cubit/API/join/roster tests, dead Clock, redundant index, GDPR docs, AD-6 guard now forbids `nickname` with an explicit V22 whitelist); 3 deferred to Epic 6 (export, erasure trigger, audit). Full-stack: per-household nickname
+last_updated: 2026-09-28 (Story 8.4 review→done, committed bfa2c5e + pushed. Prior — Story 8.4 dev-story + review complete: single replaceable household invite code. 3-layer review (Blind Hunter, Edge Case Hunter, Verification Gap) → 4 patches applied (GetActiveInviteCodeTest + ReplaceInviteCodeHandlerTest added incl. commandId-dedup idempotency test, stale Story 4.3 Javadoc fixed, InviteControllerTest FQN→imports, 404-not-yet-projected test added, CreateHousehold retry-safety Javadoc tightened); 2 low findings rejected (defensive canReplace guard, onboarding projector-lag race — both narrow/self-healing); several diff-artifact false findings (untracked new files not shown by plain git diff) refuted. Suites green: backend ./gradlew test incl. ArchUnit; flutter test 762 + analyze 0. Prior — Story 8.3 code review (Opus 5.5, 4 layers) → done: 1 decision (Profile header never shows the JWT name — neutral fallback „Noch ohne Namen") + 13 patches applied (Profile reload on household switch, both onboarding nickname skip-paths closed, missing cubit/API/join/roster tests, dead Clock, redundant index, GDPR docs, AD-6 guard now forbids `nickname` with an explicit V22 whitelist); 3 deferred to Epic 6 (export, erasure trigger, audit). Full-stack: per-household nickname
 # (Timo's decision) stored in a NEW identity-context side-store `membership_nickname` (V22), NOT in events;
 # captured at create+join onboarding, edited from Profile, resolved into the roster via the MemberMapping
 # ACL join (no Keycloak Admin on the read path). Deliberate documented AD-6 exception (reconcile
@@ -367,7 +367,7 @@ development_status:
   8-1-fix-manage-household-crash-invites-reachable: done
   8-2-session-never-expires-silent-device-reauth: done
   8-3-display-name-at-onboarding-used-everywhere: done
-  8-4-single-replaceable-household-invite-code: review
+  8-4-single-replaceable-household-invite-code: done
   8-5-short-recovery-token-instead-of-phrase: backlog
   8-6-real-recovery-emails-smtp-and-mailpit: backlog
   8-7-hide-household-selector-on-profile: backlog
