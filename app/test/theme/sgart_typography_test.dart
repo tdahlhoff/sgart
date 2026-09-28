@@ -11,7 +11,7 @@ void main() {
       expect(SgartTypography.sizeTitle, 21);
       expect(SgartTypography.sizeHeading, 18);
       expect(SgartTypography.sizeBody, 15);
-      expect(SgartTypography.sizeMeta, 13);
+      expect(SgartTypography.sizeMeta, 14);
       expect(SgartTypography.sizeCaption, 12);
       expect(SgartTypography.sizeKicker, 11);
     });

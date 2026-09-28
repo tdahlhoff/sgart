@@ -20,9 +20,10 @@ import 'await_invite_page.dart';
 import 'households_cubit.dart';
 
 /// The first-run choice for a caller with zero households (AC1): create one, or accept a personal
-/// invite and join theirs (Story 4.2). This is frame 1 of the onboarding mockup — privacy is
-/// stated up front (AC3, Story 1.9), no account/marketing pressure. „Haushalt erstellen" launches
-/// the guided onboarding wizard; „Auf Einladung warten" opens the accept-invite screen.
+/// invite and join theirs (Story 4.2). This is frame 1 of the onboarding mockup — the two choices
+/// are described up front, closing with a brief privacy reassurance (AC3, Story 1.9), no
+/// account/marketing pressure. „Haushalt erstellen" launches the guided onboarding wizard;
+/// „Einladung annehmen" opens the accept-invite screen for an invite the person already has.
 class CreateOrAwaitChoicePage extends StatelessWidget {
   const CreateOrAwaitChoicePage({super.key});
 

@@ -11,7 +11,7 @@ abstract final class SgartTypography {
   static const double sizeTitle = 21; // ~1.32rem
   static const double sizeHeading = 18; // ~1.15rem
   static const double sizeBody = 15; // ~0.92rem
-  static const double sizeMeta = 13; // ~0.8rem
+  static const double sizeMeta = 14; // ~0.875rem
   static const double sizeCaption = 12; // ~0.75rem
   static const double sizeKicker = 11; // ~0.66rem
 

@@ -98,7 +98,7 @@ quantities, counts (`7 von 12`), later prices. de-DE formatting via `intl`.
 > + counts.
 
 Type scale (rem, may fine-tune): display ~1.7 · title ~1.32 · heading ~1.15 · body ~0.92 ·
-meta ~0.8 · caption ~0.75 · kicker ~0.66.
+meta ~0.875 · caption ~0.75 · kicker ~0.66.
 
 ## 3. Shape · elevation · density — “System 3 · Ausgewogen”
 

@@ -72,11 +72,17 @@ void main() {
           ),
         );
 
-    testWidgets('statesPrivacyUpFrontOnTheWelcomeChoice', (tester) async {
+    testWidgets('describesTheTwoChoicesAndReassuresAboutDataUseOnTheWelcomeChoice', (tester) async {
       await tester.pumpWidget(buildSubject());
 
       expect(find.byKey(const Key('onboarding-choice-privacy')), findsOneWidget);
-      expect(find.text('Deine Daten bleiben bei dir.'), findsOneWidget);
+      expect(
+        find.text(
+          'Erstelle einen Haushalt oder tritt per Einladung einem bestehenden bei. '
+          'Deine Daten werden nicht für andere Zwecke verwendet.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('choosingCreateLaunchesTheOnboardingWizardWithoutEscapingItsProviders', (tester) async {

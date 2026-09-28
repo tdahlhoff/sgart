@@ -154,9 +154,9 @@
     "description": "Label of the button that starts creating a new household."
   },
 
-  "householdsAwaitInviteChoiceButtonLabel": "Auf Einladung warten",
+  "householdsAwaitInviteChoiceButtonLabel": "Einladung annehmen",
   "@householdsAwaitInviteChoiceButtonLabel": {
-    "description": "Label of the button that leads to the accept-invite screen."
+    "description": "Label of the button that leads to the accept-invite screen — accepting an invite the person already has, not waiting for one."
   },
 
   "householdsSaveRecoveryTokenActionLabel": "Wiederherstellungsschlüssel sichern",
@@ -819,9 +819,9 @@
     }
   },
 
-  "onboardingChoicePrivacyNote": "Deine Daten bleiben bei dir.",
+  "onboardingChoicePrivacyNote": "Erstelle einen Haushalt oder tritt per Einladung einem bestehenden bei. Deine Daten werden nicht für andere Zwecke verwendet.",
   "@onboardingChoicePrivacyNote": {
-    "description": "Privacy reassurance stated up front on the first-run welcome/choice screen (Story 1.9, AC3)."
+    "description": "Describes the two choices on the first-run welcome/choice screen, closing with a brief privacy reassurance (Story 1.9, AC3)."
   },
 
   "onboardingStepLabel": "Schritt {current} von {total}",
