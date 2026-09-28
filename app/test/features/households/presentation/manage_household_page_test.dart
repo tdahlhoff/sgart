@@ -6,7 +6,6 @@ import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
 import 'package:sgart/features/households/presentation/manage_household_page.dart';
 import 'package:sgart/features/invites/data/invites_api.dart';
-import 'package:sgart/features/invites/data/pending_invite.dart';
 import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/data/members_api.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
@@ -64,37 +63,25 @@ void main() {
           ),
         );
 
-    testWidgets('theInvitesRowOpensTheInvitePage', (tester) async {
+    testWidgets('theInvitesRowOpensTheInvitePageShowingTheActiveCode', (tester) async {
+      invitesApi.activeInviteIdToReturn = 'invite-1';
       await tester.pumpWidget(buildSubject());
 
       await tester.tap(find.byKey(const Key('manage-invites-row')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
+      expect(find.byKey(const Key('invite-code-row')), findsOneWidget);
+      expect(find.textContaining('invite-1'), findsWidgets);
     });
 
-    testWidgets('creatingAnInviteFromTheInvitePageCallsTheBackendAndAppendsAPendingRow', (tester) async {
+    testWidgets('theReplaceCodeButtonIsShownForAnAdmin', (tester) async {
+      invitesApi.activeInviteIdToReturn = 'invite-1';
+      invitesApi.canReplaceToReturn = true;
       await tester.pumpWidget(buildSubject());
       await tester.tap(find.byKey(const Key('manage-invites-row')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
-
-      expect(invitesApi.createCallCount, 1);
-      expect(find.byKey(const Key('invite-created-card')), findsOneWidget);
-      expect(find.byKey(const Key('invites-pending-empty-state')), findsNothing);
-    });
-
-    testWidgets('thePendingInvitesListRendersWhatTheReadModelReturns', (tester) async {
-      invitesApi.pendingInvitesToReturn = const [
-        PendingInvite(inviteId: 'invite-1', invitedAt: '2026-09-06T10:00:00Z', invitedBy: 'member-1', status: 'PENDING'),
-      ];
-      await tester.pumpWidget(buildSubject());
-      await tester.tap(find.byKey(const Key('manage-invites-row')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('invite-row-invite-1')), findsOneWidget);
+      expect(find.byKey(const Key('invite-replace-button')), findsOneWidget);
     });
 
     testWidgets('theMembersRowOpensTheMembersPage', (tester) async {

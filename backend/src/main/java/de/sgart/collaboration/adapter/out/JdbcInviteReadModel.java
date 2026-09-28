@@ -1,115 +1,62 @@
 package de.sgart.collaboration.adapter.out;
 
-import de.sgart.collaboration.domain.Invite;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteView;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.InviteId;
-import de.sgart.shared.MemberId;
 import java.sql.Timestamp;
-import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * The durable PostgreSQL invite read model (Story 4.1, AC6): written only by {@link
- * HouseholdReadModelProjector} (AD-4), read by {@code ListPendingInvites} through the {@link
- * InviteReadModel} port it implements. Returns <strong>pending (non-expired) invites only</strong>
- * — "expired" is derived from {@code invited_at + TTL} at query time, matching the aggregate's own
- * lazy-expiry semantics (AC5) rather than needing a scheduled job. No email/HMAC column (AD-6).
- * Schema: {@code db/migration/V12__invite_read_model.sql}. Mirrors {@link JdbcStoreReadModel}.
+ * The durable PostgreSQL read model for a household's single active invite code (Story 8.4, F7):
+ * written only by {@link HouseholdReadModelProjector} (AD-4), read by {@code GetActiveInviteCode}
+ * through the {@link InviteReadModel} port it implements. One row per household — replacing the
+ * code overwrites it in place; no TTL, no status column (the code is either the active one or it no
+ * longer exists in this table at all). Schema: {@code db/migration/V23__single_household_invite_code.sql}.
+ * Mirrors {@link JdbcStoreReadModel}.
  */
 public final class JdbcInviteReadModel implements InviteReadModel {
 
     private final JdbcClient jdbcClient;
-    private final Clock clock;
 
-    public JdbcInviteReadModel(JdbcClient jdbcClient, Clock clock) {
+    public JdbcInviteReadModel(JdbcClient jdbcClient) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     @Override
-    public List<InviteView> pendingInvitesOf(HouseholdId householdId) {
-        Instant notExpiredAfter = clock.instant().minus(Invite.TIME_TO_LIVE);
+    public Optional<InviteView> activeInviteOf(HouseholdId householdId) {
         return jdbcClient
-                .sql("""
-                        SELECT invite_id, status, invited_at, invited_by FROM invite_read_model
-                        WHERE household_id = :householdId AND status = 'PENDING' AND invited_at > :notExpiredAfter
-                        ORDER BY invited_at DESC
-                        """)
+                .sql("SELECT invite_id FROM household_invite_code WHERE household_id = :householdId")
                 .param("householdId", householdId.value())
-                .param("notExpiredAfter", Timestamp.from(notExpiredAfter))
-                .query((resultSet, rowNumber) -> new InviteView(
-                        new InviteId(resultSet.getObject("invite_id", UUID.class)),
-                        resultSet.getTimestamp("invited_at").toInstant(),
-                        new MemberId(resultSet.getObject("invited_by", UUID.class)),
-                        resultSet.getString("status")))
-                .list();
+                .query((resultSet, rowNumber) ->
+                        new InviteView(new InviteId(resultSet.getObject("invite_id", UUID.class))))
+                .optional();
     }
 
-    /** Idempotent upsert — re-projecting the same {@code MemberInvited} is a safe no-op. */
-    void upsertInvite(HouseholdId householdId, InviteId inviteId, MemberId invitedBy, Instant invitedAt) {
+    /** Idempotent upsert — re-projecting the same {@code MemberInvited} (issue or replace) is a
+     * safe no-op/overwrite either way. */
+    void upsertActiveInvite(HouseholdId householdId, InviteId inviteId, Instant issuedAt) {
         jdbcClient
                 .sql("""
-                        INSERT INTO invite_read_model (household_id, invite_id, status, invited_at, invited_by)
-                        VALUES (:householdId, :inviteId, 'PENDING', :invitedAt, :invitedBy)
-                        ON CONFLICT (household_id, invite_id) DO NOTHING
+                        INSERT INTO household_invite_code (household_id, invite_id, updated_at)
+                        VALUES (:householdId, :inviteId, :updatedAt)
+                        ON CONFLICT (household_id) DO UPDATE SET
+                            invite_id = EXCLUDED.invite_id, updated_at = EXCLUDED.updated_at
                         """)
                 .param("householdId", householdId.value())
                 .param("inviteId", inviteId.value())
-                .param("invitedAt", Timestamp.from(invitedAt))
-                .param("invitedBy", invitedBy.value())
+                .param("updatedAt", Timestamp.from(issuedAt))
                 .update();
     }
 
-    /** Idempotent flag flip — re-projecting the same {@code InviteExpired} is a safe no-op. */
-    void markExpired(HouseholdId householdId, InviteId inviteId) {
-        jdbcClient
-                .sql("""
-                        UPDATE invite_read_model SET status = 'EXPIRED'
-                        WHERE household_id = :householdId AND invite_id = :inviteId
-                        """)
-                .param("householdId", householdId.value())
-                .param("inviteId", inviteId.value())
-                .update();
-    }
-
-    /** Idempotent flag flip — re-projecting the same {@code InviteAccepted} is a safe no-op (Story
-     * 4.2, AC2). Drops the invite out of {@link #pendingInvitesOf} without a schema change; V12's
-     * {@code status VARCHAR(20)} already accommodates {@code ACCEPTED}. */
-    void markAccepted(HouseholdId householdId, InviteId inviteId) {
-        jdbcClient
-                .sql("""
-                        UPDATE invite_read_model SET status = 'ACCEPTED'
-                        WHERE household_id = :householdId AND invite_id = :inviteId
-                        """)
-                .param("householdId", householdId.value())
-                .param("inviteId", inviteId.value())
-                .update();
-    }
-
-    /** Idempotent flag flip — re-projecting the same {@code InviteRevoked} is a safe no-op (Story
-     * 4.3, AC6). Drops the invite out of {@link #pendingInvitesOf}, same mechanism as {@link
-     * #markAccepted}. */
-    void markRevoked(HouseholdId householdId, InviteId inviteId) {
-        jdbcClient
-                .sql("""
-                        UPDATE invite_read_model SET status = 'REVOKED'
-                        WHERE household_id = :householdId AND invite_id = :inviteId
-                        """)
-                .param("householdId", householdId.value())
-                .param("inviteId", inviteId.value())
-                .update();
-    }
-
-    /** Idempotent bulk delete — the delete-cascade purge (Story 4.3, AC7, decision 4). */
+    /** Idempotent bulk delete — the delete-cascade purge (Story 8.4). */
     void purgeHousehold(HouseholdId householdId) {
         jdbcClient
-                .sql("DELETE FROM invite_read_model WHERE household_id = :householdId")
+                .sql("DELETE FROM household_invite_code WHERE household_id = :householdId")
                 .param("householdId", householdId.value())
                 .update();
     }

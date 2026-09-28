@@ -10,8 +10,6 @@ import de.sgart.collaboration.domain.StoreName;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
-import de.sgart.collaboration.domain.event.InviteAccepted;
-import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.ItemAdded;
 import de.sgart.collaboration.domain.event.ItemAssignedToStore;
@@ -90,8 +88,6 @@ final class DomainEventJsonCodec {
     static final String TRIP_COMPLETED_FOR_LIST_TYPE = "TripCompletedForList";
     static final String TRIP_COMPLETED_TYPE = "TripCompleted";
     static final String MEMBER_INVITED_TYPE = "MemberInvited";
-    static final String INVITE_EXPIRED_TYPE = "InviteExpired";
-    static final String INVITE_ACCEPTED_TYPE = "InviteAccepted";
     static final String INVITE_REVOKED_TYPE = "InviteRevoked";
     static final String MEMBER_LEFT_TYPE = "MemberLeft";
     static final String MEMBER_REMOVED_TYPE = "MemberRemoved";
@@ -127,8 +123,6 @@ final class DomainEventJsonCodec {
             case TripCompletedForList ignored -> TRIP_COMPLETED_FOR_LIST_TYPE;
             case TripCompleted ignored -> TRIP_COMPLETED_TYPE;
             case MemberInvited ignored -> MEMBER_INVITED_TYPE;
-            case InviteExpired ignored -> INVITE_EXPIRED_TYPE;
-            case InviteAccepted ignored -> INVITE_ACCEPTED_TYPE;
             case InviteRevoked ignored -> INVITE_REVOKED_TYPE;
             case MemberLeft ignored -> MEMBER_LEFT_TYPE;
             case MemberRemoved ignored -> MEMBER_REMOVED_TYPE;
@@ -275,15 +269,6 @@ final class DomainEventJsonCodec {
                     invited.invitedBy().value().toString(),
                     invited.role().name(),
                     invited.invitedAt().toString()));
-            case InviteExpired expired -> jsonMapper.writeValueAsBytes(new InviteExpiredPayload(
-                    expired.eventId().value().toString(),
-                    expired.householdId().value().toString(),
-                    expired.inviteId().value().toString()));
-            case InviteAccepted accepted -> jsonMapper.writeValueAsBytes(new InviteAcceptedPayload(
-                    accepted.eventId().value().toString(),
-                    accepted.householdId().value().toString(),
-                    accepted.inviteId().value().toString(),
-                    accepted.memberId().value().toString()));
             case InviteRevoked revoked -> jsonMapper.writeValueAsBytes(new InviteRevokedPayload(
                     revoked.eventId().value().toString(),
                     revoked.householdId().value().toString(),
@@ -521,21 +506,6 @@ final class DomainEventJsonCodec {
                         HouseholdRole.valueOf(payload.role()),
                         Instant.parse(payload.invitedAt()));
             }
-            case INVITE_EXPIRED_TYPE -> {
-                InviteExpiredPayload payload = jsonMapper.readValue(json, InviteExpiredPayload.class);
-                yield new InviteExpired(
-                        EventId.fromString(payload.eventId()),
-                        HouseholdId.fromString(payload.householdId()),
-                        InviteId.fromString(payload.inviteId()));
-            }
-            case INVITE_ACCEPTED_TYPE -> {
-                InviteAcceptedPayload payload = jsonMapper.readValue(json, InviteAcceptedPayload.class);
-                yield new InviteAccepted(
-                        EventId.fromString(payload.eventId()),
-                        HouseholdId.fromString(payload.householdId()),
-                        InviteId.fromString(payload.inviteId()),
-                        MemberId.fromString(payload.memberId()));
-            }
             case INVITE_REVOKED_TYPE -> {
                 InviteRevokedPayload payload = jsonMapper.readValue(json, InviteRevokedPayload.class);
                 yield new InviteRevoked(
@@ -660,11 +630,6 @@ final class DomainEventJsonCodec {
     /** No email or email-derived field (Story 7.5, AD-6). */
     private record MemberInvitedPayload(
             String eventId, String householdId, String inviteId, String invitedBy, String role, String invitedAt) {}
-
-    private record InviteExpiredPayload(String eventId, String householdId, String inviteId) {}
-
-    /** Carries only {@code memberId} — no email/HMAC (AD-5/AD-6). */
-    private record InviteAcceptedPayload(String eventId, String householdId, String inviteId, String memberId) {}
 
     private record InviteRevokedPayload(String eventId, String householdId, String inviteId, String revokedBy) {}
 

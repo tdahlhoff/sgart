@@ -16,6 +16,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -47,10 +49,10 @@ class PromoteMemberHandlerTest {
 
     private void seedHouseholdWithAdminAndParticipant() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(streamId, 2),
+                AggregateVersion.of(streamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -78,7 +80,7 @@ class PromoteMemberHandlerTest {
         assertThatThrownBy(() -> handler.handle(
                         PARTICIPANT_SUB, householdId.toString(), adminMemberId.toString(), CommandId.generate().toString()))
                 .isInstanceOf(GovernanceNotPermittedApplicationException.class);
-        assertThat(eventStore.readStream(streamId)).hasSize(3);
+        assertThat(eventStore.readStream(streamId)).hasSize(4);
     }
 
     @Test
@@ -86,12 +88,12 @@ class PromoteMemberHandlerTest {
         seedHouseholdWithAdminAndParticipant();
         MemberId secondAdminId = MemberId.generate();
         eventStore.append(
-                AggregateVersion.of(streamId, 3),
+                AggregateVersion.of(streamId, 4),
                 List.of(new MemberJoined(EventId.generate(), householdId, secondAdminId, HouseholdRole.ADMIN)),
                 CommandId.generate());
 
         handler.handle(ADMIN_SUB, householdId.toString(), secondAdminId.toString(), CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(4); // no MemberPromoted appended
+        assertThat(eventStore.readStream(streamId)).hasSize(5); // no MemberPromoted appended
     }
 }

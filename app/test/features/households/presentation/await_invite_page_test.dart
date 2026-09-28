@@ -123,8 +123,8 @@ void main() {
       expect(invitesApi.acceptCallCount, 0);
     });
 
-    testWidgets('anExpiredInviteShowsAnInlineError', (tester) async {
-      invitesApi.acceptInviteError = const AppException(AppError(code: 'invite.expired', message: 'debug only'));
+    testWidgets('aReplacedOrUnknownInviteShowsAnInlineError', (tester) async {
+      invitesApi.acceptInviteError = const AppException(AppError(code: 'invite.notFound', message: 'debug only'));
       await tester.pumpWidget(buildSubject());
 
       await tester.enterText(find.byKey(const Key('await-invite-link-field')), 'household-1:invite-1');
@@ -132,7 +132,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('await-invite-error')), findsOneWidget);
-      expect(find.text('Diese Einladung ist abgelaufen.'), findsOneWidget);
+      expect(find.text('Dieser Einladungscode ist ungültig oder wurde ersetzt.'), findsOneWidget);
     });
 
     testWidgets('anInitialLinkAutoTriggersTheAccept', (tester) async {
@@ -151,7 +151,7 @@ void main() {
     });
 
     testWidgets('anInitialLinkPreFillsTheFieldSoAFailedAutoAcceptCanBeRetried', (tester) async {
-      invitesApi.acceptInviteError = const AppException(AppError(code: 'invite.expired', message: 'debug only'));
+      invitesApi.acceptInviteError = const AppException(AppError(code: 'invite.notFound', message: 'debug only'));
       await tester.pumpWidget(buildSubject(
         initialLink: const InviteLink(householdId: 'household-1', inviteId: 'invite-1'),
       ));

@@ -19,6 +19,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -50,7 +52,7 @@ class RenameHouseholdHandlerTest {
 
     private void seedHouseholdWithAdmin() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -63,9 +65,9 @@ class RenameHouseholdHandlerTest {
         handler.handle(ADMIN_SUB, householdId.toString(), "Familie Beispiel", CommandId.generate().toString());
 
         List<DomainEvent> events = eventStore.readStream(streamId);
-        assertThat(events).hasSize(3);
-        assertThat(events.get(2)).isInstanceOf(HouseholdRenamed.class);
-        assertThat(((HouseholdRenamed) events.get(2)).newName()).isEqualTo(new HouseholdName("Familie Beispiel"));
+        assertThat(events).hasSize(4);
+        assertThat(events.get(3)).isInstanceOf(HouseholdRenamed.class);
+        assertThat(((HouseholdRenamed) events.get(3)).newName()).isEqualTo(new HouseholdName("Familie Beispiel"));
     }
 
     @Test
@@ -73,7 +75,7 @@ class RenameHouseholdHandlerTest {
         seedHouseholdWithAdmin();
         MemberId participantId = MemberId.generate();
         eventStore.append(
-                AggregateVersion.of(streamId, 2),
+                AggregateVersion.of(streamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, participantId, new KeycloakUserId("participant-sub")));
@@ -84,7 +86,7 @@ class RenameHouseholdHandlerTest {
                 .satisfies(thrown -> assertThat(
                                 ((RenameNotPermittedApplicationException) thrown).errorDescriptor().code())
                         .isEqualTo("household.renameNotPermitted"));
-        assertThat(eventStore.readStream(streamId)).hasSize(3); // no HouseholdRenamed appended
+        assertThat(eventStore.readStream(streamId)).hasSize(4); // no HouseholdRenamed appended
     }
 
     @Test
@@ -136,6 +138,6 @@ class RenameHouseholdHandlerTest {
 
         handler.handle(ADMIN_SUB, householdId.toString(), "Familie Muster", CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2); // still just the two creation events
+        assertThat(eventStore.readStream(streamId)).hasSize(3); // still just the three creation events
     }
 }

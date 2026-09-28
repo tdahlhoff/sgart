@@ -5,7 +5,7 @@ import '../../../shared/http/app_exception.dart';
 /// caller themselves, and (Story 8.3) the resolved self-chosen [nickname]. Deliberately carries
 /// **no Keycloak name/email** (AD-6, decision 5): [nickname] is the one documented AD-6 exception
 /// (a freely-chosen, low-sensitivity in-household display name, AD-6 rev F) — `null` when that
-/// member has not set one yet, never the raw credential/member id. Mirrors `PendingInvite`.
+/// member has not set one yet, never the raw credential/member id. Mirrors `ActiveInviteCode`.
 class MemberView {
   const MemberView({required this.memberId, required this.role, required this.isSelf, this.nickname});
 

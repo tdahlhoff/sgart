@@ -6,8 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
-import de.sgart.collaboration.domain.event.InviteAccepted;
-import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
@@ -19,8 +17,6 @@ import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
-import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
-import de.sgart.collaboration.domain.exception.InviteExpiredException;
 import de.sgart.collaboration.domain.exception.InviteNotFoundException;
 import de.sgart.collaboration.domain.exception.LastAdminException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
@@ -45,24 +41,29 @@ import org.junit.jupiter.api.Test;
 /**
  * Pure domain-layer unit test — no framework, persistence, or transport (CLAUDE.md §6). Proves the
  * first real aggregate: creating a household raises {@code HouseholdCreated} then {@code
- * MemberJoined} carrying the caller-issued {@link MemberId}, and replaying that history rebuilds
- * identical state (AC1, AC3).
+ * MemberJoined} carrying the caller-issued {@link MemberId}, then {@code MemberInvited} for the
+ * household's first active invite code (Story 8.4), and replaying that history rebuilds identical
+ * state (AC1, AC3).
  */
 class HouseholdTest {
 
+    private static final Instant NOW = Instant.parse("2026-09-06T10:00:00Z");
+
     private final HouseholdId householdId = HouseholdId.generate();
     private final MemberId adminMemberId = MemberId.generate();
+    private final InviteId inviteId = InviteId.generate();
     private final CommandId commandId = CommandId.generate();
 
     @Test
-    void create_raisesHouseholdCreatedThenMemberJoinedInOrderCarryingTheGivenMemberIdAndName() {
+    void create_raisesHouseholdCreatedThenMemberJoinedThenMemberInvitedInOrder() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, inviteId, NOW, commandId);
 
         List<DomainEvent> events = household.uncommittedEvents();
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(3);
         assertThat(events.get(0)).isInstanceOf(HouseholdCreated.class);
         assertThat(events.get(1)).isInstanceOf(MemberJoined.class);
+        assertThat(events.get(2)).isInstanceOf(MemberInvited.class);
 
         HouseholdCreated created = (HouseholdCreated) events.get(0);
         assertThat(created.householdId()).isEqualTo(householdId);
@@ -72,15 +73,27 @@ class HouseholdTest {
         assertThat(joined.householdId()).isEqualTo(householdId);
         assertThat(joined.memberId()).isEqualTo(adminMemberId);
         assertThat(joined.role()).isEqualTo(HouseholdRole.ADMIN);
+
+        MemberInvited invited = (MemberInvited) events.get(2);
+        assertThat(invited.inviteId()).isEqualTo(inviteId);
+        assertThat(invited.invitedBy()).isEqualTo(adminMemberId);
+        assertThat(invited.role()).isEqualTo(HouseholdRole.PARTICIPANT);
     }
 
     @Test
-    void create_advancesTheVersionByTwo() {
+    void create_advancesTheVersionByThree() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, inviteId, NOW, commandId);
 
         StreamId streamId = StreamId.forHousehold(householdId);
-        assertThat(household.version()).isEqualTo(AggregateVersion.of(streamId, 2));
+        assertThat(household.version()).isEqualTo(AggregateVersion.of(streamId, 3));
+    }
+
+    @Test
+    void create_yieldsExactlyOneActiveInviteCode() {
+        Household household = createdHousehold();
+
+        assertThat(household.activeInviteId()).isEqualTo(inviteId);
     }
 
     @Test
@@ -90,28 +103,27 @@ class HouseholdTest {
 
     @Test
     void create_rejectsANullHouseholdId() {
-        assertThatThrownBy(() ->
-                        Household.create(null, new HouseholdName("Familie Muster"), adminMemberId, commandId))
+        assertThatThrownBy(() -> Household.create(
+                        null, new HouseholdName("Familie Muster"), adminMemberId, inviteId, NOW, commandId))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    void replayingHouseholdCreatedThenMemberJoinedRebuildsIdenticalStateAndVersion() {
-        Household original =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+    void replayingTheCreationHistoryRebuildsIdenticalStateAndVersion() {
+        Household original = createdHousehold();
         List<DomainEvent> history = original.uncommittedEvents();
 
         Household rehydrated = Household.rehydrate(StreamId.forHousehold(householdId), history);
 
         assertThat(rehydrated.householdId()).isEqualTo(original.householdId());
         assertThat(rehydrated.name()).isEqualTo(original.name());
+        assertThat(rehydrated.activeInviteId()).isEqualTo(original.activeInviteId());
         assertThat(rehydrated.version()).isEqualTo(original.version());
     }
 
     @Test
     void anAdminRenamesTheHouseholdRaisingHouseholdRenamedWithTheNewName() {
-        Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        Household household = createdHousehold();
         household.markEventsCommitted();
 
         household.rename(adminMemberId, new HouseholdName("Familie Beispiel"), CommandId.generate());
@@ -142,8 +154,7 @@ class HouseholdTest {
     @Test
     void aNonMemberCannotRenameTheHousehold() {
         MemberId strangerId = MemberId.generate();
-        Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        Household household = createdHousehold();
 
         assertThatThrownBy(() ->
                         household.rename(strangerId, new HouseholdName("Familie Beispiel"), CommandId.generate()))
@@ -152,8 +163,7 @@ class HouseholdTest {
 
     @Test
     void renamingToTheSameNameRaisesNoEvent() {
-        Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        Household household = createdHousehold();
         household.markEventsCommitted();
 
         household.rename(adminMemberId, new HouseholdName("Familie Muster"), CommandId.generate());
@@ -163,8 +173,7 @@ class HouseholdTest {
 
     @Test
     void renameFoldsSoThatSubsequentStateReflectsTheNewName() {
-        Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        Household household = createdHousehold();
 
         household.rename(adminMemberId, new HouseholdName("Familie Beispiel"), CommandId.generate());
 
@@ -292,23 +301,6 @@ class HouseholdTest {
     }
 
     @Test
-    void invitePerson_isNotAdminGatedSoAParticipantMemberSucceeds() {
-        MemberId participantId = MemberId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId),
-                List.of(
-                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
-                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
-                        new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
-
-        household.invitePerson(
-                participantId, InviteId.generate(), Instant.now(), CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
-    }
-
-    @Test
     void noEventCarriesADisplayNameEmailOrKeycloakUserId() {
         assertNoPersonalDataComponent(HouseholdCreated.class);
         assertNoPersonalDataComponent(MemberJoined.class);
@@ -316,8 +308,6 @@ class HouseholdTest {
         assertNoPersonalDataComponent(StoreAdded.class);
         assertNoPersonalDataComponent(StoreArchived.class);
         assertNoPersonalDataComponent(MemberInvited.class);
-        assertNoPersonalDataComponent(InviteExpired.class);
-        assertNoPersonalDataComponent(InviteAccepted.class);
         assertNoPersonalDataComponent(InviteRevoked.class);
         assertNoPersonalDataComponent(MemberLeft.class);
         assertNoPersonalDataComponent(MemberRemoved.class);
@@ -326,185 +316,130 @@ class HouseholdTest {
         assertNoPersonalDataComponent(HouseholdDeleted.class);
     }
 
+    // --- Story 8.4: single, replaceable household invite code -------------------------------
+
     @Test
-    void invitePerson_raisesMemberInvitedCarryingNoEmailDerivedField() {
+    void acceptInvite_withTheActiveCode_raisesMemberJoinedAsParticipant() {
         Household household = createdHousehold();
         household.markEventsCommitted();
-        InviteId inviteId = InviteId.generate();
-        Instant now = Instant.parse("2026-09-06T10:00:00Z");
+        MemberId joiner = MemberId.generate();
 
-        household.invitePerson(adminMemberId, inviteId, now, CommandId.generate());
+        household.acceptInvite(inviteId, joiner, CommandId.generate());
 
         assertThat(household.uncommittedEvents()).hasSize(1);
-        MemberInvited invited = (MemberInvited) household.uncommittedEvents().get(0);
-        assertThat(invited.inviteId()).isEqualTo(inviteId);
-        assertThat(invited.invitedBy()).isEqualTo(adminMemberId);
-        assertThat(invited.role()).isEqualTo(HouseholdRole.PARTICIPANT);
-        assertThat(invited.invitedAt()).isEqualTo(now);
-        assertNoPersonalDataComponent(MemberInvited.class);
+        MemberJoined joined = (MemberJoined) household.uncommittedEvents().get(0);
+        assertThat(joined.memberId()).isEqualTo(joiner);
+        assertThat(joined.role()).isEqualTo(HouseholdRole.PARTICIPANT);
     }
 
     @Test
-    void invitePerson_byAnyMember_isAllowed() {
+    void acceptInvite_withTheActiveCode_maySucceedForManyDifferentJoiners() {
+        Household household = createdHousehold();
+        household.markEventsCommitted();
+
+        household.acceptInvite(inviteId, MemberId.generate(), CommandId.generate());
+        household.acceptInvite(inviteId, MemberId.generate(), CommandId.generate());
+        household.acceptInvite(inviteId, MemberId.generate(), CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(3);
+        assertThat(household.uncommittedEvents()).allMatch(MemberJoined.class::isInstance);
+    }
+
+    @Test
+    void acceptInvite_bySomeoneAlreadyAMember_isAConvergentNoOp() {
+        Household household = createdHousehold();
+        MemberId joiner = MemberId.generate();
+        household.acceptInvite(inviteId, joiner, CommandId.generate());
+        household.markEventsCommitted();
+
+        household.acceptInvite(inviteId, joiner, CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void acceptInvite_withAnUnknownCode_throwsInviteNotFound() {
+        Household household = createdHousehold();
+        household.markEventsCommitted();
+
+        assertThatThrownBy(() -> household.acceptInvite(InviteId.generate(), MemberId.generate(), CommandId.generate()))
+                .isInstanceOf(InviteNotFoundException.class);
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void acceptInvite_withAReplacedCode_throwsInviteNotFound() {
+        Household household = createdHousehold();
+        household.replaceInviteCode(adminMemberId, InviteId.generate(), NOW, CommandId.generate());
+        household.markEventsCommitted();
+
+        assertThatThrownBy(() -> household.acceptInvite(inviteId, MemberId.generate(), CommandId.generate()))
+                .isInstanceOf(InviteNotFoundException.class);
+        assertThat(household.uncommittedEvents()).isEmpty();
+    }
+
+    @Test
+    void replaceInviteCode_byAnAdmin_invalidatesTheOldCodeAndIssuesTheNewOneInOneAppend() {
+        Household household = createdHousehold();
+        household.markEventsCommitted();
+        InviteId newInviteId = InviteId.generate();
+
+        household.replaceInviteCode(adminMemberId, newInviteId, NOW, CommandId.generate());
+
+        List<DomainEvent> events = household.uncommittedEvents();
+        assertThat(events).hasSize(2);
+        InviteRevoked revoked = (InviteRevoked) events.get(0);
+        assertThat(revoked.inviteId()).isEqualTo(inviteId);
+        assertThat(revoked.revokedBy()).isEqualTo(adminMemberId);
+        MemberInvited invited = (MemberInvited) events.get(1);
+        assertThat(invited.inviteId()).isEqualTo(newInviteId);
+        assertThat(household.activeInviteId()).isEqualTo(newInviteId);
+    }
+
+    @Test
+    void replaceInviteCode_byAnyAdmin_isAllowedNotJustTheCreator() {
+        MemberId secondAdminId = MemberId.generate();
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId),
+                List.of(
+                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
+                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
+                        new MemberInvited(EventId.generate(), householdId, inviteId, adminMemberId, HouseholdRole.PARTICIPANT, NOW),
+                        new MemberJoined(EventId.generate(), householdId, secondAdminId, HouseholdRole.ADMIN)));
+
+        household.replaceInviteCode(secondAdminId, InviteId.generate(), NOW, CommandId.generate());
+
+        assertThat(household.uncommittedEvents()).hasSize(2);
+    }
+
+    @Test
+    void replaceInviteCode_byAParticipant_throwsGovernanceNotPermitted() {
         MemberId participantId = MemberId.generate();
         Household household = Household.rehydrate(
                 StreamId.forHousehold(householdId),
                 List.of(
                         new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
                         new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
+                        new MemberInvited(EventId.generate(), householdId, inviteId, adminMemberId, HouseholdRole.PARTICIPANT, NOW),
                         new MemberJoined(EventId.generate(), householdId, participantId, HouseholdRole.PARTICIPANT)));
 
-        household.invitePerson(
-                participantId, InviteId.generate(), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(MemberInvited.class);
-    }
-
-    @Test
-    void invitePerson_byNonMember_throwsNotAHouseholdMember() {
-        Household household = createdHousehold();
-        MemberId strangerId = MemberId.generate();
-
-        assertThatThrownBy(() -> household.invitePerson(
-                        strangerId, InviteId.generate(), Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate()))
-                .isInstanceOf(NotAHouseholdMemberException.class);
-    }
-
-    @Test
-    void invitePerson_sameHouseholdTwice_createsTwoIndependentInvites() {
-        Household household = createdHousehold();
-        Instant now = Instant.parse("2026-09-06T10:00:00Z");
-        InviteId firstInviteId = InviteId.generate();
-        household.invitePerson(adminMemberId, firstInviteId, now, CommandId.generate());
-        household.markEventsCommitted();
-
-        InviteId secondInviteId = InviteId.generate();
-        household.invitePerson(adminMemberId, secondInviteId, now, CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        MemberInvited invited = (MemberInvited) household.uncommittedEvents().get(0);
-        assertThat(invited.inviteId()).isEqualTo(secondInviteId);
-        assertThat(firstInviteId).isNotEqualTo(secondInviteId);
-    }
-
-    @Test
-    void acceptInvite_onAPendingInTtlInvite_raisesInviteAcceptedAndMemberJoinedAsParticipant() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-        MemberId joiner = MemberId.generate();
-
-        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(60), CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(2);
-        InviteAccepted accepted = (InviteAccepted) household.uncommittedEvents().get(0);
-        assertThat(accepted.inviteId()).isEqualTo(inviteId);
-        assertThat(accepted.memberId()).isEqualTo(joiner);
-        MemberJoined joined = (MemberJoined) household.uncommittedEvents().get(1);
-        assertThat(joined.memberId()).isEqualTo(joiner);
-        assertThat(joined.role()).isEqualTo(HouseholdRole.PARTICIPANT);
-    }
-
-    @Test
-    void acceptInvite_bySomeoneAlreadyAMember_raisesInviteAcceptedButNoSecondMemberJoined() {
-        MemberId existingMember = MemberId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId),
-                List.of(
-                        new HouseholdCreated(EventId.generate(), householdId, new HouseholdName("Familie Muster")),
-                        new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN),
-                        new MemberJoined(EventId.generate(), householdId, existingMember, HouseholdRole.PARTICIPANT)));
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-
-        household.acceptInvite(inviteId, existingMember, invitedAt.plusSeconds(60), CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteAccepted.class);
-    }
-
-    @Test
-    void acceptInvite_onAPastTtlPendingInvite_raisesInviteExpiredThenThrowsInviteExpired() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-        Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
-
-        assertThatThrownBy(() -> household.acceptInvite(
-                        inviteId, MemberId.generate(), pastTtl, CommandId.generate()))
-                .isInstanceOf(InviteExpiredException.class);
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        assertThat(household.uncommittedEvents().get(0)).isInstanceOf(InviteExpired.class);
-        assertThat(((InviteExpired) household.uncommittedEvents().get(0)).inviteId()).isEqualTo(inviteId);
-    }
-
-    @Test
-    void acceptInvite_onAnAlreadyExpiredInvite_throwsInviteExpiredWithoutANewEvent() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-        Instant pastTtl = invitedAt.plus(Invite.TIME_TO_LIVE).plusSeconds(1);
-        assertThatThrownBy(() -> household.acceptInvite(inviteId, MemberId.generate(), pastTtl, CommandId.generate()))
-                .isInstanceOf(InviteExpiredException.class);
-        household.markEventsCommitted();
-
-        assertThatThrownBy(() -> household.acceptInvite(
-                        inviteId, MemberId.generate(), pastTtl.plusSeconds(60), CommandId.generate()))
-                .isInstanceOf(InviteExpiredException.class);
+        assertThatThrownBy(() -> household.replaceInviteCode(participantId, InviteId.generate(), NOW, CommandId.generate()))
+                .isInstanceOf(GovernanceNotPermittedException.class);
         assertThat(household.uncommittedEvents()).isEmpty();
+        assertThat(household.activeInviteId()).isEqualTo(inviteId);
     }
 
     @Test
-    void acceptInvite_onAnUnknownInvite_throwsInviteNotFound() {
+    void replaceInviteCode_retriedWithTheSameNewInviteId_isAConvergentNoOp() {
         Household household = createdHousehold();
+        InviteId newInviteId = InviteId.generate();
+        household.replaceInviteCode(adminMemberId, newInviteId, NOW, CommandId.generate());
         household.markEventsCommitted();
 
-        assertThatThrownBy(() -> household.acceptInvite(
-                        InviteId.generate(), MemberId.generate(), Instant.now(), CommandId.generate()))
-                .isInstanceOf(InviteNotFoundException.class);
-        assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
-    void acceptInvite_reAcceptedByTheSameJoiner_isAConvergentNoOp() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-        MemberId joiner = MemberId.generate();
-        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(60), CommandId.generate());
-        household.markEventsCommitted();
-
-        household.acceptInvite(inviteId, joiner, invitedAt.plusSeconds(120), CommandId.generate());
+        household.replaceInviteCode(adminMemberId, newInviteId, NOW, CommandId.generate());
 
         assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
-    void acceptInvite_onAConsumedInviteByANonMember_throwsInviteAlreadyConsumed() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-        household.acceptInvite(inviteId, MemberId.generate(), invitedAt.plusSeconds(60), CommandId.generate());
-        household.markEventsCommitted();
-
-        assertThatThrownBy(() -> household.acceptInvite(
-                        inviteId, MemberId.generate(), invitedAt.plusSeconds(120), CommandId.generate()))
-                .isInstanceOf(InviteAlreadyConsumedException.class);
-        assertThat(household.uncommittedEvents()).isEmpty();
+        assertThat(household.activeInviteId()).isEqualTo(newInviteId);
     }
 
     @Test
@@ -722,74 +657,6 @@ class HouseholdTest {
     }
 
     @Test
-    void revokeInvite_aPendingInvite_raisesInviteRevoked() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.markEventsCommitted();
-
-        household.revokeInvite(adminMemberId, inviteId, CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).hasSize(1);
-        InviteRevoked revoked = (InviteRevoked) household.uncommittedEvents().get(0);
-        assertThat(revoked.inviteId()).isEqualTo(inviteId);
-        assertThat(revoked.revokedBy()).isEqualTo(adminMemberId);
-    }
-
-    @Test
-    void revokeInvite_byAParticipant_throwsGovernanceNotPermitted() {
-        MemberId participantId = MemberId.generate();
-        Household household = householdWithAdminAndParticipant(participantId);
-        InviteId inviteId = InviteId.generate();
-        household.invitePerson(
-                adminMemberId, inviteId, Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
-        household.markEventsCommitted();
-
-        assertThatThrownBy(() -> household.revokeInvite(participantId, inviteId, CommandId.generate()))
-                .isInstanceOf(GovernanceNotPermittedException.class);
-        assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
-    void revokeInvite_anAbsentInvite_throwsInviteNotFound() {
-        Household household = createdHousehold();
-        household.markEventsCommitted();
-
-        assertThatThrownBy(() -> household.revokeInvite(adminMemberId, InviteId.generate(), CommandId.generate()))
-                .isInstanceOf(InviteNotFoundException.class);
-        assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
-    void revokeInvite_anAlreadyRevokedInvite_isAConvergentNoOp() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        household.invitePerson(
-                adminMemberId, inviteId, Instant.parse("2026-09-06T10:00:00Z"), CommandId.generate());
-        household.revokeInvite(adminMemberId, inviteId, CommandId.generate());
-        household.markEventsCommitted();
-
-        household.revokeInvite(adminMemberId, inviteId, CommandId.generate());
-
-        assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
-    void revokeInvite_anAcceptedInvite_throwsInviteNotFound() {
-        Household household = createdHousehold();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = Instant.parse("2026-09-06T10:00:00Z");
-        household.invitePerson(adminMemberId, inviteId, invitedAt, CommandId.generate());
-        household.acceptInvite(inviteId, MemberId.generate(), invitedAt.plusSeconds(60), CommandId.generate());
-        household.markEventsCommitted();
-
-        assertThatThrownBy(() -> household.revokeInvite(adminMemberId, inviteId, CommandId.generate()))
-                .isInstanceOf(InviteNotFoundException.class);
-        assertThat(household.uncommittedEvents()).isEmpty();
-    }
-
-    @Test
     void isDeleted_reflectsHouseholdDeletedFold() {
         Household household = createdHousehold();
 
@@ -860,7 +727,7 @@ class HouseholdTest {
     }
 
     private Household createdHousehold() {
-        return Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, commandId);
+        return Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, inviteId, NOW, commandId);
     }
 
     private void assertNoPersonalDataComponent(Class<? extends DomainEvent> eventType) {

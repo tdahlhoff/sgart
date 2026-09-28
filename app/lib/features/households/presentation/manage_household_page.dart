@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../invites/data/invites_api.dart';
-import '../../invites/presentation/invite_page.dart';
+import '../../invites/presentation/invite_page.dart' show buildInvitePageRoute;
 import '../../members/data/members_api.dart';
 import '../../members/presentation/members_page.dart';
 import '../../stores/data/store_chain_reference_cache.dart';
@@ -56,9 +56,10 @@ MaterialPageRoute<void> buildManageHouseholdPageRoute(BuildContext context, Hous
 }
 
 /// The thin „Haushalt verwalten" hub (Story 1.8, grown in Story 4.1): hosts the „Geschäfte" row
-/// that opens [ManageStoresPage] and the „Einladen" row that opens [InvitePage]. Epic 4 continues
-/// growing the same hub with members/roles (EXPERIENCE §3), which is why management lives behind a
-/// hub rather than bare switcher entries.
+/// that opens [ManageStoresPage] and the „Einladen" row that opens the invite screen (also reachable
+/// directly from the household switcher's promoted row, Story 8.4, F6). Epic 4 continues growing the
+/// same hub with members/roles (EXPERIENCE §3), which is why management lives behind a hub rather
+/// than bare switcher entries.
 class ManageHouseholdPage extends StatelessWidget {
   const ManageHouseholdPage({super.key, required this.household});
 
@@ -101,15 +102,7 @@ class ManageHouseholdPage extends StatelessWidget {
   }
 
   void _openInvites(BuildContext context) {
-    // Re-provide InvitesApi across the root-navigator route boundary, the same way stores does
-    // (the Story 1.6 ProviderNotFoundException lesson).
-    final invitesApi = context.read<InvitesApi>();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => RepositoryProvider<InvitesApi>.value(
-        value: invitesApi,
-        child: InvitePage(householdId: household.householdId),
-      ),
-    ));
+    Navigator.of(context).push(buildInvitePageRoute(context, household.householdId));
   }
 
   void _openMembers(BuildContext context) {
@@ -120,14 +113,12 @@ class ManageHouseholdPage extends StatelessWidget {
     // (context.read to re-bootstrap after a leave/delete, AC3/AC7) would otherwise crash.
     final membersApi = context.read<MembersApi>();
     final householdsApi = context.read<HouseholdsApi>();
-    final invitesApi = context.read<InvitesApi>();
     final householdsCubit = context.read<HouseholdsCubit>();
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => MultiRepositoryProvider(
         providers: [
           RepositoryProvider<MembersApi>.value(value: membersApi),
           RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
-          RepositoryProvider<InvitesApi>.value(value: invitesApi),
         ],
         child: BlocProvider<HouseholdsCubit>.value(
           value: householdsCubit,

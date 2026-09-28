@@ -19,6 +19,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -53,10 +55,10 @@ class LeaveHouseholdHandlerTest {
 
     private void seedHouseholdWithAdminAndParticipant() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(streamId, 2),
+                AggregateVersion.of(streamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -70,16 +72,16 @@ class LeaveHouseholdHandlerTest {
         handler.handle(PARTICIPANT_SUB, householdId.toString(), CommandId.generate().toString());
 
         List<DomainEvent> events = eventStore.readStream(streamId);
-        assertThat(events).hasSize(4);
-        assertThat(events.get(3)).isInstanceOf(MemberLeft.class);
-        assertThat(((MemberLeft) events.get(3)).memberId()).isEqualTo(participantMemberId);
+        assertThat(events).hasSize(5);
+        assertThat(events.get(4)).isInstanceOf(MemberLeft.class);
+        assertThat(((MemberLeft) events.get(4)).memberId()).isEqualTo(participantMemberId);
         assertThat(mappingRepository.findMemberId(new KeycloakUserId(PARTICIPANT_SUB), householdId)).isEmpty();
     }
 
     @Test
     void theLastAdminLeavingIsRejectedWith409AndLeavesNoAppendAndNoDeLink() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
 
@@ -88,7 +90,7 @@ class LeaveHouseholdHandlerTest {
                 .satisfies(thrown -> assertThat(((LastAdminApplicationException) thrown).errorDescriptor().code())
                         .isEqualTo("membership.lastAdmin"));
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2);
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
         assertThat(mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId)).contains(adminMemberId);
     }
 

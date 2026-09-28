@@ -15,7 +15,7 @@ import java.util.Objects;
  * The read side of member management (Story 4.3, AC8): the household's member roster. A pure
  * query — no side effects (CLAUDE.md §6 CQRS coverage) — composing the Identity ACL's {@link
  * ResolveMemberIdentity} port (AD-2) with the member read model (AD-4). Mirrors {@code
- * ListPendingInvites}. Each row carries only {@code memberId}/{@code role} (AD-6, decision 5); the
+ * GetActiveInviteCode}. Each row carries only {@code memberId}/{@code role} (AD-6, decision 5); the
  * caller is flagged {@code isSelf} here, computed from the resolved caller id — never stored.
  */
 public final class ListHouseholdMembers {

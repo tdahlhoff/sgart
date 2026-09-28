@@ -1,29 +1,25 @@
 import '../../../shared/http/authenticated_http_client.dart';
-import 'pending_invite.dart';
+import 'active_invite_code.dart';
 
-/// The client's invite-management source — calls the backend's invite slice under a household
-/// (`/api/v1/households/{householdId}/invites`, Story 7.5).
+/// The client's invite source — calls the backend's single-invite-code slice under a household
+/// (`/api/v1/households/{householdId}/invite-code`, Story 8.4) plus the accept endpoint, which
+/// stays where Story 4.2 put it (`/api/v1/households/{householdId}/invites/{inviteId}/accept`).
 abstract interface class InvitesApi {
-  /// Creates an invite (Story 7.5, AC1) — no email or other payload; the invite is a bearer
-  /// capability over the opaque [inviteId], shared afterwards as a code or link. [inviteId] and
-  /// [commandId] are the caller-minted idempotency keys reused across retries of the *same* intent
-  /// (AD-8), exactly like `addStore`'s `storeId` — the client mints [inviteId] (not this method) so
-  /// a retry reuses the same id.
-  Future<void> createInvite(String householdId, {required String inviteId, required String commandId});
+  /// Returns the household's single active invite code and whether this caller may replace it
+  /// (Story 8.4). No email in the response (AD-6), no list of codes.
+  Future<ActiveInviteCode> getActiveInviteCode(String householdId);
 
-  /// Lists the household's pending (non-expired) invites (AC6). No email in the response (AD-6).
-  Future<List<PendingInvite>> listPendingInvites(String householdId);
+  /// Replaces the household's active invite code with [newInviteId] (Story 8.4, F7) — Admin-only.
+  /// [newInviteId] and [commandId] are the caller-minted idempotency keys reused across retries of
+  /// the *same* intent (AD-8), exactly like `addStore`'s `storeId` — the client mints [newInviteId]
+  /// (not this method) so a retry reuses the same id. No response body — the caller re-fetches via
+  /// [getActiveInviteCode] (read-your-writes).
+  Future<void> replaceInviteCode(String householdId, {required String newInviteId, required String commandId});
 
   /// Redeems the invite [inviteId] and joins [householdId] (Story 4.2, AC1). [commandId] is the
   /// caller-minted idempotency key, reused across retries of the same attempt (AD-8). No response
   /// body — the caller already holds [householdId] and re-bootstraps to route in (AC1/AC6).
   Future<void> acceptInvite(String householdId, {required String inviteId, required String commandId});
-
-  /// Revokes the pending invite [inviteId] (Story 4.3, AC6) — Admin-only, no response body.
-  /// [commandId] is the caller-minted idempotency key, reused across retries (AD-8). A non-Admin
-  /// caller surfaces `governance.notPermitted` (403); an absent/non-pending invite surfaces
-  /// `invite.notFound` (404).
-  Future<void> revokeInvite(String householdId, {required String inviteId, required String commandId});
 }
 
 class HttpInvitesApi implements InvitesApi {
@@ -32,19 +28,17 @@ class HttpInvitesApi implements InvitesApi {
   final AuthenticatedHttpClient _client;
 
   @override
-  Future<void> createInvite(String householdId, {required String inviteId, required String commandId}) async {
-    // The caller-minted invite id is sent in the envelope, so the response needs no body
-    // (read-your-writes without a projection wait) — the same rationale as `addStore`'s storeId.
-    await _client.postJson('/api/v1/households/$householdId/invites', {
-      'inviteId': inviteId,
-      'commandId': commandId,
-    });
+  Future<ActiveInviteCode> getActiveInviteCode(String householdId) async {
+    final json = await _client.getJson('/api/v1/households/$householdId/invite-code');
+    return ActiveInviteCode.fromJson(json);
   }
 
   @override
-  Future<List<PendingInvite>> listPendingInvites(String householdId) async {
-    final json = await _client.getJsonList('/api/v1/households/$householdId/invites');
-    return json.map((entry) => PendingInvite.fromJson(entry as Map<String, dynamic>)).toList();
+  Future<void> replaceInviteCode(String householdId, {required String newInviteId, required String commandId}) async {
+    await _client.postJson('/api/v1/households/$householdId/invite-code/replace', {
+      'newInviteId': newInviteId,
+      'commandId': commandId,
+    });
   }
 
   @override
@@ -52,10 +46,5 @@ class HttpInvitesApi implements InvitesApi {
     await _client.postJson('/api/v1/households/$householdId/invites/$inviteId/accept', {
       'commandId': commandId,
     });
-  }
-
-  @override
-  Future<void> revokeInvite(String householdId, {required String inviteId, required String commandId}) {
-    return _client.deleteJson('/api/v1/households/$householdId/invites/$inviteId', {'commandId': commandId});
   }
 }

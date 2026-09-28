@@ -18,6 +18,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -54,10 +56,10 @@ class RemoveMemberHandlerTest {
 
     private void seedHouseholdWithAdminAndParticipant() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(streamId, 2),
+                AggregateVersion.of(streamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -147,14 +149,14 @@ class RemoveMemberHandlerTest {
                                 ((GovernanceNotPermittedApplicationException) thrown).errorDescriptor().code())
                         .isEqualTo("governance.notPermitted"));
 
-        assertThat(eventStore.readStream(streamId)).hasSize(3);
+        assertThat(eventStore.readStream(streamId)).hasSize(4);
         assertThat(mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId)).contains(adminMemberId);
     }
 
     @Test
     void aSelfTargetIsRejectedWith403AndLeavesNoAppendAndNoDeLink() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
 
@@ -162,7 +164,7 @@ class RemoveMemberHandlerTest {
                         ADMIN_SUB, householdId.toString(), adminMemberId.toString(), CommandId.generate().toString()))
                 .isInstanceOf(GovernanceNotPermittedApplicationException.class);
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2);
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
         assertThat(mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId)).contains(adminMemberId);
     }
 
@@ -173,7 +175,7 @@ class RemoveMemberHandlerTest {
 
         handler.handle(ADMIN_SUB, householdId.toString(), strangerId.toString(), CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(3); // no MemberRemoved appended
+        assertThat(eventStore.readStream(streamId)).hasSize(4); // no MemberRemoved appended
     }
 
     @Test
@@ -184,7 +186,7 @@ class RemoveMemberHandlerTest {
         // retry through them would fail resolveMemberIdentity before ever reaching the de-link.
         seedHouseholdWithAdminAndParticipant();
         eventStore.append(
-                AggregateVersion.of(streamId, 3),
+                AggregateVersion.of(streamId, 4),
                 List.of(new MemberRemoved(EventId.generate(), householdId, participantMemberId, adminMemberId)),
                 CommandId.generate());
         mappingRepository.deleteMapping(new KeycloakUserId(ADMIN_SUB), householdId);

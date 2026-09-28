@@ -13,6 +13,7 @@ import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.IssueMemberIdentity;
 import de.sgart.identity.domain.KeycloakUserId;
+import java.time.Clock;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.HouseholdId;
@@ -41,7 +42,7 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), never -> false);
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), never -> false, Clock.systemUTC());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString()))
                 .isInstanceOf(ConsentRequiredException.class);
@@ -54,12 +55,12 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate(), Clock.systemUTC());
 
         HouseholdId householdId =
                 handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(StreamId.forHousehold(householdId))).hasSize(2);
+        assertThat(eventStore.readStream(StreamId.forHousehold(householdId))).hasSize(3);
     }
 
     @Test
@@ -67,13 +68,13 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate(), Clock.systemUTC());
 
         HouseholdId householdId =
                 handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
 
         List<DomainEvent> events = eventStore.readStream(StreamId.forHousehold(householdId));
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(3);
         MemberJoined memberJoined = (MemberJoined) events.get(1);
         assertThat(memberJoined.role()).isEqualTo(HouseholdRole.ADMIN);
         MemberId issuedMemberId = mappingRepository
@@ -87,7 +88,7 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate(), Clock.systemUTC());
 
         HouseholdId firstHouseholdId =
                 handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", CommandId.generate().toString());
@@ -104,7 +105,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsABlankNameWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate(), Clock.systemUTC());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "   ", CommandId.generate().toString()))
                 .isInstanceOf(InvalidHouseholdNameException.class)
@@ -115,7 +116,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAnOverLongNameWithItsOwnCodeNotNameRequired() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate(), Clock.systemUTC());
         String tooLong = "x".repeat(HouseholdName.MAX_LENGTH + 1);
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, tooLong, CommandId.generate().toString()))
@@ -127,7 +128,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAMissingCommandIdWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate(), Clock.systemUTC());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", null))
                 .isInstanceOf(InvalidCommandEnvelopeException.class)
@@ -138,7 +139,7 @@ class CreateHouseholdHandlerTest {
     @Test
     void handle_rejectsAMalformedCommandIdWithAClientLocalizableCode() {
         CreateHouseholdHandler handler = new CreateHouseholdHandler(
-                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate());
+                new InMemoryEventStore(), new IssueMemberIdentity(new InMemoryMemberMappingRepository()), alwaysConsentingGate(), Clock.systemUTC());
 
         assertThatThrownBy(() -> handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", "not-a-uuid"))
                 .isInstanceOf(InvalidCommandEnvelopeException.class)
@@ -151,7 +152,7 @@ class CreateHouseholdHandlerTest {
         InMemoryEventStore eventStore = new InMemoryEventStore();
         InMemoryMemberMappingRepository mappingRepository = new InMemoryMemberMappingRepository();
         CreateHouseholdHandler handler =
-                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate());
+                new CreateHouseholdHandler(eventStore, new IssueMemberIdentity(mappingRepository), alwaysConsentingGate(), Clock.systemUTC());
         String commandId = CommandId.generate().toString();
 
         HouseholdId firstResult = handler.handle(RAW_KEYCLOAK_USER_ID, "Familie Muster", commandId);
@@ -159,7 +160,7 @@ class CreateHouseholdHandlerTest {
 
         assertThat(retryResult).isEqualTo(firstResult);
         // The append no-ops on the replayed commandId (still exactly the 2 creation events)...
-        assertThat(eventStore.readStream(StreamId.forHousehold(firstResult))).hasSize(2);
+        assertThat(eventStore.readStream(StreamId.forHousehold(firstResult))).hasSize(3);
         // ...and the issue replayed the existing MemberId rather than issuing a second.
         assertThat(mappingRepository.householdIdsFor(new KeycloakUserId(RAW_KEYCLOAK_USER_ID)))
                 .containsExactly(firstResult);

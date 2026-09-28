@@ -180,19 +180,9 @@
     "description": "Inline error shown when the pasted invite link/code cannot be parsed (Story 4.2, client-side fail-fast)."
   },
 
-  "householdsAwaitInviteExpiredError": "Diese Einladung ist abgelaufen.",
-  "@householdsAwaitInviteExpiredError": {
-    "description": "Inline error shown when the invite is past its time-to-live (Story 4.2, AC3)."
-  },
-
-  "householdsAwaitInviteNotFoundError": "Diese Einladung wurde nicht gefunden.",
+  "householdsAwaitInviteNotFoundError": "Dieser Einladungscode ist ungültig oder wurde ersetzt.",
   "@householdsAwaitInviteNotFoundError": {
-    "description": "Inline error shown when the invite does not exist (Story 4.2, AC5)."
-  },
-
-  "householdsAwaitInviteAlreadyUsedError": "Diese Einladung wurde bereits verwendet.",
-  "@householdsAwaitInviteAlreadyUsedError": {
-    "description": "Inline error shown when the invite was already consumed by someone else (Story 4.2, AC5)."
+    "description": "Inline error shown when the invite code is unknown or was replaced by a newer one (Story 8.4, F7) — the household's single reusable code has no separate expired/already-used outcome any more."
   },
 
   "householdsBackButtonLabel": "Zurück",
@@ -260,6 +250,11 @@
     "description": "Entry in the switcher sheet that opens the rename form for the active household."
   },
 
+  "householdsSwitcherInviteButtonLabel": "Mitglieder einladen",
+  "@householdsSwitcherInviteButtonLabel": {
+    "description": "Promoted entry in the switcher sheet that opens the invite screen directly, beside „Haushalt verwalten\" (Story 8.4, F6 — the hub's own „Einladen\" row also stays)."
+  },
+
   "householdsSwitcherChipTooltip": "Haushalt wechseln",
   "@householdsSwitcherChipTooltip": {
     "description": "Tooltip/semantics label for the tappable household-name chip in the persistent header."
@@ -325,16 +320,6 @@
     "description": "Heading of the invite screen opened from the household-management hub (Story 4.1)."
   },
 
-  "invitesCreateButtonLabel": "Einladung erstellen",
-  "@invitesCreateButtonLabel": {
-    "description": "Creates a new invite — a join code and link, no email (Story 7.5, AC1)."
-  },
-
-  "invitesCreatedHeading": "Neue Einladung",
-  "@invitesCreatedHeading": {
-    "description": "Heading over the freshly created invite's code and link (Story 7.5, AC1)."
-  },
-
   "invitesCodeLabel": "Code",
   "@invitesCodeLabel": {
     "description": "Label above the invite's join code (Story 7.5, AC1, D-A)."
@@ -365,34 +350,19 @@
     "description": "Brief confirmation shown after copying the code or link (Story 7.5, AC1)."
   },
 
-  "invitesPendingHeading": "Ausstehende Einladungen",
-  "@invitesPendingHeading": {
-    "description": "Heading above the pending-invites list (Story 4.1, AC6/AC7)."
+  "invitesReplaceCodeButtonLabel": "Code ersetzen",
+  "@invitesReplaceCodeButtonLabel": {
+    "description": "Admin-only action that invalidates the household's active invite code and issues a new one (Story 8.4, F7)."
   },
 
-  "invitesPendingEmptyStateLabel": "Noch keine ausstehenden Einladungen.",
-  "@invitesPendingEmptyStateLabel": {
-    "description": "Shown when the household has no pending invites."
+  "invitesReplaceCodeConfirmTitle": "Code ersetzen?",
+  "@invitesReplaceCodeConfirmTitle": {
+    "description": "Title of the confirmation dialog before replacing the active invite code (Story 8.4, F7)."
   },
 
-  "invitesPendingRowLabel": "Eingeladen am {invitedAt}",
-  "@invitesPendingRowLabel": {
-    "description": "One pending-invite row — date only, no email (AD-6, privacy-first).",
-    "placeholders": {
-      "invitedAt": {
-        "type": "String"
-      }
-    }
-  },
-
-  "invitesStatusPending": "Ausstehend",
-  "@invitesStatusPending": {
-    "description": "Localized label for a pending invite's PENDING status (Story 4.1, AC6/AC7)."
-  },
-
-  "invitesStatusExpired": "Abgelaufen",
-  "@invitesStatusExpired": {
-    "description": "Localized label for a pending invite's EXPIRED status (Story 4.1, AC5/AC6/AC7)."
+  "invitesReplaceCodeConfirmMessage": "Der bisherige Code funktioniert danach nicht mehr. Neue Mitglieder benötigen den neuen Code.",
+  "@invitesReplaceCodeConfirmMessage": {
+    "description": "Body of the confirmation dialog before replacing the active invite code, warning that the old code stops working (Story 8.4, F7)."
   },
 
   "storesHeading": "Geschäfte",
@@ -1303,16 +1273,6 @@
   "membersDeleteHouseholdConfirmFieldLabel": "Haushaltsname",
   "@membersDeleteHouseholdConfirmFieldLabel": {
     "description": "Label of the type-to-confirm text field on the delete-household hard-confirmation dialog."
-  },
-
-  "membersRevokeInviteAction": "Zurückziehen",
-  "@membersRevokeInviteAction": {
-    "description": "Action label that revokes a pending invite (Story 4.3, AC6, AC9)."
-  },
-
-  "membersRevokeInviteConfirmTitle": "Einladung zurückziehen?",
-  "@membersRevokeInviteConfirmTitle": {
-    "description": "Title of the confirmation dialog before revoking a pending invite."
   },
 
   "membersGovernanceNotPermittedError": "Nur Administratoren können diese Aktion ausführen.",

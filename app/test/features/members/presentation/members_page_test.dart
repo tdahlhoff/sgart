@@ -4,8 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
-import 'package:sgart/features/invites/data/invites_api.dart';
-import 'package:sgart/features/invites/data/pending_invite.dart';
 import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/data/members_api.dart';
 import 'package:sgart/features/members/presentation/members_page.dart';
@@ -13,7 +11,6 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_households_dependencies.dart';
-import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_members_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
@@ -21,7 +18,6 @@ void main() {
   group('MembersPage', () {
     late FakeMembersApi membersApi;
     late FakeHouseholdsApi householdsApi;
-    late FakeInvitesApi invitesApi;
     late FakeActiveHouseholdStore activeHouseholdStore;
     late HouseholdsCubit householdsCubit;
 
@@ -32,7 +28,6 @@ void main() {
     setUp(() async {
       membersApi = FakeMembersApi();
       householdsApi = FakeHouseholdsApi()..householdsToReturn = const [household];
-      invitesApi = FakeInvitesApi();
       activeHouseholdStore = FakeActiveHouseholdStore(activeId: 'household-1');
       householdsCubit = HouseholdsCubit(householdsApi: householdsApi, activeHouseholdStore: activeHouseholdStore);
       await householdsCubit.bootstrap();
@@ -50,7 +45,6 @@ void main() {
                     providers: [
                       RepositoryProvider<MembersApi>.value(value: membersApi),
                       RepositoryProvider<HouseholdsApi>.value(value: householdsApi),
-                      RepositoryProvider<InvitesApi>.value(value: invitesApi),
                     ],
                     child: BlocProvider<HouseholdsCubit>.value(
                       value: householdsCubit,
@@ -195,22 +189,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(householdsApi.deleteCallCount, 1);
-    });
-
-    testWidgets('pendingInvitesShowARevokeActionForAnAdmin', (tester) async {
-      membersApi.membersToReturn = const [admin];
-      invitesApi.pendingInvitesToReturn = const [
-        PendingInvite(inviteId: 'invite-1', invitedAt: '2026-09-06T10:00:00Z', invitedBy: 'member-admin', status: 'PENDING'),
-      ];
-      await openMembersPage(tester);
-
-      expect(find.byKey(const Key('pending-invite-row-invite-1')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('pending-invite-row-invite-1-revoke')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Bestätigen'));
-      await tester.pumpAndSettle();
-
-      expect(invitesApi.lastRevokedInviteId, 'invite-1');
     });
   });
 }

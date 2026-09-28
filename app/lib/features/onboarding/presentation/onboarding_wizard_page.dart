@@ -37,10 +37,10 @@ enum _OnboardingStep { name, nickname, stores, invite }
 /// finishing lands in the created household via [HouseholdsCubit.selectHousehold] (read-your-writes,
 /// AC2), the same transition the minimal create page performs.
 ///
-/// The invite step creates a real invite (Story 7.5): „Einladung erstellen" calls the invite
-/// backend via [InvitesCubit] and shows the resulting code/link (embeds the shared [InvitesView]);
-/// „Später einladen — fertig" still finishes onboarding regardless — solo remains first-class (AC7,
-/// unchanged from AC4/Clarification 1).
+/// The invite step shows the household's single active invite code/link, created together with the
+/// household itself (Story 8.4) — no separate create action, just share/copy (embeds the shared
+/// [InvitesView]); „Später einladen — fertig" still finishes onboarding regardless — solo remains
+/// first-class (AC7, unchanged from AC4/Clarification 1).
 ///
 /// Reached as a pushed route above the `FirstRunRouter` providers, so its dependencies
 /// ([HouseholdsApi], [HouseholdsCubit], [StoresApi], [StoreChainReferenceCache], [InvitesApi],
@@ -463,10 +463,9 @@ class _StoresStep extends StatelessWidget {
   }
 }
 
-/// Step 4 — invite (optional, Story 4.1). „Einladung senden" now sends a real invite via
-/// [InvitesCubit]; a rejection (duplicate-pending, already-a-member, invalid email) shows inline
-/// without leaving the step. „Später einladen — fertig" still finishes onboarding regardless —
-/// solo remains first-class (AC7, unchanged).
+/// Step 4 — invite (optional, Story 4.1/8.4): shows the household's already-active code/link, ready
+/// to share immediately. „Später einladen — fertig" still finishes onboarding regardless — solo
+/// remains first-class (AC7, unchanged).
 class _InviteStep extends StatelessWidget {
   const _InviteStep({required this.household, required this.onFinish, required this.onBack});
 
@@ -511,9 +510,9 @@ class _InviteStepBody extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        // Reuses the shared invite body (Story 7.5) exactly as the manage-household hub's
-        // InvitePage does — create + share/copy plus the pending-invites list — so onboarding
-        // never re-implements the create-invite flow.
+        // Reuses the shared invite body (Story 8.4) exactly as the manage-household hub's
+        // InvitePage does — the household's single active code, share/copy, no create/list — so
+        // onboarding never re-implements the invite-code display.
         const Expanded(child: InvitesView()),
         Padding(
           padding: const EdgeInsets.all(SgartShapes.cardPadding),

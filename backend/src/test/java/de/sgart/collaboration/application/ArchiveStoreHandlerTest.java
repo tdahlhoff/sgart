@@ -18,6 +18,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
@@ -53,7 +55,7 @@ class ArchiveStoreHandlerTest {
 
     private void seedHouseholdWithAdmin() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
     }
@@ -73,9 +75,9 @@ class ArchiveStoreHandlerTest {
         handler.handle(ADMIN_SUB, householdId.toString(), storeId.toString(), CommandId.generate().toString());
 
         List<DomainEvent> events = eventStore.readStream(streamId);
-        assertThat(events).hasSize(4); // created, joined, added, archived
-        assertThat(events.get(3)).isInstanceOf(StoreArchived.class);
-        assertThat(((StoreArchived) events.get(3)).storeId()).isEqualTo(storeId);
+        assertThat(events).hasSize(5); // created, joined, invited, added, archived
+        assertThat(events.get(4)).isInstanceOf(StoreArchived.class);
+        assertThat(((StoreArchived) events.get(4)).storeId()).isEqualTo(storeId);
     }
 
     @Test
@@ -86,7 +88,7 @@ class ArchiveStoreHandlerTest {
 
         handler.handle(ADMIN_SUB, householdId.toString(), storeId.toString(), CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(4); // no second StoreArchived
+        assertThat(eventStore.readStream(streamId)).hasSize(5); // no second StoreArchived
     }
 
     @Test
@@ -96,7 +98,7 @@ class ArchiveStoreHandlerTest {
         handler.handle(
                 ADMIN_SUB, householdId.toString(), StoreId.generate().toString(), CommandId.generate().toString());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2); // still just the two creation events
+        assertThat(eventStore.readStream(streamId)).hasSize(3); // still just the three creation events
     }
 
     @Test

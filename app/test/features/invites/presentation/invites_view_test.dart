@@ -22,12 +22,12 @@ class _RecordingSharePlatform extends SharePlatform {
 }
 
 void main() {
-  group('InvitesView (Story 7.5, AC1)', () {
+  group('InvitesView (Story 8.4)', () {
     late FakeInvitesApi invitesApi;
     late _RecordingSharePlatform sharePlatform;
 
     setUp(() {
-      invitesApi = FakeInvitesApi();
+      invitesApi = FakeInvitesApi()..activeInviteIdToReturn = 'invite-1';
       sharePlatform = _RecordingSharePlatform();
       SharePlatform.instance = sharePlatform;
     });
@@ -42,23 +42,18 @@ void main() {
           ),
         );
 
-    testWidgets('invitePage_createInvite_showsCodeAndLink_andSharesViaShareSheet', (tester) async {
+    testWidgets('showsTheActiveCodeAndLinkAndSharesViaShareSheet', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
-
-      expect(invitesApi.createCallCount, 1);
-      final inviteId = invitesApi.lastCreatedInviteId!;
-      expect(find.byKey(const Key('invite-created-card')), findsOneWidget);
-      expect(find.text('household-1:$inviteId'), findsOneWidget);
+      expect(find.byKey(const Key('invite-code-row')), findsOneWidget);
+      expect(find.text('household-1:invite-1'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('invite-code-share-button')));
       await tester.pumpAndSettle();
 
       expect(sharePlatform.sharedParams, hasLength(1));
-      expect(sharePlatform.sharedParams.single.text, 'household-1:$inviteId');
+      expect(sharePlatform.sharedParams.single.text, 'household-1:invite-1');
     });
 
     testWidgets('copyingTheLinkPutsItOnTheClipboardAndShowsAConfirmation', (tester) async {
@@ -74,32 +69,57 @@ void main() {
 
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('invite-link-copy-button')));
       await tester.pumpAndSettle();
 
-      final inviteId = invitesApi.lastCreatedInviteId!;
-      expect(copiedTexts, ['http://localhost:8081/invite?h=household-1&i=$inviteId']);
+      expect(copiedTexts, ['http://localhost:8081/invite?h=household-1&i=invite-1']);
       expect(find.byKey(const Key('invite-link-row')), findsOneWidget);
     });
 
-    testWidgets('creatingTwoInvitesInARowShowsTwoIndependentPendingRows', (tester) async {
+    testWidgets('noCreateButtonOrCodeListExists', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
-      final firstInviteId = invitesApi.lastCreatedInviteId;
+      expect(find.byKey(const Key('invite-create-button')), findsNothing);
+      expect(find.byKey(const Key('invites-pending-empty-state')), findsNothing);
+    });
 
-      await tester.tap(find.byKey(const Key('invite-create-button')));
+    testWidgets('theReplaceButtonIsHiddenForAParticipant', (tester) async {
+      invitesApi.canReplaceToReturn = false;
+      await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
-      final secondInviteId = invitesApi.lastCreatedInviteId;
 
-      expect(firstInviteId, isNot(secondInviteId));
-      expect(find.byKey(Key('invite-row-$firstInviteId')), findsOneWidget);
-      expect(find.byKey(Key('invite-row-$secondInviteId')), findsOneWidget);
+      expect(find.byKey(const Key('invite-replace-button')), findsNothing);
+    });
+
+    testWidgets('anAdminCanReplaceTheCodeAfterConfirming', (tester) async {
+      invitesApi.canReplaceToReturn = true;
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('invite-replace-button')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('invite-replace-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bestätigen'));
+      await tester.pumpAndSettle();
+
+      expect(invitesApi.replaceCallCount, 1);
+      expect(find.text('household-1:invite-1'), findsNothing);
+    });
+
+    testWidgets('decliningTheConfirmationLeavesTheCodeUnchanged', (tester) async {
+      invitesApi.canReplaceToReturn = true;
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('invite-replace-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+
+      expect(invitesApi.replaceCallCount, 0);
+      expect(find.text('household-1:invite-1'), findsOneWidget);
     });
   });
 }

@@ -4,30 +4,27 @@ import '../../../shared/commands/command_intent.dart';
 import '../../../shared/errors/app_error.dart';
 import '../../../shared/http/app_exception.dart';
 import '../../households/data/households_api.dart';
-import '../../invites/data/invites_api.dart';
 import '../data/member_view.dart';
 import '../data/members_api.dart';
 import 'members_state.dart';
 
-/// Drives the member-management screen (Story 4.3, AC8, AC9): loads the roster + pending invites,
-/// and exposes the governance intents (leave/remove/promote/demote/delete-household/revoke-invite)
-/// with a single [CommandIntent] per intent kind (regenerated on payload change / after success,
-/// AD-8) and an `isSubmitting` re-entrancy guard (Epic-2 Action 3 lesson). Surfaces `403`
-/// (`governance.notPermitted`), `409` (`membership.lastAdmin`), and `404` (`invite.notFound`) as
-/// distinct inline errors via the caller's `error_message_resolver.dart`. Depends only on the
-/// [MembersApi]/[HouseholdsApi]/[InvitesApi] interfaces so tests never touch the network (CLAUDE.md
-/// §6); guards every `emit` with `isClosed`. Mirrors `InvitesCubit`.
+/// Drives the member-management screen (Story 4.3, AC8, AC9): loads the roster, and exposes the
+/// governance intents (leave/remove/promote/demote/delete-household) with a single [CommandIntent]
+/// per intent kind (regenerated on payload change / after success, AD-8) and an `isSubmitting`
+/// re-entrancy guard (Epic-2 Action 3 lesson). Surfaces `403` (`governance.notPermitted`) and `409`
+/// (`membership.lastAdmin`) as distinct inline errors via the caller's `error_message_resolver.dart`.
+/// Depends only on the [MembersApi]/[HouseholdsApi] interfaces so tests never touch the network
+/// (CLAUDE.md §6); guards every `emit` with `isClosed`. Invites are no longer this screen's concern
+/// (Story 8.4 moved the household's single invite code to its own screen); mirrors `InvitesCubit`.
 class MembersCubit extends Cubit<MembersState> {
   MembersCubit({
     required this._membersApi,
     required this._householdsApi,
-    required this._invitesApi,
     required this._householdId,
   }) : super(const MembersState.loading());
 
   final MembersApi _membersApi;
   final HouseholdsApi _householdsApi;
-  final InvitesApi _invitesApi;
   final String _householdId;
 
   final CommandIntent _leaveIntent = CommandIntent();
@@ -35,14 +32,12 @@ class MembersCubit extends Cubit<MembersState> {
   final CommandIntent _promoteIntent = CommandIntent();
   final CommandIntent _demoteIntent = CommandIntent();
   final CommandIntent _deleteIntent = CommandIntent();
-  final CommandIntent _revokeIntent = CommandIntent();
 
   Future<void> bootstrap() async {
     _safeEmit(const MembersState.loading());
     try {
       final members = await _membersApi.listMembers(_householdId);
-      final pendingInvites = await _invitesApi.listPendingInvites(_householdId);
-      _safeEmit(MembersState.ready(members: members, pendingInvites: pendingInvites));
+      _safeEmit(MembersState.ready(members: members));
     } on Object catch (error) {
       _safeEmit(MembersState.failure(_toAppError(error)));
     }
@@ -127,24 +122,6 @@ class MembersCubit extends Cubit<MembersState> {
       await _householdsApi.deleteHousehold(_householdId, commandId: _deleteIntent.commandId);
       _deleteIntent.complete();
       _safeEmit(state.copyWith(isSubmitting: false, exited: true));
-    } on Object catch (error) {
-      _safeEmit(state.copyWith(isSubmitting: false, actionError: _toAppError(error)));
-    }
-  }
-
-  /// Revokes the pending invite [inviteId] (AC6) — Admin-only. Removes it from the pending list
-  /// locally on success.
-  Future<void> revokeInvite(String inviteId) async {
-    if (!_canSubmit()) {
-      return;
-    }
-    _revokeIntent.beginAttempt(inviteId);
-    _safeEmit(state.copyWith(isSubmitting: true, clearActionError: true));
-    try {
-      await _invitesApi.revokeInvite(_householdId, inviteId: inviteId, commandId: _revokeIntent.commandId);
-      _revokeIntent.complete();
-      final remaining = state.pendingInvites.where((invite) => invite.inviteId != inviteId).toList();
-      _safeEmit(state.copyWith(pendingInvites: remaining, isSubmitting: false));
     } on Object catch (error) {
       _safeEmit(state.copyWith(isSubmitting: false, actionError: _toAppError(error)));
     }

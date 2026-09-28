@@ -19,6 +19,8 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
@@ -100,7 +102,7 @@ class StoreControllerTest {
         HouseholdId householdId = HouseholdId.generate();
         MemberId adminMemberId = MemberId.generate();
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),

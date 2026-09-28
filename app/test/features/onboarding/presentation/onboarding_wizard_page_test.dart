@@ -197,43 +197,21 @@ void main() {
       expect(find.byKey(const Key('onboarding-invite-deferred-note')), findsNothing);
     });
 
-    testWidgets('creatingAnInviteFromTheWizardCallsTheRealInviteBackend', (tester) async {
+    testWidgets('theInviteStepShowsTheHouseholdsAlreadyActiveCode', (tester) async {
+      invitesApi.activeInviteIdToReturn = 'invite-1';
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester);
       await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
-
-      expect(invitesApi.createCallCount, 1);
+      expect(find.byKey(const Key('invite-code-row')), findsOneWidget);
       expect(find.byKey(const Key('invite-action-error')), findsNothing);
-      expect(find.byKey(const Key('invite-created-card')), findsOneWidget);
     });
 
-    testWidgets('aRejectedInviteFromTheWizardShowsInlineWithoutLeavingTheStep', (tester) async {
-      invitesApi.createInviteError =
-          const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
+    testWidgets('finishStillWorksFromTheInviteStep', (tester) async {
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester);
       await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const Key('invite-create-button')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('invite-action-error')), findsOneWidget);
-      expect(find.text('Schritt 4 von 4'), findsOneWidget);
-    });
-
-    testWidgets('finishStillWorksAfterAFailedInviteAttempt', (tester) async {
-      invitesApi.createInviteError =
-          const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
-      await tester.pumpWidget(buildSubject());
-      await nameAndAdvance(tester);
-      await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('invite-create-button')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('onboarding-invite-finish-button')));
@@ -243,25 +221,24 @@ void main() {
     });
 
     testWidgets(
-        'aFailedInviteBootstrapShowsAnErrorWithRetryInsteadOfASilentlyDeadCreateButton',
+        'aFailedInviteCodeBootstrapShowsAnErrorWithRetry',
         (tester) async {
-      invitesApi.listPendingInvitesError =
+      invitesApi.getActiveInviteCodeError =
           const AppException(AppError(code: 'invites.unknown', message: 'debug'));
       await tester.pumpWidget(buildSubject());
       await nameAndAdvance(tester);
       await tester.tap(find.byKey(const Key('onboarding-stores-next-button')));
       await tester.pumpAndSettle();
 
-      // The create button must not stay silently enabled-but-inert while bootstrap() has failed.
       expect(find.byKey(const Key('invites-load-error')), findsOneWidget);
-      expect(find.byKey(const Key('invite-create-button')), findsNothing);
+      expect(find.byKey(const Key('invite-code-row')), findsNothing);
 
-      invitesApi.listPendingInvitesError = null;
+      invitesApi.getActiveInviteCodeError = null;
       await tester.tap(find.byKey(const Key('invites-retry-button')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('invites-load-error')), findsNothing);
-      expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
+      expect(find.byKey(const Key('invite-code-row')), findsOneWidget);
     });
 
     testWidgets(

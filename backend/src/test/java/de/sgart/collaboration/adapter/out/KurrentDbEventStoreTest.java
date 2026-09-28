@@ -9,6 +9,8 @@ import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.HouseholdId;
@@ -82,12 +84,12 @@ class KurrentDbEventStoreTest {
     }
 
     @Test
-    void appendingAHouseholdsCreationEventsAdvancesTheStreamByTwo() {
+    void appendingAHouseholdsCreationEventsAdvancesTheStreamByThree() {
         Household household = newHousehold();
 
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2);
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
     }
 
     @Test
@@ -100,20 +102,20 @@ class KurrentDbEventStoreTest {
         eventStore.append(AggregateVersion.initial(streamId), newHousehold().uncommittedEvents(), CommandId.generate());
 
         assertThatThrownBy(() -> eventStore.append(
-                        AggregateVersion.initial(streamId), // behind: stream is already at version 2
+                        AggregateVersion.initial(streamId), // behind: stream is already at version 3
                         newHousehold().uncommittedEvents(),
                         CommandId.generate()))
                 .isInstanceOf(ConcurrencyConflictException.class)
                 .satisfies(thrown -> assertThat(((ConcurrencyConflictException) thrown).errorDescriptor().code())
                         .isEqualTo(ConcurrencyConflictException.ERROR_CODE));
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2); // nothing further was appended
+        assertThat(eventStore.readStream(streamId)).hasSize(3); // nothing further was appended
     }
 
     @Test
     void aRejectedMultiEventAppendLeavesTheStreamUntouchedAtomically() {
-        // A rejected append writes NEITHER of the two events (HouseholdCreated, MemberJoined) —
-        // proving atomicity, not just that the version check itself works.
+        // A rejected append writes NONE of the three events (HouseholdCreated, MemberJoined,
+        // MemberInvited) — proving atomicity, not just that the version check itself works.
         eventStore.append(AggregateVersion.initial(streamId), newHousehold().uncommittedEvents(), CommandId.generate());
         List<DomainEvent> afterFirstAppend = eventStore.readStream(streamId);
 
@@ -135,7 +137,7 @@ class KurrentDbEventStoreTest {
         // no-op — never a conflict, and never applied twice (AD-8, "survives restart").
         eventStore.append(AggregateVersion.initial(streamId), newHousehold().uncommittedEvents(), retriedCommand);
 
-        assertThat(eventStore.readStream(streamId)).hasSize(2);
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
     }
 
     @Test
@@ -144,7 +146,7 @@ class KurrentDbEventStoreTest {
         MemberId adminMemberId = MemberId.generate();
         StreamId householdStreamId = StreamId.forHousehold(householdId);
         Household original =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
 
         eventStore.append(AggregateVersion.initial(householdStreamId), original.uncommittedEvents(), CommandId.generate());
 
@@ -158,6 +160,6 @@ class KurrentDbEventStoreTest {
 
     private Household newHousehold() {
         return Household.create(
-                new HouseholdId(streamId.id()), new HouseholdName("Familie Muster"), MemberId.generate(), CommandId.generate());
+                new HouseholdId(streamId.id()), new HouseholdName("Familie Muster"), MemberId.generate(), InviteId.generate(), Instant.now(), CommandId.generate());
     }
 }

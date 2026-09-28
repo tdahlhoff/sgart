@@ -19,6 +19,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -61,10 +63,10 @@ class CreateShoppingListHandlerTest {
         MemberId participantMemberId = MemberId.generate();
         StreamId householdStreamId = StreamId.forHousehold(householdId);
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(householdStreamId), household.uncommittedEvents(), CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(householdStreamId, 2),
+                AggregateVersion.of(householdStreamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, participantMemberId, new KeycloakUserId(PARTICIPANT_SUB)));

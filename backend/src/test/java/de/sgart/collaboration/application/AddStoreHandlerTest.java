@@ -19,6 +19,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
@@ -54,7 +56,7 @@ class AddStoreHandlerTest {
 
     private void seedHouseholdWithAdmin() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
     }
@@ -74,9 +76,9 @@ class AddStoreHandlerTest {
                 CommandId.generate().toString());
 
         List<DomainEvent> events = eventStore.readStream(streamId);
-        assertThat(events).hasSize(3);
-        assertThat(events.get(2)).isInstanceOf(StoreAdded.class);
-        StoreAdded added = (StoreAdded) events.get(2);
+        assertThat(events).hasSize(4);
+        assertThat(events.get(3)).isInstanceOf(StoreAdded.class);
+        StoreAdded added = (StoreAdded) events.get(3);
         assertThat(added.storeId()).isEqualTo(storeId);
         assertThat(added.chainId()).isEqualTo(chainId);
     }
@@ -93,7 +95,7 @@ class AddStoreHandlerTest {
                 null,
                 CommandId.generate().toString());
 
-        StoreAdded added = (StoreAdded) eventStore.readStream(streamId).get(2);
+        StoreAdded added = (StoreAdded) eventStore.readStream(streamId).get(3);
         assertThat(added.chainId()).isNull();
     }
 
@@ -109,7 +111,7 @@ class AddStoreHandlerTest {
                         null,
                         CommandId.generate().toString()))
                 .isInstanceOf(NotAMemberException.class);
-        assertThat(eventStore.readStream(streamId)).hasSize(2); // no StoreAdded appended
+        assertThat(eventStore.readStream(streamId)).hasSize(3); // no StoreAdded appended
     }
 
     @Test
@@ -129,7 +131,7 @@ class AddStoreHandlerTest {
                         null,
                         CommandId.generate().toString()))
                 .isInstanceOf(NotAHouseholdMemberApplicationException.class);
-        assertThat(eventStore.readStream(streamId)).hasSize(2); // no StoreAdded appended
+        assertThat(eventStore.readStream(streamId)).hasSize(3); // no StoreAdded appended
     }
 
     @Test
@@ -154,7 +156,7 @@ class AddStoreHandlerTest {
                 .satisfies(thrown -> assertThat(
                                 ((DuplicateStoreNameApplicationException) thrown).errorDescriptor().code())
                         .isEqualTo("store.duplicateName"));
-        assertThat(eventStore.readStream(streamId)).hasSize(3); // only the first StoreAdded
+        assertThat(eventStore.readStream(streamId)).hasSize(4); // only the first StoreAdded
     }
 
     @Test

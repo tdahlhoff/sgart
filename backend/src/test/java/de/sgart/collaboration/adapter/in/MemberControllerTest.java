@@ -21,6 +21,8 @@ import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
@@ -109,13 +111,13 @@ class MemberControllerTest {
     private HouseholdId seedHouseholdWithAdminAndParticipant(MemberId adminMemberId, MemberId participantMemberId) {
         HouseholdId householdId = HouseholdId.generate();
         Household household = Household.create(
-                householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),
                 CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -212,7 +214,7 @@ class MemberControllerTest {
         MemberId adminMemberId = MemberId.generate();
         HouseholdId householdId = HouseholdId.generate();
         Household household = Household.create(
-                householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),

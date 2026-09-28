@@ -35,9 +35,10 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'list.moveTargetSameAsSource' => localizations.listsMoveTargetSameAsSourceError,
     'list.moveMergeRemoveFailed' => localizations.listsMoveMergeRemoveFailedError,
     'invite.invalidLink' => localizations.householdsAwaitInviteInvalidLinkError,
-    'invite.expired' => localizations.householdsAwaitInviteExpiredError,
+    // The household's invite code is single and reusable (Story 8.4, F7): a 404 always means the
+    // code is unknown or was replaced by a newer one — there is no separate expired/already-used
+    // outcome any more.
     'invite.notFound' => localizations.householdsAwaitInviteNotFoundError,
-    'invite.alreadyUsed' => localizations.householdsAwaitInviteAlreadyUsedError,
     'governance.notPermitted' => localizations.membersGovernanceNotPermittedError,
     'membership.lastAdmin' => localizations.membersLastAdminError,
     'auth.unauthorized' => localizations.authSessionExpiredError,

@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sgart/features/invites/data/pending_invite.dart';
 import 'package:sgart/features/invites/presentation/invites_cubit.dart';
 import 'package:sgart/features/invites/presentation/invites_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
@@ -17,21 +16,21 @@ void main() {
 
     InvitesCubit buildCubit() => InvitesCubit(invitesApi: invitesApi, householdId: 'household-1');
 
-    test('bootstrap_loadsPendingInvites', () async {
-      invitesApi.pendingInvitesToReturn = const [
-        PendingInvite(inviteId: 'invite-1', invitedAt: '2026-09-06T10:00:00Z', invitedBy: 'member-1', status: 'PENDING'),
-      ];
+    test('bootstrap_loadsTheActiveInviteCode', () async {
+      invitesApi.activeInviteIdToReturn = 'invite-1';
+      invitesApi.canReplaceToReturn = true;
       final cubit = buildCubit();
 
       await cubit.bootstrap();
 
       expect(cubit.state.status, InvitesStatus.ready);
-      expect(cubit.state.invites, hasLength(1));
+      expect(cubit.state.inviteId, 'invite-1');
+      expect(cubit.state.canReplace, isTrue);
       await cubit.close();
     });
 
     test('bootstrap_emitsFailureWhenTheLoadFails', () async {
-      invitesApi.listPendingInvitesError =
+      invitesApi.getActiveInviteCodeError =
           const AppException(AppError(code: 'network.unreachable', message: 'debug'));
       final cubit = buildCubit();
 
@@ -42,91 +41,63 @@ void main() {
       await cubit.close();
     });
 
-    test('createInvite_onSuccessOptimisticallyAppendsAPendingInviteAndSurfacesItsCode', () async {
+    test('replaceCode_onSuccessSwapsInTheNewInviteId', () async {
+      invitesApi.activeInviteIdToReturn = 'invite-1';
+      invitesApi.canReplaceToReturn = true;
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.createInvite();
+      await cubit.replaceCode();
 
-      expect(invitesApi.createCallCount, 1);
-      expect(cubit.state.invites, hasLength(1));
-      expect(cubit.state.lastCreatedInviteId, isNotNull);
-      expect(cubit.state.lastCreatedInviteId, invitesApi.lastCreatedInviteId);
+      expect(invitesApi.replaceCallCount, 1);
+      expect(cubit.state.inviteId, isNot('invite-1'));
+      expect(cubit.state.inviteId, invitesApi.lastReplacedNewInviteId);
       expect(cubit.state.isSubmitting, isFalse);
       expect(cubit.state.actionError, isNull);
       await cubit.close();
     });
 
-    test('createInvite_sameHouseholdTwice_createsTwoIndependentInvites', () async {
+    test('replaceCode_surfacesARejectionAsAnInlineActionError', () async {
+      invitesApi.canReplaceToReturn = true;
+      invitesApi.replaceInviteCodeError =
+          const AppException(AppError(code: 'governance.notPermitted', message: 'debug'));
       final cubit = buildCubit();
       await cubit.bootstrap();
+      final inviteIdBeforeReplace = cubit.state.inviteId;
 
-      await cubit.createInvite();
-      await cubit.createInvite();
+      await cubit.replaceCode();
 
-      expect(invitesApi.createCallCount, 2);
-      expect(cubit.state.invites, hasLength(2));
-      expect(invitesApi.createInviteIds.toSet(), hasLength(2));
-      await cubit.close();
-    });
-
-    test('createInvite_surfacesARejectionAsAnInlineActionError', () async {
-      invitesApi.createInviteError = const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
-      final cubit = buildCubit();
-      await cubit.bootstrap();
-
-      await cubit.createInvite();
-
-      expect(cubit.state.actionError?.code, 'identity.notAMember');
+      expect(cubit.state.actionError?.code, 'governance.notPermitted');
       expect(cubit.state.isSubmitting, isFalse);
-      expect(cubit.state.invites, isEmpty);
+      expect(cubit.state.inviteId, inviteIdBeforeReplace);
       await cubit.close();
     });
 
-    test('createInvite_afterASuccess_aFailedCreatePreservesLastCreatedInviteId', () async {
-      final cubit = buildCubit();
-      await cubit.bootstrap();
-
-      await cubit.createInvite();
-      final firstInviteId = cubit.state.lastCreatedInviteId;
-      expect(firstInviteId, isNotNull);
-
-      // A subsequent create that fails must not wipe the earlier invite's shareable card — the
-      // earlier invite is still valid and pending.
-      invitesApi.createInviteError = const AppException(AppError(code: 'network.unreachable', message: 'debug'));
-      await cubit.createInvite();
-
-      expect(cubit.state.lastCreatedInviteId, firstInviteId);
-      expect(cubit.state.actionError?.code, 'network.unreachable');
-      expect(cubit.state.isSubmitting, isFalse);
-      await cubit.close();
-    });
-
-    test('createInvite_isSubmittingGuardIgnoresASecondCallWhileTheFirstIsInFlight', () async {
+    test('replaceCode_isSubmittingGuardIgnoresASecondCallWhileTheFirstIsInFlight', () async {
+      invitesApi.canReplaceToReturn = true;
       final cubit = buildCubit();
       await cubit.bootstrap();
 
       // Both calls start synchronously; the first sets isSubmitting before yielding at its first
       // await, so the second observes isSubmitting=true and is a no-op (Epic-2 Action 3 lesson) —
-      // never a second concurrent create.
-      final firstCreate = cubit.createInvite();
-      final secondCreate = cubit.createInvite();
-      await Future.wait([firstCreate, secondCreate]);
+      // never a second concurrent replace.
+      final firstReplace = cubit.replaceCode();
+      final secondReplace = cubit.replaceCode();
+      await Future.wait([firstReplace, secondReplace]);
 
-      expect(invitesApi.createCallCount, 1);
+      expect(invitesApi.replaceCallCount, 1);
       await cubit.close();
     });
 
-    test('createInvite_mintsAFreshCommandIdAndInviteIdEveryCall', () async {
+    test('replaceCode_mintsAFreshCommandIdAndInviteIdEveryCall', () async {
+      invitesApi.canReplaceToReturn = true;
       final cubit = buildCubit();
       await cubit.bootstrap();
 
-      await cubit.createInvite();
-      await cubit.createInvite();
+      await cubit.replaceCode();
+      await cubit.replaceCode();
 
-      expect(invitesApi.createCommandIds.toSet(), hasLength(2));
-      expect(invitesApi.createInviteIds.toSet(), hasLength(2));
-      await cubit.close();
+      expect(invitesApi.replaceCommandIds.toSet(), hasLength(2));
     });
   });
 }

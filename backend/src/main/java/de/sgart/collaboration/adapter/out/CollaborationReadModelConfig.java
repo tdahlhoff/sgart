@@ -1,7 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
 import io.kurrent.dbclient.KurrentDBClient;
-import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,8 +49,8 @@ public class CollaborationReadModelConfig {
     }
 
     @Bean
-    JdbcInviteReadModel jdbcInviteReadModel(JdbcClient jdbcClient, Clock clock) {
-        return new JdbcInviteReadModel(jdbcClient, clock);
+    JdbcInviteReadModel jdbcInviteReadModel(JdbcClient jdbcClient) {
+        return new JdbcInviteReadModel(jdbcClient);
     }
 
     @Bean

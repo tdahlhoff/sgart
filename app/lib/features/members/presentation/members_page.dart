@@ -8,7 +8,6 @@ import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../households/data/household_summary.dart';
 import '../../households/presentation/households_cubit.dart';
-import '../../invites/data/pending_invite.dart';
 import '../data/member_view.dart';
 import 'members_cubit.dart';
 import 'members_state.dart';
@@ -16,10 +15,10 @@ import 'members_state.dart';
 /// The member-management screen (Story 4.3, AC9): the roster (caller marked „Sie", others by
 /// role — Story 8.3 adds each member's self-chosen nickname as the row's primary label, with a
 /// neutral fallback for a member who has not set one yet). **Admin** sees per-member
-/// promote/demote/remove (with confirmations), a **revoke** action on each pending invite, and a
-/// **delete-household** action behind a hard (type-to-confirm) confirmation. **Participant** sees
-/// only „Haushalt verlassen". On a successful self-leave/removal or household deletion, re-routes
-/// via `HouseholdsCubit.bootstrap()`.
+/// promote/demote/remove (with confirmations) and a **delete-household** action behind a hard
+/// (type-to-confirm) confirmation. **Participant** sees only „Haushalt verlassen". The household's
+/// invite code moved to its own screen (Story 8.4) — this page no longer shows it. On a successful
+/// self-leave/removal or household deletion, re-routes via `HouseholdsCubit.bootstrap()`.
 class MembersPage extends StatelessWidget {
   const MembersPage({super.key, required this.household});
 
@@ -31,7 +30,6 @@ class MembersPage extends StatelessWidget {
       create: (_) => MembersCubit(
         membersApi: context.read(),
         householdsApi: context.read(),
-        invitesApi: context.read(),
         householdId: household.householdId,
       )..bootstrap(),
       child: _MembersView(household: household),
@@ -100,12 +98,6 @@ class _ReadyBody extends StatelessWidget {
             const SizedBox(height: SgartShapes.space4),
           ],
           for (final member in state.members) _MemberRow(member: member, isCallerAdmin: isAdmin),
-          if (isAdmin) ...[
-            const Divider(height: SgartShapes.space4),
-            Text(localizations.invitesPendingHeading, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: SgartShapes.space2),
-            for (final invite in state.pendingInvites) _PendingInviteRow(invite: invite),
-          ],
           const SizedBox(height: SgartShapes.space4),
           if (self != null && !isAdmin)
             SgartButton(
@@ -290,37 +282,6 @@ class _MemberRow extends StatelessWidget {
 }
 
 enum _MemberAction { promote, demote, remove }
-
-class _PendingInviteRow extends StatelessWidget {
-  const _PendingInviteRow({required this.invite});
-
-  final PendingInvite invite;
-
-  @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-
-    return ListTile(
-      key: Key('pending-invite-row-${invite.inviteId}'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.mail_outline),
-      title: Text(localizations.invitesPendingRowLabel(invite.invitedAt)),
-      trailing: TextButton(
-        key: Key('pending-invite-row-${invite.inviteId}-revoke'),
-        onPressed: () => _confirmAndRevoke(context),
-        child: Text(localizations.membersRevokeInviteAction),
-      ),
-    );
-  }
-
-  Future<void> _confirmAndRevoke(BuildContext context) async {
-    final localizations = AppLocalizations.of(context);
-    final confirmed = await _showYesNoDialog(context, title: localizations.membersRevokeInviteConfirmTitle);
-    if (confirmed && context.mounted) {
-      await context.read<MembersCubit>().revokeInvite(invite.inviteId);
-    }
-  }
-}
 
 /// Shared confirm/cancel dialog for every governance action except delete-household (which needs
 /// its own hard, type-to-confirm dialog, AC7).

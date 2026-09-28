@@ -24,6 +24,7 @@ import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
@@ -253,7 +254,7 @@ class HouseholdControllerTest {
         // Participant the aggregate rejects.
         MemberId participantMemberId = MemberId.generate();
         eventStore.append(
-                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
                 List.of(new MemberJoined(
                         EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
@@ -302,7 +303,7 @@ class HouseholdControllerTest {
         seedHousehold(householdId, adminMemberId, "Familie Muster", "anna-sub");
         MemberId participantMemberId = MemberId.generate();
         eventStore.append(
-                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
                 List.of(new MemberJoined(
                         EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
@@ -327,7 +328,7 @@ class HouseholdControllerTest {
     private void seedHousehold(
             HouseholdId householdId, MemberId adminMemberId, String name, String keycloakUserId) {
         Household household =
-                Household.create(householdId, new HouseholdName(name), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName(name), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),

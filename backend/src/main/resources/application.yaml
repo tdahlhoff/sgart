@@ -79,9 +79,11 @@ sgart:
   projector:
     auto-start: ${SGART_PROJECTOR_AUTOSTART:false}
   invite:
-    # Invite link factory (Story 4.6, AC6): the single configurable base URL every invite link is
-    # built from — the exact form the deep link, the web fallback page, and InviteLink.tryParse
-    # (Flutter) all consume.
+    # The single configurable base URL every invite link is built from — the exact form the deep
+    # link, the web fallback page, and InviteLink.tryParse (Flutter) all consume. Read only by the
+    # app (SGART_INVITE_BASE_URL, Flutter dart-define) since Story 8.4 retired the backend's
+    # dev-logging InviteLinkFactory; kept here so the shared env-var default stays documented in
+    # one place for local/CI setup.
     base-url: ${SGART_INVITE_BASE_URL:http://localhost:8081/invite}
     # The dedicated public PKCE client the web fallback page (Story 4.6, D3) authenticates with —
     # isolates web origins/redirects from the native app's sgart-app client (keycloak/realm-sgart.json).

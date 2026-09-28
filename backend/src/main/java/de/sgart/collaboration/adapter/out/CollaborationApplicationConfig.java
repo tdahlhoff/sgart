@@ -1,7 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
 import de.sgart.collaboration.application.ConsentGate;
-import de.sgart.collaboration.application.InviteLinkFactory;
 import de.sgart.collaboration.application.ItemTransferProcessManager;
 import de.sgart.collaboration.application.TripLifecycleProcessManager;
 import de.sgart.collaboration.application.command.AcceptInviteHandler;
@@ -17,7 +16,6 @@ import de.sgart.collaboration.application.command.CreateShoppingListHandler;
 import de.sgart.collaboration.application.command.DeleteHouseholdHandler;
 import de.sgart.collaboration.application.command.DemoteMemberHandler;
 import de.sgart.collaboration.application.command.DiscardItemHandler;
-import de.sgart.collaboration.application.command.InvitePersonHandler;
 import de.sgart.collaboration.application.command.LeaveHouseholdHandler;
 import de.sgart.collaboration.application.command.MoveItemHandler;
 import de.sgart.collaboration.application.command.PostponeItemToListHandler;
@@ -25,8 +23,8 @@ import de.sgart.collaboration.application.command.PromoteMemberHandler;
 import de.sgart.collaboration.application.command.RemoveItemHandler;
 import de.sgart.collaboration.application.command.RemoveMemberHandler;
 import de.sgart.collaboration.application.command.RenameShoppingListHandler;
+import de.sgart.collaboration.application.command.ReplaceInviteCodeHandler;
 import de.sgart.collaboration.application.command.RerouteItemHandler;
-import de.sgart.collaboration.application.command.RevokeInviteHandler;
 import de.sgart.collaboration.application.command.StartTripHandler;
 import de.sgart.collaboration.application.command.UncheckItemHandler;
 import de.sgart.collaboration.application.command.UpdateItemHandler;
@@ -36,8 +34,8 @@ import de.sgart.collaboration.application.query.ListHouseholdMembers;
 import de.sgart.collaboration.application.query.ListItemSuggestions;
 import de.sgart.collaboration.application.query.ListItems;
 import de.sgart.collaboration.application.query.ListMyHouseholds;
+import de.sgart.collaboration.application.query.GetActiveInviteCode;
 import de.sgart.collaboration.application.query.ListOpenLists;
-import de.sgart.collaboration.application.query.ListPendingInvites;
 import de.sgart.collaboration.application.query.ListStores;
 import de.sgart.collaboration.application.query.TripView;
 import de.sgart.collaboration.application.command.RenameHouseholdHandler;
@@ -56,11 +54,8 @@ import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.RetractMembership;
 import de.sgart.shared.EventStore;
 import java.time.Clock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 
 /**
  * Wires the Collaboration context's application layer — the command handlers and queries for
@@ -79,8 +74,8 @@ public class CollaborationApplicationConfig {
 
     @Bean
     CreateHouseholdHandler createHouseholdHandler(
-            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate) {
-        return new CreateHouseholdHandler(eventStore, issueMemberIdentity, consentGate);
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate, Clock clock) {
+        return new CreateHouseholdHandler(eventStore, issueMemberIdentity, consentGate, clock);
     }
 
     @Bean
@@ -225,30 +220,17 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    InviteLinkFactory inviteLinkFactory(@Value("${sgart.invite.base-url}") String baseUrl) {
-        return new InviteLinkFactory(baseUrl);
-    }
-
-    @Bean
-    InvitePersonHandler invitePersonHandler(
-            EventStore eventStore,
+    GetActiveInviteCode getActiveInviteCode(
             ResolveMemberIdentity resolveMemberIdentity,
-            InviteLinkFactory inviteLinkFactory,
-            Clock clock,
-            Environment environment) {
-        return new InvitePersonHandler(
-                eventStore, resolveMemberIdentity, inviteLinkFactory, clock, environment.acceptsProfiles(Profiles.of("dev")));
-    }
-
-    @Bean
-    ListPendingInvites listPendingInvites(ResolveMemberIdentity resolveMemberIdentity, InviteReadModel inviteReadModel) {
-        return new ListPendingInvites(resolveMemberIdentity, inviteReadModel);
+            InviteReadModel inviteReadModel,
+            HouseholdMemberReadModel householdMemberReadModel) {
+        return new GetActiveInviteCode(resolveMemberIdentity, inviteReadModel, householdMemberReadModel);
     }
 
     @Bean
     AcceptInviteHandler acceptInviteHandler(
-            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, Clock clock, ConsentGate consentGate) {
-        return new AcceptInviteHandler(eventStore, issueMemberIdentity, clock, consentGate);
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate) {
+        return new AcceptInviteHandler(eventStore, issueMemberIdentity, consentGate);
     }
 
     @Bean
@@ -280,8 +262,9 @@ public class CollaborationApplicationConfig {
     }
 
     @Bean
-    RevokeInviteHandler revokeInviteHandler(EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity) {
-        return new RevokeInviteHandler(eventStore, resolveMemberIdentity);
+    ReplaceInviteCodeHandler replaceInviteCodeHandler(
+            EventStore eventStore, ResolveMemberIdentity resolveMemberIdentity, Clock clock) {
+        return new ReplaceInviteCodeHandler(eventStore, resolveMemberIdentity, clock);
     }
 
     @Bean

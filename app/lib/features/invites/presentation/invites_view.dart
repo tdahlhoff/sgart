@@ -9,16 +9,16 @@ import '../../../shared/http/invite_link_config.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/invite_link.dart';
-import '../data/pending_invite.dart';
 import 'invites_cubit.dart';
 import 'invites_state.dart';
 
-/// The reusable invite body (Story 7.5, AC1, AC6): a create-invite action that, on success, shows
-/// the freshly created invite's **join code** and **link** — each shareable via the OS share sheet
-/// (`share_plus`) and copyable — plus the minimal pending-invites list (date + inviter + status —
-/// **no email**, privacy-first, AD-6). Reads its [InvitesCubit] from the enclosing provider, so any
-/// host that provides one can embed it — the onboarding wizard's invite step and the
-/// manage-household hub's invite page both mount this same view (mirrors `StoresManagementView`).
+/// The reusable invite body (Story 8.4): shows the household's single active invite **code** and
+/// **link** — each shareable via the OS share sheet (`share_plus`) and copyable — and, for an
+/// Admin, a „Code ersetzen" action that invalidates the old code and issues a fresh one (behind a
+/// confirmation dialog). No create button, no list of codes (F7). Reads its [InvitesCubit] from
+/// the enclosing provider, so any host that provides one can embed it — the household switcher's
+/// promoted „Mitglieder einladen" row and the manage-household hub's „Einladen" row both open the
+/// same screen (mirrors `StoresManagementView`).
 class InvitesView extends StatelessWidget {
   const InvitesView({super.key});
 
@@ -46,90 +46,77 @@ class _ReadyBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final lastCreatedInviteId = state.lastCreatedInviteId;
+    final code = InviteLink.codeFor(householdId: householdId, inviteId: state.inviteId);
+    final link =
+        InviteLink.linkFor(baseUrl: InviteLinkConfig.baseUrl, householdId: householdId, inviteId: state.inviteId);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(SgartShapes.cardPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SgartButton(
-            key: const Key('invite-create-button'),
-            label: localizations.invitesCreateButtonLabel,
-            onPressed: state.isSubmitting ? null : () => context.read<InvitesCubit>().createInvite(),
-          ),
           if (state.actionError != null) ...[
-            const SizedBox(height: SgartShapes.space2),
             Text(
               localizedMessageForErrorCode(localizations, state.actionError!.code),
               key: const Key('invite-action-error'),
             ),
-          ],
-          if (lastCreatedInviteId != null) ...[
             const SizedBox(height: SgartShapes.space4),
-            _CreatedInviteCard(householdId: householdId, inviteId: lastCreatedInviteId),
           ],
-          const Divider(height: SgartShapes.space4),
-          Text(localizations.invitesPendingHeading, style: Theme.of(context).textTheme.titleSmall),
+          _ShareableRow(
+            key: const Key('invite-code-row'),
+            label: localizations.invitesCodeLabel,
+            value: code,
+            shareLabel: localizations.invitesShareCodeButtonLabel,
+            copyKey: const Key('invite-code-copy-button'),
+            shareKey: const Key('invite-code-share-button'),
+            copiedMessage: localizations.invitesCopiedSnackBar,
+          ),
           const SizedBox(height: SgartShapes.space2),
-          if (state.invites.isEmpty)
-            Text(localizations.invitesPendingEmptyStateLabel, key: const Key('invites-pending-empty-state'))
-          else
-            for (final invite in state.invites) _PendingInviteRow(invite: invite),
+          _ShareableRow(
+            key: const Key('invite-link-row'),
+            label: localizations.invitesLinkLabel,
+            value: link,
+            shareLabel: localizations.invitesShareLinkButtonLabel,
+            copyKey: const Key('invite-link-copy-button'),
+            shareKey: const Key('invite-link-share-button'),
+            copiedMessage: localizations.invitesCopiedSnackBar,
+          ),
+          if (state.canReplace) ...[
+            const SizedBox(height: SgartShapes.space4),
+            SgartButton(
+              key: const Key('invite-replace-button'),
+              label: localizations.invitesReplaceCodeButtonLabel,
+              variant: SgartButtonVariant.secondary,
+              onPressed: state.isSubmitting ? null : () => _confirmAndReplace(context),
+            ),
+          ],
         ],
       ),
     );
   }
-}
 
-/// The freshly created invite's two shareable representations (Story 7.5, AC1, D-A): the **join
-/// code** (`householdId:inviteId`, [InviteLink.codeFor]) and the **link**
-/// (`<base-url>?h=<householdId>&i=<inviteId>`, [InviteLink.linkFor]) — the same shapes the backend
-/// and [InviteLink.tryParse] already agree on. Each has its own share and copy action.
-class _CreatedInviteCard extends StatelessWidget {
-  const _CreatedInviteCard({required this.householdId, required this.inviteId});
-
-  final String householdId;
-  final String inviteId;
-
-  @override
-  Widget build(BuildContext context) {
+  Future<void> _confirmAndReplace(BuildContext context) async {
     final localizations = AppLocalizations.of(context);
-    final code = InviteLink.codeFor(householdId: householdId, inviteId: inviteId);
-    final link = InviteLink.linkFor(baseUrl: InviteLinkConfig.baseUrl, householdId: householdId, inviteId: inviteId);
-
-    return Card(
-      key: const Key('invite-created-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(SgartShapes.cardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(localizations.invitesCreatedHeading, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: SgartShapes.space2),
-            _ShareableRow(
-              key: const Key('invite-code-row'),
-              label: localizations.invitesCodeLabel,
-              value: code,
-              shareLabel: localizations.invitesShareCodeButtonLabel,
-              copyKey: const Key('invite-code-copy-button'),
-              shareKey: const Key('invite-code-share-button'),
-              copiedMessage: localizations.invitesCopiedSnackBar,
-            ),
-            const SizedBox(height: SgartShapes.space2),
-            _ShareableRow(
-              key: const Key('invite-link-row'),
-              label: localizations.invitesLinkLabel,
-              value: link,
-              shareLabel: localizations.invitesShareLinkButtonLabel,
-              copyKey: const Key('invite-link-copy-button'),
-              shareKey: const Key('invite-link-share-button'),
-              copiedMessage: localizations.invitesCopiedSnackBar,
-            ),
-          ],
-        ),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(localizations.invitesReplaceCodeConfirmTitle),
+        content: Text(localizations.invitesReplaceCodeConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(localizations.membersCancelButtonLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(localizations.membersConfirmButtonLabel),
+          ),
+        ],
       ),
     );
+    if (confirmed == true && context.mounted) {
+      await context.read<InvitesCubit>().replaceCode();
+    }
   }
 }
 
@@ -191,37 +178,6 @@ class _ShareableRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _PendingInviteRow extends StatelessWidget {
-  const _PendingInviteRow({required this.invite});
-
-  final PendingInvite invite;
-
-  @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-
-    return ListTile(
-      key: Key('invite-row-${invite.inviteId}'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.mail_outline),
-      // No email shown — the read model carries none (AD-6, privacy-first).
-      title: Text(localizations.invitesPendingRowLabel(invite.invitedAt)),
-      subtitle: Text(_localizedInviteStatus(localizations, invite.status)),
-    );
-  }
-}
-
-/// Maps the read model's raw status ("PENDING"/"EXPIRED") to German copy — the backend enum name
-/// must never leak into an otherwise-German UI. Falls back to the raw value for any status this
-/// catalog does not (yet) recognise, mirroring [localizedMessageForErrorCode]'s fallback shape.
-String _localizedInviteStatus(AppLocalizations localizations, String status) {
-  return switch (status) {
-    'PENDING' => localizations.invitesStatusPending,
-    'EXPIRED' => localizations.invitesStatusExpired,
-    _ => status,
-  };
 }
 
 class _FailureBody extends StatelessWidget {

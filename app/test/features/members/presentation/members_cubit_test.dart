@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sgart/features/invites/data/pending_invite.dart';
 import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/presentation/members_cubit.dart';
 import 'package:sgart/features/members/presentation/members_state.dart';
@@ -7,43 +6,35 @@ import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
 import '../../../support/fake_households_dependencies.dart';
-import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/fake_members_dependencies.dart';
 
 void main() {
   group('MembersCubit', () {
     late FakeMembersApi membersApi;
     late FakeHouseholdsApi householdsApi;
-    late FakeInvitesApi invitesApi;
 
     setUp(() {
       membersApi = FakeMembersApi();
       householdsApi = FakeHouseholdsApi();
-      invitesApi = FakeInvitesApi();
     });
 
     MembersCubit buildCubit() => MembersCubit(
           membersApi: membersApi,
           householdsApi: householdsApi,
-          invitesApi: invitesApi,
           householdId: 'household-1',
         );
 
     const admin = MemberView(memberId: 'member-admin', role: 'ADMIN', isSelf: true);
     const participant = MemberView(memberId: 'member-participant', role: 'PARTICIPANT', isSelf: false);
 
-    test('bootstrap_loadsMembersAndPendingInvites', () async {
+    test('bootstrap_loadsMembers', () async {
       membersApi.membersToReturn = const [admin, participant];
-      invitesApi.pendingInvitesToReturn = const [
-        PendingInvite(inviteId: 'invite-1', invitedAt: '2026-09-06T10:00:00Z', invitedBy: 'member-admin', status: 'PENDING'),
-      ];
       final cubit = buildCubit();
 
       await cubit.bootstrap();
 
       expect(cubit.state.status, MembersStatus.ready);
       expect(cubit.state.members, hasLength(2));
-      expect(cubit.state.pendingInvites, hasLength(1));
       await cubit.close();
     });
 
@@ -156,21 +147,6 @@ void main() {
       expect(householdsApi.deleteCallCount, 1);
       expect(householdsApi.lastDeletedHouseholdId, 'household-1');
       expect(cubit.state.exited, isTrue);
-      await cubit.close();
-    });
-
-    test('revokeInvite_onSuccessDropsTheInviteFromThePendingList', () async {
-      membersApi.membersToReturn = const [admin];
-      invitesApi.pendingInvitesToReturn = const [
-        PendingInvite(inviteId: 'invite-1', invitedAt: '2026-09-06T10:00:00Z', invitedBy: 'member-admin', status: 'PENDING'),
-      ];
-      final cubit = buildCubit();
-      await cubit.bootstrap();
-
-      await cubit.revokeInvite('invite-1');
-
-      expect(invitesApi.lastRevokedInviteId, 'invite-1');
-      expect(cubit.state.pendingInvites, isEmpty);
       await cubit.close();
     });
 

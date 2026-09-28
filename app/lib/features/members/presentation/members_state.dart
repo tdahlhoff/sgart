@@ -1,23 +1,20 @@
 import 'package:collection/collection.dart';
 
 import '../../../shared/errors/app_error.dart';
-import '../../invites/data/pending_invite.dart';
 import '../data/member_view.dart';
 
 enum MembersStatus { loading, ready, failure }
 
 /// State of [MembersCubit] (Story 4.3, AC9). [loading]/[failure] cover the initial roster load;
-/// once [ready] it carries the current `members` + `pendingInvites` (for the Admin's per-invite
-/// revoke action), the `isSubmitting` flag for an in-flight governance action, `actionError` for a
-/// rejection shown inline (kept separate from `loadError` so a rejected action never tears down the
-/// screen), and `exited` — set once a successful **leave / self-removal / delete** fires, the signal
-/// the screen uses to `HouseholdsCubit.bootstrap()` and re-route (consumed once, then cleared).
-/// Mirrors `InvitesState`.
+/// once [ready] it carries the current `members`, the `isSubmitting` flag for an in-flight
+/// governance action, `actionError` for a rejection shown inline (kept separate from `loadError` so
+/// a rejected action never tears down the screen), and `exited` — set once a successful **leave /
+/// self-removal / delete** fires, the signal the screen uses to `HouseholdsCubit.bootstrap()` and
+/// re-route (consumed once, then cleared). Mirrors `InvitesState`.
 class MembersState {
   const MembersState._(
     this.status, {
     this.members = const [],
-    this.pendingInvites = const [],
     this.isSubmitting = false,
     this.loadError,
     this.actionError,
@@ -30,14 +27,12 @@ class MembersState {
 
   const MembersState.ready({
     required List<MemberView> members,
-    List<PendingInvite> pendingInvites = const [],
     bool isSubmitting = false,
     AppError? actionError,
     bool exited = false,
   }) : this._(
           MembersStatus.ready,
           members: members,
-          pendingInvites: pendingInvites,
           isSubmitting: isSubmitting,
           actionError: actionError,
           exited: exited,
@@ -45,7 +40,6 @@ class MembersState {
 
   final MembersStatus status;
   final List<MemberView> members;
-  final List<PendingInvite> pendingInvites;
   final bool isSubmitting;
   final AppError? loadError;
   final AppError? actionError;
@@ -55,7 +49,6 @@ class MembersState {
 
   MembersState copyWith({
     List<MemberView>? members,
-    List<PendingInvite>? pendingInvites,
     bool? isSubmitting,
     AppError? actionError,
     bool clearActionError = false,
@@ -63,7 +56,6 @@ class MembersState {
   }) {
     return MembersState.ready(
       members: members ?? this.members,
-      pendingInvites: pendingInvites ?? this.pendingInvites,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       actionError: clearActionError ? null : (actionError ?? this.actionError),
       exited: exited ?? this.exited,
@@ -75,7 +67,6 @@ class MembersState {
       other is MembersState &&
       other.status == status &&
       const ListEquality<MemberView>().equals(other.members, members) &&
-      const ListEquality<PendingInvite>().equals(other.pendingInvites, pendingInvites) &&
       other.isSubmitting == isSubmitting &&
       other.loadError == loadError &&
       other.actionError == actionError &&
@@ -85,7 +76,6 @@ class MembersState {
   int get hashCode => Object.hash(
         status,
         const ListEquality<MemberView>().hash(members),
-        const ListEquality<PendingInvite>().hash(pendingInvites),
         isSubmitting,
         loadError,
         actionError,

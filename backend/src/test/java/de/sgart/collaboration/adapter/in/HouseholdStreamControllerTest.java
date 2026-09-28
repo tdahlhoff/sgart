@@ -15,6 +15,8 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.EventId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
@@ -73,7 +75,7 @@ class HouseholdStreamControllerTest {
     private HouseholdId seedHouseholdWithAdmin(MemberId adminMemberId) {
         HouseholdId householdId = HouseholdId.generate();
         Household household = Household.create(
-                householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),
@@ -110,7 +112,7 @@ class HouseholdStreamControllerTest {
         HouseholdId householdId = seedHouseholdWithAdmin(adminMemberId);
         mappingRepository.save(new MemberMapping(householdId, removedMemberId, new KeycloakUserId("removed-sub")));
         eventStore.append(
-                AggregateVersion.of(StreamId.forHousehold(householdId), 2),
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
                 java.util.List.of(new MemberRemoved(EventId.generate(), householdId, removedMemberId, adminMemberId)),
                 CommandId.generate());
         // The de-link is a separate Identity ACL write in the real handler (Story 4.3,

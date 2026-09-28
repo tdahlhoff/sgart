@@ -177,11 +177,10 @@
     if (response.status === 200) {
       showStatus("success", "Willkommen! Sie sind dem Haushalt als Mitglied beigetreten.");
     } else if (response.status === 404) {
-      showStatus("error", "Diese Einladung wurde nicht gefunden.");
-    } else if (response.status === 409) {
-      showStatus("error", "Diese Einladung wurde bereits verwendet.");
-    } else if (response.status === 410) {
-      showStatus("error", "Diese Einladung ist abgelaufen.");
+      // The household's invite code is a single reusable one, replaceable by any Admin (Story 8.4):
+      // a 404 here always means this link's code is either unknown or was replaced by a newer one —
+      // there is no separate "expired" or "already used" outcome any more.
+      showStatus("error", "Dieser Einladungscode ist ungültig oder wurde ersetzt.");
     } else {
       showStatus("error", "Der Einladungslink ist ungültig.");
     }

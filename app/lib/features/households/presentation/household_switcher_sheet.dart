@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
+import '../../invites/presentation/invite_page.dart' show buildInvitePageRoute;
 import '../data/household_summary.dart';
 import '../data/households_api.dart';
 import 'create_household_page.dart';
@@ -44,6 +45,12 @@ class HouseholdSwitcherSheet extends StatelessWidget {
               leading: const Icon(Icons.settings_outlined),
               title: Text(localizations.householdsManageButtonLabel),
               onTap: () => _openManage(context),
+            ),
+            ListTile(
+              key: const Key('switcher-invite-button'),
+              leading: const Icon(Icons.person_add_outlined),
+              title: Text(localizations.householdsSwitcherInviteButtonLabel),
+              onTap: () => _openInvite(context),
             ),
             ListTile(
               key: const Key('switcher-rename-button'),
@@ -100,6 +107,17 @@ class HouseholdSwitcherSheet extends StatelessWidget {
     final manageHouseholdRoute = buildManageHouseholdPageRoute(context, activeHousehold);
     navigator.pop();
     navigator.push(manageHouseholdRoute);
+  }
+
+  void _openInvite(BuildContext context) {
+    // Read-pop-push, mirroring `_openManage`: `buildInvitePageRoute` needs the sheet's still-mounted
+    // context to read `InvitesApi`, so that read must happen before the pop; the push itself must
+    // happen after the pop (via the captured navigator) or it would land underneath the sheet route
+    // being popped instead of on top of it (Story 8.4, F6 — promoted discoverability).
+    final navigator = Navigator.of(context);
+    final invitePageRoute = buildInvitePageRoute(context, activeHousehold.householdId);
+    navigator.pop();
+    navigator.push(invitePageRoute);
   }
 
   void _openRename(BuildContext context) {

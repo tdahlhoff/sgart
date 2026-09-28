@@ -223,7 +223,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const Key('invite-create-button')), findsOneWidget);
+      expect(find.byKey(const Key('invite-code-row')), findsOneWidget);
     });
 
     testWidgets('theMembersRowOpensWithoutThrowingAfterReachingTheHubFromTheTopBarSelector', (tester) async {

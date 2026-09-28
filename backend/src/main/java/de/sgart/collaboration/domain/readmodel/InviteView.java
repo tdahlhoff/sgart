@@ -1,12 +1,10 @@
 package de.sgart.collaboration.domain.readmodel;
 
 import de.sgart.shared.InviteId;
-import de.sgart.shared.MemberId;
-import java.time.Instant;
 
 /**
- * A pending invite as held in the read model (AD-4, Story 4.1, AC6/AC7) — id, when, who invited,
- * and status. Deliberately carries <strong>no email</strong> (AD-6): the pending-invites list shown
- * to household members is privacy-first by construction, not by convention.
+ * The household's single active invite code as held in the read model (AD-4, Story 8.4) — just the
+ * id; no email, no status, no TTL (a reusable bearer capability with no lifecycle beyond "active"
+ * or "replaced").
  */
-public record InviteView(InviteId inviteId, Instant invitedAt, MemberId invitedBy, String status) {}
+public record InviteView(InviteId inviteId) {}

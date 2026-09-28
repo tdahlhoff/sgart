@@ -11,9 +11,6 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
-import de.sgart.collaboration.domain.event.InviteAccepted;
-import de.sgart.collaboration.domain.event.InviteExpired;
-import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -38,9 +35,7 @@ import de.sgart.shared.StoreChainId;
 import de.sgart.shared.StoreId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.List;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -77,7 +72,6 @@ class HouseholdReadModelProjectorTest {
     private JdbcInviteReadModel inviteReadModel;
     private JdbcHouseholdMemberReadModel memberReadModel;
     private JdbcMemberMappingRepository mappingRepository;
-    private MutableClock clock;
 
     @BeforeAll
     static void migrateDatabase() {
@@ -93,14 +87,13 @@ class HouseholdReadModelProjectorTest {
     void setUp() {
         JdbcClient jdbcClient = JdbcClient.create(dataSource);
         jdbcClient
-                .sql("TRUNCATE TABLE household_read_model, store_read_model, invite_read_model, "
+                .sql("TRUNCATE TABLE household_read_model, store_read_model, household_invite_code, "
                         + "household_member_read_model")
                 .update();
         jdbcClient.sql("TRUNCATE TABLE identity_member_mapping").update();
         readModel = new JdbcHouseholdReadModel(jdbcClient);
         storeReadModel = new JdbcStoreReadModel(jdbcClient);
-        clock = new MutableClock(Instant.now());
-        inviteReadModel = new JdbcInviteReadModel(jdbcClient, clock);
+        inviteReadModel = new JdbcInviteReadModel(jdbcClient);
         memberReadModel = new JdbcHouseholdMemberReadModel(jdbcClient);
         mappingRepository = new JdbcMemberMappingRepository(jdbcClient);
         // Never connected: project(...) never touches the KurrentDB client (only start() does).
@@ -114,7 +107,12 @@ class HouseholdReadModelProjectorTest {
     void projectingHouseholdCreatedAndMemberJoinedYieldsTheReadModelRows() {
         MemberId adminMemberId = MemberId.generate();
         Household household = Household.create(
-                HouseholdId.generate(), new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                HouseholdId.generate(),
+                new HouseholdName("Familie Muster"),
+                adminMemberId,
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         household.uncommittedEvents().forEach(projector::project);
 
         assertThat(readModel.namesFor(List.of(household.householdId())))
@@ -128,7 +126,12 @@ class HouseholdReadModelProjectorTest {
     void projectingHouseholdRenamedUpdatesTheReadModelToTheNewName() {
         HouseholdId householdId = HouseholdId.generate();
         Household household = Household.create(
-                householdId, new HouseholdName("Familie Muster"), MemberId.generate(), CommandId.generate());
+                householdId,
+                new HouseholdName("Familie Muster"),
+                MemberId.generate(),
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         household.uncommittedEvents().forEach(projector::project);
 
         projector.project(new HouseholdRenamed(EventId.generate(), householdId, new HouseholdName("Familie Beispiel")));
@@ -174,37 +177,35 @@ class HouseholdReadModelProjectorTest {
     }
 
     @Test
-    void projectingMemberInvitedYieldsAPendingInviteRow() {
+    void projectingMemberInvitedYieldsTheActiveInviteCode() {
         HouseholdId householdId = HouseholdId.generate();
         InviteId inviteId = InviteId.generate();
         MemberId invitedBy = MemberId.generate();
-        // PostgreSQL TIMESTAMPTZ has microsecond precision; truncate so the round-tripped value
-        // compares equal rather than losing sub-microsecond nanos.
-        Instant invitedAt = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
 
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, invitedBy,
-                HouseholdRole.PARTICIPANT, invitedAt));
+                EventId.generate(), householdId, inviteId, invitedBy, HouseholdRole.PARTICIPANT, Instant.now()));
 
-        assertThat(inviteReadModel.pendingInvitesOf(householdId))
-                .containsExactly(new InviteView(inviteId, invitedAt, invitedBy, "PENDING"));
+        assertThat(inviteReadModel.activeInviteOf(householdId)).contains(new InviteView(inviteId));
     }
 
     @Test
-    void projectingInviteExpiredRemovesTheInviteFromThePendingList() {
+    void reProjectingMemberInvitedOverwritesTheActiveInviteCode() {
         HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
+        InviteId firstInviteId = InviteId.generate();
+        InviteId secondInviteId = InviteId.generate();
         projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
+                EventId.generate(), householdId, firstInviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
-        projector.project(new InviteExpired(EventId.generate(), householdId, inviteId));
+        projector.project(new MemberInvited(
+                EventId.generate(), householdId, secondInviteId, MemberId.generate(),
+                HouseholdRole.PARTICIPANT, Instant.now()));
 
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
+        assertThat(inviteReadModel.activeInviteOf(householdId)).contains(new InviteView(secondInviteId));
     }
 
     @Test
-    void twoHouseholdsPendingInvitesAreIsolatedFromEachOther() {
+    void twoHouseholdsActiveInviteCodesAreIsolatedFromEachOther() {
         HouseholdId firstHousehold = HouseholdId.generate();
         HouseholdId secondHousehold = HouseholdId.generate();
         InviteId firstInvite = InviteId.generate();
@@ -216,111 +217,22 @@ class HouseholdReadModelProjectorTest {
                 EventId.generate(), secondHousehold, secondInvite, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now()));
 
-        assertThat(inviteReadModel.pendingInvitesOf(firstHousehold))
-                .extracting(InviteView::inviteId)
-                .containsExactly(firstInvite);
-        assertThat(inviteReadModel.pendingInvitesOf(secondHousehold))
-                .extracting(InviteView::inviteId)
-                .containsExactly(secondInvite);
+        assertThat(inviteReadModel.activeInviteOf(firstHousehold)).contains(new InviteView(firstInvite));
+        assertThat(inviteReadModel.activeInviteOf(secondHousehold)).contains(new InviteView(secondInvite));
     }
 
     @Test
-    void reProjectingMemberInvitedThenInviteExpiredIsIdempotent() {
+    void reProjectingTheSameMemberInvitedIsIdempotent() {
         HouseholdId householdId = HouseholdId.generate();
         InviteId inviteId = InviteId.generate();
         MemberInvited invited = new MemberInvited(
                 EventId.generate(), householdId, inviteId, MemberId.generate(),
                 HouseholdRole.PARTICIPANT, Instant.now());
-        InviteExpired expired = new InviteExpired(EventId.generate(), householdId, inviteId);
 
         projector.project(invited);
         projector.project(invited);
-        projector.project(expired);
-        projector.project(expired);
 
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
-    }
-
-    @Test
-    void pendingInvitesOf_derivesExpiryFromInvitedAtPlusTimeToLiveWithNoExplicitInviteExpiredEvent() {
-        HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
-        Instant invitedAt = clock.instant();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, invitedAt));
-
-        clock.advanceBy(de.sgart.collaboration.domain.Invite.TIME_TO_LIVE.plusSeconds(1));
-
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
-    }
-
-    @Test
-    void projectingInviteAcceptedFlipsTheInviteToAcceptedSoItDropsFromThePendingList() {
-        HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
-        MemberId joiner = MemberId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-
-        projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
-
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
-    }
-
-    @Test
-    void projectingMemberJoinedFromAnAcceptedInviteAddsTheJoinerAsAHouseholdMember() {
-        HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
-        MemberId joiner = MemberId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-
-        projector.project(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
-        projector.project(new MemberJoined(EventId.generate(), householdId, joiner, HouseholdRole.PARTICIPANT));
-
-        assertThat(memberReadModel.membersOf(householdId))
-                .extracting(de.sgart.collaboration.domain.readmodel.MemberRoleView::memberId)
-                .contains(joiner);
-    }
-
-    @Test
-    void twoHouseholdsInviteAcceptedIsolatedFromEachOther() {
-        HouseholdId firstHousehold = HouseholdId.generate();
-        HouseholdId secondHousehold = HouseholdId.generate();
-        InviteId firstInvite = InviteId.generate();
-        InviteId secondInvite = InviteId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), firstHousehold, firstInvite, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-        projector.project(new MemberInvited(
-                EventId.generate(), secondHousehold, secondInvite, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-
-        projector.project(new InviteAccepted(EventId.generate(), firstHousehold, firstInvite, MemberId.generate()));
-
-        assertThat(inviteReadModel.pendingInvitesOf(firstHousehold)).isEmpty();
-        assertThat(inviteReadModel.pendingInvitesOf(secondHousehold))
-                .extracting(InviteView::inviteId)
-                .containsExactly(secondInvite);
-    }
-
-    @Test
-    void reProjectingInviteAcceptedIsIdempotent() {
-        HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
-        MemberId joiner = MemberId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-        InviteAccepted accepted = new InviteAccepted(EventId.generate(), householdId, inviteId, joiner);
-
-        projector.project(accepted);
-        projector.project(accepted);
-
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
+        assertThat(inviteReadModel.activeInviteOf(householdId)).contains(new InviteView(inviteId));
     }
 
     @Test
@@ -336,9 +248,19 @@ class HouseholdReadModelProjectorTest {
         String rawKeycloakUserId = "anna-sub";
         KeycloakUserId keycloakUserId = new KeycloakUserId(rawKeycloakUserId);
         Household first = Household.create(
-                HouseholdId.generate(), new HouseholdName("Familie Muster"), MemberId.generate(), CommandId.generate());
+                HouseholdId.generate(),
+                new HouseholdName("Familie Muster"),
+                MemberId.generate(),
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         Household second = Household.create(
-                HouseholdId.generate(), new HouseholdName("WG Sonnenallee"), MemberId.generate(), CommandId.generate());
+                HouseholdId.generate(),
+                new HouseholdName("WG Sonnenallee"),
+                MemberId.generate(),
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         first.uncommittedEvents().forEach(projector::project);
         second.uncommittedEvents().forEach(projector::project);
         mappingRepository.save(new MemberMapping(first.householdId(), MemberId.generate(), keycloakUserId));
@@ -446,42 +368,35 @@ class HouseholdReadModelProjectorTest {
     }
 
     @Test
-    void projectingInviteRevokedRemovesTheInviteFromThePendingList() {
-        HouseholdId householdId = HouseholdId.generate();
-        InviteId inviteId = InviteId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdId, inviteId, MemberId.generate(),
-                HouseholdRole.PARTICIPANT, Instant.now()));
-
-        projector.project(new InviteRevoked(EventId.generate(), householdId, inviteId, MemberId.generate()));
-
-        assertThat(inviteReadModel.pendingInvitesOf(householdId)).isEmpty();
-    }
-
-    @Test
     void projectingHouseholdDeletedPurgesEveryHouseholdKeyedRowInThisProjectorAndLeavesAnotherHouseholdUntouched() {
         HouseholdId householdToDelete = HouseholdId.generate();
         HouseholdId otherHousehold = HouseholdId.generate();
         MemberId adminMemberId = MemberId.generate();
         MemberId otherAdminMemberId = MemberId.generate();
         Household household = Household.create(
-                householdToDelete, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                householdToDelete,
+                new HouseholdName("Familie Muster"),
+                adminMemberId,
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         household.uncommittedEvents().forEach(projector::project);
         Household otherHouseholdAggregate = Household.create(
-                otherHousehold, new HouseholdName("WG Sonnenallee"), otherAdminMemberId, CommandId.generate());
+                otherHousehold,
+                new HouseholdName("WG Sonnenallee"),
+                otherAdminMemberId,
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         otherHouseholdAggregate.uncommittedEvents().forEach(projector::project);
         StoreId storeId = StoreId.generate();
         projector.project(new StoreAdded(EventId.generate(), householdToDelete, storeId, new StoreName("Edeka"), null));
-        InviteId inviteId = InviteId.generate();
-        projector.project(new MemberInvited(
-                EventId.generate(), householdToDelete, inviteId, adminMemberId,
-                HouseholdRole.PARTICIPANT, Instant.now()));
 
         projector.project(new HouseholdDeleted(EventId.generate(), householdToDelete, adminMemberId));
 
         assertThat(readModel.namesFor(List.of(householdToDelete))).isEmpty();
         assertThat(storeReadModel.activeStoresOf(householdToDelete)).isEmpty();
-        assertThat(inviteReadModel.pendingInvitesOf(householdToDelete)).isEmpty();
+        assertThat(inviteReadModel.activeInviteOf(householdToDelete)).isEmpty();
         assertThat(memberReadModel.membersOf(householdToDelete)).isEmpty();
         assertThat(readModel.namesFor(List.of(otherHousehold)))
                 .containsEntry(otherHousehold, otherHouseholdAggregate.name());
@@ -493,7 +408,12 @@ class HouseholdReadModelProjectorTest {
     void reProjectingHouseholdDeletedIsANoOp() {
         HouseholdId householdId = HouseholdId.generate();
         Household household = Household.create(
-                householdId, new HouseholdName("Familie Muster"), MemberId.generate(), CommandId.generate());
+                householdId,
+                new HouseholdName("Familie Muster"),
+                MemberId.generate(),
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         household.uncommittedEvents().forEach(projector::project);
         HouseholdDeleted deleted = new HouseholdDeleted(EventId.generate(), householdId, MemberId.generate());
 
@@ -502,35 +422,5 @@ class HouseholdReadModelProjectorTest {
 
         assertThat(readModel.namesFor(List.of(householdId))).isEmpty();
         assertThat(memberReadModel.membersOf(householdId)).isEmpty();
-    }
-
-    /** A settable {@link Clock} for asserting {@link JdbcInviteReadModel}'s query-time derived
-     * expiry (AC6) without waiting real time or faking a stored {@code invited_at}. */
-    private static final class MutableClock extends Clock {
-
-        private Instant instant;
-
-        MutableClock(Instant instant) {
-            this.instant = instant;
-        }
-
-        void advanceBy(java.time.Duration duration) {
-            instant = instant.plus(duration);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneId.of("UTC");
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Instant instant() {
-            return instant;
-        }
     }
 }

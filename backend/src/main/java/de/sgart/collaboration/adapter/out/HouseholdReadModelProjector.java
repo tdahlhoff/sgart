@@ -5,9 +5,6 @@ import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
-import de.sgart.collaboration.domain.event.InviteAccepted;
-import de.sgart.collaboration.domain.event.InviteExpired;
-import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
 import de.sgart.collaboration.domain.event.MemberJoined;
@@ -105,11 +102,8 @@ public final class HouseholdReadModelProjector implements SmartLifecycle {
             case StoreAdded added ->
                 storeReadModel.upsertStore(added.householdId(), added.storeId(), added.name(), added.chainId());
             case StoreArchived archived -> storeReadModel.markArchived(archived.householdId(), archived.storeId());
-            case MemberInvited invited -> inviteReadModel.upsertInvite(
-                    invited.householdId(), invited.inviteId(), invited.invitedBy(), invited.invitedAt());
-            case InviteExpired expired -> inviteReadModel.markExpired(expired.householdId(), expired.inviteId());
-            case InviteAccepted accepted -> inviteReadModel.markAccepted(accepted.householdId(), accepted.inviteId());
-            case InviteRevoked revoked -> inviteReadModel.markRevoked(revoked.householdId(), revoked.inviteId());
+            case MemberInvited invited ->
+                inviteReadModel.upsertActiveInvite(invited.householdId(), invited.inviteId(), invited.invitedAt());
             case MemberPromoted promoted ->
                 memberReadModel.upsert(promoted.householdId(), promoted.memberId(), HouseholdRole.ADMIN);
             case MemberDemoted demoted ->

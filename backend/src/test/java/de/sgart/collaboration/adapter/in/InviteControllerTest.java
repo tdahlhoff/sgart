@@ -1,7 +1,6 @@
 package de.sgart.collaboration.adapter.in;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,8 +10,10 @@ import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.HouseholdRole;
 import de.sgart.collaboration.domain.event.MemberJoined;
+import de.sgart.collaboration.domain.readmodel.HouseholdMemberReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteReadModel;
 import de.sgart.collaboration.domain.readmodel.InviteView;
+import de.sgart.collaboration.domain.readmodel.MemberRoleView;
 import de.sgart.identity.adapter.out.InMemoryAccountConsentRepository;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.domain.AccountConsentRepository;
@@ -43,11 +44,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * MockMvc slice over the real {@code InviteController}/handler/{@code ListPendingInvites} wiring,
+ * MockMvc slice over the real {@code InviteController}/handler/{@code GetActiveInviteCode} wiring,
  * with the durable adapters swapped for in-memory doubles — no live KurrentDB/PostgreSQL. Proves
- * AC1/AC3/AC6 end-to-end through REST: send ({@code 201}, no email in the request), non-member
- * ({@code 403}), list pending invites ({@code 200}), and that no response body ever carries an
- * email field (AD-6).
+ * Story 8.4 end-to-end through REST: the household's one active code is returned to any member
+ * with {@code canReplace} reflecting their role, an Admin may replace it, a Participant may not,
+ * accepting the active code succeeds for any number of callers, and accepting a replaced/unknown
+ * code is rejected 404.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -66,6 +68,9 @@ class InviteControllerTest {
 
     @Autowired
     private InMemoryInviteReadModel inviteReadModel;
+
+    @Autowired
+    private InMemoryHouseholdMemberReadModel householdMemberReadModel;
 
     @Autowired
     private AccountConsentRepository accountConsentRepository;
@@ -96,22 +101,37 @@ class InviteControllerTest {
         InMemoryInviteReadModel testInviteReadModel() {
             return new InMemoryInviteReadModel();
         }
+
+        @Bean
+        @Primary
+        InMemoryHouseholdMemberReadModel testHouseholdMemberReadModel() {
+            return new InMemoryHouseholdMemberReadModel();
+        }
     }
 
-    /** A read model whose pending-invite list a test can preset, so GET never touches PostgreSQL. */
+    /** A read model whose active code a test can preset, so GET never touches PostgreSQL. */
     static final class InMemoryInviteReadModel implements InviteReadModel {
-        List<InviteView> pendingInvites = List.of();
+        java.util.Optional<InviteView> activeInvite = java.util.Optional.empty();
 
         @Override
-        public List<InviteView> pendingInvitesOf(HouseholdId householdId) {
-            return pendingInvites;
+        public java.util.Optional<InviteView> activeInviteOf(HouseholdId householdId) {
+            return activeInvite;
+        }
+    }
+
+    /** A read model whose roster a test can preset, so {@code canReplace} never touches PostgreSQL. */
+    static final class InMemoryHouseholdMemberReadModel implements HouseholdMemberReadModel {
+        List<MemberRoleView> members = List.of();
+
+        @Override
+        public List<MemberRoleView> membersOf(HouseholdId householdId) {
+            return members;
         }
     }
 
     /**
-     * {@code accept_*} tests below exercise {@code AcceptInviteHandler}, which now gates on
-     * recorded consent (Story 7.4, AC3) — pre-record it for the joiners those tests use, so this
-     * file keeps proving AC1/AC3/AC6 unchanged.
+     * {@code accept_*} tests below exercise {@code AcceptInviteHandler}, which gates on recorded
+     * consent (Story 7.4, AC3) — pre-record it for the joiners those tests use.
      * {@link #accept_withoutRecordedConsent_returns409ConsentRequired()} is the one test that
      * deliberately leaves a joiner unconsented.
      */
@@ -127,8 +147,13 @@ class InviteControllerTest {
     private HouseholdId seedHouseholdWithAdmin() {
         HouseholdId householdId = HouseholdId.generate();
         MemberId adminMemberId = MemberId.generate();
-        Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+        Household household = Household.create(
+                householdId,
+                new HouseholdName("Familie Muster"),
+                adminMemberId,
+                InviteId.generate(),
+                Instant.now(),
+                CommandId.generate());
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),
                 household.uncommittedEvents(),
@@ -138,67 +163,94 @@ class InviteControllerTest {
     }
 
     @Test
-    void invite_returns201ForAMember() throws Exception {
+    void activeInviteCode_returns200WithTheCodeAndCanReplaceTrueForAnAdmin() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
+        MemberId adminMemberId = mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow();
+        InviteId inviteId = InviteId.generate();
+        inviteReadModel.activeInvite = java.util.Optional.of(new InviteView(inviteId));
+        householdMemberReadModel.members = List.of(new MemberRoleView(adminMemberId, HouseholdRole.ADMIN));
 
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody(InviteId.generate().toString())))
-                .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/households/{householdId}/invite-code", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inviteId").value(inviteId.toString()))
+                .andExpect(jsonPath("$.canReplace").value(true));
     }
 
     @Test
-    void invite_sameHouseholdTwice_bothReturn201() throws Exception {
+    void activeInviteCode_returnsCanReplaceFalseForAParticipant() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody(InviteId.generate().toString())))
-                .andExpect(status().isCreated());
+        InviteId inviteId = InviteId.generate();
+        MemberId participantMemberId = MemberId.generate();
+        inviteReadModel.activeInvite = java.util.Optional.of(new InviteView(inviteId));
+        householdMemberReadModel.members =
+                List.of(new MemberRoleView(participantMemberId, HouseholdRole.PARTICIPANT));
+        mappingRepository.save(
+                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
 
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody(InviteId.generate().toString())))
-                .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/households/{householdId}/invite-code", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canReplace").value(false));
     }
 
     @Test
-    void invite_rejectsANonMemberWith403() throws Exception {
+    void activeInviteCode_returns404WhileTheProjectionHasNotCaughtUpYet() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        // The read model bean is shared across tests in this context — reset it explicitly rather
+        // than relying on its default, so this test proves the 404 branch regardless of test order.
+        inviteReadModel.activeInvite = java.util.Optional.empty();
+
+        mockMvc.perform(get("/api/v1/households/{householdId}/invite-code", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void activeInviteCode_rejectsANonMemberWith403() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
 
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody(InviteId.generate().toString())))
+        mockMvc.perform(get("/api/v1/households/{householdId}/invite-code", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("identity.notAMember"));
     }
 
     @Test
-    void invite_rejectsAnUnauthenticatedRequest() throws Exception {
+    void replace_byAnAdminReturns200() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
 
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites", householdId.toString())
+        mockMvc.perform(post("/api/v1/households/{householdId}/invite-code/replace", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(inviteRequestBody(InviteId.generate().toString())))
-                .andExpect(status().isUnauthorized());
+                        .content(replaceRequestBody(InviteId.generate().toString())))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void accept_returns200ForAValidInvite() throws Exception {
+    void replace_byAParticipantReturns403WithGovernanceNotPermitted() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        household.invitePerson(
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
-                inviteId,
-                Instant.now(),
+        MemberId participantMemberId = MemberId.generate();
+        eventStore.append(
+                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
+                List.of(new MemberJoined(
+                        EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+        mappingRepository.save(
+                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invite-code/replace", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replaceRequestBody(InviteId.generate().toString())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("governance.notPermitted"));
+    }
+
+    @Test
+    void accept_returns200ForTheActiveCode() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = activeInviteIdOf(householdId);
 
         mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
                         householdId.toString(), inviteId.toString())
@@ -209,18 +261,29 @@ class InviteControllerTest {
     }
 
     @Test
+    void accept_theSameActiveCodeSucceedsForMultipleDifferentJoiners() throws Exception {
+        HouseholdId householdId = seedHouseholdWithAdmin();
+        InviteId inviteId = activeInviteIdOf(householdId);
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("first-joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
+                        householdId.toString(), inviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("second-joiner-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptRequestBody()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void accept_withoutRecordedConsent_returns409ConsentRequired() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        household.invitePerson(
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
-                inviteId,
-                Instant.now(),
-                CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+        InviteId inviteId = activeInviteIdOf(householdId);
 
         mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
                         householdId.toString(), inviteId.toString())
@@ -246,56 +309,29 @@ class InviteControllerTest {
     }
 
     @Test
-    void accept_returns410ForAnExpiredInvite() throws Exception {
+    void accept_returns404ForAReplacedInvite() throws Exception {
         HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        Instant longAgo = Instant.now().minus(java.time.Duration.ofDays(8));
-        household.invitePerson(
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
-                inviteId,
-                longAgo,
-                CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
+        InviteId originalInviteId = activeInviteIdOf(householdId);
 
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
-                        householdId.toString(), inviteId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("joiner-sub")))
+        mockMvc.perform(post("/api/v1/households/{householdId}/invite-code/replace", householdId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(acceptRequestBody()))
-                .andExpect(status().isGone())
-                .andExpect(jsonPath("$.code").value("invite.expired"));
-    }
-
-    @Test
-    void accept_returns409ForAConsumedInviteAcceptedByAnotherCaller() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        household.invitePerson(
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
-                inviteId,
-                Instant.now(),
-                CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
-        mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
-                        householdId.toString(), inviteId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("first-joiner-sub")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(acceptRequestBody()))
+                        .content(replaceRequestBody(InviteId.generate().toString())))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/households/{householdId}/invites/{inviteId}/accept",
-                        householdId.toString(), inviteId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("second-joiner-sub")))
+                        householdId.toString(), originalInviteId.toString())
+                        .with(jwt().jwt(jwt -> jwt.subject("joiner-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(acceptRequestBody()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("invite.alreadyUsed"));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("invite.notFound"));
+    }
+
+    private InviteId activeInviteIdOf(HouseholdId householdId) {
+        Household household = Household.rehydrate(
+                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
+        return household.activeInviteId();
     }
 
     private static String acceptRequestBody() {
@@ -304,99 +340,9 @@ class InviteControllerTest {
                 """.formatted(UUID.randomUUID());
     }
 
-    @Test
-    void list_returns200WithThePendingInvitesAndNeverAnEmailField() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-        MemberId invitedBy = MemberId.generate();
-        InviteId inviteId = InviteId.generate();
-        inviteReadModel.pendingInvites = List.of(new InviteView(inviteId, Instant.now(), invitedBy, "PENDING"));
-
-        mockMvc.perform(get("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].inviteId").value(inviteId.toString()))
-                .andExpect(jsonPath("$[0].status").value("PENDING"))
-                .andExpect(jsonPath("$[0].email").doesNotExist());
-    }
-
-    @Test
-    void list_rejectsANonMemberWith403() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-
-        mockMvc.perform(get("/api/v1/households/{householdId}/invites", householdId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("stranger-sub"))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("identity.notAMember"));
-    }
-
-    @Test
-    void revoke_byAnAdminReturns204() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        household.invitePerson(
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow(),
-                inviteId,
-                Instant.now(),
-                CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
-
-        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
-                        householdId.toString(), inviteId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(acceptRequestBody()))
-                .andExpect(status().isNoContent());
-    }
-
-    @Test
-    void revoke_byAParticipantReturns403WithGovernanceNotPermitted() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-        InviteId inviteId = InviteId.generate();
-        Household household = Household.rehydrate(
-                StreamId.forHousehold(householdId), eventStore.readStream(StreamId.forHousehold(householdId)));
-        AggregateVersion loadedVersion = household.version();
-        MemberId adminMemberId =
-                mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId).orElseThrow();
-        household.invitePerson(adminMemberId, inviteId, Instant.now(), CommandId.generate());
-        eventStore.append(loadedVersion, household.uncommittedEvents(), CommandId.generate());
-        MemberId participantMemberId = MemberId.generate();
-        eventStore.append(
-                AggregateVersion.of(StreamId.forHousehold(householdId), 3),
-                List.of(new MemberJoined(
-                        EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
-                CommandId.generate());
-        mappingRepository.save(
-                new MemberMapping(householdId, participantMemberId, new KeycloakUserId("participant-sub")));
-
-        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
-                        householdId.toString(), inviteId.toString())
-                        .with(jwt().jwt(jwt -> jwt.subject("participant-sub")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(acceptRequestBody()))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("governance.notPermitted"));
-    }
-
-    @Test
-    void revoke_anAbsentInviteReturns404() throws Exception {
-        HouseholdId householdId = seedHouseholdWithAdmin();
-
-        mockMvc.perform(delete("/api/v1/households/{householdId}/invites/{inviteId}",
-                        householdId.toString(), InviteId.generate().toString())
-                        .with(jwt().jwt(jwt -> jwt.subject(ADMIN_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(acceptRequestBody()))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("invite.notFound"));
-    }
-
-    private static String inviteRequestBody(String inviteId) {
+    private static String replaceRequestBody(String newInviteId) {
         return """
-                {"inviteId":"%s","commandId":"%s"}
-                """.formatted(inviteId, UUID.randomUUID());
+                {"newInviteId":"%s","commandId":"%s"}
+                """.formatted(newInviteId, UUID.randomUUID());
     }
 }

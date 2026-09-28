@@ -3,8 +3,6 @@ package de.sgart.collaboration.domain;
 import de.sgart.collaboration.domain.event.HouseholdCreated;
 import de.sgart.collaboration.domain.event.HouseholdDeleted;
 import de.sgart.collaboration.domain.event.HouseholdRenamed;
-import de.sgart.collaboration.domain.event.InviteAccepted;
-import de.sgart.collaboration.domain.event.InviteExpired;
 import de.sgart.collaboration.domain.event.InviteRevoked;
 import de.sgart.collaboration.domain.event.MemberDemoted;
 import de.sgart.collaboration.domain.event.MemberInvited;
@@ -16,8 +14,6 @@ import de.sgart.collaboration.domain.event.StoreAdded;
 import de.sgart.collaboration.domain.event.StoreArchived;
 import de.sgart.collaboration.domain.exception.DuplicateStoreNameException;
 import de.sgart.collaboration.domain.exception.GovernanceNotPermittedException;
-import de.sgart.collaboration.domain.exception.InviteAlreadyConsumedException;
-import de.sgart.collaboration.domain.exception.InviteExpiredException;
 import de.sgart.collaboration.domain.exception.InviteNotFoundException;
 import de.sgart.collaboration.domain.exception.LastAdminException;
 import de.sgart.collaboration.domain.exception.NotAHouseholdMemberException;
@@ -43,9 +39,13 @@ import java.util.Objects;
  * The first real aggregate (Story 1.6): a household is the top-level tenant every list, store,
  * and trip belongs to (glossary). State changes only through {@link #apply(DomainEvent)}, folding
  * {@link HouseholdCreated}, {@link MemberJoined}, {@link HouseholdRenamed}, {@link MemberInvited},
- * {@link InviteExpired}, {@link InviteAccepted}, {@link InviteRevoked}, {@link MemberLeft}, {@link
- * MemberRemoved}, {@link MemberPromoted}, {@link MemberDemoted}, and {@link HouseholdDeleted} —
- * never mutated directly by a command method (the {@link EventSourcedAggregate} contract).
+ * {@link InviteRevoked}, {@link MemberLeft}, {@link MemberRemoved}, {@link MemberPromoted}, {@link
+ * MemberDemoted}, and {@link HouseholdDeleted} — never mutated directly by a command method (the
+ * {@link EventSourcedAggregate} contract).
+ *
+ * <p>A household carries exactly <strong>one active invite code</strong> at a time (Story 8.4,
+ * locked decision 2026-09-20): no TTL, no per-invite consumption — {@code activeInviteId} is a
+ * reusable bearer capability any number of people may redeem, until an Admin replaces it.
  */
 public final class Household extends EventSourcedAggregate {
 
@@ -54,7 +54,7 @@ public final class Household extends EventSourcedAggregate {
     private boolean deleted;
     private final Map<MemberId, HouseholdRole> rolesByMember = new HashMap<>();
     private final Map<StoreId, StoreState> storesById = new HashMap<>();
-    private final Map<InviteId, InviteState> pendingInvitesById = new HashMap<>();
+    private InviteId activeInviteId;
 
     private Household(StreamId streamId) {
         super(streamId);
@@ -62,21 +62,31 @@ public final class Household extends EventSourcedAggregate {
 
     /**
      * Creates a brand-new household on its own stream, with {@code adminMemberId} as its creator
-     * (AC1). {@code adminMemberId} must already be issued by the Identity ACL (the sole issuer,
-     * AD-5) — this factory never issues one itself. {@code commandId} is validated for
-     * completeness of the command envelope but carries no domain meaning here; idempotency is the
-     * {@code EventStore}'s concern (AD-8), not the aggregate's.
+     * (AC1) and {@code inviteId} as its first active invite code (Story 8.4). {@code adminMemberId}
+     * must already be issued by the Identity ACL (the sole issuer, AD-5) — this factory never
+     * issues one itself. {@code commandId} is validated for completeness of the command envelope
+     * but carries no domain meaning here; idempotency is the {@code EventStore}'s concern (AD-8),
+     * not the aggregate's.
      */
     public static Household create(
-            HouseholdId householdId, HouseholdName name, MemberId adminMemberId, CommandId commandId) {
+            HouseholdId householdId,
+            HouseholdName name,
+            MemberId adminMemberId,
+            InviteId inviteId,
+            Instant now,
+            CommandId commandId) {
         Objects.requireNonNull(householdId, "householdId must not be null");
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(adminMemberId, "adminMemberId must not be null");
+        Objects.requireNonNull(inviteId, "inviteId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
 
         Household household = new Household(StreamId.forHousehold(householdId));
         household.raise(new HouseholdCreated(EventId.generate(), householdId, name));
         household.raise(new MemberJoined(EventId.generate(), householdId, adminMemberId, HouseholdRole.ADMIN));
+        household.raise(new MemberInvited(
+                EventId.generate(), householdId, inviteId, adminMemberId, HouseholdRole.PARTICIPANT, now));
         return household;
     }
 
@@ -93,6 +103,12 @@ public final class Household extends EventSourcedAggregate {
 
     public HouseholdName name() {
         return name;
+    }
+
+    /** The household's single active invite code (Story 8.4) — the only code that {@link
+     * #acceptInvite} accepts until an Admin replaces it via {@link #replaceInviteCode}. */
+    public InviteId activeInviteId() {
+        return activeInviteId;
     }
 
     /**
@@ -187,80 +203,37 @@ public final class Household extends EventSourcedAggregate {
     }
 
     /**
-     * Invites a person by join code/link (Story 7.5, AC1) — membership-gated, not role-gated, like
-     * {@link #addStore}: any member may invite ({@code requireMember}), never Admin-only. Multiple
-     * independent pending invites to the same household may coexist — there is no email to dedupe
-     * against (AD-6). The already-a-member prevention happens at accept time (E5, see {@link
-     * #acceptInvite}), not here.
+     * Redeems the household's active invite code (Story 8.4) — the one command with <strong>no
+     * membership gate</strong>: accept is precisely how a non-member becomes one. {@code joiner} is
+     * the Identity-ACL-issued {@link MemberId} for the accepting caller (AD-5). A reusable bearer
+     * code with no TTL and no consumption (locked decision, 2026-09-20): any number of people may
+     * accept it, any number of times.
      *
-     * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
-     */
-    public void invitePerson(MemberId requestedBy, InviteId inviteId, Instant now, CommandId commandId) {
-        Objects.requireNonNull(requestedBy, "requestedBy must not be null");
-        Objects.requireNonNull(inviteId, "inviteId must not be null");
-        Objects.requireNonNull(now, "now must not be null");
-        Objects.requireNonNull(commandId, "commandId must not be null");
-        requireMember(requestedBy);
-
-        raise(new MemberInvited(EventId.generate(), householdId, inviteId, requestedBy, HouseholdRole.PARTICIPANT, now));
-    }
-
-    /**
-     * Redeems a personal invite (Story 4.2, AC1, AC3, AC4, AC5) — the one command with
-     * <strong>no membership gate</strong>: accept is precisely how a non-member becomes one, unlike
-     * {@link #invitePerson}'s {@code requireMember}. {@code joiner} is the Identity-ACL-issued
-     * {@link MemberId} for the accepting caller (AD-5); {@code now} is caller-injected, never {@code
-     * Instant.now()} here, so expiry stays deterministic and testable.
-     *
-     * <p>Branches on the folded invite state for {@code inviteId}:
      * <ol>
-     *   <li>absent → {@link InviteNotFoundException} (no event);</li>
-     *   <li>{@code PENDING} and not expired at {@code now} → raises {@link InviteAccepted}, and —
-     *       unless {@code joiner} is already a member (AC4, E5) — also raises {@link MemberJoined}
-     *       as {@link HouseholdRole#PARTICIPANT};</li>
-     *   <li>{@code PENDING} and expired at {@code now} → raises the lazy {@link InviteExpired}
-     *       transition, then throws {@link InviteExpiredException} (AC3);</li>
-     *   <li>{@code EXPIRED} → throws {@link InviteExpiredException} (no new event);</li>
-     *   <li>{@code ACCEPTED} → a no-op success (raises nothing) if {@code joiner} is already a
-     *       member (the convergent re-accept, AD-8/§3.5), otherwise throws {@link
-     *       InviteAlreadyConsumedException} (AC5) — a spent link cannot be ridden by a stranger.</li>
+     *   <li>{@code inviteId} does not match the household's {@link #activeInviteId} (absent, or
+     *       replaced by a later {@link #replaceInviteCode}) → {@link InviteNotFoundException} (no
+     *       event);</li>
+     *   <li>{@code inviteId} matches and {@code joiner} is not yet a member → raises {@link
+     *       MemberJoined} as {@link HouseholdRole#PARTICIPANT};</li>
+     *   <li>{@code inviteId} matches and {@code joiner} is already a member → a convergent no-op
+     *       (raises nothing, AD-8/§3.5).</li>
      * </ol>
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
-    public void acceptInvite(InviteId inviteId, MemberId joiner, Instant now, CommandId commandId) {
+    public void acceptInvite(InviteId inviteId, MemberId joiner, CommandId commandId) {
         Objects.requireNonNull(inviteId, "inviteId must not be null");
         Objects.requireNonNull(joiner, "joiner must not be null");
-        Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
 
-        InviteState invite = pendingInvitesById.get(inviteId);
-        if (invite == null) {
-            throw new InviteNotFoundException("No invite " + inviteId + " exists in this household");
+        if (!inviteId.equals(activeInviteId)) {
+            throw new InviteNotFoundException(
+                    "Invite " + inviteId + " is invalid or has been replaced in this household");
         }
-
-        switch (invite.status()) {
-            case PENDING -> {
-                if (invite.isExpiredAt(now)) {
-                    raise(new InviteExpired(EventId.generate(), householdId, inviteId));
-                    throw new InviteExpiredException("Invite " + inviteId + " has expired");
-                }
-                raise(new InviteAccepted(EventId.generate(), householdId, inviteId, joiner));
-                if (!rolesByMember.containsKey(joiner)) {
-                    raise(new MemberJoined(EventId.generate(), householdId, joiner, HouseholdRole.PARTICIPANT));
-                }
-            }
-            case EXPIRED -> throw new InviteExpiredException("Invite " + inviteId + " has expired");
-            case ACCEPTED -> {
-                if (!rolesByMember.containsKey(joiner)) {
-                    throw new InviteAlreadyConsumedException(
-                            "Invite " + inviteId + " was already accepted by someone else");
-                }
-                // convergent no-op — the same joiner re-accepting an already-consumed invite (AD-8)
-            }
-            default ->
-                throw new IllegalStateException("Unhandled invite status " + invite.status());
+        if (!rolesByMember.containsKey(joiner)) {
+            raise(new MemberJoined(EventId.generate(), householdId, joiner, HouseholdRole.PARTICIPANT));
         }
+        // else convergent no-op — the joiner is already a member of this household (AD-8/§3.5)
     }
 
     /**
@@ -367,34 +340,29 @@ public final class Household extends EventSourcedAggregate {
     }
 
     /**
-     * An Admin revokes a pending invite (Story 4.3, AC2, AC6), completing its lifecycle ({@code
-     * PENDING -> REVOKED}). Branches on the folded invite state: absent or a terminal
-     * non-{@code PENDING} state other than {@code REVOKED} (i.e. {@code ACCEPTED}/{@code EXPIRED}) is
-     * rejected as "no pending invite to revoke" ({@link InviteNotFoundException}); an already-{@code
-     * REVOKED} invite is a convergent no-op (§3.5). No expiry check — a past-TTL {@code PENDING}
-     * invite may still be revoked (revoke is a terminal governance action; expiry is lazy
-     * housekeeping elsewhere).
+     * An Admin replaces the household's active invite code with a fresh one (Story 8.4, F7):
+     * invalidates {@code activeInviteId} and issues {@code newInviteId} atomically, in one append.
+     * <strong>Any Admin</strong> may replace it — not creator-only (roles already guarantee someone
+     * can always do this, the last-Admin invariant) — enforced by the same {@link #requireAdmin}
+     * gate as the rest of governance. Retrying with the same {@code newInviteId} (idempotent client
+     * retry, mirrors {@code create}) is a convergent no-op — the code is already active.
      *
      * @param commandId validated for envelope completeness (AD-8) but with no domain meaning here
      */
-    public void revokeInvite(MemberId requestedBy, InviteId inviteId, CommandId commandId) {
+    public void replaceInviteCode(MemberId requestedBy, InviteId newInviteId, Instant now, CommandId commandId) {
         Objects.requireNonNull(requestedBy, "requestedBy must not be null");
-        Objects.requireNonNull(inviteId, "inviteId must not be null");
+        Objects.requireNonNull(newInviteId, "newInviteId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(commandId, "commandId must not be null");
         requireNotDeleted();
         requireAdmin(requestedBy);
 
-        InviteState invite = pendingInvitesById.get(inviteId);
-        if (invite == null) {
-            throw new InviteNotFoundException("No invite " + inviteId + " exists in this household");
+        if (newInviteId.equals(activeInviteId)) {
+            return; // convergent no-op — this code is already the active one (AD-8, idempotent retry)
         }
-
-        switch (invite.status()) {
-            case PENDING -> raise(new InviteRevoked(EventId.generate(), householdId, inviteId, requestedBy));
-            case REVOKED -> { /* convergent no-op — already revoked (§3.5) */ }
-            case ACCEPTED, EXPIRED ->
-                throw new InviteNotFoundException("Invite " + inviteId + " has no pending invite to revoke");
-        }
+        raise(new InviteRevoked(EventId.generate(), householdId, activeInviteId, requestedBy));
+        raise(new MemberInvited(
+                EventId.generate(), householdId, newInviteId, requestedBy, HouseholdRole.PARTICIPANT, now));
     }
 
     /**
@@ -478,25 +446,10 @@ public final class Household extends EventSourcedAggregate {
                     storesById.put(archived.storeId(), existing.archived(true));
                 }
             }
-            case MemberInvited invited ->
-                pendingInvitesById.put(
-                        invited.inviteId(), new InviteState(invited.invitedAt(), InviteStatus.PENDING));
-            case InviteExpired expired -> {
-                InviteState existing = pendingInvitesById.get(expired.inviteId());
-                if (existing != null) {
-                    pendingInvitesById.put(expired.inviteId(), existing.withStatus(InviteStatus.EXPIRED));
-                }
-            }
-            case InviteAccepted accepted -> {
-                InviteState existing = pendingInvitesById.get(accepted.inviteId());
-                if (existing != null) {
-                    pendingInvitesById.put(accepted.inviteId(), existing.withStatus(InviteStatus.ACCEPTED));
-                }
-            }
+            case MemberInvited invited -> this.activeInviteId = invited.inviteId();
             case InviteRevoked revoked -> {
-                InviteState existing = pendingInvitesById.get(revoked.inviteId());
-                if (existing != null) {
-                    pendingInvitesById.put(revoked.inviteId(), existing.withStatus(InviteStatus.REVOKED));
+                if (revoked.inviteId().equals(this.activeInviteId)) {
+                    this.activeInviteId = null;
                 }
             }
             case MemberLeft left -> rolesByMember.remove(left.memberId());
@@ -521,29 +474,4 @@ public final class Household extends EventSourcedAggregate {
         }
     }
 
-    /** Status a folded invite carries — kept foldable/out of the active-blocker set once expired or
-     * accepted (Story 4.2). */
-    private enum InviteStatus {
-        PENDING,
-        EXPIRED,
-        ACCEPTED,
-        REVOKED
-    }
-
-    /**
-     * A pending (or lazily expired) invite as held inside the {@link Household} aggregate (AD-10):
-     * the folded state {@link #invitePerson} reads for the duplicate-pending / past-TTL invariants
-     * (AC2, AC5). Mirrors {@link StoreState}. {@code invitedAt} plus {@link Invite#TIME_TO_LIVE}
-     * decides expiry deterministically — never wall-clock time read here.
-     */
-    private record InviteState(Instant invitedAt, InviteStatus status) {
-
-        boolean isExpiredAt(Instant now) {
-            return invitedAt.plus(Invite.TIME_TO_LIVE).isBefore(now) || invitedAt.plus(Invite.TIME_TO_LIVE).equals(now);
-        }
-
-        InviteState withStatus(InviteStatus status) {
-            return new InviteState(invitedAt, status);
-        }
-    }
 }

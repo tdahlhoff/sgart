@@ -12,12 +12,13 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
 import io.kurrent.dbclient.KurrentDBClient;
 import io.kurrent.dbclient.KurrentDBConnectionString;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +107,7 @@ class HouseholdReadModelSubscriptionTest {
                 client,
                 readModel,
                 new JdbcStoreReadModel(jdbcClient),
-                new JdbcInviteReadModel(jdbcClient, Clock.systemUTC()),
+                new JdbcInviteReadModel(jdbcClient),
                 new JdbcHouseholdMemberReadModel(jdbcClient));
         projector.start();
     }
@@ -123,7 +124,7 @@ class HouseholdReadModelSubscriptionTest {
         MemberId adminMemberId = MemberId.generate();
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(rawKeycloakUserId)));
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
 
         eventStore.append(
                 AggregateVersion.initial(StreamId.forHousehold(householdId)),

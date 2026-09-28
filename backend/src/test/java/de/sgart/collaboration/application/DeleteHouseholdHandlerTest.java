@@ -18,6 +18,8 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
+import de.sgart.shared.InviteId;
+import java.time.Instant;
 import de.sgart.shared.DomainEvent;
 import de.sgart.shared.EventId;
 import de.sgart.shared.HouseholdId;
@@ -52,10 +54,10 @@ class DeleteHouseholdHandlerTest {
 
     private void seedHouseholdWithAdminAndParticipant() {
         Household household =
-                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, CommandId.generate());
+                Household.create(householdId, new HouseholdName("Familie Muster"), adminMemberId, InviteId.generate(), Instant.now(), CommandId.generate());
         eventStore.append(AggregateVersion.initial(streamId), household.uncommittedEvents(), CommandId.generate());
         eventStore.append(
-                AggregateVersion.of(streamId, 2),
+                AggregateVersion.of(streamId, 3),
                 List.of(new MemberJoined(EventId.generate(), householdId, participantMemberId, HouseholdRole.PARTICIPANT)),
                 CommandId.generate());
         mappingRepository.save(new MemberMapping(householdId, adminMemberId, new KeycloakUserId(ADMIN_SUB)));
@@ -83,7 +85,7 @@ class DeleteHouseholdHandlerTest {
                         handler.handle(PARTICIPANT_SUB, householdId.toString(), CommandId.generate().toString()))
                 .isInstanceOf(GovernanceNotPermittedApplicationException.class);
 
-        assertThat(eventStore.readStream(streamId)).hasSize(3);
+        assertThat(eventStore.readStream(streamId)).hasSize(4);
         assertThat(mappingRepository.findMemberId(new KeycloakUserId(ADMIN_SUB), householdId)).contains(adminMemberId);
     }
 

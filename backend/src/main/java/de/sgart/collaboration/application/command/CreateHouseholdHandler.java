@@ -13,8 +13,10 @@ import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
 import de.sgart.shared.EventStore;
 import de.sgart.shared.HouseholdId;
+import de.sgart.shared.InviteId;
 import de.sgart.shared.MemberId;
 import de.sgart.shared.StreamId;
+import java.time.Clock;
 import java.util.Objects;
 
 /**
@@ -30,11 +32,14 @@ public final class CreateHouseholdHandler {
     private final EventStore eventStore;
     private final IssueMemberIdentity issueMemberIdentity;
     private final ConsentGate consentGate;
+    private final Clock clock;
 
-    public CreateHouseholdHandler(EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate) {
+    public CreateHouseholdHandler(
+            EventStore eventStore, IssueMemberIdentity issueMemberIdentity, ConsentGate consentGate, Clock clock) {
         this.eventStore = Objects.requireNonNull(eventStore, "eventStore must not be null");
         this.issueMemberIdentity = Objects.requireNonNull(issueMemberIdentity, "issueMemberIdentity must not be null");
         this.consentGate = Objects.requireNonNull(consentGate, "consentGate must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     /**
@@ -65,11 +70,15 @@ public final class CreateHouseholdHandler {
         // whole create converges on one household instead of duplicating it (Clarification 5).
         HouseholdId householdId = HouseholdId.deterministicFrom(keycloakUserId + "|" + commandId);
         AggregateVersion basedOnVersion = AggregateVersion.initial(StreamId.forHousehold(householdId));
-        CreateHousehold command = new CreateHousehold(commandId, basedOnVersion, name);
+        // Minted fresh per attempt — a retry with the same commandId still converges on one
+        // household because the append itself collapses (AD-8, Design Notes).
+        InviteId inviteId = InviteId.generate();
+        CreateHousehold command = new CreateHousehold(commandId, basedOnVersion, name, inviteId);
 
         // Issue precedes append: MemberJoined must carry the ACL-issued MemberId (AD-5).
         MemberId adminMemberId = issueMemberIdentity.issue(keycloakUserId, householdId);
-        Household household = Household.create(householdId, command.name(), adminMemberId, command.commandId());
+        Household household = Household.create(
+                householdId, command.name(), adminMemberId, command.inviteId(), clock.instant(), command.commandId());
         eventStore.append(command.basedOnVersion(), household.uncommittedEvents(), command.commandId());
 
         return householdId;
