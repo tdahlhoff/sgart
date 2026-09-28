@@ -441,6 +441,7 @@ class _StoresStep extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(SgartShapes.cardPadding),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SgartButton(
                   key: const Key('onboarding-stores-next-button'),
