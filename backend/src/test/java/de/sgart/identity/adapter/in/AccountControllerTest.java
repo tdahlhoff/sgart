@@ -10,14 +10,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
 import de.sgart.identity.adapter.out.InMemoryRecoveryCodeIssuanceThrottle;
+import de.sgart.identity.application.AccountDetails;
+import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.FindAccountByEmail;
+import de.sgart.identity.application.GetAccountDetails;
+import de.sgart.identity.application.RebindAccountCredential;
 import de.sgart.identity.application.RecoveryCodeIssuanceThrottle;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
+import de.sgart.identity.domain.RecoveryCodePurpose;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,6 +65,15 @@ class AccountControllerTest {
     @Autowired
     private RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle;
 
+    @Autowired
+    private RecordingGetAccountDetails getAccountDetails;
+
+    @Autowired
+    private RecordingDeleteAccount deleteAccount;
+
+    @Autowired
+    private RecordingRebindAccountCredential rebindAccountCredential;
+
     @TestConfiguration
     static class InMemoryAdaptersConfig {
 
@@ -91,6 +106,31 @@ class AccountControllerTest {
         @Primary
         TestFindAccountByEmail testFindAccountByEmail() {
             return new TestFindAccountByEmail();
+        }
+
+        /**
+         * The default {@code DeferredGetAccountDetails}/{@code DeferredDeleteAccount}/{@code
+         * DeferredRebindAccountCredential} stand-ins never find or record anything (no real
+         * Keycloak account exists in this slice) — the recover-by-email end-to-end test needs a
+         * throwaway account it can register details for, plus a way to observe the delete/rebind
+         * the R1 rebind performs (Story 8.9).
+         */
+        @Bean
+        @Primary
+        RecordingGetAccountDetails testGetAccountDetails() {
+            return new RecordingGetAccountDetails();
+        }
+
+        @Bean
+        @Primary
+        RecordingDeleteAccount testDeleteAccount() {
+            return new RecordingDeleteAccount();
+        }
+
+        @Bean
+        @Primary
+        RecordingRebindAccountCredential testRebindAccountCredential() {
+            return new RecordingRebindAccountCredential();
         }
     }
 
@@ -128,6 +168,52 @@ class AccountControllerTest {
         }
     }
 
+    /** Registers the throwaway device's current {@code username}/{@code publicKey}, as the real Admin API would answer. */
+    static final class RecordingGetAccountDetails implements GetAccountDetails {
+        private final Map<String, AccountDetails> byKeycloakUserId = new HashMap<>();
+
+        void register(String keycloakUserId, String username, String publicKey) {
+            byKeycloakUserId.put(keycloakUserId, new AccountDetails(username, publicKey, null, false));
+        }
+
+        @Override
+        public Optional<AccountDetails> findById(KeycloakUserId keycloakUserId) {
+            return Optional.ofNullable(byKeycloakUserId.get(keycloakUserId.value()));
+        }
+
+        void clear() {
+            byKeycloakUserId.clear();
+        }
+    }
+
+    static final class RecordingDeleteAccount implements DeleteAccount {
+        final List<String> deletedIds = new ArrayList<>();
+
+        @Override
+        public void delete(KeycloakUserId keycloakUserId) {
+            deletedIds.add(keycloakUserId.value());
+        }
+
+        void clear() {
+            deletedIds.clear();
+        }
+    }
+
+    static final class RecordingRebindAccountCredential implements RebindAccountCredential {
+        record Rebind(String keycloakUserId, String username, String publicKey) {}
+
+        final List<Rebind> rebinds = new ArrayList<>();
+
+        @Override
+        public void rebind(KeycloakUserId keycloakUserId, String username, String publicKey) {
+            rebinds.add(new Rebind(keycloakUserId.value(), username, publicKey));
+        }
+
+        void clear() {
+            rebinds.clear();
+        }
+    }
+
     @BeforeEach
     void clearSharedRepository() {
         // The @Primary in-memory doubles are singletons for the whole (shared) Spring context, so
@@ -136,6 +222,9 @@ class AccountControllerTest {
         ((InMemoryEmailRecoveryCodeStore) emailRecoveryCodeStore).clear();
         ((InMemoryRecoveryCodeIssuanceThrottle) recoveryCodeIssuanceThrottle).clear();
         sendRecoveryCodeEmail.clear();
+        getAccountDetails.clear();
+        deleteAccount.clear();
+        rebindAccountCredential.clear();
     }
 
     @Test
@@ -351,5 +440,43 @@ class AccountControllerTest {
                         .content("{\"email\":\"nobody@example.com\",\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("account.recoveryCodeInvalid"));
+    }
+
+    @Test
+    void recoverByEmail_requestThenConfirmWithTheEmailedCode_rebindsTheTargetAccount() throws Exception {
+        String throwawayAccountId = "device-2-sub";
+        KeycloakUserId throwaway = new KeycloakUserId(throwawayAccountId);
+        getAccountDetails.register(throwawayAccountId, "throwaway-username", "throwaway-public-key");
+        ((InMemoryProvisionedAccountRepository) provisionedAccountRepository)
+                .recordIfAbsent(throwaway, Instant.now());
+
+        mockMvc.perform(post("/api/v1/account/recovery/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(throwawayAccountId)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\"}"))
+                .andExpect(status().isAccepted());
+        assertThat(sendRecoveryCodeEmail.sentCodes).hasSize(1);
+        String code = sendRecoveryCodeEmail.lastCode();
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(throwawayAccountId)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\",\"code\":\"" + code
+                                + "\"}"))
+                .andExpect(status().isNoContent());
+
+        assertThat(deleteAccount.deletedIds).containsExactly(throwawayAccountId);
+        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+        RecordingRebindAccountCredential.Rebind rebind = rebindAccountCredential.rebinds.get(0);
+        assertThat(rebind.keycloakUserId()).isEqualTo(TestFindAccountByEmail.REGISTERED_ACCOUNT_ID);
+        assertThat(rebind.username()).isEqualTo("throwaway-username");
+        assertThat(rebind.publicKey()).isEqualTo("throwaway-public-key");
+
+        // The de-link: the RECOVER code is consumed and the throwaway's provisioned-shell row is gone.
+        assertThat(emailRecoveryCodeStore.find(
+                        new KeycloakUserId(TestFindAccountByEmail.REGISTERED_ACCOUNT_ID), RecoveryCodePurpose.RECOVER))
+                .isEmpty();
+        assertThat(((InMemoryProvisionedAccountRepository) provisionedAccountRepository).contains(throwaway))
+                .isFalse();
     }
 }

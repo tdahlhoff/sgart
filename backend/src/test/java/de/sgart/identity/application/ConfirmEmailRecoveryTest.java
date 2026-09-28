@@ -15,7 +15,9 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingRebindAcc
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +44,7 @@ class ConfirmEmailRecoveryTest {
     private final InMemoryProvisionedAccountRepository provisionedAccountRepository =
             new InMemoryProvisionedAccountRepository();
     private final RecordingRebindAccountCredential rebindAccountCredential = new RecordingRebindAccountCredential();
-    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final MutableClock clock = new MutableClock(NOW);
     private final ConfirmEmailRecovery confirmEmailRecovery = new ConfirmEmailRecovery(
             findAccountByEmail,
             emailRecoveryCodeStore,
@@ -135,6 +137,45 @@ class ConfirmEmailRecoveryTest {
     }
 
     @Test
+    void confirmEmailRecovery_withExpiredCode_isRejectedAndChangesNothing() {
+        findAccountByEmail.registerAccount("person@example.com", TARGET);
+        emailRecoveryCodeStore.store(TARGET, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
+        // Registered so a regression that skips the expiry check would actually reach
+        // delete/rebind instead of failing earlier on a missing throwaway lookup — otherwise the
+        // "no delete/rebind" asserts below would pass vacuously.
+        getAccountDetails.register(THROWAWAY, "U2", "K2");
+        provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
+        clock.advance(Duration.ofSeconds(61));
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817"))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+        var stored = emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER);
+        assertThat(stored).isPresent();
+        // Pins the real (correct) production behavior: an expired candidate still counts as a
+        // wrong guess and increments the attempt counter — the row is not consumed, but not untouched either.
+        assertThat(stored.get().attempts()).isEqualTo(1);
+    }
+
+    @Test
+    void confirmEmailRecovery_atExactlyTheExpiryInstant_isStillAccepted() {
+        // RecoveryCode.matches uses isAfter(expiresAt), so the boundary instant itself must still
+        // be treated as unexpired — an off-by-one (isAfter → !isBefore, or >=) would flip this.
+        findAccountByEmail.registerAccount("person@example.com", TARGET);
+        emailRecoveryCodeStore.store(
+                TARGET, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plus(RecoveryCode.TTL), NOW);
+        getAccountDetails.register(THROWAWAY, "U2", "K2");
+        provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
+        clock.advance(RecoveryCode.TTL);
+
+        confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817");
+
+        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+    }
+
+    @Test
     void confirmEmailRecovery_replayAfterSuccess_isRejectedBecauseTheCodeWasConsumed() {
         findAccountByEmail.registerAccount("person@example.com", TARGET);
         emailRecoveryCodeStore.store(TARGET, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
@@ -184,5 +225,33 @@ class ConfirmEmailRecoveryTest {
         orderedConfirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817");
 
         assertThat(sharedLog).containsExactly("delete:" + THROWAWAY_ID, "rebind:target-A1");
+    }
+
+    /** Lets {@code confirmEmailRecovery_withExpiredCode_isRejectedAndChangesNothing} move past a TTL without a sleep. */
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+
+        MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

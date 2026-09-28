@@ -389,3 +389,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/8-8-fix-live-sync-projector-stream-filter-throw.md`
   summary: `ShoppingListReadModelProjector.stop()` / `ShoppingTripReadModelProjector.stop()` never cancel the open KurrentDB `$all` subscription (they only clear `running` and shut down the resubscribe scheduler), so events keep being projected after stop; retain the `Subscription` and stop it, mirroring `HouseholdLiveSyncFanout`'s `retainSubscription`.
   evidence: Verified in the 8.8 review (2026-09-28) — pre-existing. Harmless at app shutdown (the client closes), but a stop/start lifecycle (SmartLifecycle restart, tests) leaks a live subscription; in `MultiPrefixKurrentDbSubscriptionRegressionTest` it makes stopped projectors keep consuming later tests' events (log noise, hidden cross-test coupling). Natural home: Epic 5 reconnect/checkpointing work.
+
+## Deferred from: planning of story-8.9 (2026-09-28)
+
+- source_spec: `_bmad-output/implementation-artifacts/8-9-provisioning-epic-critical-path-tests.md`
+  summary: `POST /api/v1/accounts` (silent account provisioning) has no rate limiter, and there is no account to key one on since the endpoint is unauthenticated by design.
+  evidence: Decision D2 (Timo, 2026-09-28) — per ADR-0002 this belongs at the reverse-proxy seam, not in application code. Deferred alongside the beta SMTP item (8.6 D1) to land with the beta-infra deployment work (prod compose, TLS proxy).

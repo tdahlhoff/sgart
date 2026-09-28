@@ -372,7 +372,7 @@ development_status:
   8-6-real-recovery-emails-smtp-and-mailpit: done
   8-7-hide-household-selector-on-profile: done
   8-8-fix-live-sync-projector-stream-filter-throw: done
-  8-9-provisioning-epic-critical-path-tests: backlog
+  8-9-provisioning-epic-critical-path-tests: done
   epic-8-retrospective: optional
 
 action_items:
