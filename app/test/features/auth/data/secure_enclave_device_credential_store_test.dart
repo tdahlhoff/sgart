@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/test/test_flutter_secure_storage_platform
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/device_credential.dart';
-import 'package:sgart/features/auth/data/recovery_phrase.dart';
+import 'package:sgart/features/auth/data/recovery_token.dart';
 import 'package:sgart/features/auth/data/secure_enclave_device_credential_store.dart';
 
 void main() {
@@ -20,34 +20,33 @@ void main() {
       store = const SecureEnclaveDeviceCredentialStore();
     });
 
-    test('recoveryPhrase_returnsTwentyFourWordsFromStoredEntropy', () async {
+    test('recoveryToken_returnsATokenEncodingTheStoredEntropy', () async {
       final credential = await store.loadOrCreate(); // generates + persists the device's entropy
 
-      final words = await store.recoveryPhrase();
+      final token = await store.recoveryToken();
 
-      expect(words, hasLength(24));
-      final reDerivedCredential = await DeviceCredential.fromEntropy(RecoveryPhrase.entropyFromWords(words));
+      final reDerivedCredential = await DeviceCredential.fromEntropy(await RecoveryToken.parse(token));
       expect(reDerivedCredential.publicKeyBase64Url, credential.publicKeyBase64Url);
     });
 
-    test('restoreFromPhrase_replacesStoredEntropy_soCredentialReDerivesSameUsername', () async {
+    test('restoreFromToken_replacesStoredEntropy_soCredentialReDerivesSameUsername', () async {
       await store.loadOrCreate(); // seeds throwaway entropy first, like a freshly provisioned device
-      final importedEntropy = Uint8List.fromList(List<int>.generate(32, (index) => index));
-      final importedWords = RecoveryPhrase.wordsFromEntropy(importedEntropy);
+      final importedEntropy = Uint8List.fromList(List<int>.generate(16, (index) => index));
+      final importedToken = await RecoveryToken.format(importedEntropy);
       final expectedCredential = await DeviceCredential.fromEntropy(importedEntropy);
 
-      await store.restoreFromPhrase(importedWords);
+      await store.restoreFromToken(importedToken);
       final restoredCredential = await store.loadOrCreate();
 
       expect(restoredCredential.publicKeyBase64Url, expectedCredential.publicKeyBase64Url);
     });
 
-    test('restoreFromPhrase_withInvalidPhrase_writesNothing', () async {
+    test('restoreFromToken_withInvalidToken_writesNothing', () async {
       final originalCredential = await store.loadOrCreate();
 
       await expectLater(
-        () => store.restoreFromPhrase(const ['not', 'a', 'valid', 'phrase']),
-        throwsA(isA<InvalidRecoveryPhrase>()),
+        () => store.restoreFromToken('not-a-valid-token'),
+        throwsA(isA<InvalidRecoveryToken>()),
       );
       final unchangedCredential = await store.loadOrCreate();
 

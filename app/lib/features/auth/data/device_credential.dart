@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 /// The device's silent-provisioning identity (Story 7.1, §2 of the design note): a device-bound
-/// Ed25519 keypair, deterministically derived from 32 bytes of entropy generated once on first
+/// Ed25519 keypair, deterministically derived from 16 bytes of entropy generated once on first
 /// launch. The private key never leaves this object — only [publicKeyBase64Url] (registered with
 /// Keycloak at provisioning) and [sign] (used to prove possession at sign-in) are exposed.
 ///
@@ -14,11 +14,24 @@ import 'package:cryptography/cryptography.dart';
 class DeviceCredential {
   DeviceCredential._(this._keyPair, this.publicKeyBase64Url);
 
-  /// Derives the (deterministic) Ed25519 keypair from 32 bytes of entropy — the same entropy that
-  /// is BIP39-encodable to the 24-word recovery phrase (not shown in this story, see
-  /// [RecoveryPhrase]). All three representations are the *same* secret in different encodings.
+  /// Versions the HKDF derivation below (Story 8.5, Design Notes) — bumping it would deliberately
+  /// derive a *different* keypair from the same entropy, so it must never change casually.
+  static final _seedDerivationInfo = utf8.encode('sgart-device-ed25519-v1');
+
+  /// Derives the (deterministic) Ed25519 keypair from 16 bytes of entropy — the same entropy that
+  /// is Crockford-Base32-encodable to the recovery token (Story 8.5, see [RecoveryToken]). The
+  /// entropy is not the seed itself any more: HKDF-SHA256 stretches it to the 32-byte seed Ed25519
+  /// needs, with a fixed `info` string for domain separation (Design Notes) — a slow password KDF
+  /// would add nothing here, since the input is already 128 bits of full entropy, not a guessable
+  /// secret.
   static Future<DeviceCredential> fromEntropy(Uint8List entropy) async {
-    final keyPair = await Ed25519().newKeyPairFromSeed(entropy);
+    final seedKey = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
+      secretKey: SecretKey(entropy),
+      nonce: const <int>[],
+      info: _seedDerivationInfo,
+    );
+    final seed = Uint8List.fromList(await seedKey.extractBytes());
+    final keyPair = await Ed25519().newKeyPairFromSeed(seed);
     final publicKey = await keyPair.extractPublicKey();
     return DeviceCredential._(keyPair, base64UrlEncode(publicKey.bytes).replaceAll('=', ''));
   }

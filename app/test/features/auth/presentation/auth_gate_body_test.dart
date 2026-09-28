@@ -6,7 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
-import 'package:sgart/features/auth/data/recovery_phrase.dart';
+import 'package:sgart/features/auth/data/recovery_token.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_gate.dart';
 
@@ -74,13 +74,13 @@ void main() {
     });
 
     // Task Manifest: "Confirm the swap routes correctly" (Story 7.2, AC3, D-E) — a successful
-    // recoverFromPhrase must fully unmount and remount the authenticated subtree (the real
+    // recoverFromToken must fully unmount and remount the authenticated subtree (the real
     // FirstRunRouter in production), not just rebuild it in place, so it re-bootstraps against the
     // recovered identity's access token rather than reusing stale state. [_MountCounter] stands in
     // for FirstRunRouter here (which itself builds a real HTTP client, CLAUDE.md §6) — its
     // initState only re-runs on a genuine remount.
-    testWidgets('recoverFromPhraseRemountsTheAuthenticatedSubtreeForTheRecoveredIdentity', (tester) async {
-      final recoveryWords = RecoveryPhrase.wordsFromEntropy(Uint8List(32));
+    testWidgets('recoverFromTokenRemountsTheAuthenticatedSubtreeForTheRecoveredIdentity', (tester) async {
+      final recoveryToken = await RecoveryToken.format(Uint8List(16));
       final delayedOidcClient = _CompleterControlledFakeOidcClient()
         ..tokensToReturn = const OidcTokens(accessToken: 'access-throwaway');
       identityApi.identityToReturn = const CallerIdentity(
@@ -115,7 +115,7 @@ void main() {
       expect(find.text('sub-throwaway'), findsOneWidget);
       expect(mountCount, 1);
 
-      // The next signIn() (driven by recoverFromPhrase) resolves to a different, existing account —
+      // The next signIn() (driven by recoverFromToken) resolves to a different, existing account —
       // but blocks on a Completer we control, so the test can pump exactly on the transient
       // `inProgress` frame instead of the fakes' instant microtask resolution collapsing straight
       // from authenticated-throwaway to authenticated-recovered (which a single pump() would never
@@ -127,7 +127,7 @@ void main() {
       final pendingSignIn = Completer<OidcTokens>();
       delayedOidcClient.pendingSignIn = pendingSignIn;
 
-      final recoverFuture = recoveryCubit.recoverFromPhrase(recoveryWords);
+      final recoverFuture = recoveryCubit.recoverFromToken(recoveryToken);
       await tester.pump();
       await tester.pump();
       // Briefly back at the sign-in gate — the previous authenticated subtree is disposed here.

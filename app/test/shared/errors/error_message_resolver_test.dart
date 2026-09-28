@@ -76,10 +76,10 @@ void main() {
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 
-    test('authInvalidRecoveryPhraseResolvesToItsOwnCopyNotTheGenericFallback', () {
-      final resolved = localizedMessageForErrorCode(localizations, 'auth.invalidRecoveryPhrase');
+    test('authInvalidRecoveryTokenResolvesToItsOwnCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'auth.invalidRecoveryToken');
 
-      expect(resolved, localizations.recoveryPhraseRestoreInvalidPhraseError);
+      expect(resolved, localizations.recoveryTokenRestoreInvalidTokenError);
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 

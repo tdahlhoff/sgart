@@ -7,7 +7,7 @@ import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
-import 'package:sgart/features/auth/presentation/recovery_phrase_reveal_page.dart';
+import 'package:sgart/features/auth/presentation/recovery_token_reveal_page.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/members/data/member_view.dart';
 import 'package:sgart/features/members/data/members_api.dart';
@@ -42,7 +42,7 @@ void main() {
       identityApi = FakeIdentityApi()
         ..identityToReturn = const CallerIdentity(
             keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
-      deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
+      deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       authCubit = AuthCubit(
         oidcClient: oidcClient,
         tokenStorage: tokenStorage,
@@ -198,16 +198,16 @@ void main() {
       expect(find.textContaining('Größere Darstellung'), findsNothing);
     });
 
-    // Test Manifest: profileScreen_recoveryPhraseRow_opensRevealPage (Story 7.2, AC2, D-C) — the
+    // Test Manifest: profileScreen_recoveryTokenRow_opensRevealPage (Story 7.2, AC2, D-C) — the
     // re-view row is present and, on any number of taps, re-opens the shared reveal page.
-    testWidgets('theWiederherstellungsphraseRowOpensTheRecoveryPhraseRevealPage', (tester) async {
+    testWidgets('theWiederherstellungsschluesselRowOpensTheRecoveryTokenRevealPage', (tester) async {
       await tester.pumpWidget(buildSubject());
 
-      await tester.tap(find.byKey(const Key('profile-recovery-phrase-row')));
+      await tester.tap(find.byKey(const Key('profile-recovery-token-row')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(RecoveryPhraseRevealPage), findsOneWidget);
-      expect(find.byKey(const Key('recovery-phrase-word-1')), findsOneWidget);
+      expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
+      expect(find.byKey(const Key('recovery-token-value')), findsOneWidget);
     });
 
     testWidgets('theSpracheUndRegionRowOpensTheLocaleSettingsPage', (tester) async {

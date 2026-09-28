@@ -5,7 +5,7 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
-import 'package:sgart/features/auth/data/recovery_phrase.dart';
+import 'package:sgart/features/auth/data/recovery_token.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/shared/errors/app_error.dart';
@@ -389,11 +389,15 @@ void main() {
       });
     });
 
-    group('recoverFromPhrase (Story 7.2, AC3, D-E)', () {
-      final recoveryWords = RecoveryPhrase.wordsFromEntropy(Uint8List(32));
+    group('recoverFromToken (Story 7.2, AC3, D-E; token format Story 8.5)', () {
+      late String recoveryToken;
+
+      setUp(() async {
+        recoveryToken = await RecoveryToken.format(Uint8List(16));
+      });
 
       blocTest<AuthCubit, AuthState>(
-        'recoverFromPhrase_withValidPhrase_signsInAndClearsActiveHousehold',
+        'recoverFromToken_withValidToken_signsInAndClearsActiveHousehold',
         build: () {
           activeHouseholdStore.activeId = 'throwaway-household';
           oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
@@ -401,31 +405,31 @@ void main() {
               keycloakUserId: 'sub-recovered', displayName: 'Anna Recovered', email: 'anna@example.test');
           return buildCubit();
         },
-        act: (cubit) => cubit.recoverFromPhrase(recoveryWords),
+        act: (cubit) => cubit.recoverFromToken(recoveryToken),
         expect: () => [
           const AuthState.inProgress(),
           const AuthState.authenticated('Anna Recovered', 'sub-recovered', 'anna@example.test'),
         ],
         verify: (_) {
-          expect(deviceCredentialStore.lastRestoredWords, recoveryWords);
+          expect(deviceCredentialStore.lastRestoredToken, recoveryToken);
           expect(activeHouseholdStore.cleared, isTrue);
           expect(tokenStorage.storedTokens!.accessToken, 'access');
         },
       );
 
-      test('recoverFromPhrase_withInvalidPhrase_throwsAndLeavesTheGlobalAuthStateUntouched', () async {
-        deviceCredentialStore.restoreErrorToThrow = const InvalidRecoveryPhrase();
+      test('recoverFromToken_withInvalidToken_throwsAndLeavesTheGlobalAuthStateUntouched', () async {
+        deviceCredentialStore.restoreErrorToThrow = const InvalidRecoveryToken();
         final cubit = buildCubit();
         addTearDown(cubit.close);
         final emittedStates = <AuthState>[];
         final subscription = cubit.stream.listen(emittedStates.add);
 
         await expectLater(
-          cubit.recoverFromPhrase(const ['not', 'a', 'valid', 'phrase']),
-          throwsA(isA<InvalidRecoveryPhrase>()),
+          cubit.recoverFromToken('not-a-valid-token'),
+          throwsA(isA<InvalidRecoveryToken>()),
         );
 
-        // AC3: an invalid phrase changes nothing — no inProgress/failure emit (which would tear
+        // AC3: an invalid token changes nothing — no inProgress/failure emit (which would tear
         // down the current session), no active-household clear, and no sign-in attempt. The caller
         // (RecoverAccountPage) shows the error inline instead.
         expect(emittedStates, isEmpty);

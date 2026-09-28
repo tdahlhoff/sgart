@@ -5,7 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
-import 'package:sgart/features/auth/data/recovery_phrase.dart';
+import 'package:sgart/features/auth/data/recovery_token.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/auth/presentation/recover_account_page.dart';
@@ -22,10 +22,10 @@ void main() {
     late FakeDeviceCredentialStore deviceCredentialStore;
     late FakeActiveHouseholdStore activeHouseholdStore;
     late AuthCubit authCubit;
-    late List<String> recoveryWords;
+    late String recoveryToken;
 
     setUp(() async {
-      recoveryWords = RecoveryPhrase.wordsFromEntropy(Uint8List(32)); // fixed synthetic test vector
+      recoveryToken = await RecoveryToken.format(Uint8List(16)); // fixed synthetic test vector
       oidcClient = FakeOidcClient()
         ..tokensToReturn = const OidcTokens(accessToken: 'access-throwaway');
       tokenStorage = FakeSecureTokenStorage();
@@ -81,11 +81,11 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('recoverAccountPage_invalidPhrase_showsInlineError', (tester) async {
-      deviceCredentialStore.restoreErrorToThrow = const InvalidRecoveryPhrase();
+    testWidgets('recoverAccountPage_invalidToken_showsInlineError', (tester) async {
+      deviceCredentialStore.restoreErrorToThrow = const InvalidRecoveryToken();
       await openRecoverAccountPage(tester);
 
-      await tester.enterText(find.byKey(const Key('recover-account-phrase-field')), 'not a valid phrase');
+      await tester.enterText(find.byKey(const Key('recover-account-token-field')), 'not a valid token');
       await tester.tap(find.byKey(const Key('recover-account-submit-button')));
       await tester.pumpAndSettle();
 
@@ -99,33 +99,33 @@ void main() {
       expect(activeHouseholdStore.cleared, isFalse);
     });
 
-    testWidgets('recoverAccountPage_signInFailsAfterValidPhrase_showsGenericErrorAndStaysOpen', (tester) async {
+    testWidgets('recoverAccountPage_signInFailsAfterValidToken_showsGenericErrorAndStaysOpen', (tester) async {
       await openRecoverAccountPage(tester);
 
-      // A valid phrase imports fine, but the Direct-Grant exchange then fails (e.g. server
+      // A valid token imports fine, but the Direct-Grant exchange then fails (e.g. server
       // unreachable). The page must surface that instead of silently resetting the form.
       oidcClient.signInErrorToThrow = Exception('server unreachable');
 
-      await tester.enterText(find.byKey(const Key('recover-account-phrase-field')), recoveryWords.join(' '));
+      await tester.enterText(find.byKey(const Key('recover-account-token-field')), recoveryToken);
       await tester.tap(find.byKey(const Key('recover-account-submit-button')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('recover-account-signin-error')), findsOneWidget);
       expect(find.byType(RecoverAccountPage), findsOneWidget);
       expect(authCubit.state.status, AuthStatus.failure);
-      expect(deviceCredentialStore.lastRestoredWords, recoveryWords); // the import did happen
+      expect(deviceCredentialStore.lastRestoredToken, recoveryToken); // the import did happen
     });
 
-    testWidgets('recoverAccountPage_validPhrase_swapsIdentityAndReroutes', (tester) async {
+    testWidgets('recoverAccountPage_validToken_swapsIdentityAndReroutes', (tester) async {
       await openRecoverAccountPage(tester);
 
-      // The next signIn() (driven by recoverFromPhrase) resolves to the *existing* account behind
-      // the phrase — a different identity than the throwaway one this cubit started as.
+      // The next signIn() (driven by recoverFromToken) resolves to the *existing* account behind
+      // the token — a different identity than the throwaway one this cubit started as.
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
       identityApi.identityToReturn = const CallerIdentity(
           keycloakUserId: 'sub-recovered', displayName: 'Recovered Person', email: 'recovered@example.test');
 
-      await tester.enterText(find.byKey(const Key('recover-account-phrase-field')), recoveryWords.join(' '));
+      await tester.enterText(find.byKey(const Key('recover-account-token-field')), recoveryToken);
       await tester.tap(find.byKey(const Key('recover-account-submit-button')));
       await tester.pumpAndSettle();
 
@@ -134,7 +134,7 @@ void main() {
       expect(find.byType(RecoverAccountPage), findsNothing);
       expect(authCubit.state.status, AuthStatus.authenticated);
       expect(authCubit.state.keycloakUserId, 'sub-recovered');
-      expect(deviceCredentialStore.lastRestoredWords, recoveryWords);
+      expect(deviceCredentialStore.lastRestoredToken, recoveryToken);
       expect(activeHouseholdStore.cleared, isTrue);
     });
   });

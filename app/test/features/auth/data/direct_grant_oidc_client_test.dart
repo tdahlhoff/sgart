@@ -86,16 +86,16 @@ void main() {
     // recovery half of the guarantee. This is DirectGrantOidcClient's own request-assembly, run
     // unchanged after a recovery import (Dev Notes crux: recovery reuses signIn() verbatim), so
     // proving it here covers the sign-in DirectGrantOidcClient issues on the recovery path too. The
-    // reveal half needs no test here: RecoveryPhraseRevealPage never constructs a Dio/HTTP client
-    // at all (see recovery_phrase_reveal_page_test.dart), so it cannot make a network call by
+    // reveal half needs no test here: RecoveryTokenRevealPage never constructs a Dio/HTTP client
+    // at all (see recovery_token_reveal_page_test.dart), so it cannot make a network call by
     // construction.
-    test('signIn_sendsOnlyThePublicKeyAndSignedChallenge_neverTheEntropyOrPhraseWords', () async {
+    test('signIn_sendsOnlyThePublicKeyAndSignedChallenge_neverTheEntropyOrRecoveryToken', () async {
       adapter.responseJson = '{"access_token":"access-1"}';
 
       await client.signIn();
 
       final sentForm = adapter.lastRequestBody as Map;
-      // The wire contract itself has no field for entropy/phrase words — DeviceCredential's own
+      // The wire contract itself has no field for entropy/a recovery token — DeviceCredential's own
       // API makes leaking them structurally impossible (only publicKeyBase64Url/sign() are
       // exposed). Pinning the exact key set is the regression guard: a future field could only be
       // added here by a deliberate change, not by an accidental new export off DeviceCredential.

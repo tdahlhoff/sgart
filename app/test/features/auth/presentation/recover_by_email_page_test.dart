@@ -8,7 +8,7 @@ import 'package:sgart/features/auth/data/oidc_tokens.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/auth/presentation/recover_by_email_page.dart';
-import 'package:sgart/features/auth/presentation/recovery_phrase_reveal_page.dart';
+import 'package:sgart/features/auth/presentation/recovery_token_reveal_page.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
 
@@ -17,7 +17,7 @@ import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/fake_households_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
 
-/// Test Manifest: recoverByEmail_validCode_rebindsSwapsIdentityAndRevealsFreshPhrase,
+/// Test Manifest: recoverByEmail_validCode_rebindsSwapsIdentityAndRevealsFreshToken,
 /// recoverByEmail_wrongCode_showsInlineErrorAndKeepsSessionIntact,
 /// recoverByEmailPath_sendsNoLocalSecretItShouldNot (Story 7.3, AC2/AC3).
 void main() {
@@ -36,7 +36,7 @@ void main() {
       identityApi = FakeIdentityApi()
         ..identityToReturn = const CallerIdentity(
             keycloakUserId: 'sub-throwaway', displayName: 'Throwaway', email: '');
-      deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
+      deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       activeHouseholdStore = FakeActiveHouseholdStore()..activeId = 'throwaway-household';
       accountEmailApi = FakeAccountEmailApi();
       authCubit = AuthCubit(
@@ -100,12 +100,12 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('recoverByEmail_validCode_rebindsSwapsIdentityAndRevealsFreshPhrase', (tester) async {
+    testWidgets('recoverByEmail_validCode_rebindsSwapsIdentityAndRevealsFreshToken', (tester) async {
       await openPage(tester);
       await requestCode(tester, 'anna@example.test');
 
       // The rebind resolves into the *recovered* account — a different identity than the
-      // throwaway one this cubit started as (mirrors recoverFromPhrase's precedent).
+      // throwaway one this cubit started as (mirrors recoverFromToken's precedent).
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
       identityApi.identityToReturn = const CallerIdentity(
           keycloakUserId: 'sub-recovered', displayName: 'Recovered Person', email: 'anna@example.test');
@@ -120,9 +120,10 @@ void main() {
       expect(activeHouseholdStore.cleared, isTrue);
       // The route was replaced (pushReplacement), not merely covered — this page is gone.
       expect(find.byType(RecoverByEmailPage), findsNothing);
-      expect(find.byType(RecoveryPhraseRevealPage), findsOneWidget);
-      expect(find.byKey(const Key('recovery-phrase-word-1')), findsOneWidget);
-      expect(find.text('Deine vorherige Wiederherstellungsphrase gilt nicht mehr. Sichere diese neue Phrase.'),
+      expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
+      expect(find.byKey(const Key('recovery-token-value')), findsOneWidget);
+      expect(
+          find.text('Dein vorheriger Wiederherstellungsschlüssel gilt nicht mehr. Sichere diesen neuen Schlüssel.'),
           findsOneWidget);
     });
 

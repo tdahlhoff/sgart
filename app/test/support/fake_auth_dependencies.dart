@@ -16,7 +16,7 @@ import 'fake_households_dependencies.dart';
 /// identity header, Story 1.11) without touching real OIDC/storage/network (CLAUDE.md §6). Data is
 /// synthetic (DSGVO). Neither [FakeDeviceCredentialStore] nor [FakeActiveHouseholdStore] is
 /// exercised by this happy-path sign-in — they only matter to tests that call
-/// [AuthCubit.recoverFromPhrase] directly.
+/// [AuthCubit.recoverFromToken] directly.
 Future<AuthCubit> buildAuthenticatedAuthCubit({
   String displayName = 'Anna Testperson',
   String keycloakUserId = 'sub-1',
@@ -98,11 +98,17 @@ class FakeIdentityApi implements IdentityApi {
   }
 }
 
-/// Test double for [DeviceCredentialStore] (Story 7.2) — no real secure storage or BIP39/Ed25519
-/// work in tests that only need *an* `AuthCubit`/`DirectGrantOidcClient` to function. [credential]
-/// is settable for tests that assert against a specific, known [DeviceCredential] (e.g.
-/// `DirectGrantOidcClient`'s own test, which signs a challenge with it); [wordsToReturn],
-/// [lastRestoredWords], and [restoreErrorToThrow] drive the recovery-phrase reveal/restore paths.
+/// Test double for [DeviceCredentialStore] (Story 7.2, token format Story 8.5) — no real secure
+/// storage or codec/Ed25519 work in tests that only need *an* `AuthCubit`/`DirectGrantOidcClient`
+/// to function. [credential] is settable for tests that assert against a specific, known
+/// [DeviceCredential] (e.g. `DirectGrantOidcClient`'s own test, which signs a challenge with it);
+/// [tokenToReturn], [lastRestoredToken], and [restoreErrorToThrow] drive the recovery-token
+/// reveal/restore paths.
+/// A fixed, synthetic test-vector recovery token — never a real one (CLAUDE.md §6, DSGVO in
+/// tests). Shared so widget tests across features stub [FakeDeviceCredentialStore.tokenToReturn]
+/// with one literal instead of repeating it (DRY, CLAUDE.md §1).
+const fakeRecoveryToken = 'K7QM-2XRA-9FDT-HB4W-0NCE-M3PY-Q8ZJ';
+
 class FakeDeviceCredentialStore implements DeviceCredentialStore {
   FakeDeviceCredentialStore({DeviceCredential? credential}) : _seedCredential = credential;
 
@@ -114,23 +120,23 @@ class FakeDeviceCredentialStore implements DeviceCredentialStore {
   DeviceCredential get credential => _seedCredential!;
   set credential(DeviceCredential value) => _seedCredential = value;
 
-  List<String> wordsToReturn = const [];
-  List<String>? lastRestoredWords;
+  String tokenToReturn = '';
+  String? lastRestoredToken;
   Object? restoreErrorToThrow;
-  Object? recoveryPhraseErrorToThrow;
+  Object? recoveryTokenErrorToThrow;
 
   @override
   Future<DeviceCredential> loadOrCreate() async => credential;
 
   @override
-  Future<List<String>> recoveryPhrase() async {
-    if (recoveryPhraseErrorToThrow != null) throw recoveryPhraseErrorToThrow!;
-    return wordsToReturn;
+  Future<String> recoveryToken() async {
+    if (recoveryTokenErrorToThrow != null) throw recoveryTokenErrorToThrow!;
+    return tokenToReturn;
   }
 
   @override
-  Future<void> restoreFromPhrase(List<String> words) async {
-    lastRestoredWords = words;
+  Future<void> restoreFromToken(String token) async {
+    lastRestoredToken = token;
     if (restoreErrorToThrow != null) throw restoreErrorToThrow!;
   }
 }

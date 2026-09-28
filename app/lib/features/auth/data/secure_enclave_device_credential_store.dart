@@ -6,10 +6,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'device_credential.dart';
 import 'device_credential_store.dart';
-import 'recovery_phrase.dart';
+import 'recovery_token.dart';
 
 /// Real [DeviceCredentialStore] backed by `flutter_secure_storage` (Android Keystore / iOS
-/// Keychain, Story 7.1 §2) — the 256-bit entropy is the device's actual secret, generated once
+/// Keychain, Story 7.1 §2) — the 128-bit entropy is the device's actual secret, generated once
 /// with a cryptographically secure random source and then never regenerated. Deliberately a
 /// separate storage key from [FlutterSecureTokenStorage]'s session tokens: the device identity
 /// outlives sign-out (a re-launch after sign-out re-derives and re-uses the *same* Keycloak
@@ -17,11 +17,14 @@ import 'recovery_phrase.dart';
 class SecureEnclaveDeviceCredentialStore implements DeviceCredentialStore {
   const SecureEnclaveDeviceCredentialStore([this._storage = const FlutterSecureStorage()]);
 
-  static const _entropyKey = 'sgart.auth.deviceEntropy';
+  /// Story 8.5: a new key, deliberately distinct from the old (dropped) 32-byte
+  /// `sgart.auth.deviceEntropy` entry — no real beta ever ran (emulator-only, no persisted data),
+  /// so a stale old entry is simply ignored rather than migrated.
+  static const _entropyKey = 'sgart.auth.recoveryTokenEntropy';
 
-  /// 256 bits (RFC-typical for a strong symmetric secret; also the exact size BIP39 encodes to a
-  /// 24-word mnemonic, D-A) — the entropy IS the Ed25519 seed, never a second derivation step.
-  static const _entropyLengthBytes = 32;
+  /// 128 bits — the stored-entropy floor a short recovery token (Story 8.5, D1) encodes; the
+  /// Ed25519 seed is HKDF-derived from it ([DeviceCredential.fromEntropy]), never a raw seed.
+  static const _entropyLengthBytes = 16;
 
   final FlutterSecureStorage _storage;
 
@@ -32,16 +35,16 @@ class SecureEnclaveDeviceCredentialStore implements DeviceCredentialStore {
   }
 
   @override
-  Future<List<String>> recoveryPhrase() async {
+  Future<String> recoveryToken() async {
     final entropy = await _loadOrGenerateEntropy();
-    return RecoveryPhrase.wordsFromEntropy(entropy);
+    return RecoveryToken.format(entropy);
   }
 
   @override
-  Future<void> restoreFromPhrase(List<String> words) async {
-    // Validate before writing anything — an InvalidRecoveryPhrase here propagates straight to the
+  Future<void> restoreFromToken(String token) async {
+    // Validate before writing anything — an InvalidRecoveryToken here propagates straight to the
     // caller with the current entropy left untouched (AC3, fail fast).
-    final entropy = RecoveryPhrase.entropyFromWords(words);
+    final entropy = await RecoveryToken.parse(token);
     await _storage.write(key: _entropyKey, value: base64Encode(entropy));
   }
 

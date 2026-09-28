@@ -24,10 +24,10 @@ dependencies:
   printing: ^5.15.0
   pdf: ^3.13.0
   # Story 7.1: the silent-provisioning device credential — a deterministic Ed25519 keypair (native
-  # JVM support server-side; this is the Flutter/client-side signer) and its BIP39 recovery-phrase
-  # encoding (not shown to the person until Story 7.2).
+  # JVM support server-side; this is the Flutter/client-side signer), its HKDF seed derivation
+  # (Story 8.5), and the short recovery-token checksum hash. No separate encoding library: the
+  # recovery token's Crockford Base32 codec is hand-rolled (RecoveryToken, Story 8.5).
   cryptography: ^2.9.0
-  bip39: ^1.0.6
   share_plus: ^13.3.0
 
 dev_dependencies:
@@ -36,7 +36,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   bloc_test: ^10.0.0
   # Story 7.2: the package-provided in-memory FlutterSecureStoragePlatform fake — lets
-  # SecureEnclaveDeviceCredentialStore's recovery-phrase tests swap the real Keychain/Keystore
+  # SecureEnclaveDeviceCredentialStore's recovery-token tests swap the real Keychain/Keystore
   # backend for an in-memory one (CLAUDE.md §6) without depending on it only transitively.
   flutter_secure_storage_platform_interface: ^2.1.0
   share_plus_platform_interface: ^7.2.0

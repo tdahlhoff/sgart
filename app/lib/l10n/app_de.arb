@@ -36,53 +36,67 @@
     "description": "Shown on the authenticated placeholder screen when the token carries no display name (neither name nor preferred_username claim), instead of a trailing blank."
   },
 
-  "recoveryPhraseRevealTitle": "Wiederherstellungsphrase",
-  "@recoveryPhraseRevealTitle": {
-    "description": "Title of the shared recovery-phrase reveal page (Story 7.2, AC1/AC2), reached from the choice screen's save action and Profil's re-view row."
+  "recoveryTokenRevealTitle": "Wiederherstellungsschlüssel",
+  "@recoveryTokenRevealTitle": {
+    "description": "Title of the shared recovery-token reveal page (Story 7.2, AC1/AC2; token format Story 8.5), reached from the choice screen's save action and Profil's re-view row."
   },
 
-  "recoveryPhraseRevealWarning": "Bewahre diese 24 Wörter an einem sicheren Ort auf. Nur damit kannst du dein Konto auf einem anderen Gerät oder nach einer Neuinstallation wiederherstellen. Gehen sie verloren, sind dein Konto und die Daten deines Haushalts unwiederbringlich verloren.",
-  "@recoveryPhraseRevealWarning": {
-    "description": "Plain-German warning on the recovery-phrase reveal page stating the consequence of losing the phrase, without mentioning the not-yet-built email backup (Story 7.2, AC1, Dev Notes Q&A default)."
+  "recoveryTokenRevealWarning": "Bewahre diesen Wiederherstellungsschlüssel an einem sicheren Ort auf. Damit kannst du dein Konto auf einem anderen Gerät oder nach einer Neuinstallation wiederherstellen, auch ohne hinterlegte E-Mail-Adresse. Geht er verloren, ist eine Wiederherstellung nur noch möglich, wenn du zuvor eine Wiederherstellungs-E-Mail-Adresse hinterlegt hast.",
+  "@recoveryTokenRevealWarning": {
+    "description": "Plain-German warning on the recovery-token reveal page stating the consequence of losing the token. Does not claim the token is the only way to recover the account — Story 7.3 shipped opt-in email-based recovery as an alternative path (Story 7.2, AC1, Dev Notes Q&A default; wording updated Story 8.5, corrected Story 8.5 review to account for Story 7.3)."
   },
 
-  "recoveryPhraseRevealLoadError": "Die Wiederherstellungsphrase konnte nicht geladen werden. Bitte versuche es erneut.",
-  "@recoveryPhraseRevealLoadError": {
-    "description": "Shown on the recovery-phrase reveal page when reading the phrase from secure local storage fails, instead of a spinner that never resolves (Story 7.2, AC1, code review 2026-09-14)."
+  "recoveryTokenRevealLoadError": "Der Wiederherstellungsschlüssel konnte nicht geladen werden. Bitte versuche es erneut.",
+  "@recoveryTokenRevealLoadError": {
+    "description": "Shown on the recovery-token reveal page when reading the token from secure local storage fails, instead of a spinner that never resolves (Story 7.2, AC1, code review 2026-09-14)."
   },
 
-  "recoveryPhraseWordSemanticLabel": "Wort {number}: {word}",
-  "@recoveryPhraseWordSemanticLabel": {
-    "description": "Accessibility label for one numbered word chip on the recovery-phrase reveal page, so a screen reader announces the position and word clearly (Story 7.2, AC1/AC2 a11y).",
+  "recoveryTokenValueSemanticLabel": "Wiederherstellungsschlüssel: {token}",
+  "@recoveryTokenValueSemanticLabel": {
+    "description": "Accessibility label for the single token value on the recovery-token reveal page, so a screen reader announces it clearly (Story 8.5, AC a11y).",
     "placeholders": {
-      "number": { "type": "int" },
-      "word": { "type": "String" }
+      "token": { "type": "String" }
     }
   },
 
-  "recoveryPhraseRestoreTitle": "Konto wiederherstellen",
-  "@recoveryPhraseRestoreTitle": {
-    "description": "Title of the recovery-phrase entry form (Story 7.2, AC3)."
+  "recoveryTokenCopyButtonLabel": "Kopieren",
+  "@recoveryTokenCopyButtonLabel": {
+    "description": "Label of the button next to the token on the recovery-token reveal page that copies it to the clipboard (Story 8.5, D2)."
   },
 
-  "recoveryPhraseRestoreSubtitle": "Gib die 24 Wörter deiner Wiederherstellungsphrase ein, um dein bestehendes Konto auf diesem Gerät anzumelden.",
-  "@recoveryPhraseRestoreSubtitle": {
-    "description": "Short supporting copy on the recovery-phrase entry form explaining what it does."
+  "recoveryTokenCopiedSnackBar": "Wiederherstellungsschlüssel in die Zwischenablage kopiert.",
+  "@recoveryTokenCopiedSnackBar": {
+    "description": "Snackbar shown after the copy button on the recovery-token reveal page successfully copies the token to the clipboard. Its own key, distinct from invitesCopiedSnackBar, so this page's wording isn't coupled to Story 7.5's invite-copy feature."
   },
 
-  "recoveryPhraseRestoreFieldLabel": "Wiederherstellungsphrase (24 Wörter)",
-  "@recoveryPhraseRestoreFieldLabel": {
-    "description": "Label of the single, forgiving multiline field the 24-word phrase is entered into (Story 7.2, AC3, Dev Notes Q&A default)."
+  "recoveryTokenCopyFailedSnackBar": "Der Wiederherstellungsschlüssel konnte nicht kopiert werden. Bitte versuche es erneut.",
+  "@recoveryTokenCopyFailedSnackBar": {
+    "description": "Snackbar shown when the copy button on the recovery-token reveal page fails to copy the token (e.g. a PlatformException from Clipboard.setData), so the failure isn't silent."
   },
 
-  "recoveryPhraseRestoreSubmitButtonLabel": "Wiederherstellen",
-  "@recoveryPhraseRestoreSubmitButtonLabel": {
-    "description": "Label of the button that submits the entered recovery phrase."
+  "recoveryTokenRestoreTitle": "Konto wiederherstellen",
+  "@recoveryTokenRestoreTitle": {
+    "description": "Title of the recovery-token entry form (Story 7.2, AC3)."
   },
 
-  "recoveryPhraseRestoreInvalidPhraseError": "Diese Wiederherstellungsphrase ist ungültig. Bitte überprüfe die 24 Wörter.",
-  "@recoveryPhraseRestoreInvalidPhraseError": {
-    "description": "Shown inline on the recovery-phrase entry form when the phrase fails BIP39 validation (auth.invalidRecoveryPhrase) — wrong word count, an unknown word, or a failed checksum."
+  "recoveryTokenRestoreSubtitle": "Gib deinen Wiederherstellungsschlüssel ein, um dein bestehendes Konto auf diesem Gerät anzumelden.",
+  "@recoveryTokenRestoreSubtitle": {
+    "description": "Short supporting copy on the recovery-token entry form explaining what it does (Story 8.5)."
+  },
+
+  "recoveryTokenRestoreFieldLabel": "Wiederherstellungsschlüssel",
+  "@recoveryTokenRestoreFieldLabel": {
+    "description": "Label of the single, forgiving field the recovery token is entered into (Story 7.2, AC3; token format Story 8.5, D1)."
+  },
+
+  "recoveryTokenRestoreSubmitButtonLabel": "Wiederherstellen",
+  "@recoveryTokenRestoreSubmitButtonLabel": {
+    "description": "Label of the button that submits the entered recovery token."
+  },
+
+  "recoveryTokenRestoreInvalidTokenError": "Dieser Wiederherstellungsschlüssel ist ungültig. Bitte überprüfe die Eingabe.",
+  "@recoveryTokenRestoreInvalidTokenError": {
+    "description": "Shown inline on the recovery-token entry form when the token fails validation (auth.invalidRecoveryToken) — wrong length, an illegal character, or a failed checksum (Story 8.5)."
   },
 
   "unitPiece": "Stück",
@@ -145,14 +159,14 @@
     "description": "Label of the button that leads to the accept-invite screen."
   },
 
-  "householdsSaveRecoveryPhraseActionLabel": "Wiederherstellungsphrase sichern",
-  "@householdsSaveRecoveryPhraseActionLabel": {
-    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-phrase reveal page (Story 7.2, AC1, D-A/D-B)."
+  "householdsSaveRecoveryTokenActionLabel": "Wiederherstellungsschlüssel sichern",
+  "@householdsSaveRecoveryTokenActionLabel": {
+    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-token reveal page (Story 7.2, AC1, D-A/D-B; token format Story 8.5)."
   },
 
   "householdsRecoverAccountActionLabel": "Konto wiederherstellen",
   "@householdsRecoverAccountActionLabel": {
-    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-phrase entry form (Story 7.2, AC3, D-D) — the only recovery entry point, since Profil is unreachable with zero households."
+    "description": "Quiet, non-competing action on the first-run choice screen that opens the recovery-token entry form (Story 7.2, AC3, D-D) — the only recovery entry point, since Profil is unreachable with zero households."
   },
 
   "householdsAwaitInviteHeading": "Einladung annehmen",
@@ -1095,9 +1109,9 @@
     "description": "Section heading on the Profil screen grouping account/security rows (Story 7.2, AC2)."
   },
 
-  "profileRecoveryPhraseRowLabel": "Wiederherstellungsphrase",
-  "@profileRecoveryPhraseRowLabel": {
-    "description": "Row on the Profil screen that re-opens the recovery-phrase reveal page, any number of times (Story 7.2, AC2, D-C)."
+  "profileRecoveryTokenRowLabel": "Wiederherstellungsschlüssel",
+  "@profileRecoveryTokenRowLabel": {
+    "description": "Row on the Profil screen that re-opens the recovery-token reveal page, any number of times (Story 7.2, AC2, D-C; token format Story 8.5)."
   },
 
   "profileDisplaySectionLabel": "Darstellung",
@@ -1365,7 +1379,7 @@
     "description": "Title of the confirmation dialog before detaching the recovery email (Story 7.3, AC4)."
   },
 
-  "profileRecoveryEmailDetachConfirmMessage": "Ohne E-Mail bleibt die Wiederherstellungsphrase dein einziger Weg zurück in dein Konto.",
+  "profileRecoveryEmailDetachConfirmMessage": "Ohne E-Mail bleibt der Wiederherstellungsschlüssel dein einziger Weg zurück in dein Konto.",
   "@profileRecoveryEmailDetachConfirmMessage": {
     "description": "Body of the confirmation dialog before detaching the recovery email (Story 7.3, AC4)."
   },
@@ -1412,7 +1426,7 @@
 
   "householdsRecoverByEmailActionLabel": "Per E-Mail wiederherstellen",
   "@householdsRecoverByEmailActionLabel": {
-    "description": "Quiet, non-competing action on the first-run choice screen that opens RecoverByEmailPage (Story 7.3, AC2), peer to householdsRecoverAccountActionLabel's phrase-based path."
+    "description": "Quiet, non-competing action on the first-run choice screen that opens RecoverByEmailPage (Story 7.3, AC2), peer to householdsRecoverAccountActionLabel's token-based path."
   },
 
   "recoverByEmailTitle": "Per E-Mail wiederherstellen",
@@ -1450,9 +1464,9 @@
     "description": "Label of the button that confirms the code and triggers the R1 rebind on RecoverByEmailPage (Story 7.3, AC2)."
   },
 
-  "recoveryPhraseFreshAfterEmailRecoveryWarning": "Deine vorherige Wiederherstellungsphrase gilt nicht mehr. Sichere diese neue Phrase.",
-  "@recoveryPhraseFreshAfterEmailRecoveryWarning": {
-    "description": "Distinct warning shown on RecoveryPhraseRevealPage immediately after a successful email recovery (Story 7.3, AC3, D-I) — replaces recoveryPhraseRevealWarning for this one entry point."
+  "recoveryTokenFreshAfterEmailRecoveryWarning": "Dein vorheriger Wiederherstellungsschlüssel gilt nicht mehr. Sichere diesen neuen Schlüssel.",
+  "@recoveryTokenFreshAfterEmailRecoveryWarning": {
+    "description": "Distinct warning shown on RecoveryTokenRevealPage immediately after a successful email recovery (Story 7.3, AC3, D-I) — replaces recoveryTokenRevealWarning for this one entry point (token format Story 8.5)."
   },
 
   "accountRecoveryEmailRequiredError": "Bitte eine E-Mail-Adresse eingeben.",

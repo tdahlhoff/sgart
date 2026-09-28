@@ -26,7 +26,7 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lifted out of DirectGrantOidcClient's own construction (Story 7.2) so the recovery-phrase
+    // Lifted out of DirectGrantOidcClient's own construction (Story 7.2) so the recovery-token
     // reveal/recovery UI reached from FirstRunRouter's subtree can read the *same*
     // DeviceCredentialStore instance the sign-in flow uses. The store is stateless over fixed
     // keys, so correctness never depended on a single instance — but one provided instance keeps

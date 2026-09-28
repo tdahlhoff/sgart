@@ -13,12 +13,12 @@ import '../data/account_email_api.dart';
 import '../data/device_credential_store.dart';
 import 'auth_cubit.dart';
 import 'auth_state.dart';
-import 'recovery_phrase_reveal_page.dart';
+import 'recovery_token_reveal_page.dart';
 
 /// Pushes [RecoverByEmailPage] from the guaranteed 0-household gateway
-/// (`CreateOrAwaitChoicePage`, peer to the phrase-based `RecoverAccountPage`), re-providing
-/// everything the page and its eventual fresh-phrase reveal need across the root-Navigator push
-/// boundary (the `openRecoveryPhraseRevealPage`/`_openRecoverAccount` precedent): [AuthCubit] (for
+/// (`CreateOrAwaitChoicePage`, peer to the token-based `RecoverAccountPage`), re-providing
+/// everything the page and its eventual fresh-token reveal need across the root-Navigator push
+/// boundary (the `openRecoveryTokenRevealPage`/`_openRecoverAccount` precedent): [AuthCubit] (for
 /// the post-rebind identity swap), [DeviceCredentialStore] (for the reveal page), and a fresh
 /// [AccountEmailApi] over the ambient [AuthenticatedHttpClient].
 void openRecoverByEmailPage(BuildContext context) {
@@ -139,7 +139,7 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
           MaterialPageRoute<void>(
             builder: (_) => RepositoryProvider<DeviceCredentialStore>.value(
               value: deviceCredentialStore,
-              child: const RecoveryPhraseRevealPage(isFreshAfterEmailRecovery: true),
+              child: const RecoveryTokenRevealPage(isFreshAfterEmailRecovery: true),
             ),
           ),
         );

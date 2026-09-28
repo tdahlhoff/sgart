@@ -14,7 +14,7 @@ import '../../auth/presentation/account_email_state.dart';
 import '../../auth/presentation/add_recovery_email_page.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/auth_state.dart';
-import '../../auth/presentation/recovery_phrase_reveal_page.dart';
+import '../../auth/presentation/recovery_token_reveal_page.dart';
 import '../../households/data/household_summary.dart';
 import '../../members/data/members_api.dart';
 import '../data/nickname_api.dart';
@@ -209,11 +209,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: SgartShapes.space4 * 2),
             Text(localizations.profileAccountSectionLabel, style: Theme.of(context).textTheme.labelLarge),
             ListTile(
-              key: const Key('profile-recovery-phrase-row'),
+              key: const Key('profile-recovery-token-row'),
               leading: const Icon(Icons.key_outlined),
-              title: Text(localizations.profileRecoveryPhraseRowLabel),
+              title: Text(localizations.profileRecoveryTokenRowLabel),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => openRecoveryPhraseRevealPage(context),
+              onTap: () => openRecoveryTokenRevealPage(context),
             ),
             const Divider(height: SgartShapes.space4 * 2),
             Text(localizations.profileRecoveryEmailSectionLabel, style: Theme.of(context).textTheme.labelLarge),

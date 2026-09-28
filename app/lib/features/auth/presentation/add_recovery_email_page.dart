@@ -14,7 +14,7 @@ import 'confirm_email_code_page.dart';
 /// Pushes [AddRecoveryEmailPage], building a fresh [AccountEmailCubit] over the ambient
 /// [AuthenticatedHttpClient] (already provided by `FirstRunRouter`, reachable from the Profil
 /// screen — mirrors every other API built from it, e.g. `HouseholdsApi`). Re-provided as the same
-/// instance across the push into [ConfirmEmailCodePage] (the `openRecoveryPhraseRevealPage`
+/// instance across the push into [ConfirmEmailCodePage] (the `openRecoveryTokenRevealPage`
 /// provider-escape precedent), and handed back to the caller on pop so the Profil section's own
 /// [AccountEmailCubit] instance stays in sync with the attach/confirm outcome (CLAUDE.md §1 DRY —
 /// one cubit instance for the whole attach→confirm round trip, not two disconnected ones).

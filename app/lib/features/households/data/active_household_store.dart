@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// (CLAUDE.md §6).
 ///
 /// **DSGVO:** the stored id references household membership (personal data), so [clear] exists
-/// for a future identity switch on the same device (e.g. Story 7.2/7.3's recovery-phrase import)
+/// for a future identity switch on the same device (e.g. Story 7.2/7.3's recovery-token import)
 /// and is covered by AD-7's device-cache purge on erasure — a newly-recovered identity on the same
 /// device must never inherit the previous identity's active household. `AuthCubit` has no sign-out
 /// action (Story 7.1 code review: the device credential is permanent, so there is nothing to clear

@@ -368,3 +368,12 @@
 - **Nickname data export not implemented.** `membership_nickname` is documented as "exportable" but no data-export mechanism exists in the backend at all. Belongs to Epic 6 (data portability); the export must include this table.
 - **Account-erasure `MembershipNicknameRepository.deleteFor(KeycloakUserId)` has no caller.** Provided + repository-tested; Epic 6 wires the account-erasure trigger (same as `AccountConsentRepository.deleteFor`).
 - **No audit trail for writes to personal data (the nickname).** CLAUDE.md §5 auditability; no personal-data audit mechanism exists project-wide yet — pre-existing gap.
+
+## Deferred from: code review of 8-5-short-recovery-token-instead-of-phrase.md (2026-09-28)
+
+- source_spec: `_bmad-output/implementation-artifacts/8-5-short-recovery-token-instead-of-phrase.md`
+  summary: The recovery-token `TextField` (`recover_account_page.dart`) doesn't disable autocorrect/suggestions or set `textCapitalization`, so the keyboard can mangle a pasted/typed account secret or learn it into its suggestion dictionary.
+  evidence: Confirmed pre-existing — the identical gap existed in the pre-8.5 `recover_account_page.dart` `TextField` (checked against baseline commit `43e79ed4c1b2dcb8cd94232b26c2722f74063d05`), so it is not caused by this story even though the field was otherwise rewritten.
+- source_spec: `_bmad-output/implementation-artifacts/8-5-short-recovery-token-instead-of-phrase.md`
+  summary: `AuthCubit.recoverFromToken` → `signIn()` silently provisions a brand-new empty account when a wrong-but-checksum-passing token is restored (~1-in-1024 for random garbage), instead of surfacing a distinct "no such account" outcome.
+  evidence: Pre-existing — `recoverFromToken` is `recoverFromPhrase` renamed with no behavior change (`auth_cubit.dart:116-120`); this story's 10-bit checksum is stronger than BIP39's 4-bit one, so risk decreased rather than increased. Settling this needs a "no existing account" signal from the sign-in path, out of this story's scope.

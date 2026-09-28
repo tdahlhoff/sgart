@@ -204,7 +204,7 @@ flutter install                   # installs the debug APK; launch it from the a
 3. **Test live sync (Story 4.4) / multi-person households:** each install/device silently
    provisions its **own**, distinct account — there is no "sign in as a different seeded user"
    anymore (that was Story 1.4's password-based flow, removed in 7.1; recovering the *same*
-   account on a second device via the recovery phrase is Story 7.2, not yet built). To get a
+   account on a second device via the recovery token is built, Story 7.2/8.5). To get a
    second device into the same household, use the in-app **invite** flow (Story 4.6): create the
    household on the first device, send an invite, and accept it from the second device/install.
    The `anna`/`ben`/`carla` synthetic users seeded in `keycloak/realm-sgart.json` still exist for

@@ -44,8 +44,9 @@ class AuthCubit extends Cubit<AuthState> {
   final SecureTokenStorage _tokenStorage;
   final IdentityApi _identityApi;
 
-  /// The device credential's entropy/recovery-phrase primitives (Story 7.2) — [recoverFromPhrase]
-  /// is the only method that touches this; every other flow keeps going through [_oidcClient].
+  /// The device credential's entropy/recovery-token primitives (Story 7.2, token format Story 8.5)
+  /// — [recoverFromToken] is the only method that touches this; every other flow keeps going
+  /// through [_oidcClient].
   final DeviceCredentialStore _deviceCredentialStore;
 
   /// Cleared on a successful recovery (AD-7, D-E) so a recovered identity on a shared/reused
@@ -97,23 +98,23 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  /// Imports [words] as the device's entropy and swaps to the identity it belongs to (Story 7.2,
-  /// AC3, D-E) — an identity swap through the existing `AuthGate` state machine: going
-  /// `inProgress → authenticated` re-mounts `FirstRunRouter`, which re-bootstraps
+  /// Imports [token] as the device's entropy and swaps to the identity it belongs to (Story 7.2,
+  /// AC3, D-E; token format Story 8.5) — an identity swap through the existing `AuthGate` state
+  /// machine: going `inProgress → authenticated` re-mounts `FirstRunRouter`, which re-bootstraps
   /// `HouseholdsCubit` for whichever identity is now signed in, with no bespoke re-routing.
   ///
-  /// Validation happens *first*, before any state is emitted: [DeviceCredentialStore.restoreFromPhrase]
-  /// throws `InvalidRecoveryPhrase` (writing nothing) on an invalid phrase, and this method lets it
-  /// propagate untouched. So an invalid phrase changes neither the enclave nor the app-wide auth
+  /// Validation happens *first*, before any state is emitted: [DeviceCredentialStore.restoreFromToken]
+  /// throws `InvalidRecoveryToken` (writing nothing) on an invalid token, and this method lets it
+  /// propagate untouched. So an invalid token changes neither the enclave nor the app-wide auth
   /// state — the current session stays mounted and the caller shows the error inline (AC3 "changes
-  /// nothing"; code review 2026-09-14). Only a *valid* phrase clears the active-household selection
+  /// nothing"; code review 2026-09-14). Only a *valid* token clears the active-household selection
   /// and re-signs-in via [signIn], which emits `inProgress → authenticated`: `loadOrCreate`
   /// re-derives the *same* username/keypair the imported entropy always derived, so the Direct-Grant
   /// exchange lands back in the existing account — `provision()` is an idempotent no-op there (Story
-  /// 7.1 AC3). Any non-phrase failure (a secure-storage write error) also propagates before an emit,
+  /// 7.1 AC3). Any non-token failure (a secure-storage write error) also propagates before an emit,
   /// so it can never strand the UI mid-swap.
-  Future<void> recoverFromPhrase(List<String> words) async {
-    await _deviceCredentialStore.restoreFromPhrase(words);
+  Future<void> recoverFromToken(String token) async {
+    await _deviceCredentialStore.restoreFromToken(token);
     await _activeHouseholdStore.clear();
     await signIn();
   }
@@ -121,9 +122,9 @@ class AuthCubit extends Cubit<AuthState> {
   /// Swaps identity after a successful server-side R1 rebind (Story 7.3, AC2/AC3, design §1.1):
   /// the caller (`RecoverByEmailPage`) has already driven `AccountEmailApi.confirmRecovery` to a
   /// `204`, which rebound the device's *existing* credential onto the recovered account — no new
-  /// key handling needed here, unlike [recoverFromPhrase]. This just re-runs [signIn] with that
+  /// key handling needed here, unlike [recoverFromToken]. This just re-runs [signIn] with that
   /// same credential (now authenticating into the recovered account) and clears the active
-  /// household (AD-7), mirroring [recoverFromPhrase]'s identity-swap sequencing exactly.
+  /// household (AD-7), mirroring [recoverFromToken]'s identity-swap sequencing exactly.
   Future<void> recoverFromEmailRebind() async {
     await _activeHouseholdStore.clear();
     await signIn();

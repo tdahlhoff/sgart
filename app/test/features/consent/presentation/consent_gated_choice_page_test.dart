@@ -43,7 +43,7 @@ void main() {
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
       nicknameApi = FakeNicknameApi();
-      deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
+      deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       authCubit = await buildAuthenticatedAuthCubit();
     });
 

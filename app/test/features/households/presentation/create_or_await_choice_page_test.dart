@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/recover_account_page.dart';
-import 'package:sgart/features/auth/presentation/recovery_phrase_reveal_page.dart';
+import 'package:sgart/features/auth/presentation/recovery_token_reveal_page.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/create_or_await_choice_page.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -39,7 +39,7 @@ void main() {
       referenceCache = FakeStoreChainReferenceCache();
       invitesApi = FakeInvitesApi();
       nicknameApi = FakeNicknameApi();
-      deviceCredentialStore = FakeDeviceCredentialStore()..wordsToReturn = List.generate(24, (i) => 'word$i');
+      deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       authCubit = await buildAuthenticatedAuthCubit();
     });
 
@@ -124,15 +124,15 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    // Test Manifest: choiceScreen_savePhraseAction_opensRevealPage (Story 7.2, AC1, D-A/D-B).
-    testWidgets('choosingSaveRecoveryPhraseOpensTheRevealPageWithoutEscapingItsProviders', (tester) async {
+    // Test Manifest: choiceScreen_saveTokenAction_opensRevealPage (Story 7.2, AC1, D-A/D-B).
+    testWidgets('choosingSaveRecoveryTokenOpensTheRevealPageWithoutEscapingItsProviders', (tester) async {
       await tester.pumpWidget(buildSubject());
 
-      await tester.tap(find.byKey(const Key('save-recovery-phrase-choice-button')));
+      await tester.tap(find.byKey(const Key('save-recovery-token-choice-button')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(RecoveryPhraseRevealPage), findsOneWidget);
-      expect(find.byKey(const Key('recovery-phrase-word-1')), findsOneWidget);
+      expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
+      expect(find.byKey(const Key('recovery-token-value')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -143,7 +143,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(RecoverAccountPage), findsOneWidget);
-      expect(find.byKey(const Key('recover-account-phrase-field')), findsOneWidget);
+      expect(find.byKey(const Key('recover-account-token-field')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

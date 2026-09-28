@@ -8,7 +8,7 @@ import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/recover_account_page.dart';
 import '../../auth/presentation/recover_by_email_page.dart';
-import '../../auth/presentation/recovery_phrase_reveal_page.dart';
+import '../../auth/presentation/recovery_token_reveal_page.dart';
 import '../../consent/presentation/consent_cubit.dart';
 import '../../invites/data/invites_api.dart';
 import '../../onboarding/presentation/onboarding_wizard_page.dart';
@@ -75,14 +75,14 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
                     onPressed: () => _openAwaitInvite(context),
                   ),
                   const SizedBox(height: SgartShapes.space4),
-                  // Two quiet, non-competing actions (D-A/D-B/D-D): saving the phrase now (the
+                  // Two quiet, non-competing actions (D-A/D-B/D-D): saving the token now (the
                   // guaranteed first sight, since both choices above start here) and, for a
                   // reinstalling person, restoring an existing account instead of starting fresh.
                   SgartButton(
-                    key: const Key('save-recovery-phrase-choice-button'),
-                    label: localizations.householdsSaveRecoveryPhraseActionLabel,
+                    key: const Key('save-recovery-token-choice-button'),
+                    label: localizations.householdsSaveRecoveryTokenActionLabel,
                     variant: SgartButtonVariant.tonal,
-                    onPressed: () => openRecoveryPhraseRevealPage(context),
+                    onPressed: () => openRecoveryTokenRevealPage(context),
                   ),
                   const SizedBox(height: SgartShapes.space2),
                   SgartButton(
@@ -155,9 +155,9 @@ class CreateOrAwaitChoicePage extends StatelessWidget {
   /// Pushes the accept-invite screen (Story 4.2) — see [openAwaitInvitePage].
   void _openAwaitInvite(BuildContext context) => openAwaitInvitePage(context);
 
-  /// Pushes the recovery-phrase entry form (Story 7.2, AC3, D-D), re-providing [AuthCubit] across
+  /// Pushes the recovery-token entry form (Story 7.2, AC3, D-D), re-providing [AuthCubit] across
   /// the push boundary the same way. (The reveal-page save action uses the shared
-  /// [openRecoveryPhraseRevealPage] helper directly.)
+  /// [openRecoveryTokenRevealPage] helper directly.)
   void _openRecoverAccount(BuildContext context) {
     final authCubit = context.read<AuthCubit>();
     Navigator.of(context).push(
