@@ -143,14 +143,13 @@
 
 ## Deferred from: code review of story-4.4 (2026-09-09)
 
-- **Existing projectors chain `addStreamNamePrefix` twice → runtime throw on first real live
-  subscription.** `ShoppingListReadModelProjector` and `ShoppingTripReadModelProjector` build their
-  `list-`+`household-` filters with two chained `addStreamNamePrefix` calls, which
-  `kurrentdb-client 1.2.1` rejects (`IllegalStateException: Filter type is already set to STREAM`).
-  Their live subscriptions have never been exercised end-to-end (only `project(...)` directly), so
-  this is latent — the first real live subscription against KurrentDB would throw. Story 4.4 worked
-  around it in `HouseholdLiveSyncFanout` with a single `withStreamNameRegularExpression` filter.
-  Verify a follow-up ticket exists to fix the two projectors the same way.
+- **RESOLVED** (fixed by commit `b4218f7`, 2026-09-12; delivery proven by Story 8.8, 2026-09-28).
+  ~~Existing projectors chain `addStreamNamePrefix` twice → runtime throw on first real live
+  subscription.~~ `ShoppingListReadModelProjector` and `ShoppingTripReadModelProjector` now build
+  their `list-`/`trip-` + `household-` filters with a single `withStreamNameRegularExpression`,
+  matching `HouseholdLiveSyncFanout`. `MultiPrefixKurrentDbSubscriptionRegressionTest` proves both
+  `start()` no longer throws and that each projector's live subscription actually delivers and
+  projects an event from each of its two stream prefixes into the real read model.
 - **T8 reconcile omits open list-detail / trip-detail screens.** `HouseholdLiveSyncController` only
   reconciles the shell-owned `ShoppingListsCubit` + `ActiveTripsCubit`; a member sitting on a pushed
   list-detail or trip-detail screen receives the nudge but nothing refreshes what they're viewing.
@@ -387,3 +386,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/8-6-real-recovery-emails-smtp-and-mailpit.md`
   summary: Assert the secure SMTP defaults (`mail.smtp.auth` / `mail.smtp.starttls.enable` resolve to `true` when `SGART_SMTP_AUTH`/`SGART_SMTP_STARTTLS` are unset) with a property-binding test.
   evidence: 8.6 made both env-overridable for Mailpit; no test reads the mail properties, so flipping a default would silently allow plaintext/unauthenticated prod SMTP. Land with the deferred beta-SMTP story (8.6 D1).
+- source_spec: `_bmad-output/implementation-artifacts/8-8-fix-live-sync-projector-stream-filter-throw.md`
+  summary: `ShoppingListReadModelProjector.stop()` / `ShoppingTripReadModelProjector.stop()` never cancel the open KurrentDB `$all` subscription (they only clear `running` and shut down the resubscribe scheduler), so events keep being projected after stop; retain the `Subscription` and stop it, mirroring `HouseholdLiveSyncFanout`'s `retainSubscription`.
+  evidence: Verified in the 8.8 review (2026-09-28) — pre-existing. Harmless at app shutdown (the client closes), but a stop/start lifecycle (SmartLifecycle restart, tests) leaks a live subscription; in `MultiPrefixKurrentDbSubscriptionRegressionTest` it makes stopped projectors keep consuming later tests' events (log noise, hidden cross-test coupling). Natural home: Epic 5 reconnect/checkpointing work.

@@ -371,7 +371,7 @@ development_status:
   8-5-short-recovery-token-instead-of-phrase: done
   8-6-real-recovery-emails-smtp-and-mailpit: done
   8-7-hide-household-selector-on-profile: done
-  8-8-fix-live-sync-projector-stream-filter-throw: backlog
+  8-8-fix-live-sync-projector-stream-filter-throw: done
   8-9-provisioning-epic-critical-path-tests: backlog
   epic-8-retrospective: optional
 

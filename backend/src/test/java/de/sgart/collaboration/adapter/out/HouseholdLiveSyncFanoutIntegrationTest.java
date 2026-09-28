@@ -1,5 +1,6 @@
 package de.sgart.collaboration.adapter.out;
 
+import static de.sgart.collaboration.adapter.out.LiveSubscriptionAwait.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.application.LiveConnection;
@@ -245,18 +246,6 @@ class HouseholdLiveSyncFanoutIntegrationTest {
         awaitTrue(
                 () -> registry.broadcastsFor(householdId).contains(resource),
                 "the live subscription did not broadcast '" + resource + "' for " + householdId + " within the timeout");
-    }
-
-    /** Polls the eventually-consistent async subscription until it observes the expected effect. */
-    private void awaitTrue(java.util.function.BooleanSupplier condition, String failureMessage)
-            throws InterruptedException {
-        for (int attempt = 0; attempt < 80; attempt++) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError(failureMessage);
     }
 
     private static final class RecordingConnection implements LiveConnection {
