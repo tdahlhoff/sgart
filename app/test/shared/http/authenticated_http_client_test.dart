@@ -188,6 +188,78 @@ void main() {
       );
     });
 
+    group('postJsonUnauthenticated (device-account provisioning — the one genuinely unauthenticated call)', () {
+      test('postJsonUnauthenticated_omitsTheAuthorizationHeaderEvenWhenATokenIsAvailable', () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        final adapter = _FakeHttpClientAdapter(
+          (options) async => _jsonResponse(const {}, 200),
+        );
+        dio.httpClientAdapter = adapter;
+        final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => 'a-stale-access-token');
+
+        await client.postJsonUnauthenticated('/api/v1/accounts', {'publicKey': 'key-1', 'platform': 'ANDROID'});
+
+        expect(adapter.lastRequest!.headers.containsKey('Authorization'), isFalse);
+      });
+
+      test('postJsonUnauthenticated_returnsTheDecodedJsonBodyOnSuccess', () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter(
+          (options) async => _jsonResponse({'provisioned': true}, 200),
+        );
+        final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => null);
+
+        final json = await client.postJsonUnauthenticated('/api/v1/accounts', {'publicKey': 'key-1'});
+
+        expect(json['provisioned'], isTrue);
+      });
+
+      test('postJsonUnauthenticated_mapsABackendErrorBodyToAnAppException', () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter(
+          (options) async =>
+              _jsonResponse({'code': 'account.publicKeyInvalid', 'message': 'debug only'}, 400),
+        );
+        final client = AuthenticatedHttpClient(dio: dio, accessTokenProvider: () async => null);
+
+        await expectLater(
+          client.postJsonUnauthenticated('/api/v1/accounts', {'publicKey': 'not-a-key'}),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'account.publicKeyInvalid')),
+        );
+      });
+
+      // Regression: a stale access token surviving a backend reset used to make this call 401,
+      // which — because this call itself runs *inside* an already in-flight
+      // `AuthCubit.tryReauthenticate` attempt during the device-credential re-auth fallback — would
+      // call back into that same in-flight attempt via the shared `refreshTokens` callback and await
+      // it forever (no error, no log, a permanently spinning sign-in screen). Proving no
+      // `refreshTokens` call ever happens here is what rules that scenario out for good.
+      test('postJsonUnauthenticated_neverInvokesRefreshTokensEvenWhenTheServerResponds401', () async {
+        var callCount = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options) async {
+          callCount++;
+          return _jsonResponse(const {'code': 'auth.unauthorized', 'message': 'stale token'}, 401);
+        });
+        var refreshCallCount = 0;
+        final client = AuthenticatedHttpClient(
+          dio: dio,
+          accessTokenProvider: () async => 'a-stale-access-token',
+          refreshTokens: () async {
+            refreshCallCount++;
+            return true;
+          },
+        );
+
+        await expectLater(
+          client.postJsonUnauthenticated('/api/v1/accounts', {'publicKey': 'key-1'}),
+          throwsA(isA<AppException>().having((e) => e.error.code, 'code', 'auth.unauthorized')),
+        );
+        expect(callCount, 1);
+        expect(refreshCallCount, 0);
+      });
+    });
+
     group('refresh-and-retry-once on 401 (optional refreshTokens callback)', () {
       test('getJson_retriesTransparentlyAfterA401WhenRefreshSucceeds', () async {
         var callCount = 0;

@@ -18,9 +18,10 @@ typedef AccessTokenProvider = Future<String?> Function();
 typedef TokenRefresher = Future<bool> Function();
 
 /// A [Dio]-backed HTTP client for the SGART backend: injects `Authorization: Bearer <token>` on
-/// every request, maps a `{code,message,details}` error body to the client's [AppError] shape
-/// (the REST error-mapping seam deferred from Story 1.3, wired here for the `/me` call), and
-/// retries a request exactly once after a successful refresh when it 401s (see [refreshTokens]).
+/// every request except [postJsonUnauthenticated], maps a `{code,message,details}` error body to
+/// the client's [AppError] shape (the REST error-mapping seam deferred from Story 1.3, wired here
+/// for the `/me` call), and retries a request exactly once after a successful refresh when it
+/// 401s (see [refreshTokens]) — again, every request except [postJsonUnauthenticated].
 ///
 /// Never puts a token in a query, path, or log — only the `Authorization` header carries it.
 class AuthenticatedHttpClient {
@@ -31,14 +32,21 @@ class AuthenticatedHttpClient {
   }) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await accessTokenProvider();
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        if (options.extra[_skipAuthExtraKey] != true) {
+          final token = await accessTokenProvider();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
         }
         handler.next(options);
       },
     ));
   }
+
+  /// [RequestOptions.extra] key [postJsonUnauthenticated] sets to tell the interceptor above to
+  /// attach no `Authorization` header at all — see that method for why this must be a real,
+  /// no-token request rather than merely skipping the refresh-retry wrapper.
+  static const _skipAuthExtraKey = 'sgart.skipAuth';
 
   final Dio _dio;
 
@@ -58,6 +66,19 @@ class AuthenticatedHttpClient {
 
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) {
     return _withRefreshRetry(() => _postJson(path, body));
+  }
+
+  /// Sends a `POST` with no `Authorization` header and no 401-refresh-retry — for the app's one
+  /// genuinely unauthenticated write, device-account provisioning ([HttpAccountProvisioningApi]).
+  /// Deliberately bypasses [_withRefreshRetry]: that wrapper's `refreshTokens` callback is
+  /// `AuthCubit.tryReauthenticate`, which this exact call is reached *from* during the
+  /// device-credential re-auth fallback ([OidcClient.signIn] docs) — going through it here would
+  /// let a stray 401 call back into an already in-flight `tryReauthenticate` attempt, which shares
+  /// a single in-flight [Future] with concurrent callers (Story 8.2) and so would await itself
+  /// forever. Skipping the (stale, irrelevant) `Authorization` header the normal path would attach
+  /// also removes the only way this call could 401 for an auth reason at all.
+  Future<Map<String, dynamic>> postJsonUnauthenticated(String path, Map<String, dynamic> body) {
+    return _postJson(path, body, options: Options(extra: const {_skipAuthExtraKey: true}));
   }
 
   /// Sends a `PATCH` whose success is a `204 No Content` (a command — no domain body to read).
@@ -97,9 +118,9 @@ class AuthenticatedHttpClient {
     }
   }
 
-  Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body, {Options? options}) async {
     try {
-      final response = await _dio.post<Map<String, dynamic>>(path, data: body);
+      final response = await _dio.post<Map<String, dynamic>>(path, data: body, options: options);
       return response.data ?? const {};
     } on DioException catch (exception) {
       throw AppException(_mapToAppError(exception));

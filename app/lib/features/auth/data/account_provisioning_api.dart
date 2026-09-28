@@ -12,9 +12,11 @@ abstract interface class AccountProvisioningApi {
 }
 
 /// The real, backend-`AuthenticatedHttpClient`-backed [AccountProvisioningApi]. Reuses the shared
-/// HTTP client rather than a second one: the endpoint being unauthenticated by nature just means
-/// the bearer interceptor finds no token yet to attach (harmless), and the same `{code,message}`
-/// error mapping every other call already gets applies here too.
+/// HTTP client rather than a second one, but via [AuthenticatedHttpClient.postJsonUnauthenticated]
+/// — never the normal [AuthenticatedHttpClient.postJson] — so this call carries no `Authorization`
+/// header and never triggers the 401-refresh-retry wrapper; see that method's docs for why that
+/// matters (a stale access token here can deadlock the sign-in flow). The same `{code,message}`
+/// error mapping every other call already gets still applies here.
 class HttpAccountProvisioningApi implements AccountProvisioningApi {
   const HttpAccountProvisioningApi(this._httpClient);
 
@@ -22,6 +24,6 @@ class HttpAccountProvisioningApi implements AccountProvisioningApi {
 
   @override
   Future<void> provision(String publicKey, String platform) {
-    return _httpClient.postJson('/api/v1/accounts', {'publicKey': publicKey, 'platform': platform});
+    return _httpClient.postJsonUnauthenticated('/api/v1/accounts', {'publicKey': publicKey, 'platform': platform});
   }
 }
