@@ -17,22 +17,21 @@ import '../../../support/fake_push_notifications.dart';
 
 void main() {
   group('AuthState', () {
-    test('authenticatedCarriesTheEmailAlongsideDisplayNameAndKeycloakUserId', () {
-      const state = AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test');
+    test('authenticatedCarriesTheDisplayNameAndKeycloakUserId', () {
+      const state = AuthState.authenticated('Anna Testperson', 'sub-1');
 
       expect(state.displayName, 'Anna Testperson');
       expect(state.keycloakUserId, 'sub-1');
-      expect(state.email, 'anna@example.test');
     });
 
-    test('equalityAndHashCodeIncludeTheEmail', () {
-      const first = AuthState.authenticated('Anna', 'sub-1', 'anna@example.test');
-      const sameEmail = AuthState.authenticated('Anna', 'sub-1', 'anna@example.test');
-      const differentEmail = AuthState.authenticated('Anna', 'sub-1', 'other@example.test');
+    test('equalityAndHashCodeIncludeTheKeycloakUserId', () {
+      const first = AuthState.authenticated('Anna', 'sub-1');
+      const same = AuthState.authenticated('Anna', 'sub-1');
+      const differentAccount = AuthState.authenticated('Anna', 'sub-2');
 
-      expect(first, sameEmail);
-      expect(first.hashCode, sameEmail.hashCode);
-      expect(first, isNot(differentEmail));
+      expect(first, same);
+      expect(first.hashCode, same.hashCode);
+      expect(first, isNot(differentAccount));
     });
   });
 
@@ -69,13 +68,13 @@ void main() {
       build: () {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+            keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
         return buildCubit();
       },
       act: (cubit) => cubit.signIn(),
       expect: () => [
         const AuthState.inProgress(),
-        const AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test'),
+        const AuthState.authenticated('Anna Testperson', 'sub-1'),
       ],
       verify: (_) => expect(tokenStorage.storedTokens!.accessToken, 'access'),
     );
@@ -100,11 +99,11 @@ void main() {
       build: () {
         tokenStorage.storedTokens = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
-      expect: () => [const AuthState.authenticated('Anna', 'sub-1', 'anna@example.test')],
+      expect: () => [const AuthState.authenticated('Anna', 'sub-1')],
     );
 
     // Test Manifest: firstLaunch_provisionsAndSignsInWithNoBrowserSurface (Story 7.1, AC1) — on a
@@ -117,13 +116,13 @@ void main() {
       build: () {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+            keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
         return buildCubit();
       },
       act: (cubit) => cubit.bootstrap(),
       expect: () => [
         const AuthState.inProgress(),
-        const AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test'),
+        const AuthState.authenticated('Anna Testperson', 'sub-1'),
       ],
       verify: (_) => expect(tokenStorage.storedTokens!.accessToken, 'access'),
     );
@@ -163,7 +162,7 @@ void main() {
       test('exchangesTheStoredRefreshTokenForAFreshAccessTokenAndReturnsTrue', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
         final cubit = buildCubit();
         await cubit.signIn();
@@ -179,7 +178,7 @@ void main() {
       test('returnsFalseWhenNoRefreshTokenIsStored', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit();
         await cubit.signIn();
 
@@ -192,7 +191,7 @@ void main() {
       test('returnsFalseWhenTheRefreshCallFails', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         oidcClient.refreshErrorToThrow = StateError('refresh token revoked');
         final cubit = buildCubit();
         await cubit.signIn();
@@ -208,7 +207,7 @@ void main() {
       test('tryReauthenticate_returnsTrueViaRefreshWhenTheRefreshTokenIsValid', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
         final cubit = buildCubit();
         await cubit.signIn();
@@ -227,7 +226,7 @@ void main() {
           () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit();
         await cubit.signIn();
         oidcClient.refreshErrorToThrow = StateError('refresh token dead');
@@ -251,7 +250,7 @@ void main() {
       test('tryReauthenticate_returnsFalseWhenBothTheRefreshAndTheDeviceSignInFail', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit();
         await cubit.signIn();
         oidcClient.refreshErrorToThrow = StateError('refresh token dead');
@@ -270,7 +269,7 @@ void main() {
       test('tryReauthenticate_sharesASingleInFlightAttemptForConcurrentCallers', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit();
         await cubit.signIn();
         oidcClient.refreshedTokensToReturn = const OidcTokens(accessToken: 'fresh', refreshToken: 'rotated');
@@ -298,7 +297,7 @@ void main() {
           () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access', refreshToken: 'refresh');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit();
         await cubit.signIn();
         // The refresh token is dead, so both concurrent callers must fall through to the device
@@ -327,7 +326,7 @@ void main() {
     test('doesNotEmitAfterTheCubitIsClosedMidSignIn', () async {
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
       identityApi.identityToReturn =
-          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
       final cubit = buildCubit();
 
       final signInFuture = cubit.signIn();
@@ -355,7 +354,7 @@ void main() {
       test('signIn_registersTheDeviceTokenOnceAuthenticated', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubitWithPush();
 
         await cubit.signIn();
@@ -380,7 +379,7 @@ void main() {
       test('worksWithNoPushNotificationsDependencyAtAll', () async {
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
         identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna', email: 'anna@example.test');
+            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna');
         final cubit = buildCubit(); // no pushNotifications injected
 
         await cubit.signIn();
@@ -402,13 +401,13 @@ void main() {
           activeHouseholdStore.activeId = 'throwaway-household';
           oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
           identityApi.identityToReturn = const CallerIdentity(
-              keycloakUserId: 'sub-recovered', displayName: 'Anna Recovered', email: 'anna@example.test');
+              keycloakUserId: 'sub-recovered', displayName: 'Anna Recovered');
           return buildCubit();
         },
         act: (cubit) => cubit.recoverFromToken(recoveryToken),
         expect: () => [
           const AuthState.inProgress(),
-          const AuthState.authenticated('Anna Recovered', 'sub-recovered', 'anna@example.test'),
+          const AuthState.authenticated('Anna Recovered', 'sub-recovered'),
         ],
         verify: (_) {
           expect(deviceCredentialStore.lastRestoredToken, recoveryToken);

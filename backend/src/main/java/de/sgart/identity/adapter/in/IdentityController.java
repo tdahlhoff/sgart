@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
  * household exists yet at this point in Epic 1. It is also the end-to-end proof that JWT
  * validation and the {@code sub}-only caller seam work (AC1, AC2).
  *
- * <p>Persists nothing: display name and email are read live from the token and returned, never
+ * <p>Persists nothing: the display name is read live from the token and returned, never
  * written to any store (AD-6).
  */
 @RestController
@@ -23,14 +23,9 @@ class IdentityController {
     @GetMapping("/me")
     IdentityResponse me(@AuthenticationPrincipal Jwt jwt) {
         AuthenticatedCaller caller = AuthenticatedCaller.fromJwt(jwt);
-        return new IdentityResponse(
-                caller.keycloakUserId(), caller.displayName(), caller.email(), caller.emailVerified());
+        return new IdentityResponse(caller.keycloakUserId(), caller.displayName());
     }
 
-    /**
-     * Transport DTO — deliberately the exact shape the client's {@code /me} call expects.
-     * {@code emailVerified} (Story 7.3 review finding) lets the Profil screen tell an unconfirmed
-     * attached email apart from a confirmed one without a separate status query.
-     */
-    record IdentityResponse(String keycloakUserId, String displayName, String email, boolean emailVerified) {}
+    /** Transport DTO — deliberately the exact shape the client's {@code /me} call expects. */
+    record IdentityResponse(String keycloakUserId, String displayName) {}
 }

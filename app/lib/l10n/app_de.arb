@@ -1374,9 +1374,12 @@
     "description": "Row subtitle after attaching an email but before confirming the code (Story 7.3, AC1)."
   },
 
-  "profileRecoveryEmailConfirmedLabel": "Bestätigt",
+  "profileRecoveryEmailConfirmedLabel": "Wiederherstellungs-E-Mail: {addressHint}",
   "@profileRecoveryEmailConfirmedLabel": {
-    "description": "Row subtitle once the recovery email is confirmed (Story 7.3, AC1)."
+    "description": "Row subtitle once the recovery email is confirmed; addressHint is the masked address, for example t***@e***.test (recovery-email ownership).",
+    "placeholders": {
+      "addressHint": { "type": "String" }
+    }
   },
 
   "profileRecoveryEmailAddAction": "E-Mail hinzufügen",
@@ -1409,7 +1412,7 @@
     "description": "Label of the email field on AddRecoveryEmailPage (Story 7.3, AC1)."
   },
 
-  "addRecoveryEmailSubtitle": "Wir senden dir einen 6-stelligen Bestätigungscode an diese Adresse.",
+  "addRecoveryEmailSubtitle": "Wir senden einen 6-stelligen Bestätigungscode an die Adresse, die du hier eingibst. Erst nach der Bestätigung gilt sie für die Wiederherstellung.",
   "@addRecoveryEmailSubtitle": {
     "description": "Short supporting copy on AddRecoveryEmailPage explaining what happens next (Story 7.3, AC1)."
   },
@@ -1477,6 +1480,30 @@
   "recoverByEmailConfirmButtonLabel": "Wiederherstellen",
   "@recoverByEmailConfirmButtonLabel": {
     "description": "Label of the button that confirms the code and triggers the R1 rebind on RecoverByEmailPage (Story 7.3, AC2)."
+  },
+
+  "recoverByEmailChooseAccountSubtitle": "Diese E-Mail-Adresse gehört zu mehreren Konten. Wähle das Konto, das du auf diesem Gerät wiederherstellen möchtest.",
+  "@recoverByEmailChooseAccountSubtitle": {
+    "description": "Supporting copy on RecoverByEmailPage's account-picker step, shown when the confirmed mailbox is bound to several accounts."
+  },
+
+  "recoverByEmailCandidateHouseholdLabel": "{householdName} ({nickname})",
+  "@recoverByEmailCandidateHouseholdLabel": {
+    "description": "One household of a candidate account in the picker: the household name and the nickname the account uses there.",
+    "placeholders": {
+      "householdName": { "type": "String" },
+      "nickname": { "type": "String" }
+    }
+  },
+
+  "recoverByEmailCandidateWithoutHouseholdLabel": "Konto ohne Haushalt",
+  "@recoverByEmailCandidateWithoutHouseholdLabel": {
+    "description": "Neutral picker label for a candidate account that belongs to no household."
+  },
+
+  "recoverByEmailUnnamedHouseholdLabel": "Haushalt ohne Namen",
+  "@recoverByEmailUnnamedHouseholdLabel": {
+    "description": "Neutral picker label for a household whose name is not available yet."
   },
 
   "recoveryTokenFreshAfterEmailRecoveryWarning": "Dein vorheriger Wiederherstellungsschlüssel gilt nicht mehr. Sichere diesen neuen Schlüssel.",

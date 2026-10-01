@@ -140,12 +140,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> _loadCallerIdentity() async {
     try {
       final identity = await _identityApi.fetchMe();
-      _safeEmit(AuthState.authenticated(
-        identity.displayName,
-        identity.keycloakUserId,
-        identity.email,
-        emailVerified: identity.emailVerified,
-      ));
+      _safeEmit(AuthState.authenticated(identity.displayName, identity.keycloakUserId));
       // Best-effort (Story 4.5, AC5) — a failed registration must never fail the sign-in itself;
       // the app already works fully without a device token, it just misses background pushes.
       unawaited(_registerPushTokenBestEffort());

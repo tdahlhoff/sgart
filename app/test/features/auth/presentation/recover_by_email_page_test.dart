@@ -5,6 +5,7 @@ import 'package:sgart/features/auth/data/account_email_api.dart';
 import 'package:sgart/features/auth/data/caller_identity.dart';
 import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/oidc_tokens.dart';
+import 'package:sgart/features/auth/data/recovery_confirmation.dart';
 import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'package:sgart/features/auth/presentation/auth_state.dart';
 import 'package:sgart/features/auth/presentation/recover_by_email_page.dart';
@@ -35,7 +36,7 @@ void main() {
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi()
         ..identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-throwaway', displayName: 'Throwaway', email: '');
+            keycloakUserId: 'sub-throwaway', displayName: 'Throwaway');
       deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       activeHouseholdStore = FakeActiveHouseholdStore()..activeId = 'throwaway-household';
       accountEmailApi = FakeAccountEmailApi();
@@ -108,7 +109,7 @@ void main() {
       // throwaway one this cubit started as (mirrors recoverFromToken's precedent).
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
       identityApi.identityToReturn = const CallerIdentity(
-          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person', email: 'anna@example.test');
+          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
 
       await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
       await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
@@ -170,6 +171,96 @@ void main() {
       // structurally forbids that; this proves the page never routes around it).
       expect(accountEmailApi.requestedRecoveryEmails, ['anna@example.test']);
       expect(accountEmailApi.confirmedRecoveries, [('anna@example.test', '042817')]);
+    });
+
+    group('when the mailbox is bound to several accounts', () {
+      const accountWithTwoHouseholds = RecoveryCandidate(accountId: 'account-two-households', households: [
+        RecoveryCandidateHousehold(householdName: 'Familie Beispiel', nickname: 'Anna'),
+        RecoveryCandidateHousehold(householdName: 'WG Testweg', nickname: 'Anni'),
+      ]);
+      const accountWithoutHousehold = RecoveryCandidate(accountId: 'account-no-household', households: []);
+
+      Future<void> confirmCode(WidgetTester tester) async {
+        await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
+        await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('showsThePickerOnlyWhenSeveralAccountsMatch', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn =
+            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+
+        await confirmCode(tester);
+
+        expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsOneWidget);
+        expect(find.text('Familie Beispiel (Anna)'), findsOneWidget);
+        expect(find.text('WG Testweg (Anni)'), findsOneWidget);
+        expect(find.text('Konto ohne Haushalt'), findsOneWidget);
+        // Nothing was rebound yet: the throwaway session is untouched.
+        expect(authCubit.state.keycloakUserId, 'sub-throwaway');
+        expect(activeHouseholdStore.cleared, isFalse);
+      });
+
+      testWidgets('showsNoPickerWhenASingleAccountMatches', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+
+        await confirmCode(tester);
+
+        expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsNothing);
+      });
+
+      testWidgets('preselectsTheAccountWithTheMostHouseholds', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn =
+            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+        await confirmCode(tester);
+
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(accountEmailApi.confirmedRecoveryAccountIds.last, 'account-two-households');
+      });
+
+      testWidgets('confirmingTheChoiceRecoversThatAccount', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn =
+            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+        await confirmCode(tester);
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationRebound();
+        oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
+        identityApi.identityToReturn =
+            const CallerIdentity(keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
+
+        await tester.tap(find.byKey(const Key('recover-by-email-candidate-account-no-household')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(accountEmailApi.confirmedRecoveryAccountIds, [null, 'account-no-household']);
+        expect(accountEmailApi.confirmedRecoveries.last, ('anna@example.test', '042817'));
+        expect(authCubit.state.keycloakUserId, 'sub-recovered');
+        expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
+      });
+
+      testWidgets('showsNeutralLabelsForAnEmptyHouseholdNameAndAnEmptyNickname', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          RecoveryCandidate(accountId: 'account-lagging', households: [
+            RecoveryCandidateHousehold(householdName: '', nickname: ''),
+          ]),
+          accountWithoutHousehold,
+        ]);
+
+        await confirmCode(tester);
+
+        expect(find.text('Haushalt ohne Namen (Noch ohne Namen)'), findsOneWidget);
+      });
     });
   });
 }

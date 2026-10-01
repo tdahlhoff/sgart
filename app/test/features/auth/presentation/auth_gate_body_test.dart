@@ -60,7 +60,7 @@ void main() {
     testWidgets('switchesAwayFromTheSignInGateOnceSignedIn', (tester) async {
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
       identityApi.identityToReturn =
-          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
       await tester.pumpWidget(buildSubject());
 
       // No button to tap (Story 7.1, AC1: zero input) — sign-in is driven by AuthCubit.bootstrap()
@@ -84,7 +84,7 @@ void main() {
       final delayedOidcClient = _CompleterControlledFakeOidcClient()
         ..tokensToReturn = const OidcTokens(accessToken: 'access-throwaway');
       identityApi.identityToReturn = const CallerIdentity(
-          keycloakUserId: 'sub-throwaway', displayName: 'Throwaway', email: 'throwaway@example.test');
+          keycloakUserId: 'sub-throwaway', displayName: 'Throwaway');
       activeHouseholdStore.activeId = 'throwaway-household';
       final recoveryCubit = AuthCubit(
         oidcClient: delayedOidcClient,
@@ -123,7 +123,7 @@ void main() {
       // element tree actually diffing against a structurally different widget — SignInPage — at
       // some point, not by comparing the start and end states after the fact).
       identityApi.identityToReturn = const CallerIdentity(
-          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person', email: 'recovered@example.test');
+          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
       final pendingSignIn = Completer<OidcTokens>();
       delayedOidcClient.pendingSignIn = pendingSignIn;
 

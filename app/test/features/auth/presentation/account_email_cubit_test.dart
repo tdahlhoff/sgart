@@ -27,7 +27,6 @@ void main() {
       await cubit.attach('anna@example.test');
 
       expect(cubit.state.status, AccountEmailStatus.pendingConfirmation);
-      expect(cubit.state.email, 'anna@example.test');
       expect(accountEmailApi.attachedEmails, ['anna@example.test']);
     });
 
@@ -46,13 +45,14 @@ void main() {
       expect(cubit.state.isBusy, isFalse);
     });
 
-    test('confirm_success_movesToConfirmedAndClearsTheCode', () async {
-      await cubit.attach('anna@example.test');
+    test('confirm_success_movesToConfirmedWithTheHintReadBackFromTheBackend', () async {
+      await cubit.attach('tester@example.test');
+      accountEmailApi.addressHintToReturn = 't***@e***.test';
 
       await cubit.confirm('042817');
 
       expect(cubit.state.status, AccountEmailStatus.confirmed);
-      expect(cubit.state.email, 'anna@example.test');
+      expect(cubit.state.addressHint, 't***@e***.test');
       expect(accountEmailApi.confirmedCodes, ['042817']);
     });
 
@@ -65,6 +65,32 @@ void main() {
 
       expect(cubit.state.status, AccountEmailStatus.pendingConfirmation);
       expect(cubit.state.error?.code, 'account.recoveryCodeInvalid');
+    });
+
+    test('loadStatus_withAConfirmedBinding_showsTheHint', () async {
+      accountEmailApi.addressHintToReturn = 't***@e***.test';
+
+      await cubit.loadStatus();
+
+      expect(cubit.state.status, AccountEmailStatus.confirmed);
+      expect(cubit.state.addressHint, 't***@e***.test');
+    });
+
+    test('loadStatus_withoutAConfirmedBinding_movesToNotAttached', () async {
+      await cubit.loadStatus();
+
+      expect(cubit.state.status, AccountEmailStatus.notAttached);
+      expect(cubit.state.addressHint, isNull);
+    });
+
+    test('loadStatus_whenTheBackendFails_keepsTheStateAndSurfacesTheError', () async {
+      accountEmailApi.fetchStatusErrorToThrow =
+          const AppException(AppError(code: 'account.unknown', message: 'unreachable'));
+
+      await cubit.loadStatus();
+
+      expect(cubit.state.status, AccountEmailStatus.unknown);
+      expect(cubit.state.error?.code, 'account.unknown');
     });
 
     test('detach_success_returnsToNotAttached', () async {

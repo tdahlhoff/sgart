@@ -11,6 +11,7 @@ import '../../../shared/widgets/sgart_button.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/account_email_api.dart';
 import '../data/device_credential_store.dart';
+import '../data/recovery_confirmation.dart';
 import 'auth_cubit.dart';
 import 'auth_state.dart';
 import 'recovery_token_reveal_page.dart';
@@ -41,13 +42,17 @@ void openRecoverByEmailPage(BuildContext context) {
   );
 }
 
-/// Email → code → rebind, Story 7.3's AC2/AC3 browserless recovery path on a fresh device. Two
-/// local steps (this page owns its own state, not a cubit — mirrors [RecoverAccountPage]):
+/// Email → code → (account) → rebind, Story 7.3's AC2/AC3 browserless recovery path on a fresh
+/// device. Up to three local steps (this page owns its own state, not a cubit — mirrors
+/// [RecoverAccountPage]):
 ///
 /// 1. Enter the email and request a code (`AccountEmailApi.requestRecoveryCode`) — the server
 ///    never reveals whether it matched an account (D-H), so this step always "succeeds" onward.
 /// 2. Enter the code and confirm (`AccountEmailApi.confirmRecovery`); on `204` the server has
-///    already performed the R1 rebind (design §1.1). Only then does this page reach into the auth
+///    already performed the R1 rebind (design §1.1). When the mailbox is bound to several accounts
+///    the server answers `200` with the candidates instead and rebinds nothing:
+/// 3. Pick the account ("Haushaltsname (Spitzname)" per household, the first candidate — the one
+///    with the most households — preselected) and confirm again with its `accountId`. Only then does this page reach into the auth
 ///    seam via [AuthCubit.recoverFromEmailRebind] — a wrong/expired/exhausted code at either step
 ///    is shown **inline** and never touches [AuthCubit] (the 7.2 Review Finding #1 discipline: the
 ///    underlying (throwaway) session must survive a local input error untouched).
@@ -58,7 +63,7 @@ class RecoverByEmailPage extends StatefulWidget {
   State<RecoverByEmailPage> createState() => _RecoverByEmailPageState();
 }
 
-enum _RecoverByEmailStep { enterEmail, enterCode }
+enum _RecoverByEmailStep { enterEmail, enterCode, chooseAccount }
 
 class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
   final _emailController = TextEditingController();
@@ -68,6 +73,8 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
   bool _isBusy = false;
   AppError? _localError;
   String _confirmedEmail = '';
+  List<RecoveryCandidate> _candidates = const [];
+  String? _selectedAccountId;
 
   @override
   void dispose() {
@@ -99,17 +106,31 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
 
   /// On `204`, the server already performed the rebind — only *then* does this reach into the auth
   /// seam. A wrong/expired/exhausted code stays entirely local (never emitted to [AuthCubit]),
-  /// leaving the current (throwaway) session mounted and untouched.
-  Future<void> _confirmAndRebind(AuthCubit authCubit) async {
+  /// leaving the current (throwaway) session mounted and untouched. A `200` with several candidates
+  /// moves to the picker without touching [AuthCubit] either; [accountId] is set on the second call.
+  Future<void> _confirmAndRebind(AuthCubit authCubit, {String? accountId}) async {
     setState(() {
       _isBusy = true;
       _localError = null;
     });
     try {
-      await context.read<AccountEmailApi>().confirmRecovery(_confirmedEmail, _codeController.text.trim());
-      await authCubit.recoverFromEmailRebind();
-      // A successful rebind resolves into AuthState.authenticated, which the BlocListener below
-      // catches to swap this route for the fresh-phrase reveal. Nothing further to do here.
+      final confirmation = await context
+          .read<AccountEmailApi>()
+          .confirmRecovery(_confirmedEmail, _codeController.text.trim(), accountId: accountId);
+      switch (confirmation) {
+        case RecoveryConfirmationChooseAccount(:final candidates):
+          if (mounted) {
+            setState(() {
+              _candidates = candidates;
+              _selectedAccountId = candidates.first.accountId;
+              _step = _RecoverByEmailStep.chooseAccount;
+            });
+          }
+        case RecoveryConfirmationRebound():
+          await authCubit.recoverFromEmailRebind();
+          // A successful rebind resolves into AuthState.authenticated, which the BlocListener below
+          // catches to swap this route for the fresh-phrase reveal. Nothing further to do here.
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _localError = _toAppError(error));
     } finally {
@@ -154,6 +175,7 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
               children: [
                 if (_step == _RecoverByEmailStep.enterEmail) ..._emailStep(localizations),
                 if (_step == _RecoverByEmailStep.enterCode) ..._codeStep(localizations),
+                if (_step == _RecoverByEmailStep.chooseAccount) ..._accountStep(localizations),
               ],
             ),
           ),
@@ -201,6 +223,56 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
         label: localizations.recoverByEmailConfirmButtonLabel,
         onPressed: _isBusy ? null : () => _confirmAndRebind(context.read<AuthCubit>()),
       ),
+    ];
+  }
+
+  List<Widget> _accountStep(AppLocalizations localizations) {
+    return [
+      Text(localizations.recoverByEmailChooseAccountSubtitle, key: const Key('recover-by-email-account-subtitle')),
+      const SizedBox(height: SgartShapes.space4),
+      RadioGroup<String>(
+        groupValue: _selectedAccountId,
+        onChanged: (accountId) {
+          if (!_isBusy) setState(() => _selectedAccountId = accountId);
+        },
+        child: Column(
+          children: [
+            for (final candidate in _candidates)
+              RadioListTile<String>(
+                key: Key('recover-by-email-candidate-${candidate.accountId}'),
+                value: candidate.accountId,
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final label in _candidateLabels(localizations, candidate)) Text(label),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      if (_localError != null) ..._errorText(localizations),
+      const SizedBox(height: SgartShapes.space4),
+      SgartButton(
+        key: const Key('recover-by-email-account-confirm-button'),
+        label: localizations.recoverByEmailConfirmButtonLabel,
+        onPressed: _isBusy ? null : () => _confirmAndRebind(context.read<AuthCubit>(), accountId: _selectedAccountId),
+      ),
+    ];
+  }
+
+  /// "Haushaltsname (Spitzname)" per household; neutral wording for the gaps (no household, a name
+  /// not yet projected, no nickname) so a candidate never shows an empty or broken line.
+  List<String> _candidateLabels(AppLocalizations localizations, RecoveryCandidate candidate) {
+    if (candidate.households.isEmpty) {
+      return [localizations.recoverByEmailCandidateWithoutHouseholdLabel];
+    }
+    return [
+      for (final household in candidate.households)
+        localizations.recoverByEmailCandidateHouseholdLabel(
+          household.householdName.isEmpty ? localizations.recoverByEmailUnnamedHouseholdLabel : household.householdName,
+          household.nickname.isEmpty ? localizations.membersNicknameFallback : household.nickname,
+        ),
     ];
   }
 

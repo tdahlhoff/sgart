@@ -285,9 +285,7 @@ void main() {
         final identityApi = FakeIdentityApi()
           ..identityToReturn = const CallerIdentity(
             keycloakUserId: 'sub-1',
-            displayName: 'Anna Testperson',
-            email: 'anna@example.test',
-          );
+            displayName: 'Anna Testperson');
         final signedOutAuthCubit = AuthCubit(
           oidcClient: oidcClient,
           tokenStorage: FakeSecureTokenStorage(),

@@ -31,7 +31,7 @@ void main() {
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi()
         ..identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-throwaway', displayName: 'Throwaway', email: 'throwaway@example.test');
+            keycloakUserId: 'sub-throwaway', displayName: 'Throwaway');
       deviceCredentialStore = FakeDeviceCredentialStore();
       activeHouseholdStore = FakeActiveHouseholdStore()..activeId = 'throwaway-household';
       authCubit = AuthCubit(
@@ -123,7 +123,7 @@ void main() {
       // the token — a different identity than the throwaway one this cubit started as.
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
       identityApi.identityToReturn = const CallerIdentity(
-          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person', email: 'recovered@example.test');
+          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
 
       await tester.enterText(find.byKey(const Key('recover-account-token-field')), recoveryToken);
       await tester.tap(find.byKey(const Key('recover-account-submit-button')));

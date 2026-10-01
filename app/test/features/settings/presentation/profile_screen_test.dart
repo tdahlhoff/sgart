@@ -41,7 +41,7 @@ void main() {
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi()
         ..identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+            keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
       deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       authCubit = AuthCubit(
         oidcClient: oidcClient,
@@ -103,13 +103,13 @@ void main() {
           ),
         );
 
-    testWidgets('rendersTheEmailFromTheAuthenticatedAuthCubitButNeverTheJwtDisplayName', (tester) async {
+    testWidgets('rendersNeitherTheJwtDisplayNameNorAnEmailLineInTheHeader', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
       // The JWT name is the raw device-credential id for a silently-provisioned account (F3).
       expect(find.text('Anna Testperson'), findsNothing);
-      expect(find.text('anna@example.test'), findsOneWidget);
+      expect(find.byKey(const Key('profile-email')), findsNothing);
     });
 
     // Test Manifest: profileScreen_nicknameSection (Story 8.3) — the active household's resolved
@@ -250,84 +250,56 @@ void main() {
 
     // Test Manifest: profileRecoveryEmailSection_attachConfirmDetach_updatesState (Story 7.3, AC1).
     group('the E-Mail-Wiederherstellung section', () {
-      testWidgets('startsNotAttachedWhenTheAuthCubitCarriesNoEmail', (tester) async {
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: '');
-        await authCubit.signIn();
+      testWidgets('startsNotAttachedWhenTheBackendReportsNoConfirmedEmail', (tester) async {
         final accountEmailApi = FakeAccountEmailApi();
 
         await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
 
+        expect(find.text('Keine E-Mail hinterlegt'), findsOneWidget);
         expect(find.byKey(const Key('profile-recovery-email-add-button')), findsOneWidget);
       });
 
-      testWidgets('attachThenConfirm_movesTheRowToConfirmed', (tester) async {
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: '');
-        await authCubit.signIn();
+      testWidgets('showsTheMaskedHintOfTheConfirmedEmailAfterARelaunch', (tester) async {
+        final accountEmailApi = FakeAccountEmailApi()..addressHintToReturn = 't***@e***.test';
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Wiederherstellungs-E-Mail: t***@e***.test'), findsOneWidget);
+        expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
+      });
+
+      testWidgets('attachThenConfirm_movesTheRowToConfirmedWithTheHintReadBackFromTheBackend', (tester) async {
         final accountEmailApi = FakeAccountEmailApi();
 
         await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('profile-recovery-email-add-button')));
         await tester.pumpAndSettle();
 
-        await tester.enterText(find.byKey(const Key('add-recovery-email-field')), 'anna@example.test');
+        await tester.enterText(find.byKey(const Key('add-recovery-email-field')), 'tester@example.test');
         await tester.tap(find.byKey(const Key('add-recovery-email-submit-button')));
         await tester.pumpAndSettle();
 
-        expect(accountEmailApi.attachedEmails, ['anna@example.test']);
+        expect(accountEmailApi.attachedEmails, ['tester@example.test']);
+        accountEmailApi.addressHintToReturn = 't***@e***.test';
         await tester.enterText(find.byKey(const Key('confirm-email-code-field')), '042817');
         await tester.tap(find.byKey(const Key('confirm-email-code-submit-button')));
         await tester.pumpAndSettle();
 
         expect(accountEmailApi.confirmedCodes, ['042817']);
-        // Both pushed pages popped, landing back on Profil with the confirmed state visible.
+        // Both pushed pages popped, landing back on Profil with the confirmed hint visible.
         expect(find.byKey(const Key('add-recovery-email-field')), findsNothing);
-        expect(find.text('Bestätigt'), findsOneWidget);
+        expect(find.text('Wiederherstellungs-E-Mail: t***@e***.test'), findsOneWidget);
         expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
       });
 
-      testWidgets('seedsPendingConfirmationWhenTheAuthCubitEmailIsUnverified', (tester) async {
-        // Story 7.3 review finding: an attached-but-unconfirmed email must not read "Bestätigt" on
-        // relaunch (only a Keycloak-confirmed `emailVerified` earns that label).
-        identityApi.identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1',
-            displayName: 'Anna Testperson',
-            email: 'anna@example.test',
-            emailVerified: false);
-        await authCubit.signIn();
-        final accountEmailApi = FakeAccountEmailApi();
-
-        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
-
-        expect(find.text('Bestätigung ausstehend'), findsOneWidget);
-        expect(find.text('Bestätigt'), findsNothing);
-      });
-
-      testWidgets('seedsConfirmedWhenTheAuthCubitEmailIsVerified', (tester) async {
-        identityApi.identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1',
-            displayName: 'Anna Testperson',
-            email: 'anna@example.test',
-            emailVerified: true);
-        await authCubit.signIn();
-        final accountEmailApi = FakeAccountEmailApi();
-
-        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
-
-        expect(find.text('Bestätigt'), findsOneWidget);
-      });
-
       testWidgets('detach_returnsToNotAttachedAfterConfirmation', (tester) async {
-        identityApi.identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1',
-            displayName: 'Anna Testperson',
-            email: 'anna@example.test',
-            emailVerified: true);
-        await authCubit.signIn();
-        final accountEmailApi = FakeAccountEmailApi();
+        final accountEmailApi = FakeAccountEmailApi()..addressHintToReturn = 't***@e***.test';
 
         await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
         expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
 
         await tester.tap(find.byKey(const Key('profile-recovery-email-detach-button')));

@@ -325,7 +325,7 @@ void main() {
       // Story 8.3: the header shows the household nickname (here the unset fallback), never the JWT name.
       expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
       expect(find.text('Anna Testperson'), findsNothing);
-      expect(find.text('anna@example.test'), findsOneWidget);
+      expect(find.byKey(const Key('profile-email')), findsNothing);
       expect(find.text('Sprache & Region'), findsOneWidget);
       // Story 8.3's nickname section pushed the notifications section further down the Profil
       // ListView, past the default test viewport — scroll it into view before asserting.

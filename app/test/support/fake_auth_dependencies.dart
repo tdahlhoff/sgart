@@ -12,7 +12,7 @@ import 'package:sgart/features/auth/presentation/auth_cubit.dart';
 import 'fake_households_dependencies.dart';
 
 /// Builds a real [AuthCubit] over fakes and drives it to an authenticated state carrying
-/// [displayName]/[email] — for widget tests that need an ancestor `AuthCubit` (e.g. the Profil
+/// [displayName] — for widget tests that need an ancestor `AuthCubit` (e.g. the Profil
 /// identity header, Story 1.11) without touching real OIDC/storage/network (CLAUDE.md §6). Data is
 /// synthetic (DSGVO). Neither [FakeDeviceCredentialStore] nor [FakeActiveHouseholdStore] is
 /// exercised by this happy-path sign-in — they only matter to tests that call
@@ -20,14 +20,13 @@ import 'fake_households_dependencies.dart';
 Future<AuthCubit> buildAuthenticatedAuthCubit({
   String displayName = 'Anna Testperson',
   String keycloakUserId = 'sub-1',
-  String email = 'anna@example.test',
 }) async {
   final cubit = AuthCubit(
     oidcClient: FakeOidcClient()..tokensToReturn = const OidcTokens(accessToken: 'access'),
     tokenStorage: FakeSecureTokenStorage(),
     identityApi: FakeIdentityApi()
       ..identityToReturn =
-          CallerIdentity(keycloakUserId: keycloakUserId, displayName: displayName, email: email),
+          CallerIdentity(keycloakUserId: keycloakUserId, displayName: displayName),
     deviceCredentialStore: FakeDeviceCredentialStore(),
     activeHouseholdStore: FakeActiveHouseholdStore(),
   );

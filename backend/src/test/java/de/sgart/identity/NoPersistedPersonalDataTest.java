@@ -51,7 +51,7 @@ class NoPersistedPersonalDataTest {
                 .should()
                 .dependOnClassesThat()
                 .haveFullyQualifiedName("de.sgart.identity.adapter.in.security.AuthenticatedCaller")
-                .as("AuthenticatedCaller (display name/email, read live for the /me response) must "
+                .as("AuthenticatedCaller (display name, read live for the /me response) must "
                         + "never reach the domain or an outbound/persistence adapter (AD-6)");
 
         rule.check(identityClasses);

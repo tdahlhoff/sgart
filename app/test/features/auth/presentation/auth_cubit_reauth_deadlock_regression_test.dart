@@ -124,7 +124,7 @@ void main() {
     // test instead of a suite that never finishes.
     await cubit.bootstrap().timeout(const Duration(seconds: 5));
 
-    expect(cubit.state, const AuthState.authenticated('Anna Testperson', 'sub-1', 'anna@example.test'));
+    expect(cubit.state, const AuthState.authenticated('Anna Testperson', 'sub-1'));
     expect(oidcClient.signInCallCount, 1);
     // Exactly one call, and it never carried the stale token in the first place (the fix) — on
     // the pre-fix code this would be 401-rejected, triggering the reentrant `tryReauthenticate`

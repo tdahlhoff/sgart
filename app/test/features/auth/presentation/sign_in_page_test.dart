@@ -53,7 +53,7 @@ void main() {
     testWidgets('automaticallyReachesTheAuthenticatedStateOnceBootstrapSignsInSilently', (tester) async {
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
       identityApi.identityToReturn =
-          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
       await tester.pumpWidget(buildSubject());
 
       await cubit.bootstrap();
@@ -88,7 +88,7 @@ void main() {
       oidcClient.signInErrorToThrow = null;
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access');
       identityApi.identityToReturn =
-          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson', email: 'anna@example.test');
+          const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
       await tester.tap(find.byKey(const Key('sign-in-retry-button')));
       await tester.pump();
       await tester.pump();

@@ -15,13 +15,26 @@ class AccountEmailCubit extends Cubit<AccountEmailState> {
 
   final AccountEmailApi _accountEmailApi;
 
+  /// Reads the confirmed recovery email's masked hint from the backend, which is the only source
+  /// of truth after a relaunch. A failure leaves the state as it was and surfaces the error.
+  Future<void> loadStatus() async {
+    try {
+      final addressHint = await _accountEmailApi.fetchStatus();
+      emit(addressHint == null
+          ? const AccountEmailState(status: AccountEmailStatus.notAttached)
+          : AccountEmailState(status: AccountEmailStatus.confirmed, addressHint: addressHint));
+    } on Object catch (error) {
+      emit(state.copyWith(error: _toAppError(error)));
+    }
+  }
+
   /// @throws InvalidRecoveryEmailException-shaped [AppException] if `email` is malformed —
   /// surfaced via [AccountEmailState.error] (fail-fast, AC1).
   Future<void> attach(String email) async {
     emit(state.copyWith(isBusy: true, clearError: true));
     try {
       await _accountEmailApi.attach(email);
-      emit(AccountEmailState(status: AccountEmailStatus.pendingConfirmation, email: email));
+      emit(const AccountEmailState(status: AccountEmailStatus.pendingConfirmation));
     } on Object catch (error) {
       emit(state.copyWith(isBusy: false, error: _toAppError(error)));
     }
@@ -31,10 +44,13 @@ class AccountEmailCubit extends Cubit<AccountEmailState> {
     emit(state.copyWith(isBusy: true, clearError: true));
     try {
       await _accountEmailApi.confirm(code);
-      emit(AccountEmailState(status: AccountEmailStatus.confirmed, email: state.email));
     } on Object catch (error) {
       emit(state.copyWith(isBusy: false, error: _toAppError(error)));
+      return;
     }
+    // The hint is computed server-side at attach time, so it is read back rather than rebuilt here.
+    emit(const AccountEmailState(status: AccountEmailStatus.confirmed));
+    await loadStatus();
   }
 
   Future<void> detach() async {

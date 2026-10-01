@@ -30,7 +30,6 @@ void main() {
           accountEmailApi,
           initialState: const AccountEmailState(
             status: AccountEmailStatus.pendingConfirmation,
-            email: 'anna@example.test',
           ),
         );
 

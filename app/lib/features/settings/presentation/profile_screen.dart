@@ -9,11 +9,10 @@ import '../../../shared/http/app_exception.dart';
 import '../../../shared/http/authenticated_http_client.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../auth/data/account_email_api.dart';
+import '../../auth/data/recovery_confirmation.dart';
 import '../../auth/presentation/account_email_cubit.dart';
 import '../../auth/presentation/account_email_state.dart';
 import '../../auth/presentation/add_recovery_email_page.dart';
-import '../../auth/presentation/auth_cubit.dart';
-import '../../auth/presentation/auth_state.dart';
 import '../../auth/presentation/recovery_token_reveal_page.dart';
 import '../../households/data/household_summary.dart';
 import '../../members/data/members_api.dart';
@@ -29,7 +28,7 @@ import 'nickname_state.dart';
 /// the shell's persistent header stays visible above it.
 ///
 /// Stateful so the Story 7.3 [AccountEmailCubit] is built exactly once (over the ambient
-/// [AuthenticatedHttpClient], seeded from the live `AuthState.email`) and disposed with the
+/// [AuthenticatedHttpClient], status loaded from the backend) and disposed with the
 /// widget, mirroring [FirstRunRouter]'s "build API clients once" rationale.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, required this.activeHousehold});
@@ -56,21 +55,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final authState = context.read<AuthCubit>().state;
     _nicknameCubit = NicknameCubit(nicknameApi: _resolveNicknameApi(context));
     _loadNickname();
-    // Seed from the live `/me` claims (Story 7.3, review finding): `emailVerified` now travels
-    // with `AuthState.email`, so an attached-but-unconfirmed address seeds `pendingConfirmation`
-    // (offering "confirm", not "detach") instead of misreading as `confirmed` on relaunch. Every
-    // in-session attach/confirm/detach action refines it precisely from there.
-    final hasEmail = authState.email != null && authState.email!.isNotEmpty;
-    final seededStatus = !hasEmail
-        ? AccountEmailStatus.notAttached
-        : (authState.emailVerified ? AccountEmailStatus.confirmed : AccountEmailStatus.pendingConfirmation);
-    _accountEmailCubit = AccountEmailCubit(
-      _resolveAccountEmailApi(context),
-      initialState: AccountEmailState(status: seededStatus, email: authState.email),
-    );
+    // The backend is the only place that knows whether a confirmed recovery email exists; the
+    // section shows its masked hint once the status has loaded.
+    _accountEmailCubit = AccountEmailCubit(_resolveAccountEmailApi(context))..loadStatus();
   }
 
   /// Prefers an explicitly-provided [AccountEmailApi] ancestor (the test seam: a widget test
@@ -179,8 +168,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final authState = context.watch<AuthCubit>().state;
-
     return BlocProvider<AccountEmailCubit>.value(
       value: _accountEmailCubit,
       child: SafeArea(
@@ -190,10 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Story 8.3: the header shows the active household's resolved nickname, else the neutral
             // fallback — never the JWT displayName (the raw device-credential id for a
             // silently-provisioned account, F3).
-            _IdentityHeader(
-              displayName: _nickname ?? localizations.membersNicknameFallback,
-              email: authState.email,
-            ),
+            _IdentityHeader(displayName: _nickname ?? localizations.membersNicknameFallback),
             const SizedBox(height: SgartShapes.space4),
             Text(
               localizations.profileNicknameSectionLabel(widget.activeHousehold.name),
@@ -259,10 +243,7 @@ class _RecoveryEmailSection extends StatelessWidget {
     return BlocBuilder<AccountEmailCubit, AccountEmailState>(
       builder: (context, state) {
         final subtitle = switch (state.status) {
-          // Deliberately not the raw email itself (the identity header above already shows it live
-          // from AuthState — repeating it here would duplicate the same text node and, at the
-          // wider a11y text scale, read as redundant rather than informative).
-          AccountEmailStatus.confirmed => localizations.profileRecoveryEmailConfirmedLabel,
+          AccountEmailStatus.confirmed => localizations.profileRecoveryEmailConfirmedLabel(state.addressHint ?? ''),
           AccountEmailStatus.pendingConfirmation => localizations.profileRecoveryEmailPendingLabel,
           AccountEmailStatus.notAttached ||
           AccountEmailStatus.unknown =>
@@ -334,7 +315,8 @@ class _RecoveryEmailSection extends StatelessWidget {
 }
 
 /// Only ever constructed when no [AuthenticatedHttpClient] ancestor exists (a test harness
-/// rendering [ProfileScreen] incidentally) — every method fails fast rather than the section
+/// rendering [ProfileScreen] incidentally) — the status read reports "nothing attached" so the
+/// section renders quietly, while every action fails fast rather than the section
 /// silently pretending success, so a stray real action in such a harness surfaces immediately.
 class _UnavailableAccountEmailApi implements AccountEmailApi {
   const _UnavailableAccountEmailApi();
@@ -350,13 +332,16 @@ class _UnavailableAccountEmailApi implements AccountEmailApi {
   Future<void> confirm(String code) => throw _error;
 
   @override
+  Future<String?> fetchStatus() async => null;
+
+  @override
   Future<void> detach() => throw _error;
 
   @override
   Future<void> requestRecoveryCode(String email) => throw _error;
 
   @override
-  Future<void> confirmRecovery(String email, String code) => throw _error;
+  Future<RecoveryConfirmation> confirmRecovery(String email, String code, {String? accountId}) => throw _error;
 }
 
 /// The Profile screen's nickname-edit dialog (Story 8.3) — its own [StatefulWidget] so the
@@ -425,13 +410,11 @@ class _UnavailableNicknameApi implements NicknameApi {
 }
 
 /// Display-only identity block: an avatar showing the display name's initial, the display name
-/// (the active household's nickname or its neutral fallback, Story 8.3), and the email read live
-/// from [AuthState].
+/// (the active household's nickname or its neutral fallback, Story 8.3).
 class _IdentityHeader extends StatelessWidget {
-  const _IdentityHeader({required this.displayName, required this.email});
+  const _IdentityHeader({required this.displayName});
 
   final String displayName;
-  final String? email;
 
   @override
   Widget build(BuildContext context) {
@@ -449,7 +432,6 @@ class _IdentityHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(displayName, key: const Key('profile-display-name'), style: theme.textTheme.titleMedium),
-              Text(email ?? '', key: const Key('profile-email'), style: theme.textTheme.bodyMedium),
             ],
           ),
         ),
