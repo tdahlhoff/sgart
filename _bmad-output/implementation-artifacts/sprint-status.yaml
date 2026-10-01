@@ -338,7 +338,7 @@ development_status:
   # silent Admin-API provisioning; supersedes shipped 1.4 sign-in transport + 4.1 email invites (see the
   # forward-pointers in epics.md Stories 1.4/1.11/4.1/4.2).
   epic-7: done
-  7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
+  7-0-choose-browserless-token-mechanism-spike: done  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
   7-1-silent-account-provisioning-on-first-launch: done
   7-2-recovery-phrase-reveal-and-profile-re-view: done
   7-3-recover-by-email-opt-in: done
