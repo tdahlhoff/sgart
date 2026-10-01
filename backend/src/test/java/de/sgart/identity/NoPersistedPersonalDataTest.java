@@ -127,9 +127,10 @@ class NoPersistedPersonalDataTest {
     }
 
     /**
-     * Story 7.3, AC4: the one-time-code table is keyed by the pseudonymous {@code keycloak_user_id}
-     * alone and carries no email column — the raw recovery email lives only on the Keycloak
-     * account (AD-6), never in this SGART-owned store.
+     * Story 7.3, AC4: the one-time-code table carries no email column. Its original definition
+     * (V19) is keyed by the pseudonymous {@code keycloak_user_id}; V25 later renamed that key
+     * column to a generic {@code subject}, because a recovery code belongs to an address digest.
+     * Either way the table never holds a plaintext address.
      */
     @Test
     void emailRecoveryCodeTable_carriesNoEmailColumn() {

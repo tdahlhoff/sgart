@@ -4,6 +4,7 @@ import de.sgart.identity.domain.EmailRecoveryCode;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -17,36 +18,36 @@ import java.util.Optional;
  */
 public final class InMemoryEmailRecoveryCodeStore implements EmailRecoveryCodeStore {
 
-    private record Key(KeycloakUserId keycloakUserId, RecoveryCodePurpose purpose) {}
+    private record Key(RecoveryCodeSubject subject, RecoveryCodePurpose purpose) {}
 
     private final Map<Key, EmailRecoveryCode> rowsByKey = new HashMap<>();
 
     @Override
     public void store(
-            KeycloakUserId keycloakUserId,
+            RecoveryCodeSubject subject,
             RecoveryCodePurpose purpose,
             String codeHash,
             Instant expiresAt,
             Instant createdAt) {
         rowsByKey.put(
-                new Key(keycloakUserId, purpose),
-                new EmailRecoveryCode(keycloakUserId, purpose, codeHash, expiresAt, 0, createdAt));
+                new Key(subject, purpose),
+                new EmailRecoveryCode(subject, purpose, codeHash, expiresAt, 0, createdAt));
     }
 
     @Override
-    public Optional<EmailRecoveryCode> find(KeycloakUserId keycloakUserId, RecoveryCodePurpose purpose) {
-        return Optional.ofNullable(rowsByKey.get(new Key(keycloakUserId, purpose)));
+    public Optional<EmailRecoveryCode> find(RecoveryCodeSubject subject, RecoveryCodePurpose purpose) {
+        return Optional.ofNullable(rowsByKey.get(new Key(subject, purpose)));
     }
 
     @Override
-    public void incrementAttempts(KeycloakUserId keycloakUserId, RecoveryCodePurpose purpose) {
-        Key key = new Key(keycloakUserId, purpose);
+    public void incrementAttempts(RecoveryCodeSubject subject, RecoveryCodePurpose purpose) {
+        Key key = new Key(subject, purpose);
         EmailRecoveryCode existing = rowsByKey.get(key);
         if (existing != null) {
             rowsByKey.put(
                     key,
                     new EmailRecoveryCode(
-                            existing.keycloakUserId(),
+                            existing.subject(),
                             existing.purpose(),
                             existing.codeHash(),
                             existing.expiresAt(),
@@ -56,13 +57,14 @@ public final class InMemoryEmailRecoveryCodeStore implements EmailRecoveryCodeSt
     }
 
     @Override
-    public void delete(KeycloakUserId keycloakUserId, RecoveryCodePurpose purpose) {
-        rowsByKey.remove(new Key(keycloakUserId, purpose));
+    public void delete(RecoveryCodeSubject subject, RecoveryCodePurpose purpose) {
+        rowsByKey.remove(new Key(subject, purpose));
     }
 
     @Override
     public void deleteAll(KeycloakUserId keycloakUserId) {
-        rowsByKey.keySet().removeIf(key -> key.keycloakUserId().equals(keycloakUserId));
+        RecoveryCodeSubject accountSubject = RecoveryCodeSubject.forAccount(keycloakUserId);
+        rowsByKey.keySet().removeIf(key -> key.subject().equals(accountSubject));
     }
 
     @Override

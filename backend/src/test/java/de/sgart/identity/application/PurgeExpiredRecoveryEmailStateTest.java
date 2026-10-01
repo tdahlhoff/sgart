@@ -6,6 +6,7 @@ import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -54,12 +55,12 @@ class PurgeExpiredRecoveryEmailStateTest {
 
     @Test
     void purge_deletesExpiredCodes() {
-        codeStore.store(STALE_ACCOUNT, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.minusSeconds(1), NOW.minusSeconds(901));
-        codeStore.store(FRESH_ACCOUNT, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+        codeStore.store(RecoveryCodeSubject.forAccount(STALE_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.minusSeconds(1), NOW.minusSeconds(901));
+        codeStore.store(RecoveryCodeSubject.forAccount(FRESH_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         purge.purge();
 
-        assertThat(codeStore.find(STALE_ACCOUNT, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(codeStore.find(FRESH_ACCOUNT, RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(STALE_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(FRESH_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
     }
 }

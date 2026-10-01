@@ -8,6 +8,7 @@ import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -45,7 +46,7 @@ class ConfirmRecoveryEmailTest {
 
         assertThat(bindings.findConfirmedFor(CALLER).orElseThrow().confirmedAt()).isEqualTo(NOW);
         assertThat(bindings.findPendingFor(CALLER)).isEmpty();
-        assertThat(codeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
     }
 
     @Test
@@ -102,9 +103,9 @@ class ConfirmRecoveryEmailTest {
     }
 
     private void storeCode(String code, Instant expiresAt, int attempts) {
-        codeStore.store(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM, hasher.hash(code), expiresAt, NOW);
+        codeStore.store(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM, hasher.hash(code), expiresAt, NOW);
         for (int attempt = 0; attempt < attempts; attempt++) {
-            codeStore.incrementAttempts(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM);
+            codeStore.incrementAttempts(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM);
         }
     }
 }

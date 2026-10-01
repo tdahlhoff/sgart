@@ -11,6 +11,7 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmai
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -56,7 +57,7 @@ class AttachRecoveryEmailTest {
         assertThat(pendingBinding.hint()).isEqualTo(RecoveryEmailHint.masking(ADDRESS));
         assertThat(pendingBinding.isConfirmed()).isFalse();
         assertThat(mails.attachMailRecipients).containsExactly(ADDRESS);
-        assertThat(codeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
                 .isEqualTo(hasher.hash(mails.attachMailCodes.get(0)));
     }
 
@@ -106,7 +107,7 @@ class AttachRecoveryEmailTest {
         assertThat(bindings.all()).hasSize(1);
         assertThat(bindings.findPendingFor(CALLER).orElseThrow().digest())
                 .isEqualTo(Sha256RecoveryEmailDigester.digestOf("second@example.test"));
-        assertThat(codeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
                 .isEqualTo(hasher.hash(mails.attachMailCodes.get(1)))
                 .isNotEqualTo(hasher.hash(firstCode));
     }

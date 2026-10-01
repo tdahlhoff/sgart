@@ -2,6 +2,7 @@ package de.sgart.identity.application;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryEmailDigest;
+import de.sgart.shared.HouseholdId;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Executor;
 
 /**
  * Shared fast, in-memory test doubles for the Story 7.3 application-service unit tests (CLAUDE.md
@@ -58,6 +60,7 @@ final class RecoveryEmailTestSupport {
         boolean attachRequestAllowed = true;
         boolean attachMailAllowed = true;
         boolean recoveryRequestAllowed = true;
+        final List<RecoveryEmailDigest> resetDigests = new ArrayList<>();
 
         @Override
         public boolean tryAttach(KeycloakUserId caller) {
@@ -75,7 +78,9 @@ final class RecoveryEmailTestSupport {
         }
 
         @Override
-        public void reset(RecoveryEmailDigest digest) {}
+        public void reset(RecoveryEmailDigest digest) {
+            resetDigests.add(digest);
+        }
     }
 
     /** A deterministic, test-only digester (plain SHA-256) that, like the real one, never contains the address. */
@@ -116,16 +121,41 @@ final class RecoveryEmailTestSupport {
         }
     }
 
-    static final class FakeFindAccountByEmail implements FindAccountByEmail {
-        private final Map<String, KeycloakUserId> byEmail = new HashMap<>();
+    static final class FakeFindHouseholdNames implements FindHouseholdNames {
+        private final Map<HouseholdId, String> namesByHouseholdId = new HashMap<>();
 
-        void registerAccount(String email, KeycloakUserId id) {
-            byEmail.put(email, id);
+        void register(HouseholdId householdId, String householdName) {
+            namesByHouseholdId.put(householdId, householdName);
         }
 
         @Override
-        public Optional<KeycloakUserId> findByEmail(String email) {
-            return Optional.ofNullable(byEmail.get(email));
+        public Map<HouseholdId, String> namesFor(List<HouseholdId> householdIds) {
+            Map<HouseholdId, String> known = new HashMap<>(namesByHouseholdId);
+            known.keySet().retainAll(householdIds);
+            return known;
+        }
+    }
+
+    /** Runs every task at once on the calling thread, so a test sees the whole effect right after the call. */
+    static final class SynchronousExecutor implements Executor {
+        @Override
+        public void execute(Runnable task) {
+            task.run();
+        }
+    }
+
+    /** Holds every task back until the test runs it, to prove what happens before the executor gets to work. */
+    static final class CapturingExecutor implements Executor {
+        final List<Runnable> pendingTasks = new ArrayList<>();
+
+        @Override
+        public void execute(Runnable task) {
+            pendingTasks.add(task);
+        }
+
+        void runPendingTasks() {
+            pendingTasks.forEach(Runnable::run);
+            pendingTasks.clear();
         }
     }
 
@@ -133,7 +163,7 @@ final class RecoveryEmailTestSupport {
         private final Map<KeycloakUserId, AccountDetails> byId = new HashMap<>();
 
         void register(KeycloakUserId id, String username, String publicKey) {
-            byId.put(id, new AccountDetails(username, publicKey, null, false));
+            byId.put(id, new AccountDetails(username, publicKey));
         }
 
         @Override

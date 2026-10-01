@@ -8,7 +8,7 @@ import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.AttachMailThrottle;
 import de.sgart.identity.application.AttachRequestThrottle;
 import de.sgart.identity.application.DetachRecoveryEmail;
-import de.sgart.identity.application.FindAccountByEmail;
+import de.sgart.identity.application.FindHouseholdNames;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.GetConsentStatus;
 import de.sgart.identity.application.GetRecoveryEmailStatus;
@@ -23,6 +23,7 @@ import de.sgart.identity.application.RecoveryCodeHasher;
 import de.sgart.identity.application.RecoveryEmailDigester;
 import de.sgart.identity.application.RecoveryRequestThrottle;
 import de.sgart.identity.application.RegisterDeviceToken;
+import de.sgart.identity.application.ResolveRecoveryCandidates;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
 import de.sgart.identity.application.ResolveMemberIdentity;
@@ -205,20 +206,14 @@ public class IdentityBeansConfig {
 
     // --- Story 7.3: recover by email (opt-in) -------------------------------------------------
     //
-    // No separate @Bean methods wrap keycloakAdminCreateAccount() for SetAccountEmail/
-    // RebindAccountCredential/FindAccountByEmail/GetAccountDetails: Spring already matches that
-    // single bean (declared as the concrete KeycloakAdminCreateAccount type) against every
-    // interface it implements when another @Bean method asks for one, exactly like CreateAccount/
-    // DeleteAccount above — an extra per-interface wrapper method would register the *same*
-    // instance under additional bean names, and once Spring resolves one by its actual runtime
-    // type it becomes an ambiguous extra candidate for every other interface that type implements.
+    // No separate @Bean methods wrap keycloakAdminCreateAccount() for RebindAccountCredential/
+    // GetAccountDetails: Spring already matches that single bean (declared as the concrete
+    // KeycloakAdminCreateAccount type) against every interface it implements when another @Bean
+    // method asks for one, exactly like CreateAccount/DeleteAccount above — an extra per-interface
+    // wrapper method would register the *same* instance under additional bean names, and once
+    // Spring resolves one by its actual runtime type it becomes an ambiguous extra candidate for
+    // every other interface that type implements.
 
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
-    DeferredSetAccountEmail deferredSetAccountEmail() {
-        return new DeferredSetAccountEmail();
-    }
 
     @Bean
     @ConditionalOnProperty(
@@ -227,12 +222,6 @@ public class IdentityBeansConfig {
         return new DeferredRebindAccountCredential();
     }
 
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "sgart.identity.keycloak-admin", name = "enabled", havingValue = "false", matchIfMissing = true)
-    DeferredFindAccountByEmail deferredFindAccountByEmail() {
-        return new DeferredFindAccountByEmail();
-    }
 
     @Bean
     @ConditionalOnProperty(
@@ -353,28 +342,55 @@ public class IdentityBeansConfig {
         return new PurgeExpiredRecoveryEmailState(recoveryEmailBindingRepository, emailRecoveryCodeStore, clock);
     }
 
+    /**
+     * Recovery issuances run on a single daemon thread so a request returns at once, whatever the
+     * address. The executor is deliberately not a bean (see {@link RecoveryIssuanceExecutor}).
+     */
+    @Bean
+    RecoveryIssuanceExecutor recoveryIssuanceExecutor() {
+        return new RecoveryIssuanceExecutor(Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "recovery-code-issuer");
+            thread.setDaemon(true);
+            return thread;
+        }));
+    }
+
     @Bean
     RequestEmailRecoveryCode requestEmailRecoveryCode(
-            FindAccountByEmail findAccountByEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
             RecoveryEmailDigester recoveryEmailDigester,
             RecoveryRequestThrottle recoveryRequestThrottle,
+            RecoveryIssuanceExecutor recoveryIssuanceExecutor,
             Clock clock) {
         return new RequestEmailRecoveryCode(
-                findAccountByEmail,
+                recoveryEmailBindingRepository,
                 emailRecoveryCodeStore,
                 recoveryCodeHasher,
                 sendRecoveryCodeEmail,
                 recoveryEmailDigester,
                 recoveryRequestThrottle,
+                recoveryIssuanceExecutor.executor(),
                 clock);
     }
 
     @Bean
+    ResolveRecoveryCandidates resolveRecoveryCandidates(
+            MemberMappingRepository memberMappingRepository,
+            MembershipNicknameRepository membershipNicknameRepository,
+            FindHouseholdNames findHouseholdNames) {
+        return new ResolveRecoveryCandidates(
+                memberMappingRepository, membershipNicknameRepository, findHouseholdNames);
+    }
+
+    @Bean
     ConfirmEmailRecovery confirmEmailRecovery(
-            FindAccountByEmail findAccountByEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            RecoveryEmailDigester recoveryEmailDigester,
+            RecoveryRequestThrottle recoveryRequestThrottle,
+            ResolveRecoveryCandidates resolveRecoveryCandidates,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             GetAccountDetails getAccountDetails,
@@ -384,7 +400,10 @@ public class IdentityBeansConfig {
             CreateAccount createAccount,
             Clock clock) {
         return new ConfirmEmailRecovery(
-                findAccountByEmail,
+                recoveryEmailBindingRepository,
+                recoveryEmailDigester,
+                recoveryRequestThrottle,
+                resolveRecoveryCandidates,
                 emailRecoveryCodeStore,
                 recoveryCodeHasher,
                 getAccountDetails,

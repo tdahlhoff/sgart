@@ -5,10 +5,12 @@ import de.sgart.identity.application.AttachRecoveryEmail;
 import de.sgart.identity.application.ConfirmEmailRecovery;
 import de.sgart.identity.application.ConfirmRecoveryEmail;
 import de.sgart.identity.application.DetachRecoveryEmail;
+import de.sgart.identity.application.EmailRecoveryOutcome;
 import de.sgart.identity.application.GetRecoveryEmailStatus;
 import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -112,12 +114,20 @@ class AccountController {
 
     /**
      * AC2 confirm & rebind (design §1.1, R1): authenticated as the throwaway {@code kc2} the caller
-     * currently holds a JWT for — never taken from the request body (AR10).
+     * currently holds a JWT for — never taken from the request body (AR10). {@code 204} once the
+     * device is rebound; {@code 200} with the candidate accounts when the mailbox is bound to
+     * several and the person has yet to choose one (D6: a deliberate read-returning command, since
+     * the single confirm endpoint is the design; the call changes nothing but the attempt counter).
      */
     @PostMapping("/api/v1/account/recovery/email/confirm")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void confirmRecovery(@AuthenticationPrincipal Jwt jwt, @RequestBody RecoveryConfirmRequest request) {
-        confirmEmailRecovery.confirmAndRebind(callerId(jwt), request.email(), request.code());
+    ResponseEntity<EmailRecoveryOutcome.ChooseAccount> confirmRecovery(
+            @AuthenticationPrincipal Jwt jwt, @RequestBody RecoveryConfirmRequest request) {
+        EmailRecoveryOutcome outcome =
+                confirmEmailRecovery.confirmAndRebind(callerId(jwt), request.email(), request.code(), request.accountId());
+        return switch (outcome) {
+            case EmailRecoveryOutcome.Rebound rebound -> ResponseEntity.noContent().build();
+            case EmailRecoveryOutcome.ChooseAccount chooseAccount -> ResponseEntity.ok(chooseAccount);
+        };
     }
 
     private static String callerId(Jwt jwt) {
@@ -133,5 +143,6 @@ class AccountController {
 
     record RecoveryEmailStatusResponse(String addressHint) {}
 
-    record RecoveryConfirmRequest(String email, String code) {}
+    /** {@code accountId} is absent on the first call and names the picked candidate on the second. */
+    record RecoveryConfirmRequest(String email, String code, String accountId) {}
 }

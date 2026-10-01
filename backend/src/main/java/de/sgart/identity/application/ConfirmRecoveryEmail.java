@@ -3,6 +3,7 @@ package de.sgart.identity.application;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
@@ -44,12 +45,12 @@ public final class ConfirmRecoveryEmail {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
         KeycloakUserId caller = new KeycloakUserId(keycloakUserId);
 
-        verifyRecoveryCode.verify(caller, RecoveryCodePurpose.ATTACH_CONFIRM, code);
+        verifyRecoveryCode.verify(RecoveryCodeSubject.forAccount(caller), RecoveryCodePurpose.ATTACH_CONFIRM, code);
 
         RecoveryEmailBinding pendingBinding = recoveryEmailBindingRepository
                 .findPendingFor(caller)
                 .orElseThrow(() -> new RecoveryCodeRejectedException("no pending recovery email binding"));
         recoveryEmailBindingRepository.confirm(pendingBinding.confirm(clock.instant()));
-        emailRecoveryCodeStore.delete(caller, RecoveryCodePurpose.ATTACH_CONFIRM);
+        emailRecoveryCodeStore.delete(RecoveryCodeSubject.forAccount(caller), RecoveryCodePurpose.ATTACH_CONFIRM);
     }
 }

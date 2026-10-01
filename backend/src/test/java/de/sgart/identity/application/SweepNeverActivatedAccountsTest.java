@@ -10,6 +10,7 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAcc
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -66,13 +67,13 @@ class SweepNeverActivatedAccountsTest {
         provisionedAccountRepository.recordIfAbsent(unconfirmedAttach, NOW.minus(Duration.ofDays(15)));
         recoveryEmailBindings.savePending(pendingBindingFor(unconfirmedAttach));
         emailRecoveryCodeStore.store(
-                unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+                RecoveryCodeSubject.forAccount(unconfirmedAttach), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         sweep.sweep();
 
         assertThat(provisionedAccountRepository.contains(unconfirmedAttach)).isFalse();
         assertThat(deleteAccount.deletedIds).containsExactly(unconfirmedAttach);
-        assertThat(emailRecoveryCodeStore.find(unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(emailRecoveryCodeStore.find(RecoveryCodeSubject.forAccount(unconfirmedAttach), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
         assertThat(recoveryEmailBindings.findAllFor(unconfirmedAttach)).isEmpty();
     }
 

@@ -1,42 +1,49 @@
 package de.sgart.identity.application;
 
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
-import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import java.time.Clock;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.concurrent.Executor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Requests a recover-by-email code on a fresh device (Story 7.3, AC2, D-H): looks the account up
- * by email and, <strong>only if found</strong>, stores and sends a code. The caller always
- * "succeeds" from the outside (the controller answers {@code 202} regardless) and this service
- * never signals which case occurred in its outcome (no account/email enumeration). The known- and
- * unknown-email paths are <em>not</em> timing-equalized — the known path additionally hashes,
- * stores, and sends — so the abuse-resistance posture rests on the constant {@code 202} response
- * plus rate-limiting at the reverse-proxy seam (ADR-0002), not on timing parity between the two
- * paths (Story 7.3 review finding: corrects an earlier overstated claim here).
+ * Requests a recover-by-email code on a fresh device. Only the address is validated on the
+ * request thread; the whole issuance (binding lookup, budget, code, mail) runs on the injected
+ * executor. A mailbox with confirmed bindings and one without therefore cost the request thread
+ * the same, and nothing the caller can observe (status, body, timing) depends on the address.
+ *
+ * <p>One code is issued per mailbox, however many accounts are bound to it. Pending bindings grant
+ * nothing; an address without a confirmed binding, or over its recovery budget, is silently dropped.
  */
 public final class RequestEmailRecoveryCode {
 
-    private final FindAccountByEmail findAccountByEmail;
+    private static final Logger log = LoggerFactory.getLogger(RequestEmailRecoveryCode.class);
+
+    private final RecoveryEmailBindingRepository recoveryEmailBindingRepository;
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final RecoveryCodeHasher recoveryCodeHasher;
     private final SendRecoveryCodeEmail sendRecoveryCodeEmail;
     private final RecoveryEmailDigester recoveryEmailDigester;
     private final RecoveryRequestThrottle recoveryRequestThrottle;
+    private final Executor issuanceExecutor;
     private final Clock clock;
 
     public RequestEmailRecoveryCode(
-            FindAccountByEmail findAccountByEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
             RecoveryEmailDigester recoveryEmailDigester,
             RecoveryRequestThrottle recoveryRequestThrottle,
+            Executor issuanceExecutor,
             Clock clock) {
-        this.findAccountByEmail = Objects.requireNonNull(findAccountByEmail, "findAccountByEmail must not be null");
+        this.recoveryEmailBindingRepository = Objects.requireNonNull(
+                recoveryEmailBindingRepository, "recoveryEmailBindingRepository must not be null");
         this.emailRecoveryCodeStore =
                 Objects.requireNonNull(emailRecoveryCodeStore, "emailRecoveryCodeStore must not be null");
         this.recoveryCodeHasher = Objects.requireNonNull(recoveryCodeHasher, "recoveryCodeHasher must not be null");
@@ -46,29 +53,36 @@ public final class RequestEmailRecoveryCode {
                 Objects.requireNonNull(recoveryEmailDigester, "recoveryEmailDigester must not be null");
         this.recoveryRequestThrottle =
                 Objects.requireNonNull(recoveryRequestThrottle, "recoveryRequestThrottle must not be null");
+        this.issuanceExecutor = Objects.requireNonNull(issuanceExecutor, "issuanceExecutor must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     /** @throws InvalidRecoveryEmailException if {@code rawEmail} is missing or not a plausible address. */
     public void request(String rawEmail) {
-        String email = RecoveryEmailValidation.validated(rawEmail);
+        String address = RecoveryEmailValidation.validated(rawEmail);
+        issuanceExecutor.execute(() -> issueCodeFor(address));
+    }
 
-        Optional<KeycloakUserId> target = findAccountByEmail.findByEmail(email);
-        if (target.isEmpty()) {
-            return;
+    private void issueCodeFor(String address) {
+        try {
+            RecoveryEmailDigest digest = recoveryEmailDigester.digest(address);
+            if (recoveryEmailBindingRepository.findConfirmedFor(digest).isEmpty()) {
+                return;
+            }
+            if (!recoveryRequestThrottle.tryRequest(digest)) {
+                return;
+            }
+            String code = RecoveryCode.generate();
+            emailRecoveryCodeStore.store(
+                    RecoveryCodeSubject.forAddress(digest),
+                    RecoveryCodePurpose.RECOVER,
+                    recoveryCodeHasher.hash(code),
+                    RecoveryCode.expiresAt(clock),
+                    clock.instant());
+            sendRecoveryCodeEmail.sendRecoveryCode(address, code);
+        } catch (RuntimeException issuanceFailure) {
+            // Never the address: neither in the message nor in the exception chain's own text.
+            log.error("Issuing a recovery code failed", issuanceFailure);
         }
-
-        // Throttled per address, separately from the attach budgets: stays silent, same as the
-        // unknown-email case above, so the constant 202 never distinguishes "unknown" from "over budget".
-        RecoveryEmailDigest digest = recoveryEmailDigester.digest(email);
-        if (!recoveryRequestThrottle.tryRequest(digest)) {
-            return;
-        }
-
-        String code = RecoveryCode.generate();
-        emailRecoveryCodeStore.store(
-                target.get(), RecoveryCodePurpose.RECOVER, recoveryCodeHasher.hash(code), RecoveryCode.expiresAt(clock),
-                clock.instant());
-        sendRecoveryCodeEmail.sendRecoveryCode(email, code);
     }
 }

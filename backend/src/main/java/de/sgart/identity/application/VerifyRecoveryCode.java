@@ -1,8 +1,8 @@
 package de.sgart.identity.application;
 
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
-import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import java.time.Clock;
 import java.util.Objects;
 
@@ -28,7 +28,7 @@ final class VerifyRecoveryCode {
      * @throws RecoveryCodeRejectedException if no code is stored, or the candidate is wrong,
      *     expired, or attempt-exhausted — a wrong guess increments the stored attempt count first.
      */
-    void verify(KeycloakUserId subject, RecoveryCodePurpose purpose, String candidate) {
+    void verify(RecoveryCodeSubject subject, RecoveryCodePurpose purpose, String candidate) {
         if (candidate == null || candidate.isBlank()) {
             // Fail fast on a missing/blank code (Story 7.3 review finding): without this guard a
             // null candidate reaches the hasher and throws an unmapped NPE, surfacing as an

@@ -47,6 +47,7 @@ import de.sgart.collaboration.domain.readmodel.ItemSuggestionReadModel;
 import de.sgart.collaboration.domain.readmodel.ShoppingListReadModel;
 import de.sgart.collaboration.domain.readmodel.StoreReadModel;
 import de.sgart.collaboration.domain.readmodel.TripStoreReadModel;
+import de.sgart.identity.application.FindHouseholdNames;
 import de.sgart.identity.application.GetConsentStatus;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
@@ -70,6 +71,11 @@ public class CollaborationApplicationConfig {
     @Bean
     ConsentGate consentGate(GetConsentStatus getConsentStatus) {
         return new IdentityConsentGate(getConsentStatus);
+    }
+
+    @Bean
+    FindHouseholdNames findHouseholdNames(HouseholdNameReadModel householdNameReadModel) {
+        return new CollaborationHouseholdNames(householdNameReadModel);
     }
 
     @Bean

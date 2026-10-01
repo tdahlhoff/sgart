@@ -6,6 +6,8 @@ import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.AttachMailThrottle;
 import de.sgart.identity.application.AttachRequestThrottle;
+import de.sgart.collaboration.adapter.out.CollaborationHouseholdNames;
+import de.sgart.identity.application.FindHouseholdNames;
 import de.sgart.identity.application.RecoveryEmailDigester;
 import de.sgart.identity.application.RecoveryRequestThrottle;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
@@ -147,6 +149,31 @@ class IdentityBeansConfigTest {
             assertThat(attachRequestThrottle).isInstanceOf(InMemoryRecoveryEmailThrottles.class);
             assertThat(attachMailThrottle).isSameAs(attachRequestThrottle);
             assertThat(recoveryRequestThrottle).isSameAs(attachRequestThrottle);
+        }
+    }
+
+    /**
+     * Recover on the index: household names for the account picker cross the context boundary only
+     * through the identity-owned port, which collaboration implements.
+     */
+    @SpringBootTest
+    @Nested
+    class RecoveryAccountPickerWiring {
+
+        @Autowired
+        private FindHouseholdNames findHouseholdNames;
+
+        @Autowired
+        private RecoveryIssuanceExecutor recoveryIssuanceExecutor;
+
+        @Test
+        void servesHouseholdNamesFromTheCollaborationReadModel() {
+            assertThat(findHouseholdNames).isInstanceOf(CollaborationHouseholdNames.class);
+        }
+
+        @Test
+        void providesAnExecutorForRecoveryIssuance() {
+            assertThat(recoveryIssuanceExecutor.executor()).isNotNull();
         }
     }
 }

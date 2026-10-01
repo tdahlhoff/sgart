@@ -3,6 +3,7 @@ package de.sgart.identity.application;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
@@ -80,7 +81,7 @@ public final class AttachRecoveryEmail {
 
         String code = RecoveryCode.generate();
         emailRecoveryCodeStore.store(
-                caller,
+                RecoveryCodeSubject.forAccount(caller),
                 RecoveryCodePurpose.ATTACH_CONFIRM,
                 recoveryCodeHasher.hash(code),
                 RecoveryCode.expiresAt(clock),

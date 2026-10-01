@@ -4,18 +4,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.sgart.identity.application.AccountDetails;
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
-import de.sgart.identity.application.FindAccountByEmail;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.InvalidAccountProvisioningException;
 import de.sgart.identity.application.RebindAccountCredential;
-import de.sgart.identity.application.SetAccountEmail;
 import de.sgart.identity.domain.KeycloakUserId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,9 +21,8 @@ import org.springframework.web.client.RestClient;
 
 /**
  * The Story 7.1 real implementation of {@link CreateAccount} and {@link DeleteAccount}, extended
- * in Story 7.3 with the email + R1-rebind Admin capabilities ({@link SetAccountEmail}, {@link
- * RebindAccountCredential}, {@link FindAccountByEmail}, {@link GetAccountDetails}): creates,
- * deletes, and mutates a Keycloak account via the Admin REST API, client-credentials
+ * in Story 7.3 with the R1-rebind Admin capabilities ({@link RebindAccountCredential}, {@link
+ * GetAccountDetails}): creates, deletes, and mutates a Keycloak account via the Admin REST API, client-credentials
  * authenticated — same token-fetch shape as every other Keycloak Admin adapter in this package;
  * all Keycloak/HTTP types are contained in this
  * adapter (AD-1/AD-2). One class implements every port because all of them are the same "manage a
@@ -41,10 +36,7 @@ import org.springframework.web.client.RestClient;
  * this story adds {@code manage-users} to (alongside the existing {@code view-users}).
  */
 public final class KeycloakAdminCreateAccount
-        implements CreateAccount, DeleteAccount, SetAccountEmail, RebindAccountCredential, FindAccountByEmail,
-                GetAccountDetails {
-
-    private static final Logger log = LoggerFactory.getLogger(KeycloakAdminCreateAccount.class);
+        implements CreateAccount, DeleteAccount, RebindAccountCredential, GetAccountDetails {
 
     /** D-D: the Ed25519 public key is stored as a plain Keycloak user attribute (simplest for the
      * Direct-Grant authenticator SPI to read). */
@@ -99,57 +91,8 @@ public final class KeycloakAdminCreateAccount
     }
 
     @Override
-    public boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean verified) {
-        return updateUserSuppressing409(keycloakUserId, new UpdateEmailRequest(email, verified));
-    }
-
-    @Override
-    public void markEmailVerified(KeycloakUserId keycloakUserId) {
-        updateUser(keycloakUserId, new UpdateEmailVerifiedRequest(true));
-    }
-
-    @Override
-    public void clearEmail(KeycloakUserId keycloakUserId) {
-        updateUser(keycloakUserId, new UpdateEmailRequest(null, false));
-    }
-
-    @Override
     public void rebind(KeycloakUserId keycloakUserId, String username, String publicKey) {
         updateUser(keycloakUserId, new RebindRequest(username, Map.of(PUBLIC_KEY_ATTRIBUTE, List.of(publicKey))));
-    }
-
-    @Override
-    public Optional<KeycloakUserId> findByEmail(String email) {
-        String accessToken = fetchAccessToken();
-        KeycloakUserResponse[] users = restClient
-                .get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/admin/realms/{realm}/users")
-                        .queryParam("email", "{email}")
-                        .queryParam("exact", true)
-                        .build(realm, email))
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .retrieve()
-                .body(KeycloakUserResponse[].class);
-        if (users == null || users.length != 1) {
-            if (users != null && users.length > 1) {
-                // An ambiguous exact-match result makes recovery quietly impossible (falls through
-                // to the "not found" branch, D-H); logged so an operator can diagnose a duplicate/
-                // squatted address instead of it silently rotting (Story 7.3 review finding).
-                log.warn(
-                        "findByEmail matched {} Keycloak users for one exact email — treating as not found",
-                        users.length);
-            }
-            return Optional.empty();
-        }
-        // Only a Keycloak-confirmed email is recovery-eligible (Story 7.3 review finding): an
-        // unverified/unproven address must never participate in the R1 rebind lookup, so an
-        // account attacker-attached-but-never-confirmed can neither be found nor used to hijack
-        // someone else's recovery.
-        if (!Boolean.TRUE.equals(users[0].emailVerified())) {
-            return Optional.empty();
-        }
-        return Optional.of(new KeycloakUserId(users[0].id()));
     }
 
     @Override
@@ -168,8 +111,7 @@ public final class KeycloakAdminCreateAccount
             return Optional.empty();
         }
         String publicKey = user.attributes() == null ? null : firstOrNull(user.attributes().get(PUBLIC_KEY_ATTRIBUTE));
-        boolean emailVerified = user.emailVerified() != null && user.emailVerified();
-        return Optional.of(new AccountDetails(user.username(), publicKey, user.email(), emailVerified));
+        return Optional.of(new AccountDetails(user.username(), publicKey));
     }
 
     private static String firstOrNull(List<String> values) {
@@ -186,27 +128,6 @@ public final class KeycloakAdminCreateAccount
                 .body(requestBody)
                 .retrieve()
                 .toBodilessEntity();
-    }
-
-    /**
-     * Story 8.6, D2 (interim): a PUT that sets the email answers {@code 409} when another Keycloak
-     * account already holds that address. Suppressing only that status (the {@link #create}
-     * pattern above) and reporting it back as {@code false} lets {@link
-     * de.sgart.identity.application.AttachRecoveryEmail} answer with a silent {@code 202} instead
-     * of an unmapped {@code 500} — never distinguishing this from success to the caller.
-     */
-    private boolean updateUserSuppressing409(KeycloakUserId keycloakUserId, Object requestBody) {
-        String accessToken = fetchAccessToken();
-        ResponseEntity<Void> response = restClient
-                .put()
-                .uri("/admin/realms/{realm}/users/{id}", realm, keycloakUserId.value())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
-                .retrieve()
-                .onStatus(status -> status.value() == 409, (request, ignoredResponse) -> {})
-                .toBodilessEntity();
-        return response.getStatusCode().value() != 409;
     }
 
     private KeycloakUserId findUserIdByUsername(String username, String accessToken) {
@@ -256,19 +177,12 @@ public final class KeycloakAdminCreateAccount
     /** {@code enabled: true, no email/name} (D-A/AD-6) — nothing but the username and public key. */
     private record CreateUserRequest(String username, boolean enabled, Map<String, List<String>> attributes) {}
 
-    /** Story 7.3 attach/detach: {@code email} is {@code null} on detach (clears it). */
-    private record UpdateEmailRequest(String email, boolean emailVerified) {}
-
-    /** Story 7.3 confirm: flips only {@code emailVerified}, leaving the email itself untouched. */
-    private record UpdateEmailVerifiedRequest(boolean emailVerified) {}
-
     /** Story 7.3 R1 rebind (design §1.1): {@code username} and {@code publicKey} together — never just the key. */
     private record RebindRequest(String username, Map<String, List<String>> attributes) {}
 
-    private record KeycloakUserResponse(String id, Boolean emailVerified) {}
+    private record KeycloakUserResponse(String id) {}
 
-    private record UserDetailResponse(
-            String username, String email, Boolean emailVerified, Map<String, List<String>> attributes) {}
+    private record UserDetailResponse(String username, Map<String, List<String>> attributes) {}
 
     private record TokenResponse(@JsonProperty("access_token") String accessToken) {}
 }

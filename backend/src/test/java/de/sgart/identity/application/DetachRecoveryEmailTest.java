@@ -11,6 +11,7 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmai
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -39,15 +40,13 @@ class DetachRecoveryEmailTest {
         bindings.confirm(bindings.findPendingFor(CALLER).orElseThrow().confirm(NOW));
         bindings.savePending(RecoveryEmailBinding.pending(new RecoveryEmailDigest("other"), CALLER, HINT, NOW));
         bindings.savePending(RecoveryEmailBinding.pending(DIGEST, OTHER_ACCOUNT, HINT, NOW));
-        codeStore.store(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
-        codeStore.store(CALLER, RecoveryCodePurpose.RECOVER, "hash2", NOW.plusSeconds(60), NOW);
+        codeStore.store(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         detachRecoveryEmail.detach(CALLER_ID);
 
         assertThat(bindings.findAllFor(CALLER)).isEmpty();
         assertThat(bindings.findPendingFor(OTHER_ACCOUNT)).isPresent();
-        assertThat(codeStore.find(CALLER, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(codeStore.find(CALLER, RecoveryCodePurpose.RECOVER)).isEmpty();
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
     }
 
     @Test

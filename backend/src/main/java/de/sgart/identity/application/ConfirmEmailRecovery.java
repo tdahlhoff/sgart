@@ -4,25 +4,39 @@ import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
+import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
+import de.sgart.identity.domain.RecoveryEmailDigest;
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The R1 rebind (Story 7.3, design §1.1, AC2): verifies the recovery code for the account found
- * by email, then — <strong>in this exact order</strong> — deletes the caller's own throwaway
- * account (freeing its username, which Keycloak's uniqueness constraint would otherwise reject the
- * rebind on) and rebinds the target account's {@code username}/{@code publicKey} to the throwaway
- * device's own credential. The target's {@link KeycloakUserId} is preserved across the recovery —
- * only the throwaway device's own account is deleted, never the target's.
+ * The R1 rebind (Story 7.3, design §1.1, AC2): verifies the recovery code for the mailbox the
+ * person typed, resolves which account to recover, then — <strong>in this exact order</strong> —
+ * deletes the caller's own throwaway account (freeing its username, which Keycloak's uniqueness
+ * constraint would otherwise reject the rebind on) and rebinds the target account's {@code
+ * username}/{@code publicKey} to the throwaway device's own credential. The target's {@link
+ * KeycloakUserId} is preserved across the recovery — only the throwaway device's own account is
+ * deleted, never the target's.
+ *
+ * <p>A mailbox may be bound to several accounts. The caller's own throwaway is never a candidate.
+ * With one candidate the rebind runs at once; with several, the first call verifies the code and
+ * answers with the candidates (consuming nothing), and the second call names the chosen account and
+ * is verified from scratch, so the server keeps no picker session.
  */
 public final class ConfirmEmailRecovery {
 
     private static final Logger log = LoggerFactory.getLogger(ConfirmEmailRecovery.class);
 
-    private final FindAccountByEmail findAccountByEmail;
+    private final RecoveryEmailBindingRepository recoveryEmailBindingRepository;
+    private final RecoveryEmailDigester recoveryEmailDigester;
+    private final RecoveryRequestThrottle recoveryRequestThrottle;
+    private final ResolveRecoveryCandidates resolveRecoveryCandidates;
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final GetAccountDetails getAccountDetails;
     private final DeleteAccount deleteAccount;
@@ -33,7 +47,10 @@ public final class ConfirmEmailRecovery {
     private final VerifyRecoveryCode verifyRecoveryCode;
 
     public ConfirmEmailRecovery(
-            FindAccountByEmail findAccountByEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            RecoveryEmailDigester recoveryEmailDigester,
+            RecoveryRequestThrottle recoveryRequestThrottle,
+            ResolveRecoveryCandidates resolveRecoveryCandidates,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             GetAccountDetails getAccountDetails,
@@ -42,7 +59,14 @@ public final class ConfirmEmailRecovery {
             RebindAccountCredential rebindAccountCredential,
             CreateAccount createAccount,
             Clock clock) {
-        this.findAccountByEmail = Objects.requireNonNull(findAccountByEmail, "findAccountByEmail must not be null");
+        this.recoveryEmailBindingRepository = Objects.requireNonNull(
+                recoveryEmailBindingRepository, "recoveryEmailBindingRepository must not be null");
+        this.recoveryEmailDigester =
+                Objects.requireNonNull(recoveryEmailDigester, "recoveryEmailDigester must not be null");
+        this.recoveryRequestThrottle =
+                Objects.requireNonNull(recoveryRequestThrottle, "recoveryRequestThrottle must not be null");
+        this.resolveRecoveryCandidates =
+                Objects.requireNonNull(resolveRecoveryCandidates, "resolveRecoveryCandidates must not be null");
         this.emailRecoveryCodeStore =
                 Objects.requireNonNull(emailRecoveryCodeStore, "emailRecoveryCodeStore must not be null");
         this.getAccountDetails = Objects.requireNonNull(getAccountDetails, "getAccountDetails must not be null");
@@ -59,32 +83,58 @@ public final class ConfirmEmailRecovery {
     /**
      * @param throwawayKeycloakUserId the {@code kc2} resolved from the caller's own (throwaway)
      *     JWT (D-C) — never taken from the request body.
-     * @throws RecoveryCodeRejectedException if the email is unknown (D-H, no enumeration — the same
-     *     rejection as a wrong code) or the code is wrong, expired, or attempt-exhausted.
+     * @param chosenAccountId the account the person picked among several candidates, or {@code
+     *     null} on the first call.
+     * @throws RecoveryCodeRejectedException if the mailbox has no candidate account (D-H, no
+     *     enumeration — the same rejection as a wrong code), the code is wrong, expired, or
+     *     attempt-exhausted, or {@code chosenAccountId} is not one of the candidates.
      * @throws CallerAccountNotFoundException if the caller's own account no longer exists (401 —
      *     the app's {@code AuthenticatedHttpClient} then re-signs-in silently and retries once).
      * @throws RecoveryRebindFailedException if the rebind failed after the throwaway was deleted;
      *     the throwaway is restored best-effort and the code row is kept for a retry.
      */
-    public void confirmAndRebind(String throwawayKeycloakUserId, String rawEmail, String code) {
+    public EmailRecoveryOutcome confirmAndRebind(
+            String throwawayKeycloakUserId, String rawEmail, String code, String chosenAccountId) {
         Objects.requireNonNull(throwawayKeycloakUserId, "throwawayKeycloakUserId must not be null");
         KeycloakUserId throwawayCaller = new KeycloakUserId(throwawayKeycloakUserId);
-        String email = RecoveryEmailValidation.validated(rawEmail);
-        KeycloakUserId target = findAccountByEmail
-                .findByEmail(email)
-                .orElseThrow(() -> new RecoveryCodeRejectedException("no account for this email"));
+        RecoveryEmailDigest digest = recoveryEmailDigester.digest(RecoveryEmailValidation.validated(rawEmail));
+        RecoveryCodeSubject codeSubject = RecoveryCodeSubject.forAddress(digest);
 
-        // A caller recovering into their own still-throwaway account (e.g. attached-but-not-yet-
-        // rebound email pointing back at itself) must never reach the delete-then-rebind sequence
-        // below: deleting `throwawayCaller` would delete `target` too, and the rebind would then
-        // operate on an already-deleted id, bricking the device. Reject exactly like a wrong code
-        // (Story 7.3 review finding) — no distinct signal, same no-enumeration posture (D-H).
-        if (target.equals(throwawayCaller)) {
-            throw new RecoveryCodeRejectedException("recovery target is the caller's own throwaway account");
+        // The caller's own still-throwaway account must never be the recovery target: deleting it
+        // below would delete the target too and brick the device (Story 7.3 review finding). It is
+        // left out of the candidates, so such a mailbox is rejected exactly like a wrong code (D-H).
+        List<KeycloakUserId> candidates = recoveryEmailBindingRepository.findConfirmedFor(digest).stream()
+                .map(RecoveryEmailBinding::keycloakUserId)
+                .filter(account -> !account.equals(throwawayCaller))
+                .toList();
+        if (candidates.isEmpty()) {
+            throw new RecoveryCodeRejectedException("no confirmed account for this address");
         }
 
-        verifyRecoveryCode.verify(target, RecoveryCodePurpose.RECOVER, code);
+        verifyRecoveryCode.verify(codeSubject, RecoveryCodePurpose.RECOVER, code);
 
+        if (chosenAccountId == null && candidates.size() > 1) {
+            return new EmailRecoveryOutcome.ChooseAccount(resolveRecoveryCandidates.resolve(candidates));
+        }
+        KeycloakUserId target = chosenAccountId == null ? candidates.get(0) : chooseAmong(candidates, chosenAccountId);
+
+        rebind(throwawayCaller, target);
+
+        emailRecoveryCodeStore.delete(codeSubject, RecoveryCodePurpose.RECOVER);
+        recoveryRequestThrottle.reset(digest);
+        recoveryEmailBindingRepository.deleteAllFor(throwawayCaller);
+        emailRecoveryCodeStore.deleteAll(throwawayCaller);
+        return new EmailRecoveryOutcome.Rebound();
+    }
+
+    private static KeycloakUserId chooseAmong(List<KeycloakUserId> candidates, String chosenAccountId) {
+        return candidates.stream()
+                .filter(candidate -> candidate.value().equals(chosenAccountId))
+                .findFirst()
+                .orElseThrow(() -> new RecoveryCodeRejectedException("chosen account is not a candidate"));
+    }
+
+    private void rebind(KeycloakUserId throwawayCaller, KeycloakUserId target) {
         AccountDetails throwawayDetails = getAccountDetails
                 .findById(throwawayCaller)
                 .orElseThrow(() -> new CallerAccountNotFoundException(
@@ -114,7 +164,6 @@ public final class ConfirmEmailRecovery {
                 throw new RecoveryRebindFailedException(rebindFailure);
             }
         }
-        emailRecoveryCodeStore.delete(target, RecoveryCodePurpose.RECOVER);
     }
 
     /**

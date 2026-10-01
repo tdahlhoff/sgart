@@ -4,13 +4,13 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * A stored one-time code row (Story 7.3, design §4) — PII-free: keyed by the pseudonymous {@link
- * KeycloakUserId}, no email column. {@code codeHash} is {@code HMAC-SHA256(server secret, code)},
+ * A stored one-time code row (Story 7.3, design §4) — PII-free: keyed by a {@link
+ * RecoveryCodeSubject} (a pseudonymous account id or an address digest), no plaintext address. {@code codeHash} is {@code HMAC-SHA256(server secret, code)},
  * never the plaintext code. {@code attempts} counts wrong guesses; a row is rejected once {@code
  * attempts} reaches the application service's configured maximum or {@code expiresAt} has passed.
  */
 public record EmailRecoveryCode(
-        KeycloakUserId keycloakUserId,
+        RecoveryCodeSubject subject,
         RecoveryCodePurpose purpose,
         String codeHash,
         Instant expiresAt,
@@ -18,8 +18,11 @@ public record EmailRecoveryCode(
         Instant createdAt) {
 
     public EmailRecoveryCode {
-        Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
+        Objects.requireNonNull(subject, "subject must not be null");
         Objects.requireNonNull(purpose, "purpose must not be null");
+        if (subject.kind() != purpose.subjectKind()) {
+            throw new IllegalArgumentException(purpose + " codes belong to a " + purpose.subjectKind() + " subject");
+        }
         Objects.requireNonNull(codeHash, "codeHash must not be null");
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");

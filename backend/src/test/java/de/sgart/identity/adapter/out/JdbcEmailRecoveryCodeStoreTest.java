@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.sgart.identity.domain.EmailRecoveryCode;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryCodeSubject;
+import de.sgart.identity.domain.RecoveryEmailDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import javax.sql.DataSource;
@@ -55,23 +57,35 @@ class JdbcEmailRecoveryCodeStoreTest {
         Instant expiresAt = Instant.now().plusSeconds(900).truncatedTo(ChronoUnit.MICROS);
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        store.store(subject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-abc", expiresAt, createdAt);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-abc", expiresAt, createdAt);
 
-        EmailRecoveryCode found = store.find(subject, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow();
+        EmailRecoveryCode found = store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow();
         assertThat(found.codeHash()).isEqualTo("hash-abc");
         assertThat(found.expiresAt()).isEqualTo(expiresAt);
         assertThat(found.attempts()).isZero();
     }
 
     @Test
+    void emailRecoveryCodeStore_roundTripsARecoveryCodeBelongingToAnAddress() {
+        RecoveryCodeSubject addressSubject = RecoveryCodeSubject.forAddress(new RecoveryEmailDigest("a1b2c3"));
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        store.store(addressSubject, RecoveryCodePurpose.RECOVER, "hash-address", now.plusSeconds(900), now);
+
+        EmailRecoveryCode found = store.find(addressSubject, RecoveryCodePurpose.RECOVER).orElseThrow();
+        assertThat(found.subject()).isEqualTo(addressSubject);
+        assertThat(found.codeHash()).isEqualTo("hash-address");
+    }
+
+    @Test
     void emailRecoveryCodeStore_freshRequestReplacesThePreviousCode() {
         KeycloakUserId subject = new KeycloakUserId("anna-sub");
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        store.store(subject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.plusSeconds(60), now);
 
-        store.store(subject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-2", now.plusSeconds(900), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-2", now.plusSeconds(900), now);
 
-        EmailRecoveryCode found = store.find(subject, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow();
+        EmailRecoveryCode found = store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow();
         assertThat(found.codeHash()).isEqualTo("hash-2");
         assertThat(found.attempts()).isZero();
     }
@@ -80,14 +94,14 @@ class JdbcEmailRecoveryCodeStoreTest {
     void emailRecoveryCodeStore_expiresAndExhaustsAttempts() {
         KeycloakUserId subject = new KeycloakUserId("anna-sub");
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        store.store(subject, RecoveryCodePurpose.RECOVER, "hash", now.minusSeconds(1), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER, "hash", now.minusSeconds(1), now);
 
-        assertThat(store.find(subject, RecoveryCodePurpose.RECOVER).orElseThrow().expiresAt()).isBefore(Instant.now());
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER).orElseThrow().expiresAt()).isBefore(Instant.now());
 
-        store.incrementAttempts(subject, RecoveryCodePurpose.RECOVER);
-        store.incrementAttempts(subject, RecoveryCodePurpose.RECOVER);
+        store.incrementAttempts(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER);
+        store.incrementAttempts(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER);
 
-        assertThat(store.find(subject, RecoveryCodePurpose.RECOVER).orElseThrow().attempts()).isEqualTo(2);
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER).orElseThrow().attempts()).isEqualTo(2);
     }
 
     @Test
@@ -95,14 +109,14 @@ class JdbcEmailRecoveryCodeStoreTest {
         KeycloakUserId subjectA = new KeycloakUserId("subject-a");
         KeycloakUserId subjectB = new KeycloakUserId("subject-b");
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        store.store(subjectA, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-a", now.plusSeconds(60), now);
-        store.store(subjectB, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-b", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(subjectA), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-a", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(subjectB), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-b", now.plusSeconds(60), now);
 
-        store.incrementAttempts(subjectA, RecoveryCodePurpose.ATTACH_CONFIRM);
-        store.delete(subjectA, RecoveryCodePurpose.ATTACH_CONFIRM);
+        store.incrementAttempts(RecoveryCodeSubject.forAccount(subjectA), RecoveryCodePurpose.ATTACH_CONFIRM);
+        store.delete(RecoveryCodeSubject.forAccount(subjectA), RecoveryCodePurpose.ATTACH_CONFIRM);
 
-        assertThat(store.find(subjectA, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(store.find(subjectB, RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subjectA), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subjectB), RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
     }
 
     /**
@@ -118,12 +132,12 @@ class JdbcEmailRecoveryCodeStoreTest {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         String rawEmail = "anna@example.com";
 
-        store.store(subject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-not-email", now.plusSeconds(900), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-not-email", now.plusSeconds(900), now);
 
         String row = JdbcClient.create(dataSource)
-                .sql("SELECT keycloak_user_id, purpose, code_hash FROM recovery_code WHERE keycloak_user_id = :id")
+                .sql("SELECT subject, purpose, code_hash FROM recovery_code WHERE subject = :id")
                 .param("id", subject.value())
-                .query((resultSet, rowNumber) -> resultSet.getString("keycloak_user_id") + "|" + resultSet.getString("purpose")
+                .query((resultSet, rowNumber) -> resultSet.getString("subject") + "|" + resultSet.getString("purpose")
                         + "|" + resultSet.getString("code_hash"))
                 .single();
         assertThat(row).doesNotContain(rawEmail);
@@ -133,13 +147,13 @@ class JdbcEmailRecoveryCodeStoreTest {
     void deleteAll_removesEveryPurposeForTheSubject() {
         KeycloakUserId subject = new KeycloakUserId("anna-sub");
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        store.store(subject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.plusSeconds(60), now);
-        store.store(subject, RecoveryCodePurpose.RECOVER, "hash-2", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER, "hash-2", now.plusSeconds(60), now);
 
         store.deleteAll(subject);
 
-        assertThat(store.find(subject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(store.find(subject, RecoveryCodePurpose.RECOVER)).isEmpty();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(subject), RecoveryCodePurpose.RECOVER)).isEmpty();
     }
 
     @Test
@@ -147,12 +161,12 @@ class JdbcEmailRecoveryCodeStoreTest {
         KeycloakUserId expiredSubject = new KeycloakUserId("expired-sub");
         KeycloakUserId activeSubject = new KeycloakUserId("active-sub");
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        store.store(expiredSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.minusSeconds(1), now.minusSeconds(901));
-        store.store(activeSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-2", now.plusSeconds(60), now);
+        store.store(RecoveryCodeSubject.forAccount(expiredSubject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.minusSeconds(1), now.minusSeconds(901));
+        store.store(RecoveryCodeSubject.forAccount(activeSubject), RecoveryCodePurpose.ATTACH_CONFIRM, "hash-2", now.plusSeconds(60), now);
 
         store.deleteExpiredBefore(now);
 
-        assertThat(store.find(expiredSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(store.find(activeSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(expiredSubject), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(store.find(RecoveryCodeSubject.forAccount(activeSubject), RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
     }
 }
