@@ -3,10 +3,10 @@ package de.sgart.identity.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
-import de.sgart.identity.application.RecoveryEmailTestSupport.AlwaysAllowRecoveryCodeIssuanceThrottle;
-import de.sgart.identity.application.RecoveryEmailTestSupport.AlwaysDenyRecoveryCodeIssuanceThrottle;
+import de.sgart.identity.application.RecoveryEmailTestSupport.ConfigurableThrottles;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeFindAccountByEmail;
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
+import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmailDigester;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
@@ -36,7 +36,8 @@ class RequestEmailRecoveryCodeTest {
             emailRecoveryCodeStore,
             hasher,
             sendRecoveryCodeEmail,
-            new AlwaysAllowRecoveryCodeIssuanceThrottle(),
+            new Sha256RecoveryEmailDigester(),
+            new ConfigurableThrottles(),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
@@ -46,14 +47,14 @@ class RequestEmailRecoveryCodeTest {
         requestEmailRecoveryCode.request("person@example.com");
 
         assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isPresent();
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("person@example.com");
+        assertThat(sendRecoveryCodeEmail.recoveryMailRecipients).containsExactly("person@example.com");
     }
 
     @Test
     void requestEmailRecoveryCode_withUnknownEmail_stillReturnsAcceptedAndSendsNothing() {
         requestEmailRecoveryCode.request("nobody@example.com");
 
-        assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
+        assertThat(sendRecoveryCodeEmail.recoveryMailRecipients).isEmpty();
         assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isEmpty();
         // The service itself never throws for an unknown email — the controller layer always answers 202.
     }
@@ -61,17 +62,20 @@ class RequestEmailRecoveryCodeTest {
     @Test
     void requestEmailRecoveryCode_whenTargetIsThrottled_returnsSilentlyAndSendsNothing() {
         findAccountByEmail.registerAccount("person@example.com", TARGET);
+        ConfigurableThrottles deniedThrottles = new ConfigurableThrottles();
+        deniedThrottles.recoveryRequestAllowed = false;
         RequestEmailRecoveryCode throttledRequest = new RequestEmailRecoveryCode(
                 findAccountByEmail,
                 emailRecoveryCodeStore,
                 hasher,
                 sendRecoveryCodeEmail,
-                new AlwaysDenyRecoveryCodeIssuanceThrottle(),
+                new Sha256RecoveryEmailDigester(),
+                deniedThrottles,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         throttledRequest.request("person@example.com");
 
-        assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
+        assertThat(sendRecoveryCodeEmail.recoveryMailRecipients).isEmpty();
         assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isEmpty();
     }
 }

@@ -65,6 +65,11 @@ public final class InMemoryEmailRecoveryCodeStore implements EmailRecoveryCodeSt
         rowsByKey.keySet().removeIf(key -> key.keycloakUserId().equals(keycloakUserId));
     }
 
+    @Override
+    public void deleteExpiredBefore(Instant threshold) {
+        rowsByKey.values().removeIf(row -> row.expiresAt().isBefore(threshold));
+    }
+
     /** Test helper — how many rows exist in total. */
     public int size() {
         return rowsByKey.size();

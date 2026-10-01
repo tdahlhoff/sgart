@@ -2,7 +2,7 @@
 title: 'Recovery-email ownership: the address as a digest index, not a Keycloak attribute'
 type: 'feature'
 created: '2026-10-01'
-status: 'draft'
+status: 'in-progress'
 baseline_commit: '07ffa020be3e889a4a62080f6e36313d1e43711b'
 route: 'dispatch'
 review_loop_iteration: 0

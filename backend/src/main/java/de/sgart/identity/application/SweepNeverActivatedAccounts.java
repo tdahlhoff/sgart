@@ -5,6 +5,7 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.ProvisionedAccount;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,9 +19,9 @@ import org.slf4j.LoggerFactory;
  * past the retention TTL. "Activated" is <strong>derived</strong>, never stored (DRY, mirrors
  * {@link de.sgart.identity.domain.ProvisionedAccount}'s own doc): a shell is activated the moment a
  * {@link MemberMappingRepository} row exists for its {@link KeycloakUserId}, <strong>or</strong>
- * (Story 7.3, design §7, D-G) the account carries a <em>confirmed</em> Keycloak email — checked
- * live via {@link GetAccountDetails}, never a stored SGART bool. An activated account is kept
- * regardless of age; an unconfirmed-attach shell is still swept past the TTL.
+ * the account holds a <em>confirmed</em> recovery email binding. An activated account is kept
+ * regardless of age; a shell with only a pending binding is still swept past the TTL, together
+ * with that binding.
  *
  * <p>Triggered by a scheduled adapter ({@code adapter.in.ScheduledAccountRetentionSweep}, F4); this
  * service is called directly by tests so the assertion never waits on a cron (Testing standards,
@@ -33,7 +34,7 @@ public final class SweepNeverActivatedAccounts {
     private final ProvisionedAccountRepository provisionedAccountRepository;
     private final MemberMappingRepository memberMappingRepository;
     private final DeleteAccount deleteAccount;
-    private final GetAccountDetails getAccountDetails;
+    private final RecoveryEmailBindingRepository recoveryEmailBindingRepository;
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final Clock clock;
     private final Duration retentionPeriod;
@@ -42,7 +43,7 @@ public final class SweepNeverActivatedAccounts {
             ProvisionedAccountRepository provisionedAccountRepository,
             MemberMappingRepository memberMappingRepository,
             DeleteAccount deleteAccount,
-            GetAccountDetails getAccountDetails,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             Clock clock,
             Duration retentionPeriod) {
@@ -51,7 +52,8 @@ public final class SweepNeverActivatedAccounts {
         this.memberMappingRepository =
                 Objects.requireNonNull(memberMappingRepository, "memberMappingRepository must not be null");
         this.deleteAccount = Objects.requireNonNull(deleteAccount, "deleteAccount must not be null");
-        this.getAccountDetails = Objects.requireNonNull(getAccountDetails, "getAccountDetails must not be null");
+        this.recoveryEmailBindingRepository = Objects.requireNonNull(
+                recoveryEmailBindingRepository, "recoveryEmailBindingRepository must not be null");
         this.emailRecoveryCodeStore =
                 Objects.requireNonNull(emailRecoveryCodeStore, "emailRecoveryCodeStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -74,6 +76,7 @@ public final class SweepNeverActivatedAccounts {
                 deleteAccount.delete(account.keycloakUserId());
                 provisionedAccountRepository.delete(account.keycloakUserId());
                 emailRecoveryCodeStore.deleteAll(account.keycloakUserId());
+                recoveryEmailBindingRepository.deleteAllFor(account.keycloakUserId());
             } catch (RuntimeException deletionFailed) {
                 log.error(
                         "SweepNeverActivatedAccounts: failed to delete never-activated account {} — "
@@ -88,10 +91,6 @@ public final class SweepNeverActivatedAccounts {
         if (!memberMappingRepository.householdIdsFor(keycloakUserId).isEmpty()) {
             return false;
         }
-        return !hasConfirmedEmail(keycloakUserId);
-    }
-
-    private boolean hasConfirmedEmail(KeycloakUserId keycloakUserId) {
-        return getAccountDetails.findById(keycloakUserId).map(AccountDetails::emailVerified).orElse(false);
+        return !recoveryEmailBindingRepository.hasConfirmedBindingFor(keycloakUserId);
     }
 }

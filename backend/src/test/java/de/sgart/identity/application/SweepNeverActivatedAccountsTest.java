@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
-import de.sgart.identity.application.RecoveryEmailTestSupport.FakeGetAccountDetails;
+import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAccount;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailDigest;
+import de.sgart.identity.domain.RecoveryEmailHint;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import java.time.Clock;
@@ -32,22 +35,24 @@ class SweepNeverActivatedAccountsTest {
             new InMemoryProvisionedAccountRepository();
     private final InMemoryMemberMappingRepository memberMappingRepository = new InMemoryMemberMappingRepository();
     private final RecordingDeleteAccount deleteAccount = new RecordingDeleteAccount();
-    private final FakeGetAccountDetails getAccountDetails = new FakeGetAccountDetails();
+    private final InMemoryRecoveryEmailBindingRepository recoveryEmailBindings =
+            new InMemoryRecoveryEmailBindingRepository();
     private final InMemoryEmailRecoveryCodeStore emailRecoveryCodeStore = new InMemoryEmailRecoveryCodeStore();
     private final SweepNeverActivatedAccounts sweep = new SweepNeverActivatedAccounts(
             provisionedAccountRepository,
             memberMappingRepository,
             deleteAccount,
-            getAccountDetails,
+            recoveryEmailBindings,
             emailRecoveryCodeStore,
             Clock.fixed(NOW, ZoneOffset.UTC),
             RETENTION_PERIOD);
 
     @Test
-    void sweep_keepsAccountWithConfirmedEmail() {
+    void sweep_keepsAnAccountWithAConfirmedBinding() {
         KeycloakUserId confirmedEmail = new KeycloakUserId("confirmed-email");
         provisionedAccountRepository.recordIfAbsent(confirmedEmail, NOW.minus(Duration.ofDays(100)));
-        getAccountDetails.confirmedEmailFor(confirmedEmail);
+        recoveryEmailBindings.savePending(pendingBindingFor(confirmedEmail));
+        recoveryEmailBindings.confirm(recoveryEmailBindings.findPendingFor(confirmedEmail).orElseThrow().confirm(NOW));
 
         sweep.sweep();
 
@@ -56,10 +61,10 @@ class SweepNeverActivatedAccountsTest {
     }
 
     @Test
-    void sweep_deletesUnconfirmedAttachShellPastTtl_andItsCodeRows() {
+    void sweep_deletesAShellWithOnlyAPendingBindingAndRemovesThatBinding() {
         KeycloakUserId unconfirmedAttach = new KeycloakUserId("unconfirmed-attach");
         provisionedAccountRepository.recordIfAbsent(unconfirmedAttach, NOW.minus(Duration.ofDays(15)));
-        getAccountDetails.unconfirmedEmailFor(unconfirmedAttach);
+        recoveryEmailBindings.savePending(pendingBindingFor(unconfirmedAttach));
         emailRecoveryCodeStore.store(
                 unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
@@ -68,6 +73,7 @@ class SweepNeverActivatedAccountsTest {
         assertThat(provisionedAccountRepository.contains(unconfirmedAttach)).isFalse();
         assertThat(deleteAccount.deletedIds).containsExactly(unconfirmedAttach);
         assertThat(emailRecoveryCodeStore.find(unconfirmedAttach, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(recoveryEmailBindings.findAllFor(unconfirmedAttach)).isEmpty();
     }
 
     @Test
@@ -103,5 +109,13 @@ class SweepNeverActivatedAccountsTest {
 
         assertThat(provisionedAccountRepository.contains(recentlyProvisioned)).isTrue();
         assertThat(deleteAccount.deletedIds).isEmpty();
+    }
+
+    private static RecoveryEmailBinding pendingBindingFor(KeycloakUserId account) {
+        return RecoveryEmailBinding.pending(
+                new RecoveryEmailDigest("digest-of-" + account.value()),
+                account,
+                RecoveryEmailHint.masking("person@example.test"),
+                NOW);
     }
 }

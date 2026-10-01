@@ -5,12 +5,14 @@ import de.sgart.identity.application.AttachRecoveryEmail;
 import de.sgart.identity.application.ConfirmEmailRecovery;
 import de.sgart.identity.application.ConfirmRecoveryEmail;
 import de.sgart.identity.application.DetachRecoveryEmail;
+import de.sgart.identity.application.GetRecoveryEmailStatus;
 import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -31,6 +33,7 @@ class AccountController {
     private final AttachRecoveryEmail attachRecoveryEmail;
     private final ConfirmRecoveryEmail confirmRecoveryEmail;
     private final DetachRecoveryEmail detachRecoveryEmail;
+    private final GetRecoveryEmailStatus getRecoveryEmailStatus;
     private final RequestEmailRecoveryCode requestEmailRecoveryCode;
     private final ConfirmEmailRecovery confirmEmailRecovery;
 
@@ -39,12 +42,14 @@ class AccountController {
             AttachRecoveryEmail attachRecoveryEmail,
             ConfirmRecoveryEmail confirmRecoveryEmail,
             DetachRecoveryEmail detachRecoveryEmail,
+            GetRecoveryEmailStatus getRecoveryEmailStatus,
             RequestEmailRecoveryCode requestEmailRecoveryCode,
             ConfirmEmailRecovery confirmEmailRecovery) {
         this.provisionAccount = provisionAccount;
         this.attachRecoveryEmail = attachRecoveryEmail;
         this.confirmRecoveryEmail = confirmRecoveryEmail;
         this.detachRecoveryEmail = detachRecoveryEmail;
+        this.getRecoveryEmailStatus = getRecoveryEmailStatus;
         this.requestEmailRecoveryCode = requestEmailRecoveryCode;
         this.confirmEmailRecovery = confirmEmailRecovery;
     }
@@ -63,25 +68,36 @@ class AccountController {
         provisionAccount.provision(request.publicKey(), request.platform());
     }
 
-    /** AC1 attach: sets the email unverified and sends a confirmation code. {@code 202} — a code was sent. */
+    /**
+     * Attach: writes a pending binding and mails a confirmation code. {@code 202} in every case
+     * except a malformed address ({@code 400}) and the caller's own budget ({@code 429}); nothing
+     * about the address changes the response.
+     */
     @PostMapping("/api/v1/account/email")
     @ResponseStatus(HttpStatus.ACCEPTED)
     void attachEmail(@AuthenticationPrincipal Jwt jwt, @RequestBody EmailRequest request) {
         attachRecoveryEmail.attach(callerId(jwt), request.email());
     }
 
-    /** AC1 confirm: marks the email verified and consumes the code (single-use). */
+    /** Confirm: the caller's pending binding becomes confirmed and the code is consumed (single-use). */
     @PostMapping("/api/v1/account/email/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void confirmEmail(@AuthenticationPrincipal Jwt jwt, @RequestBody CodeRequest request) {
         confirmRecoveryEmail.confirm(callerId(jwt), request.code());
     }
 
-    /** AC4 detach: clears the email + verified flag and deletes any pending code rows. */
+    /** Detach: deletes every binding of the caller and any pending code rows. */
     @DeleteMapping("/api/v1/account/email")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void detachEmail(@AuthenticationPrincipal Jwt jwt) {
         detachRecoveryEmail.detach(callerId(jwt));
+    }
+
+    /** Profile status: the masked hint of the caller's confirmed recovery email, or a {@code null} hint. */
+    @GetMapping("/api/v1/account/email")
+    RecoveryEmailStatusResponse recoveryEmailStatus(@AuthenticationPrincipal Jwt jwt) {
+        return new RecoveryEmailStatusResponse(
+                getRecoveryEmailStatus.statusFor(callerId(jwt)).addressHint());
     }
 
     /**
@@ -114,6 +130,8 @@ class AccountController {
     record EmailRequest(String email) {}
 
     record CodeRequest(String code) {}
+
+    record RecoveryEmailStatusResponse(String addressHint) {}
 
     record RecoveryConfirmRequest(String email, String code) {}
 }

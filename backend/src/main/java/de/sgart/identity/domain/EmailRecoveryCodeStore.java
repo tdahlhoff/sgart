@@ -32,4 +32,7 @@ public interface EmailRecoveryCodeStore {
 
     /** Deletes every row (both purposes) for {@code keycloakUserId} — detach, sweep, and erasure cleanup. */
     void deleteAll(KeycloakUserId keycloakUserId);
+
+    /** Retention: deletes every row whose code expired before {@code threshold}. */
+    void deleteExpiredBefore(Instant threshold);
 }

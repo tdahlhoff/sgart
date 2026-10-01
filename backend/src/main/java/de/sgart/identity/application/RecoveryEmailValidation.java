@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -14,7 +15,11 @@ final class RecoveryEmailValidation {
 
     private RecoveryEmailValidation() {}
 
-    /** @return the trimmed email. @throws InvalidRecoveryEmailException if blank or not plausible. */
+    /**
+     * @return the normalized address: trimmed and lowercased as a whole. There is deliberately no
+     *     provider-specific folding (no dot or plus-tag stripping), which keeps it predictable.
+     * @throws InvalidRecoveryEmailException if blank or not plausible.
+     */
     static String validated(String rawEmail) {
         if (rawEmail == null || rawEmail.isBlank()) {
             throw new InvalidRecoveryEmailException("account.recoveryEmailRequired", "email must be provided");
@@ -23,6 +28,6 @@ final class RecoveryEmailValidation {
         if (!PLAUSIBLE_EMAIL.matcher(trimmed).matches()) {
             throw new InvalidRecoveryEmailException("account.recoveryEmailInvalid", "email must be a plausible address");
         }
-        return trimmed;
+        return trimmed.toLowerCase(Locale.ROOT);
     }
 }

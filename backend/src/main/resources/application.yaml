@@ -130,8 +130,16 @@ sgart:
     # per-deployment secret. No default here: outside the "dev" profile, a missing
     # SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET fails context startup rather than silently
     # falling back to a known, committed secret in production.
+    #
+    # Recovery-address digests: HMAC-SHA256 over the normalized address with a per-deployment
+    # pepper kept outside the database, so a leaked binding table reveals no addresses. Same
+    # handling class as the code secret; no default outside the "dev" profile. Real provisioning
+    # belongs to the beta-infra secrets work.
+    # purge-cron: how often stale pending bindings and expired code rows are deleted.
     email-recovery:
       code-hmac-secret: ${SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET}
+      address-pepper: ${SGART_IDENTITY_EMAIL_RECOVERY_ADDRESS_PEPPER}
+      purge-cron: ${SGART_IDENTITY_EMAIL_RECOVERY_PURGE_CRON:0 */15 * * * *}
     # SGART's own SMTP send for recovery codes (Story 7.3, design §3) — off by default everywhere,
     # so the hermetic DeferredSendRecoveryCodeEmail stays wired (tests/CI/local dev never need a
     # live SMTP server). A real deployment that has completed the netcup SMTP + SPF/DKIM setup
@@ -160,3 +168,4 @@ sgart:
       client-secret: ${SGART_IDENTITY_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-only-keycloak-admin-secret-change-me}
     email-recovery:
       code-hmac-secret: ${SGART_IDENTITY_EMAIL_RECOVERY_CODE_HMAC_SECRET:local-dev-only-email-recovery-hmac-secret-change-me}
+      address-pepper: ${SGART_IDENTITY_EMAIL_RECOVERY_ADDRESS_PEPPER:local-dev-only-email-recovery-address-pepper-change-me}

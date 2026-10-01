@@ -141,4 +141,18 @@ class JdbcEmailRecoveryCodeStoreTest {
         assertThat(store.find(subject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
         assertThat(store.find(subject, RecoveryCodePurpose.RECOVER)).isEmpty();
     }
+
+    @Test
+    void deleteExpiredBefore_removesOnlyRowsThatExpiredBeforeTheThreshold() {
+        KeycloakUserId expiredSubject = new KeycloakUserId("expired-sub");
+        KeycloakUserId activeSubject = new KeycloakUserId("active-sub");
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        store.store(expiredSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-1", now.minusSeconds(1), now.minusSeconds(901));
+        store.store(activeSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash-2", now.plusSeconds(60), now);
+
+        store.deleteExpiredBefore(now);
+
+        assertThat(store.find(expiredSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(store.find(activeSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
+    }
 }

@@ -3,35 +3,42 @@ package de.sgart.identity.application;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
 import java.util.Objects;
 
 /**
- * Confirms ownership of an email just attached via {@link AttachRecoveryEmail} (Story 7.3, AC1):
- * on a correct, unexpired, non-exhausted code, marks the Keycloak account's email verified and
- * consumes the code (single-use).
+ * Confirms ownership of an address just attached via {@link AttachRecoveryEmail}: on a correct,
+ * unexpired, non-exhausted code, the caller's pending binding becomes confirmed (replacing the
+ * caller's previous confirmed binding, since an account has one recovery email) and the code is
+ * consumed (single-use).
  */
 public final class ConfirmRecoveryEmail {
 
-    private final SetAccountEmail setAccountEmail;
+    private final RecoveryEmailBindingRepository recoveryEmailBindingRepository;
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final VerifyRecoveryCode verifyRecoveryCode;
+    private final Clock clock;
 
     public ConfirmRecoveryEmail(
-            SetAccountEmail setAccountEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             Clock clock) {
-        this.setAccountEmail = Objects.requireNonNull(setAccountEmail, "setAccountEmail must not be null");
+        this.recoveryEmailBindingRepository = Objects.requireNonNull(
+                recoveryEmailBindingRepository, "recoveryEmailBindingRepository must not be null");
         this.emailRecoveryCodeStore =
                 Objects.requireNonNull(emailRecoveryCodeStore, "emailRecoveryCodeStore must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.verifyRecoveryCode = new VerifyRecoveryCode(emailRecoveryCodeStore, recoveryCodeHasher, clock);
     }
 
     /**
      * @param keycloakUserId the caller's identity, resolved server-side from the JWT {@code sub}
      *     (AR10, AD-5) — never taken from the request body.
-     * @throws RecoveryCodeRejectedException if the code is wrong, expired, or attempt-exhausted.
+     * @throws RecoveryCodeRejectedException if the code is wrong, expired, or attempt-exhausted, or
+     *     if no pending binding exists any more (indistinguishable from a wrong code).
      */
     public void confirm(String keycloakUserId, String code) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");
@@ -39,7 +46,10 @@ public final class ConfirmRecoveryEmail {
 
         verifyRecoveryCode.verify(caller, RecoveryCodePurpose.ATTACH_CONFIRM, code);
 
-        setAccountEmail.markEmailVerified(caller);
+        RecoveryEmailBinding pendingBinding = recoveryEmailBindingRepository
+                .findPendingFor(caller)
+                .orElseThrow(() -> new RecoveryCodeRejectedException("no pending recovery email binding"));
+        recoveryEmailBindingRepository.confirm(pendingBinding.confirm(clock.instant()));
         emailRecoveryCodeStore.delete(caller, RecoveryCodePurpose.ATTACH_CONFIRM);
     }
 }

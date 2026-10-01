@@ -1,13 +1,7 @@
 package de.sgart.identity.adapter.out;
 
 import de.sgart.identity.application.RecoveryCodeHasher;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Objects;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Production {@link RecoveryCodeHasher} (Story 7.3, design §4): HMAC-SHA256 with a
@@ -17,29 +11,15 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class HmacSha256RecoveryCodeHasher implements RecoveryCodeHasher {
 
-    private static final String ALGORITHM = "HmacSHA256";
-
-    private final byte[] secretBytes;
+    private final HmacSha256 hmacSha256;
 
     public HmacSha256RecoveryCodeHasher(String secret) {
-        if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException(
-                    "sgart.identity.email-recovery.code-hmac-secret must be configured (a blank/missing HMAC secret "
-                            + "is never acceptable)");
-        }
-        this.secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        this.hmacSha256 = new HmacSha256(secret, "sgart.identity.email-recovery.code-hmac-secret");
     }
 
     @Override
     public String hash(String code) {
         Objects.requireNonNull(code, "code must not be null");
-        try {
-            Mac mac = Mac.getInstance(ALGORITHM);
-            mac.init(new SecretKeySpec(secretBytes, ALGORITHM));
-            byte[] digest = mac.doFinal(code.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException | InvalidKeyException cause) {
-            throw new IllegalStateException("Failed to compute recovery code HMAC", cause);
-        }
+        return hmacSha256.hexDigestOf(code);
     }
 }

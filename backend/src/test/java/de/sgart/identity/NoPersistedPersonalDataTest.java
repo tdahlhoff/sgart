@@ -73,6 +73,13 @@ class NoPersistedPersonalDataTest {
     private static final String MEMBERSHIP_NICKNAME_MIGRATION = "V22__membership_nickname.sql";
 
     /**
+     * {@code V24} creates {@code recovery_email_binding}: the table is named for what it is, so its
+     * name contains "email". It holds only a keyed digest and a masked hint, never an address, which
+     * {@link #recoveryEmailBindingTable_holdsOnlyADigestAndAMaskedHint} proves.
+     */
+    private static final String RECOVERY_EMAIL_BINDING_MIGRATION = "V24__recovery_email_binding.sql";
+
+    /**
      * Extends the guarantee to the durable schema (Story 1.6): every Flyway migration — the
      * Identity ACL mapping table and the household read model alike — must never declare a
      * display-name/nickname/email column (AD-6, "Storage limitation" / "Right to erasure"), except
@@ -89,6 +96,7 @@ class NoPersistedPersonalDataTest {
                     .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_MIGRATION))
                     .filter(path -> !path.getFileName().toString().equals(INVITE_EMAIL_SIDE_STORE_DROP_MIGRATION))
                     .filter(path -> !path.getFileName().toString().equals(MEMBERSHIP_NICKNAME_MIGRATION))
+                    .filter(path -> !path.getFileName().toString().equals(RECOVERY_EMAIL_BINDING_MIGRATION))
                     .forEach(path -> {
                         String sql = withoutSqlComments(readFile(path)).toLowerCase(Locale.ROOT);
                         forbiddenColumnNameFragments.forEach(forbidden -> assertThat(sql)
@@ -186,6 +194,28 @@ class NoPersistedPersonalDataTest {
                 .withImportOption(new DoNotIncludeTests())
                 .importPackages("de.sgart.collaboration", "de.sgart.identity");
         neverReferencedFromEventCodec.check(collaborationClasses);
+    }
+
+    /**
+     * The recovery-email binding index stores no address: only {@code address_digest} (HMAC-SHA256
+     * with a pepper) and {@code address_hint} (a masked display form), keyed by the pseudonymous
+     * account id. Any new column must be a conscious decision that updates this test.
+     */
+    @Test
+    void recoveryEmailBindingTable_holdsOnlyADigestAndAMaskedHint() {
+        Path migration = Path.of("src/main/resources/db/migration/" + RECOVERY_EMAIL_BINDING_MIGRATION);
+        String sql = withoutSqlComments(readFile(migration)).toLowerCase(Locale.ROOT);
+
+        List<String> columnNames = sql.lines()
+                .map(String::trim)
+                .filter(line -> line.matches("[a-z_]+\\s+(varchar|timestamptz)\\b.*"))
+                .map(line -> line.split("\\s+")[0])
+                .toList();
+
+        assertThat(columnNames)
+                .containsExactlyInAnyOrder(
+                        "address_digest", "keycloak_user_id", "address_hint", "confirmed_at", "created_at");
+        assertThat(columnNames).noneMatch(name -> name.contains("email") || name.equals("address"));
     }
 
     /** Strips {@code -- ...} line comments so prose mentioning "email"/"display name" (like this

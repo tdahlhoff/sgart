@@ -5,10 +5,14 @@ import de.sgart.identity.application.ConfirmEmailRecovery;
 import de.sgart.identity.application.ConfirmRecoveryEmail;
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
+import de.sgart.identity.application.AttachMailThrottle;
+import de.sgart.identity.application.AttachRequestThrottle;
 import de.sgart.identity.application.DetachRecoveryEmail;
 import de.sgart.identity.application.FindAccountByEmail;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.GetConsentStatus;
+import de.sgart.identity.application.GetRecoveryEmailStatus;
+import de.sgart.identity.application.PurgeExpiredRecoveryEmailState;
 import de.sgart.identity.application.RecordConsent;
 import de.sgart.identity.application.ListHouseholdsForCaller;
 import de.sgart.identity.application.IssueMemberIdentity;
@@ -16,7 +20,8 @@ import de.sgart.identity.application.ProvisionAccount;
 import de.sgart.identity.application.PruneDeviceToken;
 import de.sgart.identity.application.RebindAccountCredential;
 import de.sgart.identity.application.RecoveryCodeHasher;
-import de.sgart.identity.application.RecoveryCodeIssuanceThrottle;
+import de.sgart.identity.application.RecoveryEmailDigester;
+import de.sgart.identity.application.RecoveryRequestThrottle;
 import de.sgart.identity.application.RegisterDeviceToken;
 import de.sgart.identity.application.RequestEmailRecoveryCode;
 import de.sgart.identity.application.ResolveHouseholdPushTargets;
@@ -24,7 +29,6 @@ import de.sgart.identity.application.ResolveMemberIdentity;
 import de.sgart.identity.application.ResolveMembershipNicknames;
 import de.sgart.identity.application.RetractMembership;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
-import de.sgart.identity.application.SetAccountEmail;
 import de.sgart.identity.application.SetMembershipNickname;
 import de.sgart.identity.application.SweepNeverActivatedAccounts;
 import de.sgart.identity.application.UnregisterDeviceToken;
@@ -34,8 +38,11 @@ import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -140,7 +147,7 @@ public class IdentityBeansConfig {
             ProvisionedAccountRepository provisionedAccountRepository,
             MemberMappingRepository memberMappingRepository,
             DeleteAccount deleteAccount,
-            GetAccountDetails getAccountDetails,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             Clock clock,
             @Value("${sgart.identity.provisioning.retention-days}") long retentionDays) {
@@ -148,7 +155,7 @@ public class IdentityBeansConfig {
                 provisionedAccountRepository,
                 memberMappingRepository,
                 deleteAccount,
-                getAccountDetails,
+                recoveryEmailBindingRepository,
                 emailRecoveryCodeStore,
                 clock,
                 Duration.ofDays(retentionDays));
@@ -246,18 +253,26 @@ public class IdentityBeansConfig {
     }
 
     /**
-     * The real Story 7.3 SMTP adapter (design §3.1) — active only when {@code
-     * sgart.identity.mail.enabled=true}. Building the {@link JavaMailSender} performs no I/O; only
-     * the first {@code send} reaches an SMTP server.
+     * The real SMTP adapter — active only when {@code sgart.identity.mail.enabled=true}. Mails are
+     * handed to a single daemon thread so a request returns at once, whatever the address. The
+     * executor is deliberately not a bean: a user-defined {@link Executor} bean would switch off
+     * Spring Boot's own task executor. Building the {@link JavaMailSender} performs no I/O; only
+     * the first delivery reaches an SMTP server.
      */
     @Bean
     @ConditionalOnProperty(prefix = "sgart.identity.mail", name = "enabled", havingValue = "true")
     SendRecoveryCodeEmail javaMailSenderRecoveryCodeEmail(
             JavaMailSender javaMailSender, @Value("${sgart.identity.mail.from}") String fromAddress) {
-        return new JavaMailSenderRecoveryCodeEmail(javaMailSender, fromAddress);
+        Executor mailExecutor = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "recovery-email-sender");
+            thread.setDaemon(true);
+            return thread;
+        });
+        return new AsynchronousSendRecoveryCodeEmail(
+                new JavaMailSenderRecoveryCodeEmail(javaMailSender, fromAddress), mailExecutor);
     }
 
-    /** The wired default — no build needs an SMTP server (design §3.1, AC6). */
+    /** The wired default — no build needs an SMTP server. */
     @Bean
     @ConditionalOnProperty(
             prefix = "sgart.identity.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
@@ -265,46 +280,77 @@ public class IdentityBeansConfig {
         return new DeferredSendRecoveryCodeEmail();
     }
 
+    // --- Recovery-email ownership: the address as a digest index ------------------------------
+
+    @Bean
+    RecoveryEmailBindingRepository recoveryEmailBindingRepository(JdbcClient jdbcClient) {
+        return new JdbcRecoveryEmailBindingRepository(jdbcClient);
+    }
+
+    @Bean
+    RecoveryEmailDigester recoveryEmailDigester(
+            @Value("${sgart.identity.email-recovery.address-pepper}") String pepper) {
+        return new HmacSha256RecoveryEmailDigester(pepper);
+    }
+
     /**
-     * Story 8.6: bounds recovery-code issuance per target account. In-memory (no new DB table) —
-     * a single, deployment-wide budget shared by both issuing services below, keyed by the
-     * pseudonymous account the code is issued for (never the caller, never the email).
+     * The three separate in-memory budgets (per attacher, per address mail, per address recovery),
+     * keyed by account ids and digests only. One bean serves all three ports.
      */
     @Bean
-    RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle(Clock clock) {
-        return new InMemoryRecoveryCodeIssuanceThrottle(clock);
+    InMemoryRecoveryEmailThrottles recoveryEmailThrottles(Clock clock) {
+        return new InMemoryRecoveryEmailThrottles(clock);
     }
 
     @Bean
     AttachRecoveryEmail attachRecoveryEmail(
-            SetAccountEmail setAccountEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            RecoveryEmailDigester recoveryEmailDigester,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
-            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
+            AttachRequestThrottle attachRequestThrottle,
+            AttachMailThrottle attachMailThrottle,
             Clock clock) {
         return new AttachRecoveryEmail(
-                setAccountEmail,
+                recoveryEmailBindingRepository,
+                recoveryEmailDigester,
                 emailRecoveryCodeStore,
                 recoveryCodeHasher,
                 sendRecoveryCodeEmail,
-                recoveryCodeIssuanceThrottle,
+                attachRequestThrottle,
+                attachMailThrottle,
                 clock);
     }
 
     @Bean
     ConfirmRecoveryEmail confirmRecoveryEmail(
-            SetAccountEmail setAccountEmail,
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             Clock clock) {
-        return new ConfirmRecoveryEmail(setAccountEmail, emailRecoveryCodeStore, recoveryCodeHasher, clock);
+        return new ConfirmRecoveryEmail(
+                recoveryEmailBindingRepository, emailRecoveryCodeStore, recoveryCodeHasher, clock);
     }
 
     @Bean
     DetachRecoveryEmail detachRecoveryEmail(
-            SetAccountEmail setAccountEmail, EmailRecoveryCodeStore emailRecoveryCodeStore) {
-        return new DetachRecoveryEmail(setAccountEmail, emailRecoveryCodeStore);
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            EmailRecoveryCodeStore emailRecoveryCodeStore) {
+        return new DetachRecoveryEmail(recoveryEmailBindingRepository, emailRecoveryCodeStore);
+    }
+
+    @Bean
+    GetRecoveryEmailStatus getRecoveryEmailStatus(RecoveryEmailBindingRepository recoveryEmailBindingRepository) {
+        return new GetRecoveryEmailStatus(recoveryEmailBindingRepository);
+    }
+
+    @Bean
+    PurgeExpiredRecoveryEmailState purgeExpiredRecoveryEmailState(
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            EmailRecoveryCodeStore emailRecoveryCodeStore,
+            Clock clock) {
+        return new PurgeExpiredRecoveryEmailState(recoveryEmailBindingRepository, emailRecoveryCodeStore, clock);
     }
 
     @Bean
@@ -313,14 +359,16 @@ public class IdentityBeansConfig {
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
-            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
+            RecoveryEmailDigester recoveryEmailDigester,
+            RecoveryRequestThrottle recoveryRequestThrottle,
             Clock clock) {
         return new RequestEmailRecoveryCode(
                 findAccountByEmail,
                 emailRecoveryCodeStore,
                 recoveryCodeHasher,
                 sendRecoveryCodeEmail,
-                recoveryCodeIssuanceThrottle,
+                recoveryEmailDigester,
+                recoveryRequestThrottle,
                 clock);
     }
 

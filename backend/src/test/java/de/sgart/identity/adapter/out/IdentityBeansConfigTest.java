@@ -4,7 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
+import de.sgart.identity.application.AttachMailThrottle;
+import de.sgart.identity.application.AttachRequestThrottle;
+import de.sgart.identity.application.RecoveryEmailDigester;
+import de.sgart.identity.application.RecoveryRequestThrottle;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,8 +104,49 @@ class IdentityBeansConfigTest {
         }
 
         @Test
-        void wiresTheRealJavaMailSenderAdapter() {
-            assertThat(sendRecoveryCodeEmail).isInstanceOf(JavaMailSenderRecoveryCodeEmail.class);
+        void wiresTheRealJavaMailSenderAdapterBehindTheAsynchronousDecorator() {
+            assertThat(sendRecoveryCodeEmail).isInstanceOf(AsynchronousSendRecoveryCodeEmail.class);
+        }
+    }
+
+    /**
+     * The recovery-email binding index: the digester needs the pepper, and the three separate
+     * budgets resolve to one in-memory implementation behind three distinct ports.
+     */
+    @SpringBootTest
+    @Nested
+    class RecoveryEmailBindingIndexWiring {
+
+        @Autowired
+        private RecoveryEmailDigester recoveryEmailDigester;
+
+        @Autowired
+        private AttachRequestThrottle attachRequestThrottle;
+
+        @Autowired
+        private AttachMailThrottle attachMailThrottle;
+
+        @Autowired
+        private RecoveryRequestThrottle recoveryRequestThrottle;
+
+        @Autowired
+        private RecoveryEmailBindingRepository recoveryEmailBindingRepository;
+
+        @Test
+        void wiresTheHmacDigesterWithTheDevelopmentPepper() {
+            assertThat(recoveryEmailDigester).isInstanceOf(HmacSha256RecoveryEmailDigester.class);
+        }
+
+        @Test
+        void wiresTheDurableBindingRepository() {
+            assertThat(recoveryEmailBindingRepository).isInstanceOf(JdbcRecoveryEmailBindingRepository.class);
+        }
+
+        @Test
+        void wiresTheThreeBudgetsToOneInMemoryImplementation() {
+            assertThat(attachRequestThrottle).isInstanceOf(InMemoryRecoveryEmailThrottles.class);
+            assertThat(attachMailThrottle).isSameAs(attachRequestThrottle);
+            assertThat(recoveryRequestThrottle).isSameAs(attachRequestThrottle);
         }
     }
 }

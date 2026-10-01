@@ -95,6 +95,14 @@ public final class JdbcEmailRecoveryCodeStore implements EmailRecoveryCodeStore 
                 .update();
     }
 
+    @Override
+    public void deleteExpiredBefore(Instant threshold) {
+        jdbcClient
+                .sql("DELETE FROM recovery_code WHERE expires_at < :threshold")
+                .param("threshold", Timestamp.from(threshold))
+                .update();
+    }
+
     private static EmailRecoveryCode mapRow(ResultSet resultSet, int rowNumber) throws SQLException {
         return new EmailRecoveryCode(
                 new KeycloakUserId(resultSet.getString("keycloak_user_id")),

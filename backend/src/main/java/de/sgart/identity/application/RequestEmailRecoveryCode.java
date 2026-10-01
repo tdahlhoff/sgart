@@ -3,6 +3,7 @@ package de.sgart.identity.application;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryEmailDigest;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,7 +24,8 @@ public final class RequestEmailRecoveryCode {
     private final EmailRecoveryCodeStore emailRecoveryCodeStore;
     private final RecoveryCodeHasher recoveryCodeHasher;
     private final SendRecoveryCodeEmail sendRecoveryCodeEmail;
-    private final RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle;
+    private final RecoveryEmailDigester recoveryEmailDigester;
+    private final RecoveryRequestThrottle recoveryRequestThrottle;
     private final Clock clock;
 
     public RequestEmailRecoveryCode(
@@ -31,7 +33,8 @@ public final class RequestEmailRecoveryCode {
             EmailRecoveryCodeStore emailRecoveryCodeStore,
             RecoveryCodeHasher recoveryCodeHasher,
             SendRecoveryCodeEmail sendRecoveryCodeEmail,
-            RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle,
+            RecoveryEmailDigester recoveryEmailDigester,
+            RecoveryRequestThrottle recoveryRequestThrottle,
             Clock clock) {
         this.findAccountByEmail = Objects.requireNonNull(findAccountByEmail, "findAccountByEmail must not be null");
         this.emailRecoveryCodeStore =
@@ -39,8 +42,10 @@ public final class RequestEmailRecoveryCode {
         this.recoveryCodeHasher = Objects.requireNonNull(recoveryCodeHasher, "recoveryCodeHasher must not be null");
         this.sendRecoveryCodeEmail =
                 Objects.requireNonNull(sendRecoveryCodeEmail, "sendRecoveryCodeEmail must not be null");
-        this.recoveryCodeIssuanceThrottle =
-                Objects.requireNonNull(recoveryCodeIssuanceThrottle, "recoveryCodeIssuanceThrottle must not be null");
+        this.recoveryEmailDigester =
+                Objects.requireNonNull(recoveryEmailDigester, "recoveryEmailDigester must not be null");
+        this.recoveryRequestThrottle =
+                Objects.requireNonNull(recoveryRequestThrottle, "recoveryRequestThrottle must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -53,9 +58,10 @@ public final class RequestEmailRecoveryCode {
             return;
         }
 
-        // Throttled: stays silent, same as the unknown-email case above — the constant 202 (D-H,
-        // no enumeration) must never distinguish "unknown" from "known but over budget" (Story 8.6).
-        if (!recoveryCodeIssuanceThrottle.tryIssue(target.get())) {
+        // Throttled per address, separately from the attach budgets: stays silent, same as the
+        // unknown-email case above, so the constant 202 never distinguishes "unknown" from "over budget".
+        RecoveryEmailDigest digest = recoveryEmailDigester.digest(email);
+        if (!recoveryRequestThrottle.tryRequest(digest)) {
             return;
         }
 
@@ -63,6 +69,6 @@ public final class RequestEmailRecoveryCode {
         emailRecoveryCodeStore.store(
                 target.get(), RecoveryCodePurpose.RECOVER, recoveryCodeHasher.hash(code), RecoveryCode.expiresAt(clock),
                 clock.instant());
-        sendRecoveryCodeEmail.send(email, code);
+        sendRecoveryCodeEmail.sendRecoveryCode(email, code);
     }
 }

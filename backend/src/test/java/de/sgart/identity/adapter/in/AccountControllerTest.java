@@ -3,24 +3,28 @@ package de.sgart.identity.adapter.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
-import de.sgart.identity.adapter.out.InMemoryRecoveryCodeIssuanceThrottle;
+import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
+import de.sgart.identity.adapter.out.InMemoryRecoveryEmailThrottles;
 import de.sgart.identity.application.AccountDetails;
 import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.FindAccountByEmail;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.RebindAccountCredential;
-import de.sgart.identity.application.RecoveryCodeIssuanceThrottle;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import de.sgart.identity.domain.RecoveryCodePurpose;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,7 +67,10 @@ class AccountControllerTest {
     private RecordingSendRecoveryCodeEmail sendRecoveryCodeEmail;
 
     @Autowired
-    private RecoveryCodeIssuanceThrottle recoveryCodeIssuanceThrottle;
+    private InMemoryRecoveryEmailThrottles recoveryEmailThrottles;
+
+    @Autowired
+    private RecoveryEmailBindingRepository recoveryEmailBindingRepository;
 
     @Autowired
     private RecordingGetAccountDetails getAccountDetails;
@@ -85,6 +92,12 @@ class AccountControllerTest {
 
         @Bean
         @Primary
+        RecoveryEmailBindingRepository testRecoveryEmailBindingRepository() {
+            return new InMemoryRecoveryEmailBindingRepository();
+        }
+
+        @Bean
+        @Primary
         EmailRecoveryCodeStore testEmailRecoveryCodeStore() {
             return new InMemoryEmailRecoveryCodeStore();
         }
@@ -98,9 +111,8 @@ class AccountControllerTest {
 
         /**
          * The default {@code DeferredFindAccountByEmail} always answers empty, so the recover
-         * path never reaches {@code RecoveryCodeIssuanceThrottle.tryIssue} in this slice — proving
-         * the Spring-wired throttle is actually shared with {@code RequestEmailRecoveryCode} needs
-         * one email resolvable to a real target account (Story 8.6 review finding).
+         * path never reaches the recovery budget — exercising it needs one email resolvable to a
+         * real target account.
          */
         @Bean
         @Primary
@@ -153,8 +165,17 @@ class AccountControllerTest {
         final List<String> sentCodes = new ArrayList<>();
 
         @Override
-        public void send(String email, String code) {
-            sentTo.add(email);
+        public void sendAttachConfirmationCode(String address, String code) {
+            record(address, code);
+        }
+
+        @Override
+        public void sendRecoveryCode(String address, String code) {
+            record(address, code);
+        }
+
+        private void record(String address, String code) {
+            sentTo.add(address);
             sentCodes.add(code);
         }
 
@@ -225,7 +246,8 @@ class AccountControllerTest {
         // state written by one test method would otherwise leak into the next.
         ((InMemoryProvisionedAccountRepository) provisionedAccountRepository).clear();
         ((InMemoryEmailRecoveryCodeStore) emailRecoveryCodeStore).clear();
-        ((InMemoryRecoveryCodeIssuanceThrottle) recoveryCodeIssuanceThrottle).clear();
+        ((InMemoryRecoveryEmailBindingRepository) recoveryEmailBindingRepository).clear();
+        recoveryEmailThrottles.clear();
         sendRecoveryCodeEmail.clear();
         getAccountDetails.clear();
         deleteAccount.clear();
@@ -374,6 +396,81 @@ class AccountControllerTest {
     }
 
     @Test
+    void attachEmail_toAnAddressAnotherAccountAlreadyConfirmed_answersTheSameAsForAFreshAddress() throws Exception {
+        attachAndConfirm("owner-sub", "shared@example.test");
+
+        mockMvc.perform(post("/api/v1/account/email")
+                        .with(jwt().jwt(jwt -> jwt.subject("second-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"shared@example.test\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(content().string(""));
+
+        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("shared@example.test", "shared@example.test");
+    }
+
+    @Test
+    void attachEmail_afterThePerAddressMailBudgetIsUsedUp_stillAnswers202ButSendsNothing() throws Exception {
+        for (int attacher = 0; attacher < 3; attacher++) {
+            String subject = "attacher-" + attacher;
+            mockMvc.perform(post("/api/v1/account/email")
+                            .with(jwt().jwt(jwt -> jwt.subject(subject)))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"popular@example.test\"}"))
+                    .andExpect(status().isAccepted());
+        }
+
+        mockMvc.perform(post("/api/v1/account/email")
+                        .with(jwt().jwt(jwt -> jwt.subject("attacher-3")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"popular@example.test\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(content().string(""));
+
+        assertThat(sendRecoveryCodeEmail.sentTo).hasSize(3);
+    }
+
+    @Test
+    void recoveryEmailStatus_afterConfirm_returnsTheMaskedHint() throws Exception {
+        attachAndConfirm("anna-sub", "anna@example.test");
+
+        mockMvc.perform(get("/api/v1/account/email").with(jwt().jwt(jwt -> jwt.subject("anna-sub"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.addressHint").value("a***@example.test"));
+    }
+
+    @Test
+    void recoveryEmailStatus_whileOnlyPending_returnsANullHint() throws Exception {
+        mockMvc.perform(post("/api/v1/account/email")
+                        .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"anna@example.test\"}"))
+                .andExpect(status().isAccepted());
+
+        mockMvc.perform(get("/api/v1/account/email").with(jwt().jwt(jwt -> jwt.subject("anna-sub"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.addressHint").value(nullValue()));
+    }
+
+    @Test
+    void recoveryEmailStatus_withoutAJwt_is401() throws Exception {
+        mockMvc.perform(get("/api/v1/account/email")).andExpect(status().isUnauthorized());
+    }
+
+    private void attachAndConfirm(String subject, String address) throws Exception {
+        mockMvc.perform(post("/api/v1/account/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(subject)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + address + "\"}"))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/v1/account/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(subject)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + sendRecoveryCodeEmail.lastCode() + "\"}"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     void detachEmail_returns204() throws Exception {
         mockMvc.perform(delete("/api/v1/account/email").with(jwt().jwt(jwt -> jwt.subject("anna-sub"))))
                 .andExpect(status().isNoContent());
@@ -410,13 +507,12 @@ class AccountControllerTest {
     }
 
     @Test
-    void requestRecoveryCode_afterAttachWithinTheCooldown_staysSilentBecauseTheThrottleIsShared() throws Exception {
+    void requestRecoveryCode_afterAttachWithinTheCooldown_stillSendsBecauseTheBudgetsAreSeparate() throws Exception {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject(TestFindAccountByEmail.REGISTERED_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"attacher@example.com\"}"))
                 .andExpect(status().isAccepted());
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("attacher@example.com");
 
         mockMvc.perform(post("/api/v1/account/recovery/email")
                         .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
@@ -424,9 +520,8 @@ class AccountControllerTest {
                         .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\"}"))
                 .andExpect(status().isAccepted());
 
-        // Attach and recover share one budget per target account (Story 8.6 design): only the
-        // attach code was sent, the recover request stayed silent.
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("attacher@example.com");
+        assertThat(sendRecoveryCodeEmail.sentTo)
+                .containsExactly("attacher@example.com", TestFindAccountByEmail.REGISTERED_EMAIL);
     }
 
     @Test

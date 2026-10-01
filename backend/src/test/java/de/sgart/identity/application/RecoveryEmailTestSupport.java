@@ -1,9 +1,14 @@
 package de.sgart.identity.application;
 
 import de.sgart.identity.domain.KeycloakUserId;
+import de.sgart.identity.domain.RecoveryEmailDigest;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,70 +31,88 @@ final class RecoveryEmailTestSupport {
         }
     }
 
-    static final class RecordingSetAccountEmail implements SetAccountEmail {
-        private final Map<KeycloakUserId, String> emails = new HashMap<>();
-        private final Map<KeycloakUserId, Boolean> verified = new HashMap<>();
-        private boolean emailAlreadyHeldByAnotherAccount = false;
-
-        String emailFor(KeycloakUserId id) {
-            return emails.get(id);
-        }
-
-        Boolean verifiedFor(KeycloakUserId id) {
-            return verified.get(id);
-        }
-
-        /** Story 8.6, D2: the next {@link #setEmail} call behaves like Keycloak's 409 — nothing is set. */
-        void rejectNextSetEmailAsAlreadyTaken() {
-            this.emailAlreadyHeldByAnotherAccount = true;
+    /** Always allows — the default throttle double for tests not about throttling itself. */
+    static final class AlwaysAllowThrottles implements AttachRequestThrottle, AttachMailThrottle, RecoveryRequestThrottle {
+        @Override
+        public boolean tryAttach(KeycloakUserId caller) {
+            return true;
         }
 
         @Override
-        public boolean setEmail(KeycloakUserId keycloakUserId, String email, boolean emailVerified) {
-            if (emailAlreadyHeldByAnotherAccount) {
-                return false;
+        public boolean tryMail(RecoveryEmailDigest digest) {
+            return true;
+        }
+
+        @Override
+        public boolean tryRequest(RecoveryEmailDigest digest) {
+            return true;
+        }
+
+        @Override
+        public void reset(RecoveryEmailDigest digest) {}
+    }
+
+    /** Denies the attach budgets and the recovery budget selectively, to prove each refusal path. */
+    static final class ConfigurableThrottles
+            implements AttachRequestThrottle, AttachMailThrottle, RecoveryRequestThrottle {
+        boolean attachRequestAllowed = true;
+        boolean attachMailAllowed = true;
+        boolean recoveryRequestAllowed = true;
+
+        @Override
+        public boolean tryAttach(KeycloakUserId caller) {
+            return attachRequestAllowed;
+        }
+
+        @Override
+        public boolean tryMail(RecoveryEmailDigest digest) {
+            return attachMailAllowed;
+        }
+
+        @Override
+        public boolean tryRequest(RecoveryEmailDigest digest) {
+            return recoveryRequestAllowed;
+        }
+
+        @Override
+        public void reset(RecoveryEmailDigest digest) {}
+    }
+
+    /** A deterministic, test-only digester (plain SHA-256) that, like the real one, never contains the address. */
+    static final class Sha256RecoveryEmailDigester implements RecoveryEmailDigester {
+
+        static RecoveryEmailDigest digestOf(String normalizedAddress) {
+            try {
+                byte[] hash = MessageDigest.getInstance("SHA-256")
+                        .digest(normalizedAddress.getBytes(StandardCharsets.UTF_8));
+                return new RecoveryEmailDigest(HexFormat.of().formatHex(hash));
+            } catch (NoSuchAlgorithmException cause) {
+                throw new IllegalStateException(cause);
             }
-            emails.put(keycloakUserId, email);
-            verified.put(keycloakUserId, emailVerified);
-            return true;
         }
 
         @Override
-        public void markEmailVerified(KeycloakUserId keycloakUserId) {
-            verified.put(keycloakUserId, true);
-        }
-
-        @Override
-        public void clearEmail(KeycloakUserId keycloakUserId) {
-            emails.remove(keycloakUserId);
-            verified.put(keycloakUserId, false);
-        }
-    }
-
-    /** Always allows issuance — the default throttle double for tests not about throttling itself. */
-    static final class AlwaysAllowRecoveryCodeIssuanceThrottle implements RecoveryCodeIssuanceThrottle {
-        @Override
-        public boolean tryIssue(KeycloakUserId targetAccount) {
-            return true;
-        }
-    }
-
-    /** Always denies issuance — proves the throttled-request behavior without a real clock/policy. */
-    static final class AlwaysDenyRecoveryCodeIssuanceThrottle implements RecoveryCodeIssuanceThrottle {
-        @Override
-        public boolean tryIssue(KeycloakUserId targetAccount) {
-            return false;
+        public RecoveryEmailDigest digest(String normalizedAddress) {
+            return digestOf(normalizedAddress);
         }
     }
 
     static final class RecordingSendRecoveryCodeEmail implements SendRecoveryCodeEmail {
-        final List<String> sentTo = new ArrayList<>();
-        final List<String> sentCodes = new ArrayList<>();
+        final List<String> attachMailRecipients = new ArrayList<>();
+        final List<String> attachMailCodes = new ArrayList<>();
+        final List<String> recoveryMailRecipients = new ArrayList<>();
+        final List<String> recoveryMailCodes = new ArrayList<>();
 
         @Override
-        public void send(String email, String code) {
-            sentTo.add(email);
-            sentCodes.add(code);
+        public void sendAttachConfirmationCode(String address, String code) {
+            attachMailRecipients.add(address);
+            attachMailCodes.add(code);
+        }
+
+        @Override
+        public void sendRecoveryCode(String address, String code) {
+            recoveryMailRecipients.add(address);
+            recoveryMailCodes.add(code);
         }
     }
 
@@ -111,16 +134,6 @@ final class RecoveryEmailTestSupport {
 
         void register(KeycloakUserId id, String username, String publicKey) {
             byId.put(id, new AccountDetails(username, publicKey, null, false));
-        }
-
-        /** The sweep's D-G "activated" case (design §7): a confirmed Keycloak email. */
-        void confirmedEmailFor(KeycloakUserId id) {
-            byId.put(id, new AccountDetails("u", "k", "a@example.com", true));
-        }
-
-        /** An attached-but-never-confirmed email — still sweepable past the TTL. */
-        void unconfirmedEmailFor(KeycloakUserId id) {
-            byId.put(id, new AccountDetails("u", "k", "a@example.com", false));
         }
 
         @Override
