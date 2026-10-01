@@ -21,6 +21,11 @@
     "description": "Shown instead of the generic fallback when an authenticated call 401s and the refresh token is also invalid/expired (auth.unauthorized)."
   },
 
+  "membershipMappingConflictError": "Das hat gerade nicht geklappt. Bitte versuche es noch einmal.",
+  "@membershipMappingConflictError": {
+    "description": "Shown when the same person's first-time household join or create runs twice at once and this attempt lost the race (membership.mappingConflict); a manual retry succeeds."
+  },
+
   "authSignedInAsLabel": "Angemeldet als {displayName}",
   "@authSignedInAsLabel": {
     "description": "Shown on the authenticated placeholder screen with the live display name from GET /identity/me.",

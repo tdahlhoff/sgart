@@ -7,6 +7,7 @@ import de.sgart.collaboration.application.exception.InviteNotFoundApplicationExc
 import de.sgart.collaboration.domain.Household;
 import de.sgart.collaboration.domain.exception.InviteNotFoundException;
 import de.sgart.identity.application.IssueMemberIdentity;
+import de.sgart.identity.application.MemberMappingConflictException;
 import de.sgart.identity.application.ProvisionedMemberId;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
@@ -62,6 +63,8 @@ public final class AcceptInviteHandler {
      *     household's active invite code — unknown, or replaced (404)
      * @throws ConsentRequiredException if the caller has no recorded consent (409 {@code
      *     consent.required}, Story 7.4 AC3, D-B) — checked first, before any state change.
+     * @throws MemberMappingConflictException if the caller lost a concurrent first-time join (409
+     *     {@code membership.mappingConflict}) — nothing is appended; a manual retry succeeds.
      */
     public void handle(String keycloakUserId, String rawHouseholdId, String rawInviteId, String rawCommandId) {
         Objects.requireNonNull(keycloakUserId, "keycloakUserId must not be null");

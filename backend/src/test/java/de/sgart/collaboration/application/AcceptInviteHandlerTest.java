@@ -11,6 +11,9 @@ import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.collaboration.domain.event.MemberJoined;
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.application.IssueMemberIdentity;
+import de.sgart.identity.application.MemberMappingConflictException;
+import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.shared.AggregateVersion;
 import de.sgart.shared.CommandId;
@@ -24,6 +27,8 @@ import de.sgart.shared.StreamId;
 import de.sgart.shared.support.InMemoryEventStore;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -226,6 +231,69 @@ class AcceptInviteHandlerTest {
         @Override
         public List<DomainEvent> readStream(StreamId streamId) {
             return delegate.readStream(streamId);
+        }
+    }
+
+    @Test
+    void aConcurrentAcceptByTheSamePersonThatLosesTheMappingRaceAppendsNothingAndKeepsTheWinnersMapping() {
+        InviteId inviteId = seedHouseholdWithActiveInvite();
+        MemberId winnersMemberId = MemberId.generate();
+        KeycloakUserId anna = new KeycloakUserId("anna-sub");
+        mappingRepository.save(new MemberMapping(householdId, winnersMemberId, anna));
+        IssueMemberIdentity staleReadingIssue = new IssueMemberIdentity(new StaleFirstReadRepository(mappingRepository));
+        AcceptInviteHandler losingHandler = new AcceptInviteHandler(eventStore, staleReadingIssue, alwaysConsentingGate());
+
+        assertThatThrownBy(() -> losingHandler.handle(
+                        "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(MemberMappingConflictException.class);
+
+        assertThat(eventStore.readStream(streamId)).hasSize(3);
+        assertThat(mappingRepository.findMemberId(anna, householdId)).contains(winnersMemberId);
+    }
+
+    /** Reports no mapping on the first lookup (the loser's stale read in {@code provision}), then the real state. */
+    private static final class StaleFirstReadRepository implements MemberMappingRepository {
+
+        private final MemberMappingRepository delegate;
+        private final AtomicBoolean hasServedStaleRead = new AtomicBoolean(false);
+
+        StaleFirstReadRepository(MemberMappingRepository delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<MemberId> findMemberId(KeycloakUserId keycloakUserId, HouseholdId householdId) {
+            return hasServedStaleRead.getAndSet(true) ? delegate.findMemberId(keycloakUserId, householdId) : Optional.empty();
+        }
+
+        @Override
+        public void save(MemberMapping mapping) {
+            delegate.save(mapping);
+        }
+
+        @Override
+        public void deleteMapping(KeycloakUserId keycloakUserId, HouseholdId householdId) {
+            delegate.deleteMapping(keycloakUserId, householdId);
+        }
+
+        @Override
+        public List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId) {
+            return delegate.householdIdsFor(keycloakUserId);
+        }
+
+        @Override
+        public List<KeycloakUserId> keycloakUserIdsFor(HouseholdId householdId) {
+            return delegate.keycloakUserIdsFor(householdId);
+        }
+
+        @Override
+        public void deleteMappingByMember(HouseholdId householdId, MemberId memberId) {
+            delegate.deleteMappingByMember(householdId, memberId);
+        }
+
+        @Override
+        public void deleteAllMappings(HouseholdId householdId) {
+            delegate.deleteAllMappings(householdId);
         }
     }
 }

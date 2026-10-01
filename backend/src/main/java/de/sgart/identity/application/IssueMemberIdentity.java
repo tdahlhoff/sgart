@@ -2,10 +2,12 @@ package de.sgart.identity.application;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingAlreadyExistsException;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * The Identity ACL's issue (write) port — the <strong>sole</strong> place a {@link MemberId} is
@@ -59,14 +61,30 @@ public final class IssueMemberIdentity {
     }
 
     /**
-     * Durably writes the {@code (keycloakUserId, householdId) -> memberId} mapping row, unless one
-     * already exists for the pair (idempotent — a retry with the same, already-persisted id is a
-     * no-op).
+     * Durably writes the {@code (keycloakUserId, householdId) -> memberId} mapping row. A retry with
+     * the same, already-persisted id is a no-op (idempotent).
+     *
+     * @throws MemberMappingConflictException if the pair is already mapped to a <em>different</em>
+     *     id — the caller lost a concurrent first-time join. The existing mapping is left untouched
+     *     and the caller must not append, so no phantom member and no stranded access result.
      */
     public void persist(String keycloakUserId, HouseholdId householdId, MemberId memberId) {
         KeycloakUserId keycloakUser = new KeycloakUserId(keycloakUserId);
-        if (memberMappingRepository.findMemberId(keycloakUser, householdId).isEmpty()) {
+        Optional<MemberId> existing = memberMappingRepository.findMemberId(keycloakUser, householdId);
+        if (existing.isPresent()) {
+            rejectUnlessSameMember(existing.get(), memberId);
+            return;
+        }
+        try {
             memberMappingRepository.save(new MemberMapping(householdId, memberId, keycloakUser));
+        } catch (MemberMappingAlreadyExistsException lostRace) {
+            throw new MemberMappingConflictException(lostRace);
+        }
+    }
+
+    private static void rejectUnlessSameMember(MemberId existing, MemberId requested) {
+        if (!existing.equals(requested)) {
+            throw new MemberMappingConflictException();
         }
     }
 

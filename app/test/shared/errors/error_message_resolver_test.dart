@@ -20,6 +20,13 @@ void main() {
       expect(resolved, isNot(rawDebugMessage));
     });
 
+    test('membershipMappingConflictResolvesToItsOwnRetryCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'membership.mappingConflict');
+
+      expect(resolved, localizations.membershipMappingConflictError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('itemNotDuringTripResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'item.notDuringTrip');
 

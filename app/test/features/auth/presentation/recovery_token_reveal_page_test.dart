@@ -6,6 +6,7 @@ import 'package:sgart/features/auth/data/device_credential_store.dart';
 import 'package:sgart/features/auth/data/recovery_token.dart';
 import 'package:sgart/features/auth/presentation/recovery_token_reveal_page.dart';
 import 'package:sgart/l10n/gen/app_localizations.dart';
+import 'package:sgart/shared/platform/screen_capture_guard.dart';
 
 import '../../../support/fake_auth_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -45,6 +46,28 @@ void main() {
           tester.widgetList<SelectableText>(groupFinder).map((widget) => widget.data).toList();
       expect(displayedGroups.join('-'), token);
       expect(find.byKey(const Key('recovery-token-warning')), findsOneWidget);
+    });
+
+    testWidgets('revealPage_blocksScreenCaptureWhileOpenAndReleasesItWhenClosed', (tester) async {
+      final nativeCalls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        ScreenCaptureGuard.channel,
+        (call) async {
+          nativeCalls.add(call.method);
+          return null;
+        },
+      );
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(ScreenCaptureGuard.channel, null),
+      );
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      expect(nativeCalls, ['protect']);
+
+      await tester.pumpWidget(const SizedBox());
+      expect(nativeCalls, ['protect', 'release']);
     });
 
     testWidgets('revealPage_exposesTheTokenAsASingleAccessibilitySemanticsLabel', (tester) async {

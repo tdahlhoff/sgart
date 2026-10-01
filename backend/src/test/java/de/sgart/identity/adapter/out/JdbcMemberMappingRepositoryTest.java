@@ -1,9 +1,11 @@
 package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingAlreadyExistsException;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
 import javax.sql.DataSource;
@@ -133,5 +135,18 @@ class JdbcMemberMappingRepositoryTest {
         repository.deleteAllMappings(householdId);
 
         assertThat(repository.householdIdsFor(new KeycloakUserId("anna-sub"))).isEmpty();
+    }
+
+    @Test
+    void save_rejectsASecondMappingForTheSameHouseholdAndPersonAndKeepsTheFirst() {
+        KeycloakUserId keycloakUserId = new KeycloakUserId("anna-sub");
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId firstMemberId = MemberId.generate();
+        repository.save(new MemberMapping(householdId, firstMemberId, keycloakUserId));
+
+        assertThatThrownBy(() -> repository.save(new MemberMapping(householdId, MemberId.generate(), keycloakUserId)))
+                .isInstanceOf(MemberMappingAlreadyExistsException.class);
+
+        assertThat(repository.findMemberId(keycloakUserId, householdId)).contains(firstMemberId);
     }
 }

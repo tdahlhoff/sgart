@@ -28,6 +28,7 @@ import de.sgart.collaboration.application.exception.TripNotActiveApplicationExce
 import de.sgart.collaboration.application.exception.TripNotFoundException;
 import de.sgart.collaboration.application.exception.TripNotCompletableApplicationException;
 import de.sgart.collaboration.application.exception.TripNotStartableApplicationException;
+import de.sgart.identity.application.MemberMappingConflictException;
 import de.sgart.identity.application.NotAMemberException;
 import de.sgart.shared.ConcurrencyConflictException;
 import de.sgart.shared.ErrorDescriptor;
@@ -88,6 +89,11 @@ class WriteErrorAdvice {
 
     @ExceptionHandler(ConcurrencyConflictException.class)
     ResponseEntity<ErrorDescriptor> handleConcurrencyConflict(ConcurrencyConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(MemberMappingConflictException.class)
+    ResponseEntity<ErrorDescriptor> handleMemberMappingConflict(MemberMappingConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.errorDescriptor());
     }
 

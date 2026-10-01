@@ -11,6 +11,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -63,9 +65,19 @@ public class SecurityConfig {
             @Value("${sgart.security.jwt.issuer}") String issuer,
             @Value("${sgart.security.jwt.audience}") String audience) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuer), new AudienceValidator(audience));
-        decoder.setJwtValidator(validator);
+        decoder.setJwtValidator(tokenValidator(issuer, audience));
         return decoder;
+    }
+
+    /**
+     * Issuer and audience, plus a mandatory non-blank {@code sub}: {@link AuthenticatedCaller}
+     * derives the caller's identity from it, so a validly signed token without one is rejected here
+     * as a 401 (fail fast, once for every controller) instead of surfacing as an opaque 500.
+     */
+    static OAuth2TokenValidator<Jwt> tokenValidator(String issuer, String audience) {
+        return new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(issuer),
+                new AudienceValidator(audience),
+                new JwtClaimValidator<String>(JwtClaimNames.SUB, subject -> subject != null && !subject.isBlank()));
     }
 }

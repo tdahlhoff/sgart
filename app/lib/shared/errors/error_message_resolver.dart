@@ -41,6 +41,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'invite.notFound' => localizations.householdsAwaitInviteNotFoundError,
     'governance.notPermitted' => localizations.membersGovernanceNotPermittedError,
     'membership.lastAdmin' => localizations.membersLastAdminError,
+    'membership.mappingConflict' => localizations.membershipMappingConflictError,
     'auth.unauthorized' => localizations.authSessionExpiredError,
     'auth.invalidRecoveryToken' => localizations.recoveryTokenRestoreInvalidTokenError,
     'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,

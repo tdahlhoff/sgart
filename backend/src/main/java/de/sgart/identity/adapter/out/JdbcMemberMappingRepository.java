@@ -2,6 +2,7 @@ package de.sgart.identity.adapter.out;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingAlreadyExistsException;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -41,15 +43,20 @@ public final class JdbcMemberMappingRepository implements MemberMappingRepositor
 
     @Override
     public void save(MemberMapping mapping) {
-        jdbcClient
-                .sql("""
-                        INSERT INTO identity_member_mapping (household_id, member_id, keycloak_user_id)
-                        VALUES (:householdId, :memberId, :keycloakUserId)
-                        """)
-                .param("householdId", mapping.householdId().value())
-                .param("memberId", mapping.memberId().value())
-                .param("keycloakUserId", mapping.keycloakUserId().value())
-                .update();
+        try {
+            jdbcClient
+                    .sql("""
+                            INSERT INTO identity_member_mapping (household_id, member_id, keycloak_user_id)
+                            VALUES (:householdId, :memberId, :keycloakUserId)
+                            """)
+                    .param("householdId", mapping.householdId().value())
+                    .param("memberId", mapping.memberId().value())
+                    .param("keycloakUserId", mapping.keycloakUserId().value())
+                    .update();
+        } catch (DuplicateKeyException duplicate) {
+            throw new MemberMappingAlreadyExistsException(
+                    "A mapping already exists for this household and person", duplicate);
+        }
     }
 
     @Override

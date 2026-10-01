@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.sgart.collaboration.application.exception.ItemTransferInProgressApplicationException;
 import de.sgart.collaboration.application.exception.TripNotActiveApplicationException;
 import de.sgart.collaboration.application.exception.TripNotCompletableApplicationException;
+import de.sgart.identity.application.MemberMappingConflictException;
 import de.sgart.shared.ErrorDescriptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -49,5 +50,15 @@ class WriteErrorAdviceTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("item.transferInProgress");
+    }
+
+    @Test
+    void mapsMemberMappingConflictToConflictWithTheStableCode() {
+        ResponseEntity<ErrorDescriptor> response =
+                new WriteErrorAdvice().handleMemberMappingConflict(new MemberMappingConflictException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("membership.mappingConflict");
     }
 }

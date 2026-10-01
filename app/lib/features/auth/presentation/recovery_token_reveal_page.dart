@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
+import '../../../shared/platform/screen_capture_guard.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../../theme/tokens/sgart_typography.dart';
@@ -55,6 +58,14 @@ class _RecoveryTokenRevealPageState extends State<RecoveryTokenRevealPage> {
   void initState() {
     super.initState();
     _tokenFuture = context.read<DeviceCredentialStore>().recoveryToken();
+    // The token is the account secret — keep it out of screenshots and recordings while shown.
+    unawaited(ScreenCaptureGuard.protect());
+  }
+
+  @override
+  void dispose() {
+    unawaited(ScreenCaptureGuard.release());
+    super.dispose();
   }
 
   Future<void> _copyToken(String token) async {

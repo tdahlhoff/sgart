@@ -395,3 +395,29 @@
 - source_spec: `_bmad-output/implementation-artifacts/8-9-provisioning-epic-critical-path-tests.md`
   summary: `POST /api/v1/accounts` (silent account provisioning) has no rate limiter, and there is no account to key one on since the endpoint is unauthenticated by design.
   evidence: Decision D2 (Timo, 2026-09-28) — per ADR-0002 this belongs at the reverse-proxy seam, not in application code. Deferred alongside the beta SMTP item (8.6 D1) to land with the beta-infra deployment work (prod compose, TLS proxy).
+
+- source_spec: none
+  summary: Fix `ConfirmEmailRecovery.confirmAndRebind` partial failure — on rebind failure after the throwaway account is deleted, surface a clean 4xx and keep the RECOVER code row so the device can retry, with a mid-sequence-failure test.
+  evidence: Split from the beta code should-fixes intent (2026-10-01); today a mid-sequence rebind failure bricks the device (authenticates into nothing). Shares classes with the recovery-email ownership goal below.
+
+- source_spec: none
+  summary: Design and implement the recovery-email ownership model — duplicate-address attach (possible 500 + enumeration oracle; check the realm's duplicate-email setting), address squatting, and recovery budget lockout.
+  evidence: Split from the beta code should-fixes intent (2026-10-01); a design-first task needing product decisions from Timo, too large for the same spec as the small fixes.
+
+## Deferred from: review of spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture (2026-10-01)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture.md`
+  summary: Fix the accept compensation so a failed winner's `retract` cannot delete a mapping that a concurrent retry of the same person has since committed a `MemberJoined` with.
+  evidence: [HIGH, pre-existing] Winner persists id X then its append loses; the loser's manual retry reuses X (not freshly provisioned) and appends first; the winner then retracts by (person, household), leaving a member in the stream with no access. Smallest fix: skip the retract when the re-read household already contains the member. `AcceptInviteHandler.java` retract block.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture.md`
+  summary: Protect the restore screen's typed-in recovery token (`recover_account_page.dart`) from screenshots, recording, and the app-switcher preview the same way the reveal page is protected.
+  evidence: [MEDIUM, excluded by the approved spec] The same account secret is entered into a visible field; `ScreenCaptureGuard` is only applied to `RecoveryTokenRevealPage`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture.md`
+  summary: Add iOS screen-capture protection for the recovery token screens (screen-recording and app-switcher blur).
+  evidence: [MEDIUM] `ScreenCaptureGuard` is Android-only (`FLAG_SECURE`); on iOS the channel has no handler and silently does nothing. Not needed until an iOS build ships.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture.md`
+  summary: Automated verification of the native `FLAG_SECURE` channel handler in `MainActivity.kt`.
+  evidence: [MEDIUM] No Android instrumentation or integration-test setup exists; Dart tests mock the channel only. Gate for now: manual emulator check — open Profil → recovery token and try a screenshot.

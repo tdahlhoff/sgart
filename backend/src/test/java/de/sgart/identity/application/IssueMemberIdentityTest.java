@@ -1,11 +1,16 @@
 package de.sgart.identity.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.domain.KeycloakUserId;
+import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -129,5 +134,78 @@ class IssueMemberIdentityTest {
         issueMemberIdentity.retract(RAW_KEYCLOAK_USER_ID, householdId);
 
         assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).isEmpty();
+    }
+
+    @Test
+    void persist_rejectsADifferentMemberIdWhenTheCallerIsAlreadyMappedAndKeepsTheExistingMapping() {
+        InMemoryMemberMappingRepository repository = new InMemoryMemberMappingRepository();
+        IssueMemberIdentity issueMemberIdentity = new IssueMemberIdentity(repository);
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId winner = issueMemberIdentity.issue(RAW_KEYCLOAK_USER_ID, householdId);
+
+        assertThatThrownBy(() -> issueMemberIdentity.persist(RAW_KEYCLOAK_USER_ID, householdId, MemberId.generate()))
+                .isInstanceOf(MemberMappingConflictException.class);
+
+        assertThat(repository.findMemberId(KEYCLOAK_USER_ID, householdId)).contains(winner);
+    }
+
+    @Test
+    void persist_translatesALostInsertRaceIntoAMappingConflictAndKeepsTheWinnersMapping() {
+        InMemoryMemberMappingRepository winnersRepository = new InMemoryMemberMappingRepository();
+        HouseholdId householdId = HouseholdId.generate();
+        MemberId winner = MemberId.generate();
+        winnersRepository.save(new MemberMapping(householdId, winner, KEYCLOAK_USER_ID));
+        IssueMemberIdentity staleReadingIssue = new IssueMemberIdentity(new AlwaysEmptyLookupRepository(winnersRepository));
+
+        assertThatThrownBy(() -> staleReadingIssue.persist(RAW_KEYCLOAK_USER_ID, householdId, MemberId.generate()))
+                .isInstanceOf(MemberMappingConflictException.class)
+                .hasCauseInstanceOf(de.sgart.identity.domain.MemberMappingAlreadyExistsException.class);
+
+        assertThat(winnersRepository.findMemberId(KEYCLOAK_USER_ID, householdId)).contains(winner);
+    }
+
+    /** Both lookups of a racing attempt read "not mapped yet"; only the insert reveals the winner. */
+    private static final class AlwaysEmptyLookupRepository implements MemberMappingRepository {
+
+        private final MemberMappingRepository delegate;
+
+        AlwaysEmptyLookupRepository(MemberMappingRepository delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<MemberId> findMemberId(KeycloakUserId keycloakUserId, HouseholdId householdId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void save(MemberMapping mapping) {
+            delegate.save(mapping);
+        }
+
+        @Override
+        public void deleteMapping(KeycloakUserId keycloakUserId, HouseholdId householdId) {
+            delegate.deleteMapping(keycloakUserId, householdId);
+        }
+
+        @Override
+        public List<HouseholdId> householdIdsFor(KeycloakUserId keycloakUserId) {
+            return delegate.householdIdsFor(keycloakUserId);
+        }
+
+        @Override
+        public List<KeycloakUserId> keycloakUserIdsFor(HouseholdId householdId) {
+            return delegate.keycloakUserIdsFor(householdId);
+        }
+
+        @Override
+        public void deleteMappingByMember(HouseholdId householdId, MemberId memberId) {
+            delegate.deleteMappingByMember(householdId, memberId);
+        }
+
+        @Override
+        public void deleteAllMappings(HouseholdId householdId) {
+            delegate.deleteAllMappings(householdId);
+        }
     }
 }

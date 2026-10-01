@@ -27,7 +27,12 @@ public interface MemberMappingRepository {
      */
     Optional<MemberId> findMemberId(KeycloakUserId keycloakUserId, HouseholdId householdId);
 
-    /** Persists a newly issued mapping row. The Identity ACL is the sole caller (AD-5). */
+    /**
+     * Persists a newly issued mapping row. The Identity ACL is the sole caller (AD-5).
+     *
+     * @throws MemberMappingAlreadyExistsException if a mapping already exists for the same
+     *     {@code (householdId, keycloakUserId)} pair — the loser of a concurrent first-time join.
+     */
     void save(MemberMapping mapping);
 
     /**

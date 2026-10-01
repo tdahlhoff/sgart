@@ -2,6 +2,7 @@ package de.sgart.identity.adapter.out;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MemberMappingAlreadyExistsException;
 import de.sgart.identity.domain.MemberMappingRepository;
 import de.sgart.shared.HouseholdId;
 import de.sgart.shared.MemberId;
@@ -44,6 +45,10 @@ public final class InMemoryMemberMappingRepository implements MemberMappingRepos
 
     @Override
     public void save(MemberMapping mapping) {
+        HouseholdKeycloakKey key = new HouseholdKeycloakKey(mapping.householdId(), mapping.keycloakUserId());
+        if (mappingsByHouseholdAndKeycloakUser.containsKey(key)) {
+            throw new MemberMappingAlreadyExistsException("A mapping already exists for this household and person");
+        }
         seed(mapping);
     }
 
