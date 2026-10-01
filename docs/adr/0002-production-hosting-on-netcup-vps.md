@@ -1,4 +1,4 @@
-# ADR-0002 — Production hosting on a netcup VPS (EU), co-located with a Murmur server
+# ADR-0002 — Production hosting on a netcup VPS (EU)
 
 - **Status:** Accepted — provider and server tier chosen; deployment hardening still to be built
   (the "Production concretization" backlog in ARCHITECTURE-SPINE.md)
@@ -9,10 +9,9 @@
 
 The SGART backend is a modular monolith that stands up **five long-lived services** (see
 `docker-compose.yml`): the Spring Boot 4.1 / Java 25 backend, KurrentDB 25.1.4 (event-store write
-model), PostgreSQL 18 (CQRS read models), and Keycloak 26.7 (identity provider). Alongside it we
-want to run a **Murmur (Mumble) voice server** for 2–4 people on the same host.
+model), PostgreSQL 18 (CQRS read models), and Keycloak 26.7 (identity provider).
 
-This rules out shared web hosting: five daemons plus a Murmur daemon, orchestrated via
+This rules out shared web hosting: five daemons, orchestrated via
 Docker/Compose, need **root access on a KVM-virtualized VPS**, not a restricted shared tier.
 
 Two forces shaped the choice:
@@ -36,7 +35,7 @@ netcup's automatic-EU-location tiers acceptable.
 
 ## Decision
 
-**Host the backend stack and the Murmur server on a `netcup VPS Lite 2 G12s`.**
+**Host the backend stack on a `netcup VPS Lite 2 G12s`.**
 
 Chosen server specification (baseline for all deployment/config sizing decisions):
 
@@ -130,13 +129,13 @@ These are our responsibility, not the provider's — the server + AVV is only th
    **Docker bypasses `ufw`**: a container's `ports:` mapping is wired via `iptables` directly and
    is reachable from the internet regardless of `ufw` rules (unlike the dev `docker-compose.yml`,
    which maps 5432/2113/8080 — fine locally, a GDPR-relevant exposure in prod). The production
-   compose must publish **only** the reverse proxy (80/443) and Murmur (64738); Postgres,
+   compose must publish **only** the reverse proxy (80/443); Postgres,
    KurrentDB, and Keycloak get no `ports:` entry at all, reachable only over the internal Docker
    network.
 5. **Encrypted EU backups** with a defined retention period (Rule 5 storage limitation).
 6. **JVM heap caps** (backend + Keycloak) and **~2 GB swap** so the 8 GB holds.
 7. **Server hardening**: SSH key-only ✅, `ufw` firewall (22/TCP, 80/TCP, 443/TCP,
-   64738 TCP + UDP for Murmur, default-deny incoming) ✅, `fail2ban` ✅, automatic security
+   default-deny incoming) ✅, `fail2ban` ✅, automatic security
    updates still open.
 8. **Android release signing keystore** — Timo-only manual step (generate + back up outside the
    repo), Gradle signing config wired and ready. See
