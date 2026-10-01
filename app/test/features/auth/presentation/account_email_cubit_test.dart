@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sgart/features/auth/presentation/account_email_cubit.dart';
 import 'package:sgart/features/auth/presentation/account_email_state.dart';
@@ -35,8 +37,9 @@ void main() {
       // above with no `initialState`) is `unknown`, not `notAttached` — the assertion below always
       // checked the seed, never the `notAttached` status (Story 7.3 review finding: fixed the name
       // to describe what the test actually proves, a rejected attach changes nothing).
-      accountEmailApi.attachErrorToThrow =
-          const AppException(AppError(code: 'account.recoveryEmailInvalid', message: 'bad email'));
+      accountEmailApi.attachErrorToThrow = const AppException(
+        AppError(code: 'account.recoveryEmailInvalid', message: 'bad email'),
+      );
 
       await cubit.attach('not-an-email');
 
@@ -58,8 +61,9 @@ void main() {
 
     test('confirm_wrongCode_surfacesTheErrorAndStaysPending', () async {
       await cubit.attach('anna@example.test');
-      accountEmailApi.confirmErrorToThrow =
-          const AppException(AppError(code: 'account.recoveryCodeInvalid', message: 'wrong code'));
+      accountEmailApi.confirmErrorToThrow = const AppException(
+        AppError(code: 'account.recoveryCodeInvalid', message: 'wrong code'),
+      );
 
       await cubit.confirm('000000');
 
@@ -84,13 +88,94 @@ void main() {
     });
 
     test('loadStatus_whenTheBackendFails_keepsTheStateAndSurfacesTheError', () async {
-      accountEmailApi.fetchStatusErrorToThrow =
-          const AppException(AppError(code: 'account.unknown', message: 'unreachable'));
+      accountEmailApi.fetchStatusErrorToThrow = const AppException(
+        AppError(code: 'account.unknown', message: 'unreachable'),
+      );
 
       await cubit.loadStatus();
 
       expect(cubit.state.status, AccountEmailStatus.unknown);
       expect(cubit.state.error?.code, 'account.unknown');
+    });
+
+    test('confirm_whenReadingTheHintBackFails_keepsTheConfirmedStatusAndSurfacesTheError', () async {
+      await cubit.attach('tester@example.test');
+      accountEmailApi.fetchStatusErrorToThrow = const AppException(
+        AppError(code: 'account.unknown', message: 'unreachable'),
+      );
+
+      await cubit.confirm('042817');
+
+      expect(cubit.state.status, AccountEmailStatus.confirmed);
+      expect(cubit.state.addressHint, isNull);
+      expect(cubit.state.error?.code, 'account.unknown');
+    });
+
+    test('confirm_whenTheReadBackReportsNoHint_keepsTheConfirmedStatus', () async {
+      await cubit.attach('tester@example.test');
+
+      await cubit.confirm('042817');
+
+      expect(cubit.state.status, AccountEmailStatus.confirmed);
+      expect(cubit.state.addressHint, isNull);
+      expect(cubit.state.error, isNull);
+    });
+
+    test('loadStatus_whenTheCubitIsClosedBeforeTheBackendAnswers_doesNotEmitAfterwards', () async {
+      accountEmailApi.fetchStatusCompleter = Completer<void>();
+      final loading = cubit.loadStatus();
+
+      await cubit.close();
+      accountEmailApi.fetchStatusCompleter!.complete();
+
+      await expectLater(loading, completes);
+    });
+
+    test('loadStatus_whenTheCubitIsClosedBeforeTheBackendFails_doesNotEmitAfterwards', () async {
+      accountEmailApi.fetchStatusCompleter = Completer<void>();
+      accountEmailApi.fetchStatusErrorToThrow = const AppException(
+        AppError(code: 'account.unknown', message: 'unreachable'),
+      );
+      final loading = cubit.loadStatus();
+
+      await cubit.close();
+      accountEmailApi.fetchStatusCompleter!.complete();
+
+      await expectLater(loading, completes);
+    });
+
+    test('attach_whenTheCubitIsClosedBeforeTheBackendAnswers_doesNotEmitAfterwards', () async {
+      final attaching = cubit.attach('anna@example.test');
+
+      await cubit.close();
+
+      await expectLater(attaching, completes);
+    });
+
+    test('loadStatus_resolvingAfterAnAttachStarted_doesNotOverwriteThePendingConfirmation', () async {
+      accountEmailApi.fetchStatusCompleter = Completer<void>();
+      final loading = cubit.loadStatus();
+
+      await cubit.attach('anna@example.test');
+      accountEmailApi.fetchStatusCompleter!.complete();
+      await loading;
+
+      expect(cubit.state.status, AccountEmailStatus.pendingConfirmation);
+    });
+
+    test('loadStatus_failingAfterAnAttachStarted_doesNotSurfaceAStaleError', () async {
+      accountEmailApi.fetchStatusCompleter = Completer<void>();
+      accountEmailApi.fetchStatusErrorToThrow = const AppException(
+        AppError(code: 'account.unknown', message: 'unreachable'),
+      );
+      final loading = cubit.loadStatus();
+
+      await cubit.attach('anna@example.test');
+      accountEmailApi.fetchStatusCompleter!.complete();
+      await loading;
+
+      expect(cubit.state.status, AccountEmailStatus.pendingConfirmation);
+      expect(cubit.state.error, isNull);
     });
 
     test('detach_success_returnsToNotAttached', () async {

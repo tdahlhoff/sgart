@@ -1382,6 +1382,21 @@
     }
   },
 
+  "profileRecoveryEmailConfirmedWithoutHintLabel": "Wiederherstellungs-E-Mail bestätigt",
+  "@profileRecoveryEmailConfirmedWithoutHintLabel": {
+    "description": "Row subtitle once the recovery email is confirmed but the masked address is not available (for example the read-back after confirming failed); never shows an empty hint."
+  },
+
+  "profileRecoveryEmailStatusUnavailableLabel": "E-Mail-Status nicht verfügbar",
+  "@profileRecoveryEmailStatusUnavailableLabel": {
+    "description": "Row subtitle while the recovery email status is loading or could not be loaded; deliberately neutral so it never claims that no email is attached."
+  },
+
+  "profileRecoveryEmailRetryAction": "Erneut versuchen",
+  "@profileRecoveryEmailRetryAction": {
+    "description": "Action label that reloads the recovery email status after it could not be loaded."
+  },
+
   "profileRecoveryEmailAddAction": "E-Mail hinzufügen",
   "@profileRecoveryEmailAddAction": {
     "description": "Action label that opens AddRecoveryEmailPage (Story 7.3, AC1)."

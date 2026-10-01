@@ -127,19 +127,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     final householdId = widget.activeHousehold.householdId;
-    membersApi.listMembers(householdId).then((members) {
-      // A response for a household that is no longer active must not overwrite the current one.
-      if (!mounted || householdId != widget.activeHousehold.householdId) {
-        return;
-      }
-      final self = members.where((member) => member.isSelf).firstOrNull;
-      if (self?.nickname != null) {
-        setState(() => _nickname = self!.nickname);
-      }
-    }).catchError((Object _) {
-      // Best-effort: the header simply keeps the neutral fallback (I/O matrix — never crashes,
-      // never shows the credential id).
-    });
+    membersApi
+        .listMembers(householdId)
+        .then((members) {
+          // A response for a household that is no longer active must not overwrite the current one.
+          if (!mounted || householdId != widget.activeHousehold.householdId) {
+            return;
+          }
+          final self = members.where((member) => member.isSelf).firstOrNull;
+          if (self?.nickname != null) {
+            setState(() => _nickname = self!.nickname);
+          }
+        })
+        .catchError((Object _) {
+          // Best-effort: the header simply keeps the neutral fallback (I/O matrix — never crashes,
+          // never shows the credential id).
+        });
   }
 
   Future<void> _openEditNicknameDialog(BuildContext context) async {
@@ -147,10 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogContext) => BlocProvider<NicknameCubit>.value(
         value: _nicknameCubit,
-        child: _EditNicknameDialog(
-          initialNickname: _nickname,
-          householdId: widget.activeHousehold.householdId,
-        ),
+        child: _EditNicknameDialog(initialNickname: _nickname, householdId: widget.activeHousehold.householdId),
       ),
     );
     if (saved == true && mounted) {
@@ -212,13 +212,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading: const Icon(Icons.translate_outlined),
               title: Text(localizations.profileLocaleRowLabel),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push<void>(
-                MaterialPageRoute(builder: (_) => const LocaleSettingsPage()),
-              ),
+              onTap: () =>
+                  Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const LocaleSettingsPage())),
             ),
             const Divider(height: SgartShapes.space4 * 2),
-            Text(localizations.profileNotificationsSectionLabel,
-                style: Theme.of(context).textTheme.labelLarge),
+            Text(localizations.profileNotificationsSectionLabel, style: Theme.of(context).textTheme.labelLarge),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: SgartShapes.space2),
               child: Text(localizations.profileNotificationsInfo, key: const Key('profile-notifications-info')),
@@ -243,14 +241,11 @@ class _RecoveryEmailSection extends StatelessWidget {
     return BlocBuilder<AccountEmailCubit, AccountEmailState>(
       builder: (context, state) {
         final subtitle = switch (state.status) {
-          AccountEmailStatus.confirmed => localizations.profileRecoveryEmailConfirmedLabel(state.addressHint ?? ''),
+          AccountEmailStatus.confirmed => _confirmedLabel(localizations, state.addressHint),
           AccountEmailStatus.pendingConfirmation => localizations.profileRecoveryEmailPendingLabel,
-          AccountEmailStatus.notAttached ||
-          AccountEmailStatus.unknown =>
-            localizations.profileRecoveryEmailNotAttachedLabel,
+          AccountEmailStatus.notAttached => localizations.profileRecoveryEmailNotAttachedLabel,
+          AccountEmailStatus.unknown => localizations.profileRecoveryEmailStatusUnavailableLabel,
         };
-        final isAttached =
-            state.status == AccountEmailStatus.confirmed || state.status == AccountEmailStatus.pendingConfirmation;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -260,19 +255,7 @@ class _RecoveryEmailSection extends StatelessWidget {
               leading: const Icon(Icons.email_outlined),
               title: Text(localizations.profileRecoveryEmailSectionLabel),
               subtitle: Text(subtitle, key: const Key('profile-recovery-email-status')),
-              trailing: isAttached
-                  ? IconButton(
-                      key: const Key('profile-recovery-email-detach-button'),
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: localizations.profileRecoveryEmailDetachAction,
-                      onPressed: () => _confirmDetach(context, localizations),
-                    )
-                  : IconButton(
-                      key: const Key('profile-recovery-email-add-button'),
-                      icon: const Icon(Icons.add),
-                      tooltip: localizations.profileRecoveryEmailAddAction,
-                      onPressed: () => openAddRecoveryEmailPage(context, context.read<AccountEmailCubit>()),
-                    ),
+              trailing: _trailingAction(context, localizations, state.status),
             ),
             if (state.error != null)
               Padding(
@@ -286,6 +269,38 @@ class _RecoveryEmailSection extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The status is only known after the backend answered, so an unknown status offers a retry
+  /// instead of an add button: adding on top of an unseen confirmed email would be a wrong guess.
+  Widget _trailingAction(BuildContext context, AppLocalizations localizations, AccountEmailStatus status) {
+    return switch (status) {
+      AccountEmailStatus.confirmed || AccountEmailStatus.pendingConfirmation => IconButton(
+        key: const Key('profile-recovery-email-detach-button'),
+        icon: const Icon(Icons.delete_outline),
+        tooltip: localizations.profileRecoveryEmailDetachAction,
+        onPressed: () => _confirmDetach(context, localizations),
+      ),
+      AccountEmailStatus.notAttached => IconButton(
+        key: const Key('profile-recovery-email-add-button'),
+        icon: const Icon(Icons.add),
+        tooltip: localizations.profileRecoveryEmailAddAction,
+        onPressed: () => openAddRecoveryEmailPage(context, context.read<AccountEmailCubit>()),
+      ),
+      AccountEmailStatus.unknown => IconButton(
+        key: const Key('profile-recovery-email-retry-button'),
+        icon: const Icon(Icons.refresh),
+        tooltip: localizations.profileRecoveryEmailRetryAction,
+        onPressed: () => context.read<AccountEmailCubit>().loadStatus(),
+      ),
+    };
+  }
+
+  String _confirmedLabel(AppLocalizations localizations, String? addressHint) {
+    if (addressHint == null || addressHint.isEmpty) {
+      return localizations.profileRecoveryEmailConfirmedWithoutHintLabel;
+    }
+    return localizations.profileRecoveryEmailConfirmedLabel(addressHint);
   }
 
   Future<void> _confirmDetach(BuildContext context, AppLocalizations localizations) async {
@@ -405,8 +420,8 @@ class _UnavailableNicknameApi implements NicknameApi {
 
   @override
   Future<void> setNickname(String householdId, String nickname) => throw const AppException(
-        AppError(code: 'nickname.unknown', message: 'NicknameApi unavailable — no AuthenticatedHttpClient ancestor'),
-      );
+    AppError(code: 'nickname.unknown', message: 'NicknameApi unavailable — no AuthenticatedHttpClient ancestor'),
+  );
 }
 
 /// Display-only identity block: an avatar showing the display name's initial, the display name
@@ -422,17 +437,12 @@ class _IdentityHeader extends StatelessWidget {
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: SgartShapes.minTapTarget / 2,
-          child: Text(_initial(displayName)),
-        ),
+        CircleAvatar(radius: SgartShapes.minTapTarget / 2, child: Text(_initial(displayName))),
         const SizedBox(width: SgartShapes.space4),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(displayName, key: const Key('profile-display-name'), style: theme.textTheme.titleMedium),
-            ],
+            children: [Text(displayName, key: const Key('profile-display-name'), style: theme.textTheme.titleMedium)],
           ),
         ),
       ],

@@ -1,16 +1,18 @@
 import '../../../shared/http/authenticated_http_client.dart';
 import 'recovery_confirmation.dart';
 
-/// Calls the backend's Story 7.3 "recover by email" (opt-in) endpoints — attach/confirm/detach an
-/// email on the caller's own (real) account, and request/confirm a recovery code on a fresh
+/// Calls the backend's Story 7.3 "recover by email" (opt-in) endpoints — attach/confirm/detach a
+/// recovery email binding on the caller's own (real) account, and request/confirm a recovery code on a fresh
 /// device's throwaway account. Abstracted so the cubits/pages that drive these flows never touch a
 /// real HTTP client in tests (CLAUDE.md §6), mirroring [AccountProvisioningApi]'s shape.
 abstract interface class AccountEmailApi {
-  /// `POST /api/v1/account/email` (authenticated as the real account) — sets the email unverified
-  /// and sends a 6-digit confirmation code.
+  /// `POST /api/v1/account/email` (authenticated as the real account) — starts a pending recovery
+  /// email binding and sends a 6-digit confirmation code to `email`; nothing is bound until
+  /// [confirm] succeeds.
   Future<void> attach(String email);
 
-  /// `POST /api/v1/account/email/confirm` — marks the just-attached email verified.
+  /// `POST /api/v1/account/email/confirm` — verifies the code and turns the pending binding into
+  /// the account's confirmed recovery email binding.
   Future<void> confirm(String code);
 
   /// `GET /api/v1/account/email` — the masked hint (for example `t***@e***.test`) of the caller's
@@ -18,7 +20,8 @@ abstract interface class AccountEmailApi {
   /// reported.
   Future<String?> fetchStatus();
 
-  /// `DELETE /api/v1/account/email` — clears the email and any pending code.
+  /// `DELETE /api/v1/account/email` — removes the account's recovery email binding and any pending
+  /// code.
   Future<void> detach();
 
   /// `POST /api/v1/account/recovery/email` (authenticated as the device's throwaway account) —

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sgart/features/auth/data/account_email_api.dart';
 import 'package:sgart/features/auth/data/recovery_confirmation.dart';
 
@@ -16,6 +18,9 @@ class FakeAccountEmailApi implements AccountEmailApi {
   /// The masked hint [fetchStatus] reports; `null` means no confirmed recovery email.
   String? addressHintToReturn;
 
+  /// When set, [fetchStatus] waits for it, so a test controls when the status read resolves.
+  Completer<void>? fetchStatusCompleter;
+
   /// What [confirmRecovery] answers; defaults to a plain rebound.
   RecoveryConfirmation confirmationToReturn = const RecoveryConfirmationRebound();
 
@@ -25,7 +30,6 @@ class FakeAccountEmailApi implements AccountEmailApi {
   final List<String> requestedRecoveryEmails = [];
   final List<(String email, String code)> confirmedRecoveries = [];
   final List<String?> confirmedRecoveryAccountIds = [];
-  int fetchStatusCallCount = 0;
 
   @override
   Future<void> attach(String email) async {
@@ -41,7 +45,8 @@ class FakeAccountEmailApi implements AccountEmailApi {
 
   @override
   Future<String?> fetchStatus() async {
-    fetchStatusCallCount++;
+    final completer = fetchStatusCompleter;
+    if (completer != null) await completer.future;
     if (fetchStatusErrorToThrow != null) throw fetchStatusErrorToThrow!;
     return addressHintToReturn;
   }

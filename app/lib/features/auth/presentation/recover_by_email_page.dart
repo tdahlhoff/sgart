@@ -33,10 +33,7 @@ void openRecoverByEmailPage(BuildContext context) {
           RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
           RepositoryProvider<AccountEmailApi>.value(value: accountEmailApi),
         ],
-        child: BlocProvider<AuthCubit>.value(
-          value: authCubit,
-          child: const RecoverByEmailPage(),
-        ),
+        child: BlocProvider<AuthCubit>.value(value: authCubit, child: const RecoverByEmailPage()),
       ),
     ),
   );
@@ -114,11 +111,16 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
       _localError = null;
     });
     try {
-      final confirmation = await context
-          .read<AccountEmailApi>()
-          .confirmRecovery(_confirmedEmail, _codeController.text.trim(), accountId: accountId);
+      final confirmation = await context.read<AccountEmailApi>().confirmRecovery(
+        _confirmedEmail,
+        _codeController.text.trim(),
+        accountId: accountId,
+      );
       switch (confirmation) {
         case RecoveryConfirmationChooseAccount(:final candidates):
+          // The server only offers a choice on the first call; a second offer, or an offer without
+          // any account, cannot be acted on and must not reset what the person already chose.
+          if (accountId != null || candidates.isEmpty) throw malformedRecoveryConfirmation();
           if (mounted) {
             setState(() {
               _candidates = candidates;
@@ -128,14 +130,32 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
           }
         case RecoveryConfirmationRebound():
           await authCubit.recoverFromEmailRebind();
-          // A successful rebind resolves into AuthState.authenticated, which the BlocListener below
-          // catches to swap this route for the fresh-phrase reveal. Nothing further to do here.
+        // A successful rebind resolves into AuthState.authenticated, which the BlocListener below
+        // catches to swap this route for the fresh-phrase reveal. Nothing further to do here.
       }
     } on Object catch (error) {
-      if (mounted) setState(() => _localError = _toAppError(error));
+      if (mounted) {
+        final appError = _toAppError(error);
+        setState(() {
+          _localError = appError;
+          if (accountId != null && _isRejectedCode(appError)) _returnToCodeEntry();
+        });
+      }
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
+  }
+
+  /// A wrong, expired or exhausted code cannot succeed by choosing again, so the picker would be a
+  /// dead end; the code step is where a fresh code is entered.
+  bool _isRejectedCode(AppError error) =>
+      error.code == 'account.recoveryCodeInvalid' || error.code == 'account.recoveryCodeRateLimited';
+
+  void _returnToCodeEntry() {
+    _codeController.clear();
+    _candidates = const [];
+    _selectedAccountId = null;
+    _step = _RecoverByEmailStep.enterCode;
   }
 
   AppError _toAppError(Object error) {
@@ -243,9 +263,7 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
                 value: candidate.accountId,
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final label in _candidateLabels(localizations, candidate)) Text(label),
-                  ],
+                  children: [for (final label in _candidateLabels(localizations, candidate)) Text(label)],
                 ),
               ),
           ],
@@ -279,10 +297,7 @@ class _RecoverByEmailPageState extends State<RecoverByEmailPage> {
   List<Widget> _errorText(AppLocalizations localizations) {
     return [
       const SizedBox(height: SgartShapes.space2),
-      Text(
-        localizedMessageForErrorCode(localizations, _localError!.code),
-        key: const Key('recover-by-email-error'),
-      ),
+      Text(localizedMessageForErrorCode(localizations, _localError!.code), key: const Key('recover-by-email-error')),
     ];
   }
 }

@@ -35,8 +35,7 @@ void main() {
       oidcClient = FakeOidcClient()..tokensToReturn = const OidcTokens(accessToken: 'access-throwaway');
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi()
-        ..identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-throwaway', displayName: 'Throwaway');
+        ..identityToReturn = const CallerIdentity(keycloakUserId: 'sub-throwaway', displayName: 'Throwaway');
       deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       activeHouseholdStore = FakeActiveHouseholdStore()..activeId = 'throwaway-household';
       accountEmailApi = FakeAccountEmailApi();
@@ -57,37 +56,34 @@ void main() {
     // Mirrors openRecoverByEmailPage's re-provision, using fakes instead of a real
     // AuthenticatedHttpClient (no network in widget tests, CLAUDE.md §6).
     Widget buildSubject() => wrapForTesting(
-          BlocProvider<AuthCubit>.value(
-            value: authCubit,
-            child: RepositoryProvider<DeviceCredentialStore>.value(
-              value: deviceCredentialStore,
-              child: Builder(
-                builder: (context) => Scaffold(
-                  body: Center(
-                    child: TextButton(
-                      key: const Key('open-recover-by-email'),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => MultiRepositoryProvider(
-                            providers: [
-                              RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
-                              RepositoryProvider<AccountEmailApi>.value(value: accountEmailApi),
-                            ],
-                            child: BlocProvider<AuthCubit>.value(
-                              value: authCubit,
-                              child: const RecoverByEmailPage(),
-                            ),
-                          ),
-                        ),
+      BlocProvider<AuthCubit>.value(
+        value: authCubit,
+        child: RepositoryProvider<DeviceCredentialStore>.value(
+          value: deviceCredentialStore,
+          child: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  key: const Key('open-recover-by-email'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => MultiRepositoryProvider(
+                        providers: [
+                          RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
+                          RepositoryProvider<AccountEmailApi>.value(value: accountEmailApi),
+                        ],
+                        child: BlocProvider<AuthCubit>.value(value: authCubit, child: const RecoverByEmailPage()),
                       ),
-                      child: const Text('open'),
                     ),
                   ),
+                  child: const Text('open'),
                 ),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
 
     Future<void> openPage(WidgetTester tester) async {
       await tester.pumpWidget(buildSubject());
@@ -109,7 +105,9 @@ void main() {
       // throwaway one this cubit started as (mirrors recoverFromToken's precedent).
       oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
       identityApi.identityToReturn = const CallerIdentity(
-          keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
+        keycloakUserId: 'sub-recovered',
+        displayName: 'Recovered Person',
+      );
 
       await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
       await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
@@ -124,15 +122,17 @@ void main() {
       expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
       expect(find.byKey(const Key('recovery-token-value')), findsOneWidget);
       expect(
-          find.text('Dein vorheriger Wiederherstellungsschlüssel gilt nicht mehr. Sichere diesen neuen Schlüssel.'),
-          findsOneWidget);
+        find.text('Dein vorheriger Wiederherstellungsschlüssel gilt nicht mehr. Sichere diesen neuen Schlüssel.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('recoverByEmail_wrongCode_showsInlineErrorAndKeepsSessionIntact', (tester) async {
       await openPage(tester);
       await requestCode(tester, 'anna@example.test');
-      accountEmailApi.confirmRecoveryErrorToThrow =
-          const AppException(AppError(code: 'account.recoveryCodeInvalid', message: 'wrong code'));
+      accountEmailApi.confirmRecoveryErrorToThrow = const AppException(
+        AppError(code: 'account.recoveryCodeInvalid', message: 'wrong code'),
+      );
 
       await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '000000');
       await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
@@ -173,11 +173,61 @@ void main() {
       expect(accountEmailApi.confirmedRecoveries, [('anna@example.test', '042817')]);
     });
 
+    testWidgets('anEmptyCandidateListShowsAnErrorInsteadOfAPicker', (tester) async {
+      await openPage(tester);
+      await requestCode(tester, 'anna@example.test');
+      accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([]);
+
+      await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
+      await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsNothing);
+      expect(find.byKey(const Key('recover-by-email-error')), findsOneWidget);
+    });
+
+    testWidgets('aMalformedConfirmationShowsAnErrorAndLeavesTheSessionIntact', (tester) async {
+      await openPage(tester);
+      await requestCode(tester, 'anna@example.test');
+      accountEmailApi.confirmRecoveryErrorToThrow = const AppException(
+        AppError(code: 'account.malformedResponse', message: 'malformed'),
+      );
+
+      await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
+      await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('recover-by-email-error')), findsOneWidget);
+      expect(authCubit.state.keycloakUserId, 'sub-throwaway');
+    });
+
+    testWidgets('showsNoPickerAndReboundsDirectlyWhenASingleAccountMatches', (tester) async {
+      await openPage(tester);
+      await requestCode(tester, 'anna@example.test');
+      oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
+      identityApi.identityToReturn = const CallerIdentity(
+        keycloakUserId: 'sub-recovered',
+        displayName: 'Recovered Person',
+      );
+
+      await tester.enterText(find.byKey(const Key('recover-by-email-code-field')), '042817');
+      await tester.tap(find.byKey(const Key('recover-by-email-confirm-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsNothing);
+      expect(accountEmailApi.confirmedRecoveryAccountIds, [null]);
+      expect(authCubit.state.keycloakUserId, 'sub-recovered');
+    });
+
     group('when the mailbox is bound to several accounts', () {
-      const accountWithTwoHouseholds = RecoveryCandidate(accountId: 'account-two-households', households: [
-        RecoveryCandidateHousehold(householdName: 'Familie Beispiel', nickname: 'Anna'),
-        RecoveryCandidateHousehold(householdName: 'WG Testweg', nickname: 'Anni'),
-      ]);
+      const accountWithTwoHouseholds = RecoveryCandidate(
+        accountId: 'account-two-households',
+        households: [
+          RecoveryCandidateHousehold(householdName: 'Familie Beispiel', nickname: 'Anna'),
+          RecoveryCandidateHousehold(householdName: 'WG Testweg', nickname: 'Anni'),
+        ],
+      );
       const accountWithoutHousehold = RecoveryCandidate(accountId: 'account-no-household', households: []);
 
       Future<void> confirmCode(WidgetTester tester) async {
@@ -189,8 +239,10 @@ void main() {
       testWidgets('showsThePickerOnlyWhenSeveralAccountsMatch', (tester) async {
         await openPage(tester);
         await requestCode(tester, 'anna@example.test');
-        accountEmailApi.confirmationToReturn =
-            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
 
         await confirmCode(tester);
 
@@ -203,20 +255,15 @@ void main() {
         expect(activeHouseholdStore.cleared, isFalse);
       });
 
-      testWidgets('showsNoPickerWhenASingleAccountMatches', (tester) async {
+      // Sorting by household count is the server's job (candidates arrive sorted, highest first);
+      // the page only promises to preselect whatever arrives first.
+      testWidgets('preselectsTheFirstCandidateTheServerSentWithoutTheUserChoosingAnything', (tester) async {
         await openPage(tester);
         await requestCode(tester, 'anna@example.test');
-
-        await confirmCode(tester);
-
-        expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsNothing);
-      });
-
-      testWidgets('preselectsTheAccountWithTheMostHouseholds', (tester) async {
-        await openPage(tester);
-        await requestCode(tester, 'anna@example.test');
-        accountEmailApi.confirmationToReturn =
-            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
         await confirmCode(tester);
 
         await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
@@ -228,13 +275,17 @@ void main() {
       testWidgets('confirmingTheChoiceRecoversThatAccount', (tester) async {
         await openPage(tester);
         await requestCode(tester, 'anna@example.test');
-        accountEmailApi.confirmationToReturn =
-            const RecoveryConfirmationChooseAccount([accountWithTwoHouseholds, accountWithoutHousehold]);
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
         await confirmCode(tester);
         accountEmailApi.confirmationToReturn = const RecoveryConfirmationRebound();
         oidcClient.tokensToReturn = const OidcTokens(accessToken: 'access-recovered');
-        identityApi.identityToReturn =
-            const CallerIdentity(keycloakUserId: 'sub-recovered', displayName: 'Recovered Person');
+        identityApi.identityToReturn = const CallerIdentity(
+          keycloakUserId: 'sub-recovered',
+          displayName: 'Recovered Person',
+        );
 
         await tester.tap(find.byKey(const Key('recover-by-email-candidate-account-no-household')));
         await tester.pumpAndSettle();
@@ -247,13 +298,78 @@ void main() {
         expect(find.byType(RecoveryTokenRevealPage), findsOneWidget);
       });
 
+      testWidgets('aRejectedCodeOnTheSecondConfirmReturnsToTheCodeStepWithTheCodeClearedAndTheErrorShown', (
+        tester,
+      ) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
+        await confirmCode(tester);
+        accountEmailApi.confirmRecoveryErrorToThrow = const AppException(
+          AppError(code: 'account.recoveryCodeInvalid', message: 'expired'),
+        );
+
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsNothing);
+        expect(find.byKey(const Key('recover-by-email-code-field')), findsOneWidget);
+        expect(tester.widget<TextField>(find.byKey(const Key('recover-by-email-code-field'))).controller!.text, '');
+        expect(find.byKey(const Key('recover-by-email-error')), findsOneWidget);
+        expect(authCubit.state.keycloakUserId, 'sub-throwaway');
+      });
+
+      testWidgets('aNetworkFailureOnTheSecondConfirmKeepsThePickerSoTheChoiceCanBeRetried', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
+        await confirmCode(tester);
+        accountEmailApi.confirmRecoveryErrorToThrow = const AppException(
+          AppError(code: 'network.unavailable', message: 'offline'),
+        );
+
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('recover-by-email-account-subtitle')), findsOneWidget);
+        expect(find.byKey(const Key('recover-by-email-error')), findsOneWidget);
+      });
+
+      testWidgets('chooseAccountAnsweredAgainToARequestWithAnAccountIdIsAnErrorAndKeepsTheSelection', (tester) async {
+        await openPage(tester);
+        await requestCode(tester, 'anna@example.test');
+        accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
+          accountWithTwoHouseholds,
+          accountWithoutHousehold,
+        ]);
+        await confirmCode(tester);
+        await tester.tap(find.byKey(const Key('recover-by-email-candidate-account-no-household')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('recover-by-email-account-confirm-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('recover-by-email-error')), findsOneWidget);
+        expect(accountEmailApi.confirmedRecoveryAccountIds, [null, 'account-no-household', 'account-no-household']);
+        expect(authCubit.state.keycloakUserId, 'sub-throwaway');
+      });
+
       testWidgets('showsNeutralLabelsForAnEmptyHouseholdNameAndAnEmptyNickname', (tester) async {
         await openPage(tester);
         await requestCode(tester, 'anna@example.test');
         accountEmailApi.confirmationToReturn = const RecoveryConfirmationChooseAccount([
-          RecoveryCandidate(accountId: 'account-lagging', households: [
-            RecoveryCandidateHousehold(householdName: '', nickname: ''),
-          ]),
+          RecoveryCandidate(
+            accountId: 'account-lagging',
+            households: [RecoveryCandidateHousehold(householdName: '', nickname: '')],
+          ),
           accountWithoutHousehold,
         ]);
 

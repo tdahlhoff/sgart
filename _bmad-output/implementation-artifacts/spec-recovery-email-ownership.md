@@ -111,7 +111,7 @@ Recover-by-email does not work end-to-end between Slice 1 and Slice 2 (Slice 1 s
 - `backend/src/main/java/de/sgart/collaboration/adapter/out/CollaborationApplicationConfig.java` + new `CollaborationHouseholdNames.java` (F2)
 - `backend/src/main/resources/db/migration/V24__recovery_email_binding.sql`, `V25__recovery_code_subject.sql`: new (the latest migration is V23)
 - `backend/src/test/java/de/sgart/identity/NoPersistedPersonalDataTest.java`, `application/RecoveryEmailTestSupport.java`, `adapter/in/AccountControllerTest.java`, `adapter/out/IdentityBeansConfigTest.java`, `KeycloakAdminCreateAccountTest.java`
-- App: `app/lib/features/auth/data/account_email_api.dart`, `caller_identity.dart`, `presentation/account_email_cubit.dart`, `account_email_state.dart`, `auth_state.dart`, `auth_cubit.dart`, `recover_by_email_page.dart`, `add_recovery_email_page.dart` (copy only), `app/lib/features/settings/presentation/profile_screen.dart`, `app/lib/l10n/app_de.arb`, `app/lib/shared/errors/error_message_resolver.dart`, `app/test/support/fake_account_email_api.dart`
+- App: `app/lib/features/auth/data/account_email_api.dart`, `caller_identity.dart`, `presentation/account_email_cubit.dart`, `account_email_state.dart`, `auth_state.dart`, `auth_cubit.dart`, `recover_by_email_page.dart`, `add_recovery_email_page.dart` (copy only), `app/lib/features/settings/presentation/profile_screen.dart`, `app/lib/l10n/app_de.arb`, `app/test/support/fake_account_email_api.dart`
 - Docs: `_bmad-output/planning-artifacts/architecture/architecture-sgart-2026-08-20/ARCHITECTURE-SPINE.md` (AD-6 rev G, AD-7 erasure checklist)
 
 ## Tasks & Acceptance

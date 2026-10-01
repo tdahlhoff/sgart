@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -40,8 +42,7 @@ void main() {
       oidcClient = FakeOidcClient()..tokensToReturn = const OidcTokens(accessToken: 'access');
       tokenStorage = FakeSecureTokenStorage();
       identityApi = FakeIdentityApi()
-        ..identityToReturn = const CallerIdentity(
-            keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
+        ..identityToReturn = const CallerIdentity(keycloakUserId: 'sub-1', displayName: 'Anna Testperson');
       deviceCredentialStore = FakeDeviceCredentialStore()..tokenToReturn = fakeRecoveryToken;
       authCubit = AuthCubit(
         oidcClient: oidcClient,
@@ -69,39 +70,38 @@ void main() {
       MembersApi? membersApi,
       NicknameApi? nicknameApi,
       HouseholdSummary household = activeHousehold,
-    }) =>
-        BlocProvider<AuthCubit>.value(
-          value: authCubit,
-          child: BlocProvider<LocaleCubit>.value(
-            value: localeCubit,
-            child: MultiRepositoryProvider(
-              providers: [
-                RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
-                RepositoryProvider<MembersApi>.value(value: membersApi ?? FakeMembersApi()),
-                RepositoryProvider<NicknameApi>.value(value: nicknameApi ?? FakeNicknameApi()),
+    }) => BlocProvider<AuthCubit>.value(
+      value: authCubit,
+      child: BlocProvider<LocaleCubit>.value(
+        value: localeCubit,
+        child: MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<DeviceCredentialStore>.value(value: deviceCredentialStore),
+            RepositoryProvider<MembersApi>.value(value: membersApi ?? FakeMembersApi()),
+            RepositoryProvider<NicknameApi>.value(value: nicknameApi ?? FakeNicknameApi()),
+          ],
+          child: _maybeProvideAccountEmailApi(
+            accountEmailApi,
+            child: MaterialApp(
+              theme: SgartTheme.light(),
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
               ],
-              child: _maybeProvideAccountEmailApi(
-                accountEmailApi,
-                child: MaterialApp(
-                  theme: SgartTheme.light(),
-                  localizationsDelegates: const [
-                    AppLocalizations.delegate,
-                    GlobalMaterialLocalizations.delegate,
-                    GlobalWidgetsLocalizations.delegate,
-                    GlobalCupertinoLocalizations.delegate,
-                  ],
-                  supportedLocales: AppLocalizations.supportedLocales,
-                  home: Builder(
-                    builder: (context) => MediaQuery(
-                      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-                      child: Scaffold(body: ProfileScreen(activeHousehold: household)),
-                    ),
-                  ),
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Builder(
+                builder: (context) => MediaQuery(
+                  data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+                  child: Scaffold(body: ProfileScreen(activeHousehold: household)),
                 ),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
 
     testWidgets('rendersNeitherTheJwtDisplayNameNorAnEmailLineInTheHeader', (tester) async {
       await tester.pumpWidget(buildSubject());
@@ -160,9 +160,7 @@ void main() {
 
       testWidgets('showsTheResolvedNicknameFromTheMemberRosterAndItBecomesTheHeaderSource', (tester) async {
         final membersApi = FakeMembersApi()
-          ..membersToReturn = const [
-            MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true, nickname: 'Papa'),
-          ];
+          ..membersToReturn = const [MemberView(memberId: 'member-1', role: 'ADMIN', isSelf: true, nickname: 'Papa')];
 
         await tester.pumpWidget(buildSubject(membersApi: membersApi));
         await tester.pumpAndSettle();
@@ -267,6 +265,67 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Wiederherstellungs-E-Mail: t***@e***.test'), findsOneWidget);
+        expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
+      });
+
+      testWidgets('showsANeutralStatusWithoutAnAddButtonWhileTheStatusIsLoading', (tester) async {
+        final accountEmailApi = FakeAccountEmailApi()..fetchStatusCompleter = Completer<void>();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pump();
+
+        expect(find.text('E-Mail-Status nicht verfügbar'), findsOneWidget);
+        expect(find.text('Keine E-Mail hinterlegt'), findsNothing);
+        expect(find.byKey(const Key('profile-recovery-email-add-button')), findsNothing);
+        accountEmailApi.fetchStatusCompleter!.complete();
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('offersARetryInsteadOfAnAddButtonWhenTheStatusCannotBeLoaded', (tester) async {
+        final accountEmailApi = FakeAccountEmailApi()
+          ..fetchStatusErrorToThrow = const AppException(AppError(code: 'account.unknown', message: 'unreachable'));
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
+
+        expect(find.text('E-Mail-Status nicht verfügbar'), findsOneWidget);
+        expect(find.text('Keine E-Mail hinterlegt'), findsNothing);
+        expect(find.byKey(const Key('profile-recovery-email-add-button')), findsNothing);
+        expect(find.byKey(const Key('profile-recovery-email-retry-button')), findsOneWidget);
+      });
+
+      testWidgets('retryingTheStatusLoadShowsTheConfirmedHintOnceTheBackendIsReachable', (tester) async {
+        final accountEmailApi = FakeAccountEmailApi()
+          ..fetchStatusErrorToThrow = const AppException(AppError(code: 'account.unknown', message: 'unreachable'));
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
+        accountEmailApi
+          ..fetchStatusErrorToThrow = null
+          ..addressHintToReturn = 't***@e***.test';
+
+        await tester.tap(find.byKey(const Key('profile-recovery-email-retry-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Wiederherstellungs-E-Mail: t***@e***.test'), findsOneWidget);
+        expect(find.byKey(const Key('profile-recovery-email-retry-button')), findsNothing);
+      });
+
+      testWidgets('showsAConfirmedLabelWithoutAHintWhenTheBackendReportsNone', (tester) async {
+        final accountEmailApi = FakeAccountEmailApi();
+
+        await tester.pumpWidget(buildSubject(accountEmailApi: accountEmailApi));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('profile-recovery-email-add-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('add-recovery-email-field')), 'tester@example.test');
+        await tester.tap(find.byKey(const Key('add-recovery-email-submit-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('confirm-email-code-field')), '042817');
+        await tester.tap(find.byKey(const Key('confirm-email-code-submit-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Wiederherstellungs-E-Mail bestätigt'), findsOneWidget);
+        expect(find.textContaining('Wiederherstellungs-E-Mail:'), findsNothing);
         expect(find.byKey(const Key('profile-recovery-email-detach-button')), findsOneWidget);
       });
 
