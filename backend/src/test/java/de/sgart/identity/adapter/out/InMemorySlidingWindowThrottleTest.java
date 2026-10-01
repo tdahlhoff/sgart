@@ -2,6 +2,10 @@ package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -122,31 +126,43 @@ class InMemorySlidingWindowThrottleTest {
         int rounds = 20_000;
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService threads = Executors.newFixedThreadPool(3);
+        List<Future<Void>> acquirers = new ArrayList<>();
+        AtomicBoolean acquirersFinished = new AtomicBoolean();
 
-        for (int acquirer = 0; acquirer < 2; acquirer++) {
-            threads.submit(() -> {
-                start.await();
-                for (int round = 0; round < rounds; round++) {
-                    if (singleGrant.tryAcquire("key-a")) {
-                        grants.incrementAndGet();
+        try {
+            for (int acquirer = 0; acquirer < 2; acquirer++) {
+                acquirers.add(threads.submit(() -> {
+                    start.await();
+                    for (int round = 0; round < rounds; round++) {
+                        if (singleGrant.tryAcquire("key-a")) {
+                            grants.incrementAndGet();
+                        }
                     }
+                    return null;
+                }));
+            }
+            // Resets keep coming for as long as the acquirers run, so the budget really reopens mid-race.
+            Future<Void> resetter = threads.submit(() -> {
+                start.await();
+                while (!acquirersFinished.get()) {
+                    resets.incrementAndGet();
+                    singleGrant.reset("key-a");
                 }
                 return null;
             });
-        }
-        threads.submit(() -> {
-            start.await();
-            for (int round = 0; round < rounds; round++) {
-                resets.incrementAndGet();
-                singleGrant.reset("key-a");
+            start.countDown();
+            for (Future<Void> acquirer : acquirers) {
+                acquirer.get(30, TimeUnit.SECONDS);
             }
-            return null;
-        });
-        start.countDown();
-        threads.shutdown();
-        assertThat(threads.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+            acquirersFinished.set(true);
+            resetter.get(30, TimeUnit.SECONDS);
+        } finally {
+            threads.shutdownNow();
+        }
 
         // With a budget of one, every grant after the first needs a reset in between.
         assertThat(grants.get()).isLessThanOrEqualTo(resets.get() + 1);
+        // Guards against a vacuous pass: the budget did reopen, so more than one grant happened.
+        assertThat(grants.get()).isGreaterThan(1);
     }
 }

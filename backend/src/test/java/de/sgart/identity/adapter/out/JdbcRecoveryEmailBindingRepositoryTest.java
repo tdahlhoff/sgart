@@ -1,5 +1,6 @@
 package de.sgart.identity.adapter.out;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -96,8 +97,7 @@ class JdbcRecoveryEmailBindingRepositoryTest {
 
     @Test
     void savePending_doesNotDowngradeAnAlreadyConfirmedBindingOfTheSameAddress() {
-        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(repository, SHARED_DIGEST, ACCOUNT_A, HINT, NOW);
 
         repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW.plusSeconds(60)));
 
@@ -106,13 +106,10 @@ class JdbcRecoveryEmailBindingRepositoryTest {
 
     @Test
     void confirm_replacesTheAccountsPreviousConfirmedBindingAndLeavesOtherAccountsAlone() {
-        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_B, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_B).orElseThrow().confirm(NOW));
-        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(repository, SHARED_DIGEST, ACCOUNT_B, HINT, NOW);
+        saveConfirmedBinding(repository, SHARED_DIGEST, ACCOUNT_A, HINT, NOW);
 
-        repository.savePending(RecoveryEmailBinding.pending(OTHER_DIGEST, ACCOUNT_A, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(repository, OTHER_DIGEST, ACCOUNT_A, HINT, NOW);
 
         assertThat(repository.findConfirmedFor(ACCOUNT_A).orElseThrow().digest()).isEqualTo(OTHER_DIGEST);
         assertThat(repository.findConfirmedFor(SHARED_DIGEST))
@@ -122,8 +119,7 @@ class JdbcRecoveryEmailBindingRepositoryTest {
 
     @Test
     void deleteAllFor_removesEveryBindingOfThePersonAndNoOtherPerson() {
-        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(repository, SHARED_DIGEST, ACCOUNT_A, HINT, NOW);
         repository.savePending(RecoveryEmailBinding.pending(OTHER_DIGEST, ACCOUNT_A, HINT, NOW));
         repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_B, HINT, NOW));
 
@@ -161,9 +157,21 @@ class JdbcRecoveryEmailBindingRepositoryTest {
     }
 
     @Test
-    void confirm_aBindingThatWasNeverSaved_failsAndKeepsTheAccountsConfirmedBinding() {
+    void deletePendingCreatedBefore_keepsAPendingBindingCreatedExactlyAtTheThreshold() {
+        // Current behavior, pinned: the threshold is exclusive (created_at < threshold), so a pending
+        // binding created at the very instant of the threshold survives one more purge run.
         repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
-        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        repository.savePending(RecoveryEmailBinding.pending(OTHER_DIGEST, ACCOUNT_B, HINT, NOW.minus(1, ChronoUnit.MICROS)));
+
+        repository.deletePendingCreatedBefore(NOW);
+
+        assertThat(repository.findPendingFor(ACCOUNT_A)).isPresent();
+        assertThat(repository.findPendingFor(ACCOUNT_B)).isEmpty();
+    }
+
+    @Test
+    void confirm_aBindingThatWasNeverSaved_failsAndKeepsTheAccountsConfirmedBinding() {
+        saveConfirmedBinding(repository, SHARED_DIGEST, ACCOUNT_A, HINT, NOW);
         RecoveryEmailBinding neverSaved = RecoveryEmailBinding.pending(OTHER_DIGEST, ACCOUNT_A, HINT, NOW).confirm(NOW);
 
         assertThatThrownBy(() -> repository.confirm(neverSaved))

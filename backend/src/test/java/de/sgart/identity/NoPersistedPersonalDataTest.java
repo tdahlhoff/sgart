@@ -16,7 +16,11 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * First-class privacy guarantee (AD-6): SGART never persists display name or email — they are
@@ -200,23 +204,31 @@ class NoPersistedPersonalDataTest {
     /**
      * The recovery-email binding index stores no address: only {@code address_digest} (HMAC-SHA256
      * with a pepper) and {@code address_hint} (a masked display form), keyed by the pseudonymous
-     * account id. Any new column must be a conscious decision that updates this test.
+     * account id. The columns are read from the schema of a fully migrated PostgreSQL, so a later
+     * {@code ALTER TABLE} or a column of any type is covered. Any new column must be a conscious
+     * decision that updates this test.
      */
     @Test
     void recoveryEmailBindingTable_holdsOnlyADigestAndAMaskedHint() {
-        Path migration = Path.of("src/main/resources/db/migration/" + RECOVERY_EMAIL_BINDING_MIGRATION);
-        String sql = withoutSqlComments(readFile(migration)).toLowerCase(Locale.ROOT);
+        try (PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18.6")) {
+            postgres.start();
+            DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+            Flyway.configure().dataSource(dataSource).load().migrate();
 
-        List<String> columnNames = sql.lines()
-                .map(String::trim)
-                .filter(line -> line.matches("[a-z_]+\\s+(varchar|timestamptz)\\b.*"))
-                .map(line -> line.split("\\s+")[0])
-                .toList();
+            List<String> columnNames = JdbcClient.create(dataSource)
+                    .sql("""
+                            SELECT column_name FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'recovery_email_binding'
+                            """)
+                    .query(String.class)
+                    .list();
 
-        assertThat(columnNames)
-                .containsExactlyInAnyOrder(
-                        "address_digest", "keycloak_user_id", "address_hint", "confirmed_at", "created_at");
-        assertThat(columnNames).noneMatch(name -> name.contains("email") || name.equals("address"));
+            assertThat(columnNames)
+                    .containsExactlyInAnyOrder(
+                            "address_digest", "keycloak_user_id", "address_hint", "confirmed_at", "created_at");
+            assertThat(columnNames).noneMatch(name -> name.contains("email") || name.equals("address"));
+        }
     }
 
     /** Strips {@code -- ...} line comments so prose mentioning "email"/"display name" (like this

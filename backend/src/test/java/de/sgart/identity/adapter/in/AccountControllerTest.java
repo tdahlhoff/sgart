@@ -1,11 +1,13 @@
 package de.sgart.identity.adapter.in;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,7 +34,6 @@ import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
-import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -68,6 +69,10 @@ class AccountControllerTest {
     private static final String VALID_PUBLIC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private static final String RECOVERABLE_EMAIL = "recoverable@example.test";
     private static final String RECOVERABLE_ACCOUNT_ID = "recoverable-sub";
+    private static final String SECOND_ACCOUNT_ID = "second-sub";
+    private static final String THROWAWAY_ACCOUNT_ID = "device-2-sub";
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-10-01T10:00:00Z");
+    private static final Instant AFTER_EVERY_PROVISIONING = Instant.parse("2099-01-01T00:00:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -211,18 +216,20 @@ class AccountControllerTest {
     static final class RecordingSendRecoveryCodeEmail implements SendRecoveryCodeEmail {
         final List<String> sentTo = new ArrayList<>();
         final List<String> sentCodes = new ArrayList<>();
+        final List<String> sentKinds = new ArrayList<>();
 
         @Override
         public void sendAttachConfirmationCode(String address, String code) {
-            record(address, code);
+            record("attach", address, code);
         }
 
         @Override
         public void sendRecoveryCode(String address, String code) {
-            record(address, code);
+            record("recovery", address, code);
         }
 
-        private void record(String address, String code) {
+        private void record(String kind, String address, String code) {
+            sentKinds.add(kind);
             sentTo.add(address);
             sentCodes.add(code);
         }
@@ -234,6 +241,7 @@ class AccountControllerTest {
         void clear() {
             sentTo.clear();
             sentCodes.clear();
+            sentKinds.clear();
         }
     }
 
@@ -302,6 +310,18 @@ class AccountControllerTest {
         deleteAccount.clear();
         rebindAccountCredential.clear();
         findHouseholdNames.clear();
+        clearMembershipsOfTheRecoveryAccounts();
+    }
+
+    /** The in-memory membership doubles have no bulk reset, so the accounts these tests seed are cleared one by one. */
+    private void clearMembershipsOfTheRecoveryAccounts() {
+        for (String accountId : List.of(RECOVERABLE_ACCOUNT_ID, SECOND_ACCOUNT_ID)) {
+            KeycloakUserId account = new KeycloakUserId(accountId);
+            memberMappingRepository
+                    .householdIdsFor(account)
+                    .forEach(household -> memberMappingRepository.deleteMapping(account, household));
+            membershipNicknameRepository.deleteFor(account);
+        }
     }
 
     @Test
@@ -313,7 +333,7 @@ class AccountControllerTest {
 
         InMemoryProvisionedAccountRepository repository =
                 (InMemoryProvisionedAccountRepository) provisionedAccountRepository;
-        assertThat(repository.findProvisionedBefore(Instant.now().plusSeconds(60))).hasSize(1);
+        assertThat(repository.findProvisionedBefore(AFTER_EVERY_PROVISIONING)).hasSize(1);
     }
 
     @Test
@@ -330,7 +350,7 @@ class AccountControllerTest {
 
         InMemoryProvisionedAccountRepository repository =
                 (InMemoryProvisionedAccountRepository) provisionedAccountRepository;
-        assertThat(repository.findProvisionedBefore(Instant.now().plusSeconds(60))).hasSize(1);
+        assertThat(repository.findProvisionedBefore(AFTER_EVERY_PROVISIONING)).hasSize(1);
     }
 
     @Test
@@ -343,7 +363,7 @@ class AccountControllerTest {
 
         InMemoryProvisionedAccountRepository repository =
                 (InMemoryProvisionedAccountRepository) provisionedAccountRepository;
-        assertThat(repository.findProvisionedBefore(Instant.now().plusSeconds(60))).isEmpty();
+        assertThat(repository.findProvisionedBefore(AFTER_EVERY_PROVISIONING)).isEmpty();
     }
 
     @Test
@@ -360,10 +380,10 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"anna@example.com\"}"))
+                        .content("{\"email\":\"anna@example.test\"}"))
                 .andExpect(status().isAccepted());
 
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("anna@example.com");
+        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("anna@example.test");
     }
 
     @Test
@@ -381,7 +401,7 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"anna@example.com\"}"))
+                        .content("{\"email\":\"anna@example.test\"}"))
                 .andExpect(status().isAccepted());
         String code = sendRecoveryCodeEmail.lastCode();
 
@@ -397,7 +417,7 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("anna-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"anna@example.com\"}"))
+                        .content("{\"email\":\"anna@example.test\"}"))
                 .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/v1/account/email/confirm")
@@ -413,17 +433,17 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("throttled-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"throttled@example.com\"}"))
+                        .content("{\"email\":\"throttled@example.test\"}"))
                 .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("throttled-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"throttled@example.com\"}"))
+                        .content("{\"email\":\"throttled@example.test\"}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("account.recoveryCodeRateLimited"));
 
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("throttled@example.com");
+        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("throttled@example.test");
     }
 
     @Test
@@ -431,7 +451,7 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("looping-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"looping@example.com\"}"))
+                        .content("{\"email\":\"looping@example.test\"}"))
                 .andExpect(status().isAccepted());
         mockMvc.perform(delete("/api/v1/account/email").with(jwt().jwt(jwt -> jwt.subject("looping-sub"))))
                 .andExpect(status().isNoContent());
@@ -439,10 +459,10 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject("looping-sub")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"looping@example.com\"}"))
+                        .content("{\"email\":\"looping@example.test\"}"))
                 .andExpect(status().isTooManyRequests());
 
-        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("looping@example.com");
+        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("looping@example.test");
     }
 
     @Test
@@ -450,13 +470,23 @@ class AccountControllerTest {
         attachAndConfirm("owner-sub", "shared@example.test");
 
         mockMvc.perform(post("/api/v1/account/email")
-                        .with(jwt().jwt(jwt -> jwt.subject("second-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(SECOND_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"shared@example.test\"}"))
                 .andExpect(status().isAccepted())
                 .andExpect(content().string(""));
 
         assertThat(sendRecoveryCodeEmail.sentTo).containsExactly("shared@example.test", "shared@example.test");
+
+        mockMvc.perform(post("/api/v1/account/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(SECOND_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + sendRecoveryCodeEmail.lastCode() + "\"}"))
+                .andExpect(status().isNoContent());
+        RecoveryEmailDigest sharedDigest = recoveryEmailDigester.digest("shared@example.test");
+        assertThat(recoveryEmailBindingRepository.findConfirmedFor(sharedDigest))
+                .extracting(binding -> binding.keycloakUserId().value())
+                .containsExactlyInAnyOrder("owner-sub", SECOND_ACCOUNT_ID);
     }
 
     @Test
@@ -486,7 +516,7 @@ class AccountControllerTest {
 
         mockMvc.perform(get("/api/v1/account/email").with(jwt().jwt(jwt -> jwt.subject("anna-sub"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.addressHint").value("a***@example.test"));
+                .andExpect(jsonPath("$.addressHint").value("a***@e***.test"));
     }
 
     @Test
@@ -529,24 +559,57 @@ class AccountControllerTest {
     @Test
     void requestRecoveryCode_withUnregisteredEmail_stillReturns202() throws Exception {
         mockMvc.perform(post("/api/v1/account/recovery/email")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"nobody@example.com\"}"))
-                .andExpect(status().isAccepted());
+                        .content("{\"email\":\"nobody@example.test\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(content().string(""));
 
         assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
     }
 
     @Test
-    void requestRecoveryCode_calledTwiceForARegisteredEmail_bothReturn202ButOnlyOneCodeIsSent() throws Exception {
+    void requestRecoveryCode_withAMalformedEmail_returns400AndSendsNothing() throws Exception {
         mockMvc.perform(post("/api/v1/account/recovery/email")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"not-an-email\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("account.recoveryEmailInvalid"));
+
+        assertThat(sendRecoveryCodeEmail.sentTo).isEmpty();
+    }
+
+    @Test
+    void requestRecoveryCode_forAnAddressJustAttachedByAnotherAccount_sendsBothTheAttachMailAndTheRecoveryMail()
+            throws Exception {
+        mockMvc.perform(post("/api/v1/account/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(SECOND_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\"}"))
                 .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/v1/account/recovery/email")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(content().string(""));
+
+        assertThat(sendRecoveryCodeEmail.sentKinds).containsExactly("attach", "recovery");
+        assertThat(sendRecoveryCodeEmail.sentTo).containsExactly(RECOVERABLE_EMAIL, RECOVERABLE_EMAIL);
+    }
+
+    @Test
+    void requestRecoveryCode_calledTwiceForARegisteredEmail_bothReturn202ButOnlyOneCodeIsSent() throws Exception {
+        mockMvc.perform(post("/api/v1/account/recovery/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\"}"))
+                .andExpect(status().isAccepted());
+
+        mockMvc.perform(post("/api/v1/account/recovery/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\"}"))
                 .andExpect(status().isAccepted());
@@ -561,43 +624,43 @@ class AccountControllerTest {
         mockMvc.perform(post("/api/v1/account/email")
                         .with(jwt().jwt(jwt -> jwt.subject(RECOVERABLE_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"attacher@example.com\"}"))
+                        .content("{\"email\":\"attacher@example.test\"}"))
                 .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/v1/account/recovery/email")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\"}"))
                 .andExpect(status().isAccepted());
 
         assertThat(sendRecoveryCodeEmail.sentTo)
-                .containsExactly("attacher@example.com", RECOVERABLE_EMAIL);
+                .containsExactly("attacher@example.test", RECOVERABLE_EMAIL);
     }
 
     @Test
     void requestRecoveryCode_withoutAJwt_is401() throws Exception {
         mockMvc.perform(post("/api/v1/account/recovery/email")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"nobody@example.com\"}"))
+                        .content("{\"email\":\"nobody@example.test\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void confirmRecovery_withUnknownEmail_returns400WithoutEnumeratingTheReason() throws Exception {
         mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"nobody@example.com\",\"code\":\"000000\"}"))
+                        .content("{\"email\":\"nobody@example.test\",\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("account.recoveryCodeInvalid"));
     }
 
     @Test
     void confirmRecovery_whenTheCallersAccountNoLongerExists_returns401SoTheAppReSignsIn() throws Exception {
-        String code = requestRecoveryCodeAsThrowaway("device-2-sub");
+        String code = requestRecoveryCodeAsThrowaway(THROWAWAY_ACCOUNT_ID);
 
         mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code
                                 + "\"}"))
@@ -607,7 +670,7 @@ class AccountControllerTest {
 
     @Test
     void confirmRecovery_whenTheRebindFails_returns503AndKeepsTheCodeForARetry() throws Exception {
-        String throwawayAccountId = "device-2-sub";
+        String throwawayAccountId = THROWAWAY_ACCOUNT_ID;
         getAccountDetails.register(throwawayAccountId, "throwaway-username", "throwaway-public-key");
         String code = requestRecoveryCodeAsThrowaway(throwawayAccountId);
         rebindAccountCredential.shouldFail = true;
@@ -625,12 +688,12 @@ class AccountControllerTest {
     }
 
     private void confirmBindingOf(String accountId, String address) {
-        RecoveryEmailDigest digest = recoveryEmailDigester.digest(address);
-        KeycloakUserId account = new KeycloakUserId(accountId);
-        recoveryEmailBindingRepository.savePending(
-                RecoveryEmailBinding.pending(digest, account, RecoveryEmailHint.masking(address), Instant.now()));
-        recoveryEmailBindingRepository.confirm(
-                recoveryEmailBindingRepository.findPendingFor(account).orElseThrow().confirm(Instant.now()));
+        saveConfirmedBinding(
+                recoveryEmailBindingRepository,
+                recoveryEmailDigester.digest(address),
+                new KeycloakUserId(accountId),
+                RecoveryEmailHint.masking(address),
+                FIXED_INSTANT);
     }
 
     private RecoveryCodeSubject recoveryCodeSubjectOf(String address) {
@@ -648,11 +711,11 @@ class AccountControllerTest {
 
     @Test
     void recoverByEmail_requestThenConfirmWithTheEmailedCode_rebindsTheTargetAccount() throws Exception {
-        String throwawayAccountId = "device-2-sub";
+        String throwawayAccountId = THROWAWAY_ACCOUNT_ID;
         KeycloakUserId throwaway = new KeycloakUserId(throwawayAccountId);
         getAccountDetails.register(throwawayAccountId, "throwaway-username", "throwaway-public-key");
         ((InMemoryProvisionedAccountRepository) provisionedAccountRepository)
-                .recordIfAbsent(throwaway, Instant.now());
+                .recordIfAbsent(throwaway, FIXED_INSTANT);
 
         mockMvc.perform(post("/api/v1/account/recovery/email")
                         .with(jwt().jwt(jwt -> jwt.subject(throwawayAccountId)))
@@ -685,31 +748,29 @@ class AccountControllerTest {
 
     @Test
     void confirmRecovery_withSeveralCandidateAccounts_answers200WithTheCandidatesAndKeepsTheCode() throws Exception {
-        confirmBindingOf("second-sub", RECOVERABLE_EMAIL);
+        confirmBindingOf(SECOND_ACCOUNT_ID, RECOVERABLE_EMAIL);
+        // The second account is seeded with the household, so the household count (not the account id,
+        // under which "recoverable-sub" would sort first) decides who the picker lists first.
         HouseholdId household = HouseholdId.generate();
-        memberMappingRepository.seed(
-                new MemberMapping(household, MemberId.generate(), new KeycloakUserId(RECOVERABLE_ACCOUNT_ID)));
-        membershipNicknameRepository.save(
-                new MembershipNickname(new KeycloakUserId(RECOVERABLE_ACCOUNT_ID), household, "Tester"));
+        KeycloakUserId secondAccount = new KeycloakUserId(SECOND_ACCOUNT_ID);
+        memberMappingRepository.seed(new MemberMapping(household, MemberId.generate(), secondAccount));
+        membershipNicknameRepository.save(new MembershipNickname(secondAccount, household, "Tester"));
         findHouseholdNames.register(household, "Test Flat");
-        String code = requestRecoveryCodeAsThrowaway("device-2-sub");
+        String code = requestRecoveryCodeAsThrowaway(THROWAWAY_ACCOUNT_ID);
 
-        try {
-            mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
-                            .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code + "\"}"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.candidates.length()").value(2))
-                    .andExpect(jsonPath("$.candidates[*].accountId").value(
-                            org.hamcrest.Matchers.containsInAnyOrder(RECOVERABLE_ACCOUNT_ID, "second-sub")))
-                    .andExpect(jsonPath("$.candidates[0].accountId").value(RECOVERABLE_ACCOUNT_ID))
-                    .andExpect(jsonPath("$.candidates[0].households[0].householdName").value("Test Flat"))
-                    .andExpect(jsonPath("$.candidates[0].households[0].nickname").value("Tester"));
-        } finally {
-            memberMappingRepository.deleteAllMappings(household);
-            membershipNicknameRepository.deleteAllForHousehold(household);
-        }
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.candidates.length()").value(2))
+                .andExpect(jsonPath("$.candidates[*].accountId")
+                        .value(containsInAnyOrder(RECOVERABLE_ACCOUNT_ID, SECOND_ACCOUNT_ID)))
+                .andExpect(jsonPath("$.candidates[0].accountId").value(SECOND_ACCOUNT_ID))
+                .andExpect(jsonPath("$.candidates[0].households[0].householdName").value("Test Flat"))
+                .andExpect(jsonPath("$.candidates[0].households[0].nickname").value("Tester"))
+                .andExpect(jsonPath("$.candidates[1].accountId").value(RECOVERABLE_ACCOUNT_ID))
+                .andExpect(jsonPath("$.candidates[1].households.length()").value(0));
 
         assertThat(emailRecoveryCodeStore.find(recoveryCodeSubjectOf(RECOVERABLE_EMAIL), RecoveryCodePurpose.RECOVER))
                 .isPresent();
@@ -717,19 +778,51 @@ class AccountControllerTest {
     }
 
     @Test
-    void confirmRecovery_withAChosenCandidateAccount_answers204AndRebindsExactlyThatAccount() throws Exception {
-        confirmBindingOf("second-sub", RECOVERABLE_EMAIL);
-        getAccountDetails.register("device-2-sub", "throwaway-username", "throwaway-public-key");
-        String code = requestRecoveryCodeAsThrowaway("device-2-sub");
+    void confirmRecovery_withSeveralCandidateAccountsAndAWrongCode_returns400AndListsNoCandidate() throws Exception {
+        confirmBindingOf(SECOND_ACCOUNT_ID, RECOVERABLE_EMAIL);
+        requestRecoveryCodeAsThrowaway(THROWAWAY_ACCOUNT_ID);
 
         mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("account.recoveryCodeInvalid"))
+                .andExpect(jsonPath("$.candidates").doesNotExist());
+    }
+
+    @Test
+    void confirmRecovery_withAChosenAccountAndAWrongCode_returns400AndRebindsNothing() throws Exception {
+        confirmBindingOf(SECOND_ACCOUNT_ID, RECOVERABLE_EMAIL);
+        getAccountDetails.register(THROWAWAY_ACCOUNT_ID, "throwaway-username", "throwaway-public-key");
+        requestRecoveryCodeAsThrowaway(THROWAWAY_ACCOUNT_ID);
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"000000\",\"accountId\":\""
+                                + SECOND_ACCOUNT_ID + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("account.recoveryCodeInvalid"));
+
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+        assertThat(deleteAccount.deletedIds).isEmpty();
+    }
+
+    @Test
+    void confirmRecovery_withAChosenCandidateAccount_answers204AndRebindsExactlyThatAccount() throws Exception {
+        confirmBindingOf(SECOND_ACCOUNT_ID, RECOVERABLE_EMAIL);
+        getAccountDetails.register(THROWAWAY_ACCOUNT_ID, "throwaway-username", "throwaway-public-key");
+        String code = requestRecoveryCodeAsThrowaway(THROWAWAY_ACCOUNT_ID);
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_ACCOUNT_ID)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code
                                 + "\",\"accountId\":\"second-sub\"}"))
                 .andExpect(status().isNoContent());
 
         assertThat(rebindAccountCredential.rebinds).hasSize(1);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo("second-sub");
+        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(SECOND_ACCOUNT_ID);
     }
 }

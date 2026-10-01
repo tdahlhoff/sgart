@@ -20,7 +20,7 @@ Stop using Keycloak's email field. Keep a side-store (identity context, new migr
 recovery_email_binding {
   address_digest     text   -- HMAC-SHA256(pepper, normalizedAddress); NO plaintext address anywhere
   keycloak_user_id   text   -- pseudonymous account id
-  address_hint       text   -- masked display form, e.g. "t***@gmail.com"
+  address_hint       text   -- masked display form, e.g. "t***@g***.com"
   confirmed_at       timestamptz null   -- null = pending, grants nothing
   PRIMARY KEY (address_digest, keycloak_user_id)
 }
@@ -71,7 +71,7 @@ Code format, TTL (15 min), and the 5-attempt cap are unchanged. Throttles stay i
 ## 5. GDPR / data protection
 
 - **Minimization:** no plaintext address stored; only a digest and a masked hint.
-- **Purpose:** recovery only. The `address_hint` exists so the profile can show "recovery email attached: t***@…".
+- **Purpose:** recovery only. The `address_hint` exists so the profile can show "recovery email attached: t***@g***.com".
 - **Erasure and export:** delete the account's `recovery_email_binding` rows alongside the Epic 6 erasure checklist (next to `account_consent`). Export includes the hint and `confirmed_at`, not a digest.
 - **Retention:** pending rows are purged with the code TTL sweep (a pending row without a live code is deleted).
 - **Non-user subject** (someone's address typed by a stranger): nothing is stored in plaintext, and the mail carries a contact line for objection.

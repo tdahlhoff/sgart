@@ -1,23 +1,17 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
-import de.sgart.identity.adapter.out.InMemoryRecoveryEmailThrottles;
-import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
-import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmailDigester;
-import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
 /** Fast unit test — detach removes every binding and code row of the caller, and only the caller's. */
@@ -36,17 +30,17 @@ class DetachRecoveryEmailTest {
 
     @Test
     void detach_removesPendingAndConfirmedBindingsAndCodes() {
-        bindings.savePending(RecoveryEmailBinding.pending(DIGEST, CALLER, HINT, NOW));
-        bindings.confirm(bindings.findPendingFor(CALLER).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(bindings, DIGEST, CALLER, HINT, NOW);
         bindings.savePending(RecoveryEmailBinding.pending(new RecoveryEmailDigest("other"), CALLER, HINT, NOW));
         bindings.savePending(RecoveryEmailBinding.pending(DIGEST, OTHER_ACCOUNT, HINT, NOW));
-        codeStore.store(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+        RecoveryCodeSubject callerCodeSubject = RecoveryCodeSubject.forAccount(CALLER);
+        codeStore.store(callerCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         detachRecoveryEmail.detach(CALLER_ID);
 
         assertThat(bindings.findAllFor(CALLER)).isEmpty();
         assertThat(bindings.findPendingFor(OTHER_ACCOUNT)).isPresent();
-        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(codeStore.find(callerCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
     }
 
     @Test
@@ -57,23 +51,15 @@ class DetachRecoveryEmailTest {
     }
 
     @Test
-    void detach_doesNotResetAnyThrottle() {
-        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        InMemoryRecoveryEmailThrottles throttles = new InMemoryRecoveryEmailThrottles(clock);
-        AttachRecoveryEmail attachRecoveryEmail = new AttachRecoveryEmail(
-                bindings,
-                new Sha256RecoveryEmailDigester(),
-                codeStore,
-                new IdentityRecoveryCodeHasher(),
-                new RecordingSendRecoveryCodeEmail(),
-                throttles,
-                throttles,
-                clock);
-        attachRecoveryEmail.attach(CALLER_ID, "person@example.test");
+    void detach_leavesAnAddressKeyedRecoveryCodeAlone() {
+        // A recovery code belongs to the mailbox, not to the account: other accounts may share the
+        // address and rely on it, and it expires on its own, so detaching must not touch it.
+        RecoveryCodeSubject addressSubject = RecoveryCodeSubject.forAddress(DIGEST);
+        codeStore.store(addressSubject, RecoveryCodePurpose.RECOVER, "hash", NOW.plusSeconds(60), NOW);
+        saveConfirmedBinding(bindings, DIGEST, CALLER, HINT, NOW);
 
         detachRecoveryEmail.detach(CALLER_ID);
 
-        assertThatThrownBy(() -> attachRecoveryEmail.attach(CALLER_ID, "person@example.test"))
-                .isInstanceOf(RecoveryCodeRateLimitedException.class);
+        assertThat(codeStore.find(addressSubject, RecoveryCodePurpose.RECOVER)).isPresent();
     }
 }

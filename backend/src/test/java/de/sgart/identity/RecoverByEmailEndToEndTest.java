@@ -44,7 +44,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @AutoConfigureMockMvc
 class RecoverByEmailEndToEndTest {
 
-    private static final String ADDRESS = "end.to.end@example.test";
+    private static final String LOCAL_PART = "end.to.end";
+    private static final String DOMAIN = "example.test";
+    private static final String ADDRESS = LOCAL_PART + "@" + DOMAIN;
+    private static final String MASKED_ADDRESS = "e***@e***.test";
     private static final String ACCOUNT_A = "account-a";
     private static final String THROWAWAY_T = "throwaway-t";
 
@@ -117,16 +120,20 @@ class RecoverByEmailEndToEndTest {
     }
 
     static final class CapturingMail implements SendRecoveryCodeEmail {
+        final List<String> attachRecipients = new ArrayList<>();
         final List<String> attachCodes = new ArrayList<>();
+        final List<String> recoveryRecipients = new ArrayList<>();
         final List<String> recoveryCodes = new ArrayList<>();
 
         @Override
         public void sendAttachConfirmationCode(String address, String code) {
+            attachRecipients.add(address);
             attachCodes.add(code);
         }
 
         @Override
         public void sendRecoveryCode(String address, String code) {
+            recoveryRecipients.add(address);
             recoveryCodes.add(code);
         }
     }
@@ -161,6 +168,8 @@ class RecoverByEmailEndToEndTest {
                         .content("{\"email\":\"" + ADDRESS + "\"}"))
                 .andExpect(status().isAccepted());
         assertThat(capturingMail.recoveryCodes).hasSize(1);
+        assertThat(capturingMail.recoveryRecipients).containsExactly(ADDRESS);
+        assertNoTableHoldsThePlaintextAddress();
 
         mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
                         .with(jwt().jwt(jwt -> jwt.subject(THROWAWAY_T)))
@@ -172,7 +181,7 @@ class RecoverByEmailEndToEndTest {
         assertThat(recordingDelete.deletedAccountIds).containsExactly(THROWAWAY_T);
         assertThat(recordingRebind.rebinds)
                 .containsExactly(new RecordingRebind.Rebind(ACCOUNT_A, "throwaway-username", "throwaway-public-key"));
-        assertThat(everyStoredRowAsText()).noneMatch(row -> row.contains(ADDRESS));
+        assertNoTableHoldsThePlaintextAddress();
     }
 
     private void attachAndConfirmAs(String accountId) throws Exception {
@@ -182,11 +191,29 @@ class RecoverByEmailEndToEndTest {
                         .content("{\"email\":\"" + ADDRESS + "\"}"))
                 .andExpect(status().isAccepted());
         assertThat(capturingMail.attachCodes).hasSize(1);
+        assertThat(capturingMail.attachRecipients).containsExactly(ADDRESS);
+        assertThat(storedAddressHints()).containsExactly(MASKED_ADDRESS);
+        assertNoTableHoldsThePlaintextAddress();
         mockMvc.perform(post("/api/v1/account/email/confirm")
                         .with(jwt().jwt(jwt -> jwt.subject(accountId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"" + capturingMail.attachCodes.get(0) + "\"}"))
                 .andExpect(status().isNoContent());
+    }
+
+    private List<String> storedAddressHints() {
+        return jdbcClient.sql("SELECT address_hint FROM recovery_email_binding").query(String.class).list();
+    }
+
+    /**
+     * The masked hint keeps only the first character of the domain name and the top-level domain, so
+     * no row of any table, the hint included, may contain the address, its local part or its domain.
+     */
+    private void assertNoTableHoldsThePlaintextAddress() {
+        assertThat(everyStoredRowAsText())
+                .noneMatch(row -> row.contains(ADDRESS))
+                .noneMatch(row -> row.contains(LOCAL_PART))
+                .noneMatch(row -> row.contains(DOMAIN));
     }
 
     private List<String> everyStoredRowAsText() {

@@ -9,6 +9,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -21,6 +23,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * scan reads cleanly, AD-6).
  */
 public final class JdbcEmailRecoveryCodeStore implements EmailRecoveryCodeStore {
+
+    /** Only these rows are keyed by an account; an address-keyed row must never match an account id. */
+    private static final List<String> ACCOUNT_PURPOSE_NAMES = Arrays.stream(RecoveryCodePurpose.values())
+            .filter(purpose -> purpose.subjectKind() == RecoveryCodeSubject.Kind.ACCOUNT)
+            .map(RecoveryCodePurpose::name)
+            .toList();
 
     private final JdbcClient jdbcClient;
 
@@ -92,8 +100,9 @@ public final class JdbcEmailRecoveryCodeStore implements EmailRecoveryCodeStore 
     @Override
     public void deleteAll(KeycloakUserId keycloakUserId) {
         jdbcClient
-                .sql("DELETE FROM recovery_code WHERE subject = :subject")
+                .sql("DELETE FROM recovery_code WHERE subject = :subject AND purpose IN (:accountPurposes)")
                 .param("subject", keycloakUserId.value())
+                .param("accountPurposes", ACCOUNT_PURPOSE_NAMES)
                 .update();
     }
 

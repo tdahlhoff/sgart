@@ -4,11 +4,13 @@ import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.shared.HouseholdId;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -17,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * Shared fast, in-memory test doubles for the Story 7.3 application-service unit tests (CLAUDE.md
@@ -27,22 +30,62 @@ final class RecoveryEmailTestSupport {
 
     private RecoveryEmailTestSupport() {}
 
+    /** Remembers which injected failures actually fired, so a test can prove its failure path was really taken. */
+    static final class InjectedFailures {
+        private final List<String> firedMethodNames = new ArrayList<>();
+
+        List<String> firedMethodNames() {
+            return List.copyOf(firedMethodNames);
+        }
+
+        boolean hasFired(String methodName) {
+            return firedMethodNames.contains(methodName);
+        }
+    }
+
     /**
      * Wraps {@code delegate} so that the named methods throw, like an unreachable database, while
      * every other method still reaches the real double.
+     *
+     * @throws IllegalArgumentException if a name is not a method of {@code type}: a misspelled name
+     *     would otherwise inject nothing and let the test pass without ever exercising the failure.
      */
     static <T> T failingOn(Class<T> type, T delegate, String... failingMethodNames) {
+        return failingOn(type, delegate, new InjectedFailures(), failingMethodNames);
+    }
+
+    /** Like {@link #failingOn(Class, Object, String...)}, reporting every fired failure to {@code injectedFailures}. */
+    static <T> T failingOn(Class<T> type, T delegate, InjectedFailures injectedFailures, String... failingMethodNames) {
+        Set<String> knownMethodNames = Arrays.stream(type.getMethods()).map(Method::getName).collect(Collectors.toSet());
         Set<String> failing = Set.of(failingMethodNames);
+        if (!knownMethodNames.containsAll(failing)) {
+            throw new IllegalArgumentException(
+                    "Unknown method names " + failing.stream().filter(name -> !knownMethodNames.contains(name)).toList()
+                            + " for " + type.getSimpleName());
+        }
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (proxy, method, arguments) -> {
             if (failing.contains(method.getName())) {
+                injectedFailures.firedMethodNames.add(method.getName());
                 throw new IllegalStateException("unavailable: " + method.getName());
             }
-            try {
-                return method.invoke(delegate, arguments);
-            } catch (InvocationTargetException failure) {
-                throw failure.getCause();
-            }
+            return invokeOn(delegate, method, arguments);
         }));
+    }
+
+    /** Wraps {@code delegate} so that every call appends its method name to {@code callLog}. */
+    static <T> T recordingCalls(Class<T> type, T delegate, List<String> callLog) {
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (proxy, method, arguments) -> {
+            callLog.add(method.getName());
+            return invokeOn(delegate, method, arguments);
+        }));
+    }
+
+    private static Object invokeOn(Object delegate, Method method, Object[] arguments) throws Throwable {
+        try {
+            return method.invoke(delegate, arguments);
+        } catch (InvocationTargetException failure) {
+            throw failure.getCause();
+        }
     }
 
     /** A trivial, test-only hasher (identity-prefixed) so tests can assert on the exact hash without real HMAC. */
@@ -51,27 +94,6 @@ final class RecoveryEmailTestSupport {
         public String hash(String code) {
             return "hash:" + code;
         }
-    }
-
-    /** Always allows — the default throttle double for tests not about throttling itself. */
-    static final class AlwaysAllowThrottles implements AttachRequestThrottle, AttachMailThrottle, RecoveryRequestThrottle {
-        @Override
-        public boolean tryAttach(KeycloakUserId caller) {
-            return true;
-        }
-
-        @Override
-        public boolean tryMail(RecoveryEmailDigest digest) {
-            return true;
-        }
-
-        @Override
-        public boolean tryRequest(RecoveryEmailDigest digest) {
-            return true;
-        }
-
-        @Override
-        public void reset(RecoveryEmailDigest digest) {}
     }
 
     /** Denies the attach budgets and the recovery budget selectively, to prove each refusal path. */
@@ -153,14 +175,6 @@ final class RecoveryEmailTestSupport {
             Map<HouseholdId, String> known = new HashMap<>(namesByHouseholdId);
             known.keySet().retainAll(householdIds);
             return known;
-        }
-    }
-
-    /** Runs every task at once on the calling thread, so a test sees the whole effect right after the call. */
-    static final class SynchronousExecutor implements Executor {
-        @Override
-        public void execute(Runnable task) {
-            task.run();
         }
     }
 

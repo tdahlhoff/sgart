@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -8,7 +9,9 @@ import de.sgart.identity.adapter.out.InMemoryMemberMappingRepository;
 import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
+import de.sgart.identity.CapturedLogs;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FailingRebindAccountCredential;
+import de.sgart.identity.application.RecoveryEmailTestSupport.InjectedFailures;
 import de.sgart.identity.application.RecoveryEmailTestSupport.ConfigurableThrottles;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeFindHouseholdNames;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeGetAccountDetails;
@@ -25,7 +28,6 @@ import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MembershipNickname;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
-import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
@@ -74,19 +76,30 @@ class ConfirmEmailRecoveryTest {
     private final RecordingRebindAccountCredential rebindAccountCredential = new RecordingRebindAccountCredential();
     private final RecordingCreateAccount createAccount = new RecordingCreateAccount();
     private final MutableClock clock = new MutableClock(NOW);
-    private final ConfirmEmailRecovery confirmEmailRecovery = new ConfirmEmailRecovery(
-            bindings,
-            new Sha256RecoveryEmailDigester(),
-            throttles,
-            candidateResolver,
-            emailRecoveryCodeStore,
-            hasher,
-            getAccountDetails,
-            deleteAccount,
-            provisionedAccountRepository,
-            rebindAccountCredential,
-            createAccount,
-            clock);
+    private final ConfirmEmailRecovery confirmEmailRecovery =
+            confirmEmailRecoveryUsing(bindings, throttles, emailRecoveryCodeStore, deleteAccount, rebindAccountCredential);
+
+    /** The one place that spells out the collaborators; a test swaps only the double it wants to break. */
+    private ConfirmEmailRecovery confirmEmailRecoveryUsing(
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            RecoveryRequestThrottle recoveryRequestThrottle,
+            EmailRecoveryCodeStore codeStore,
+            DeleteAccount accountDeletion,
+            RebindAccountCredential credentialRebind) {
+        return new ConfirmEmailRecovery(
+                recoveryEmailBindingRepository,
+                new Sha256RecoveryEmailDigester(),
+                recoveryRequestThrottle,
+                candidateResolver,
+                codeStore,
+                hasher,
+                getAccountDetails,
+                accountDeletion,
+                provisionedAccountRepository,
+                credentialRebind,
+                createAccount,
+                clock);
+    }
 
     @Test
     void confirmEmailRecovery_deletesThrowawayThenRebindsTargetUsernameAndPublicKey() {
@@ -245,19 +258,12 @@ class ConfirmEmailRecoveryTest {
         provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
 
         List<String> sharedLog = new ArrayList<>();
-        ConfirmEmailRecovery orderedConfirmEmailRecovery = new ConfirmEmailRecovery(
+        ConfirmEmailRecovery orderedConfirmEmailRecovery = confirmEmailRecoveryUsing(
                 bindings,
-            new Sha256RecoveryEmailDigester(),
-            throttles,
-            candidateResolver,
-            emailRecoveryCodeStore,
-                hasher,
-                getAccountDetails,
+                throttles,
+                emailRecoveryCodeStore,
                 new OrderedDeleteAccount(sharedLog),
-                provisionedAccountRepository,
-                new OrderedRebindAccountCredential(sharedLog),
-                createAccount,
-                clock);
+                new OrderedRebindAccountCredential(sharedLog));
 
         orderedConfirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
 
@@ -265,19 +271,8 @@ class ConfirmEmailRecoveryTest {
     }
 
     private ConfirmEmailRecovery confirmEmailRecoveryWithFailingRebind() {
-        return new ConfirmEmailRecovery(
-                bindings,
-            new Sha256RecoveryEmailDigester(),
-            throttles,
-            candidateResolver,
-            emailRecoveryCodeStore,
-                hasher,
-                getAccountDetails,
-                deleteAccount,
-                provisionedAccountRepository,
-                new FailingRebindAccountCredential(),
-                createAccount,
-                clock);
+        return confirmEmailRecoveryUsing(
+                bindings, throttles, emailRecoveryCodeStore, deleteAccount, new FailingRebindAccountCredential());
     }
 
     private void seedRecoverableAccount() {
@@ -343,9 +338,8 @@ class ConfirmEmailRecoveryTest {
     private static final KeycloakUserId OTHER_TARGET = new KeycloakUserId("target-B1");
 
     private void bindConfirmed(KeycloakUserId account, String address) {
-        bindings.savePending(RecoveryEmailBinding.pending(
-                Sha256RecoveryEmailDigester.digestOf(address), account, RecoveryEmailHint.masking(address), NOW));
-        bindings.confirm(bindings.findPendingFor(account).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(
+                bindings, Sha256RecoveryEmailDigester.digestOf(address), account, RecoveryEmailHint.masking(address), NOW);
     }
 
     private void joinHousehold(KeycloakUserId account, HouseholdId householdId) {
@@ -448,15 +442,14 @@ class ConfirmEmailRecoveryTest {
     void confirm_afterASuccessfulRebind_removesTheThrowawaysBindingsAndCodes() {
         seedRecoverableAccount();
         bindConfirmed(THROWAWAY, "throwaway@example.test");
+        RecoveryCodeSubject throwawayCodeSubject = RecoveryCodeSubject.forAccount(THROWAWAY);
         emailRecoveryCodeStore.store(
-                RecoveryCodeSubject.forAccount(THROWAWAY), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+                throwawayCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
         assertThat(bindings.findAllFor(THROWAWAY)).isEmpty();
-        assertThat(emailRecoveryCodeStore.find(
-                        RecoveryCodeSubject.forAccount(THROWAWAY), RecoveryCodePurpose.ATTACH_CONFIRM))
-                .isEmpty();
+        assertThat(emailRecoveryCodeStore.find(throwawayCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
         assertThat(bindings.findConfirmedFor(TARGET)).isPresent();
     }
 
@@ -474,51 +467,60 @@ class ConfirmEmailRecoveryTest {
     @Test
     void confirm_whenEveryCleanupStepFailsAfterTheRebind_stillReturnsRebound() {
         seedRecoverableAccount();
-        ConfirmEmailRecovery withFailingCleanup = new ConfirmEmailRecovery(
-                RecoveryEmailTestSupport.failingOn(RecoveryEmailBindingRepository.class, bindings, "deleteAllFor"),
-                new Sha256RecoveryEmailDigester(),
-                new FailingResetThrottles(),
-                candidateResolver,
+        InjectedFailures injectedFailures = new InjectedFailures();
+        ConfirmEmailRecovery withFailingCleanup = confirmEmailRecoveryUsing(
                 RecoveryEmailTestSupport.failingOn(
-                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, "delete", "deleteAll"),
-                hasher,
-                getAccountDetails,
+                        RecoveryEmailBindingRepository.class, bindings, injectedFailures, "deleteAllFor"),
+                new FailingResetThrottles(),
+                RecoveryEmailTestSupport.failingOn(
+                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, injectedFailures, "delete", "deleteAll"),
                 deleteAccount,
-                provisionedAccountRepository,
-                rebindAccountCredential,
-                createAccount,
-                clock);
+                rebindAccountCredential);
 
         EmailRecoveryOutcome outcome =
                 withFailingCleanup.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
         assertThat(rebindAccountCredential.rebinds).hasSize(1);
+        assertThat(injectedFailures.firedMethodNames()).containsExactlyInAnyOrder("delete", "deleteAll", "deleteAllFor");
     }
 
     @Test
     void confirm_whenOnlyTheCodeDeletionFailsAfterTheRebind_theRemainingCleanupStepsStillRun() {
         seedRecoverableAccount();
         bindConfirmed(THROWAWAY, "throwaway@example.test");
-        ConfirmEmailRecovery withFailingCodeDeletion = new ConfirmEmailRecovery(
+        InjectedFailures injectedFailures = new InjectedFailures();
+        ConfirmEmailRecovery withFailingCodeDeletion = confirmEmailRecoveryUsing(
                 bindings,
-                new Sha256RecoveryEmailDigester(),
                 throttles,
-                candidateResolver,
                 RecoveryEmailTestSupport.failingOn(
-                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, "delete", "deleteAll"),
-                hasher,
-                getAccountDetails,
+                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, injectedFailures, "delete", "deleteAll"),
                 deleteAccount,
-                provisionedAccountRepository,
-                rebindAccountCredential,
-                createAccount,
-                clock);
+                rebindAccountCredential);
 
         withFailingCodeDeletion.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
+        assertThat(injectedFailures.firedMethodNames()).containsExactlyInAnyOrder("delete", "deleteAll");
         assertThat(throttles.resetDigests).containsExactly(ADDRESS_DIGEST);
         assertThat(bindings.findAllFor(THROWAWAY)).isEmpty();
+    }
+
+    @Test
+    void confirm_whenCleanupFailsAfterTheRebind_logsNeitherTheAddressNorTheCode() {
+        seedRecoverableAccount();
+        ConfirmEmailRecovery withLeakyFailingCleanup = confirmEmailRecoveryUsing(
+                bindings,
+                new FailingResetThrottles(),
+                emailRecoveryCodeStore,
+                deleteAccount,
+                rebindAccountCredential);
+
+        try (CapturedLogs logs = CapturedLogs.ofLoggerOf(ConfirmEmailRecovery.class)) {
+            withLeakyFailingCleanup.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
+
+            assertThat(logs.hasLoggedAnything()).isTrue();
+            assertThat(logs.allOutput()).doesNotContain(ADDRESS).doesNotContain("042817");
+        }
     }
 
     private static final class FailingResetThrottles implements RecoveryRequestThrottle {
@@ -529,8 +531,122 @@ class ConfirmEmailRecoveryTest {
 
         @Override
         public void reset(RecoveryEmailDigest digest) {
-            throw new IllegalStateException("throttle unavailable");
+            throw new IllegalStateException("throttle unavailable for " + ADDRESS + " with code 042817");
         }
+    }
+
+    @Test
+    void confirm_withAWrongCodeAndSeveralCandidatesAndNoChoice_isRejectedWithoutRevealingTheCandidates() {
+        seedTwoCandidateAccounts();
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "000000", NO_CHOICE))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER).orElseThrow().attempts())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void confirm_withAWrongCodeAndAChosenCandidate_isRejectedAndRebindsNothing() {
+        seedTwoCandidateAccounts();
+
+        assertThatThrownBy(() ->
+                        confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "000000", OTHER_TARGET.value()))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+    }
+
+    @Test
+    void confirm_withAnExpiredCodeAndAChosenCandidate_isRejectedAndRebindsNothing() {
+        seedTwoCandidateAccounts();
+        clock.advance(Duration.ofSeconds(61));
+
+        assertThatThrownBy(() ->
+                        confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", OTHER_TARGET.value()))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+    }
+
+    @Test
+    void confirm_withTheCallersOwnThrowawayChosenAmongSeveralCandidates_isRejectedAndRebindsNothing() {
+        seedTwoCandidateAccounts();
+        bindConfirmed(THROWAWAY, ADDRESS);
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", THROWAWAY_ID))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+    }
+
+    @Test
+    void confirm_withTheCallersOwnThrowawayChosenBesidesASingleCandidate_isRejectedAndRebindsNothing() {
+        seedRecoverableAccount();
+        bindConfirmed(THROWAWAY, ADDRESS);
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", THROWAWAY_ID))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+    }
+
+    @Test
+    void confirm_withExactlyOneCandidateAndThatCandidateChosen_rebindsOntoIt() {
+        seedRecoverableAccount();
+
+        EmailRecoveryOutcome outcome =
+                confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", TARGET.value());
+
+        assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
+        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+    }
+
+    @Test
+    void confirm_withExactlyOneCandidateAndAStrangerChosen_isRejectedAndRebindsNothing() {
+        seedRecoverableAccount();
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", "stranger"))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+    }
+
+    @Test
+    void confirm_afterAWrongCodeWithAChosenCandidate_countsTheWrongGuessAndStillAcceptsTheRightCode() {
+        seedTwoCandidateAccounts();
+        assertThatThrownBy(() ->
+                        confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "000000", OTHER_TARGET.value()))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER).orElseThrow().attempts())
+                .isEqualTo(1);
+
+        EmailRecoveryOutcome outcome =
+                confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", OTHER_TARGET.value());
+
+        assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
+        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(OTHER_TARGET);
+    }
+
+    @Test
+    void confirm_afterAStrangerWasChosenWithTheRightCode_keepsTheCodeUsableAndDoesNotCountAGuess() {
+        // Current behavior, pinned: the code itself was right, so the verification counts no wrong
+        // guess; only the choice is refused. The same code then still completes the recovery.
+        seedTwoCandidateAccounts();
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", "stranger"))
+                .isInstanceOf(RecoveryCodeRejectedException.class);
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER).orElseThrow().attempts())
+                .isZero();
+
+        EmailRecoveryOutcome outcome =
+                confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", TARGET.value());
+
+        assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
     }
 
     @Test

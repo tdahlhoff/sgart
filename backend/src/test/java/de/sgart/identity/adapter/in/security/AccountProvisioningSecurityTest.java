@@ -73,17 +73,17 @@ class AccountProvisioningSecurityTest {
     void recoveryEndpoints_requireAThrowawayJwt_andAddNoUnauthenticatedSurface() throws Exception {
         mockMvc.perform(post("/api/v1/account/recovery/email")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"person@example.com\"}"))
+                        .content("{\"email\":\"person@example.test\"}"))
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"person@example.com\",\"code\":\"042817\"}"))
+                        .content("{\"email\":\"person@example.test\",\"code\":\"042817\"}"))
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/account/email")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"person@example.com\"}"))
+                        .content("{\"email\":\"person@example.test\"}"))
                 .andExpect(status().isUnauthorized());
     }
 }

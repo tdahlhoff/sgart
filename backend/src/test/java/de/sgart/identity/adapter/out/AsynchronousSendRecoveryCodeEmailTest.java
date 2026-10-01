@@ -3,6 +3,7 @@ package de.sgart.identity.adapter.out;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import de.sgart.identity.CapturedLogs;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,6 +11,9 @@ import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
 
 class AsynchronousSendRecoveryCodeEmailTest {
+
+    private static final String ADDRESS = "person@example.test";
+    private static final String CODE = "042817";
 
     private final List<Runnable> queuedTasks = new ArrayList<>();
     private final Executor capturingExecutor = queuedTasks::add;
@@ -42,21 +46,56 @@ class AsynchronousSendRecoveryCodeEmailTest {
     }
 
     @Test
-    void send_whenTheDeliveryFails_doesNotPropagateTheFailureToTheExecutor() {
-        SendRecoveryCodeEmail failingDelegate = new SendRecoveryCodeEmail() {
-            @Override
-            public void sendAttachConfirmationCode(String address, String code) {
-                throw new IllegalStateException("smtp down for " + address);
-            }
-
-            @Override
-            public void sendRecoveryCode(String address, String code) {
-                throw new IllegalStateException("smtp down for " + address);
-            }
-        };
-        new AsynchronousSendRecoveryCodeEmail(failingDelegate, capturingExecutor)
-                .sendRecoveryCode("person@example.test", "042817");
+    void sendRecoveryCode_whenTheDeliveryFails_doesNotPropagateTheFailureToTheExecutor() {
+        new AsynchronousSendRecoveryCodeEmail(new LeakyFailingDelegate(), capturingExecutor)
+                .sendRecoveryCode(ADDRESS, CODE);
 
         assertThatCode(() -> queuedTasks.forEach(Runnable::run)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void sendAttachConfirmationCode_whenTheDeliveryFails_doesNotPropagateTheFailureToTheExecutor() {
+        new AsynchronousSendRecoveryCodeEmail(new LeakyFailingDelegate(), capturingExecutor)
+                .sendAttachConfirmationCode(ADDRESS, CODE);
+
+        assertThatCode(() -> queuedTasks.forEach(Runnable::run)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void sendRecoveryCode_whenTheDeliveryFails_logsNeitherTheAddressNorTheCode() {
+        new AsynchronousSendRecoveryCodeEmail(new LeakyFailingDelegate(), capturingExecutor)
+                .sendRecoveryCode(ADDRESS, CODE);
+
+        assertDeliveryFailureLogLeaksNothing();
+    }
+
+    @Test
+    void sendAttachConfirmationCode_whenTheDeliveryFails_logsNeitherTheAddressNorTheCode() {
+        new AsynchronousSendRecoveryCodeEmail(new LeakyFailingDelegate(), capturingExecutor)
+                .sendAttachConfirmationCode(ADDRESS, CODE);
+
+        assertDeliveryFailureLogLeaksNothing();
+    }
+
+    private void assertDeliveryFailureLogLeaksNothing() {
+        try (CapturedLogs logs = CapturedLogs.ofLoggerOf(AsynchronousSendRecoveryCodeEmail.class)) {
+            queuedTasks.forEach(Runnable::run);
+
+            assertThat(logs.hasLoggedAnything()).isTrue();
+            assertThat(logs.allOutput()).doesNotContain(ADDRESS).doesNotContain(CODE);
+        }
+    }
+
+    /** Fails like a mail server whose error message quotes both the recipient and the code. */
+    private static final class LeakyFailingDelegate implements SendRecoveryCodeEmail {
+        @Override
+        public void sendAttachConfirmationCode(String address, String code) {
+            throw new IllegalStateException("smtp down for " + address + " with code " + code);
+        }
+
+        @Override
+        public void sendRecoveryCode(String address, String code) {
+            throw new IllegalStateException("smtp down for " + address + " with code " + code);
+        }
     }
 }

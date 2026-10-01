@@ -1,24 +1,33 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static de.sgart.identity.application.RecoveryEmailTestSupport.recordingCalls;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
+import de.sgart.identity.adapter.out.InMemoryRecoveryEmailThrottles;
+import de.sgart.identity.CapturedLogs;
 import de.sgart.identity.application.RecoveryEmailTestSupport.CapturingExecutor;
 import de.sgart.identity.application.RecoveryEmailTestSupport.ConfigurableThrottles;
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingSendRecoveryCodeEmail;
 import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmailDigester;
+import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -53,8 +62,7 @@ class RequestEmailRecoveryCodeTest {
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     private void bindConfirmed(KeycloakUserId account) {
-        bindings.savePending(RecoveryEmailBinding.pending(DIGEST, account, RecoveryEmailHint.masking(ADDRESS), NOW));
-        bindings.confirm(bindings.findPendingFor(account).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(bindings, DIGEST, account, RecoveryEmailHint.masking(ADDRESS), NOW);
     }
 
     @Test
@@ -150,28 +158,123 @@ class RequestEmailRecoveryCodeTest {
     }
 
     @Test
+    void request_withAnUnknownAddress_stillHandsExactlyOneTaskToTheExecutorAndTouchesNothingBeforeItRuns() {
+        List<String> callLog = new ArrayList<>();
+        RequestEmailRecoveryCode request = requestWithRecordedCollaborators(callLog);
+
+        request.request("nobody@example.test");
+
+        assertThat(executor.pendingTasks).hasSize(1);
+        assertThat(callLog).isEmpty();
+        executor.runPendingTasks();
+        assertThat(callLog).containsExactly("findConfirmedFor");
+    }
+
+    @Test
+    void request_withOnlyAPendingBinding_stillHandsExactlyOneTaskToTheExecutorAndTouchesNothingBeforeItRuns() {
+        bindings.savePending(RecoveryEmailBinding.pending(DIGEST, FIRST_ACCOUNT, RecoveryEmailHint.masking(ADDRESS), NOW));
+        List<String> callLog = new ArrayList<>();
+        RequestEmailRecoveryCode request = requestWithRecordedCollaborators(callLog);
+
+        request.request(ADDRESS);
+
+        assertThat(executor.pendingTasks).hasSize(1);
+        assertThat(callLog).isEmpty();
+        executor.runPendingTasks();
+        assertThat(callLog).containsExactly("findConfirmedFor");
+    }
+
+    @Test
+    void request_withAConfirmedBinding_handsExactlyOneTaskToTheExecutorAndTouchesNothingBeforeItRuns() {
+        bindConfirmed(FIRST_ACCOUNT);
+        List<String> callLog = new ArrayList<>();
+        RequestEmailRecoveryCode request = requestWithRecordedCollaborators(callLog);
+
+        request.request(ADDRESS);
+
+        assertThat(executor.pendingTasks).hasSize(1);
+        assertThat(callLog).isEmpty();
+        executor.runPendingTasks();
+        assertThat(callLog).containsExactly("findConfirmedFor", "tryRequest", "store");
+    }
+
+    @Test
+    void request_whenTheMailFails_keepsTheStoredCodeAndHasUsedUpTheAddressBudget() {
+        // Current behavior, pinned: the code is stored and the budget slot taken before the mail goes
+        // out, so a failed delivery leaves a valid code behind and a retry within the cooldown is dropped.
+        bindConfirmed(FIRST_ACCOUNT);
+        InMemoryRecoveryEmailThrottles realThrottles = new InMemoryRecoveryEmailThrottles(Clock.fixed(NOW, ZoneOffset.UTC));
+        FailingRecoveryMail failingMail = new FailingRecoveryMail();
+        requestWith(failingMail, realThrottles).request(ADDRESS);
+        executor.runPendingTasks();
+
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER).orElseThrow().codeHash())
+                .isEqualTo(hasher.hash(failingMail.attemptedCode));
+
+        requestWith(sendRecoveryCodeEmail, realThrottles).request(ADDRESS);
+        executor.runPendingTasks();
+        assertThat(sendRecoveryCodeEmail.recoveryMailRecipients).isEmpty();
+    }
+
+    @Test
+    void request_whenTheIssuanceFails_logsNeitherTheAddressNorTheCode() {
+        bindConfirmed(FIRST_ACCOUNT);
+        FailingRecoveryMail failingMail = new FailingRecoveryMail();
+        requestWith(failingMail, throttles).request(ADDRESS);
+
+        try (CapturedLogs logs = CapturedLogs.ofLoggerOf(RequestEmailRecoveryCode.class)) {
+            executor.runPendingTasks();
+
+            assertThat(logs.hasLoggedAnything()).isTrue();
+            assertThat(logs.allOutput())
+                    .doesNotContain(ADDRESS)
+                    .doesNotContain(failingMail.attemptedCode);
+        }
+    }
+
+    @Test
     void request_whenTheIssuanceFails_doesNotPropagateTheFailureFromTheExecutor() {
         bindConfirmed(FIRST_ACCOUNT);
-        RequestEmailRecoveryCode failingRequest = new RequestEmailRecoveryCode(
+        requestWith(new FailingRecoveryMail(), throttles).request(ADDRESS);
+
+        assertThatCode(executor::runPendingTasks).doesNotThrowAnyException();
+    }
+
+    private RequestEmailRecoveryCode requestWithRecordedCollaborators(List<String> callLog) {
+        return new RequestEmailRecoveryCode(
+                recordingCalls(RecoveryEmailBindingRepository.class, bindings, callLog),
+                recordingCalls(EmailRecoveryCodeStore.class, emailRecoveryCodeStore, callLog),
+                hasher,
+                sendRecoveryCodeEmail,
+                new Sha256RecoveryEmailDigester(),
+                recordingCalls(RecoveryRequestThrottle.class, throttles, callLog),
+                executor,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    private RequestEmailRecoveryCode requestWith(SendRecoveryCodeEmail mail, RecoveryRequestThrottle throttle) {
+        return new RequestEmailRecoveryCode(
                 bindings,
                 emailRecoveryCodeStore,
                 hasher,
-                new SendRecoveryCodeEmail() {
-                    @Override
-                    public void sendAttachConfirmationCode(String address, String code) {}
-
-                    @Override
-                    public void sendRecoveryCode(String address, String code) {
-                        throw new IllegalStateException("mail server down");
-                    }
-                },
+                mail,
                 new Sha256RecoveryEmailDigester(),
-                throttles,
+                throttle,
                 executor,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
 
-        failingRequest.request(ADDRESS);
+    /** Fails like a mail server that quotes the recipient and the code in its error message. */
+    private static final class FailingRecoveryMail implements SendRecoveryCodeEmail {
+        String attemptedCode;
 
-        executor.runPendingTasks();
+        @Override
+        public void sendAttachConfirmationCode(String address, String code) {}
+
+        @Override
+        public void sendRecoveryCode(String address, String code) {
+            attemptedCode = code;
+            throw new IllegalStateException("mail server rejected " + address + " with code " + code);
+        }
     }
 }

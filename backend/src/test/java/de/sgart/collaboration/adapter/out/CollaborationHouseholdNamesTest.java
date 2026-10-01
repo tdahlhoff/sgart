@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.shared.HouseholdId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,13 +19,23 @@ class CollaborationHouseholdNamesTest {
     private static final HouseholdId PROJECTED_HOUSEHOLD = HouseholdId.generate();
     private static final HouseholdId NOT_YET_PROJECTED_HOUSEHOLD = HouseholdId.generate();
 
-    private final CollaborationHouseholdNames householdNames = new CollaborationHouseholdNames(
-            householdIds -> Map.of(PROJECTED_HOUSEHOLD, new HouseholdName("Test Flat")));
+    private final List<List<HouseholdId>> requestedHouseholdIds = new ArrayList<>();
+    private final CollaborationHouseholdNames householdNames = new CollaborationHouseholdNames(householdIds -> {
+        requestedHouseholdIds.add(householdIds);
+        return Map.of(PROJECTED_HOUSEHOLD, new HouseholdName("Test Flat"));
+    });
 
     @Test
     void namesFor_returnsTheProjectedNameAsPlainText() {
         assertThat(householdNames.namesFor(List.of(PROJECTED_HOUSEHOLD)))
                 .containsExactly(Map.entry(PROJECTED_HOUSEHOLD, "Test Flat"));
+    }
+
+    @Test
+    void namesFor_asksTheReadModelForExactlyTheRequestedHouseholds() {
+        householdNames.namesFor(List.of(PROJECTED_HOUSEHOLD, NOT_YET_PROJECTED_HOUSEHOLD));
+
+        assertThat(requestedHouseholdIds).containsExactly(List.of(PROJECTED_HOUSEHOLD, NOT_YET_PROJECTED_HOUSEHOLD));
     }
 
     @Test

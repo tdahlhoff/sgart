@@ -1,6 +1,11 @@
 package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
@@ -14,8 +19,11 @@ import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -136,7 +144,11 @@ class IdentityBeansConfigTest {
 
         @Test
         void wiresTheHmacDigesterWithTheDevelopmentPepper() {
-            assertThat(recoveryEmailDigester).isInstanceOf(HmacSha256RecoveryEmailDigester.class);
+            String address = "tester@example.test";
+            RecoveryEmailDigester digesterWithTheDevelopmentPepper =
+                    new HmacSha256RecoveryEmailDigester("local-dev-only-email-recovery-address-pepper-change-me");
+
+            assertThat(recoveryEmailDigester.digest(address)).isEqualTo(digesterWithTheDevelopmentPepper.digest(address));
         }
 
         @Test
@@ -190,6 +202,48 @@ class IdentityBeansConfigTest {
             configuration.destroy();
 
             assertThat(issuanceExecutor.isShutDown()).isTrue();
+        }
+
+        @Test
+        void destroy_stopsTheMailSenderExecutor_soNoMailIsDeliveredAfterwards() {
+            IdentityBeansConfig configuration = new IdentityBeansConfig();
+            JavaMailSender javaMailSender = mock(JavaMailSender.class);
+            SendRecoveryCodeEmail sendRecoveryCodeEmail =
+                    configuration.javaMailSenderRecoveryCodeEmail(javaMailSender, "no-reply@sgart.example");
+            sendRecoveryCodeEmail.sendRecoveryCode("person@example.test", "042817");
+            verify(javaMailSender, timeout(5_000)).send(any(SimpleMailMessage.class));
+
+            configuration.destroy();
+            sendRecoveryCodeEmail.sendRecoveryCode("person@example.test", "123456");
+
+            // destroy() waits for the worker to stop and a stopped executor rejects work at once,
+            // so the second mail can never have been delivered by now.
+            verifyNoMoreInteractions(javaMailSender);
+        }
+    }
+
+    /** The decorated adapter must really reach the JavaMail sender, with the configured sender address. */
+    @Nested
+    class AsynchronousMailDelivery {
+
+        @Test
+        void theWiredDecorator_deliversThroughTheJavaMailSender() {
+            IdentityBeansConfig configuration = new IdentityBeansConfig();
+            JavaMailSender javaMailSender = mock(JavaMailSender.class);
+            try {
+                SendRecoveryCodeEmail sendRecoveryCodeEmail =
+                        configuration.javaMailSenderRecoveryCodeEmail(javaMailSender, "no-reply@sgart.example");
+
+                sendRecoveryCodeEmail.sendRecoveryCode("person@example.test", "042817");
+
+                ArgumentCaptor<SimpleMailMessage> sentMessage = ArgumentCaptor.forClass(SimpleMailMessage.class);
+                verify(javaMailSender, timeout(5_000)).send(sentMessage.capture());
+                assertThat(sentMessage.getValue().getTo()).containsExactly("person@example.test");
+                assertThat(sentMessage.getValue().getFrom()).isEqualTo("no-reply@sgart.example");
+                assertThat(sentMessage.getValue().getText()).contains("042817");
+            } finally {
+                configuration.destroy();
+            }
         }
     }
 }

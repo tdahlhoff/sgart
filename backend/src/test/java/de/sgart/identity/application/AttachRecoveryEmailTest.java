@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -18,6 +19,8 @@ import de.sgart.identity.domain.RecoveryEmailHint;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,6 +33,7 @@ class AttachRecoveryEmailTest {
     private static final Instant NOW = Instant.parse("2026-10-01T10:00:00Z");
     private static final String CALLER_ID = "caller-1";
     private static final KeycloakUserId CALLER = new KeycloakUserId(CALLER_ID);
+    private static final RecoveryCodeSubject CALLER_CODE_SUBJECT = RecoveryCodeSubject.forAccount(CALLER);
     private static final String ADDRESS = "person@example.test";
     private static final RecoveryEmailDigest ADDRESS_DIGEST = Sha256RecoveryEmailDigester.digestOf(ADDRESS);
 
@@ -57,7 +61,7 @@ class AttachRecoveryEmailTest {
         assertThat(pendingBinding.hint()).isEqualTo(RecoveryEmailHint.masking(ADDRESS));
         assertThat(pendingBinding.isConfirmed()).isFalse();
         assertThat(mails.attachMailRecipients).containsExactly(ADDRESS);
-        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
+        assertThat(codeStore.find(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
                 .isEqualTo(hasher.hash(mails.attachMailCodes.get(0)));
     }
 
@@ -78,14 +82,28 @@ class AttachRecoveryEmailTest {
     @Test
     void attach_toAnAddressConfirmedOnAnotherAccount_stillWritesAPendingBindingAndMailsACode() {
         KeycloakUserId otherAccount = new KeycloakUserId("other-account");
-        bindings.savePending(RecoveryEmailBinding.pending(ADDRESS_DIGEST, otherAccount, RecoveryEmailHint.masking(ADDRESS), NOW));
-        bindings.confirm(bindings.findPendingFor(otherAccount).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(bindings, ADDRESS_DIGEST, otherAccount, RecoveryEmailHint.masking(ADDRESS), NOW);
 
         attachRecoveryEmail.attach(CALLER_ID, ADDRESS);
 
         assertThat(bindings.findPendingFor(CALLER)).isPresent();
         assertThat(mails.attachMailRecipients).containsExactly(ADDRESS);
         assertThat(bindings.hasConfirmedBindingFor(otherAccount)).isTrue();
+    }
+
+    @Test
+    void attachThenConfirm_toAnAddressConfirmedOnAnotherAccount_leavesBothAccountsWithAConfirmedBinding() {
+        KeycloakUserId otherAccount = new KeycloakUserId("other-account");
+        saveConfirmedBinding(bindings, ADDRESS_DIGEST, otherAccount, RecoveryEmailHint.masking(ADDRESS), NOW);
+        ConfirmRecoveryEmail confirmRecoveryEmail =
+                new ConfirmRecoveryEmail(bindings, codeStore, hasher, Clock.fixed(NOW, ZoneOffset.UTC));
+        attachRecoveryEmail.attach(CALLER_ID, ADDRESS);
+
+        confirmRecoveryEmail.confirm(CALLER_ID, mails.attachMailCodes.get(0));
+
+        assertThat(bindings.findConfirmedFor(ADDRESS_DIGEST))
+                .extracting(RecoveryEmailBinding::keycloakUserId)
+                .containsExactlyInAnyOrder(CALLER, otherAccount);
     }
 
     @Test
@@ -121,7 +139,7 @@ class AttachRecoveryEmailTest {
         assertThat(bindings.all()).hasSize(1);
         assertThat(bindings.findPendingFor(CALLER).orElseThrow().digest())
                 .isEqualTo(Sha256RecoveryEmailDigester.digestOf("second@example.test"));
-        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
+        assertThat(codeStore.find(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM).orElseThrow().codeHash())
                 .isEqualTo(hasher.hash(mails.attachMailCodes.get(1)))
                 .isNotEqualTo(hasher.hash(firstCode));
     }
@@ -130,8 +148,17 @@ class AttachRecoveryEmailTest {
     void attach_neverStoresThePlaintextAddress() {
         attachRecoveryEmail.attach(CALLER_ID, ADDRESS);
 
-        String storedState = bindings.all() + " " + codeStore.all();
-        assertThat(storedState).doesNotContain("person@example.test").doesNotContain("person");
+        // Redacted toString() would hide a leak, so every stored field value is inspected directly.
+        RecoveryEmailBinding pendingBinding = bindings.findPendingFor(CALLER).orElseThrow();
+        assertThat(pendingBinding.hint().value()).isEqualTo("p***@e***.test");
+        List<String> storedValuesBesidesTheHint = new ArrayList<>(
+                List.of(pendingBinding.digest().value(), pendingBinding.keycloakUserId().value()));
+        codeStore.all().forEach(row -> storedValuesBesidesTheHint.addAll(
+                List.of(row.subject().value(), row.codeHash(), row.purpose().name())));
+        assertThat(storedValuesBesidesTheHint)
+                .noneMatch(value -> value.contains(ADDRESS))
+                .noneMatch(value -> value.contains("person"))
+                .noneMatch(value -> value.contains("example.test"));
     }
 
     @Test

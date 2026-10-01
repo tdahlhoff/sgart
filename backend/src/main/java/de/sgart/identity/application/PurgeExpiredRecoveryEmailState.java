@@ -45,7 +45,11 @@ public final class PurgeExpiredRecoveryEmailState {
         try {
             purgeStep.run();
         } catch (RuntimeException purgeFailure) {
-            log.error("PurgeExpiredRecoveryEmailState: failed to purge {}; continuing", description, purgeFailure);
+            // Only the failure type: a store exception's message may quote an address digest or code.
+            log.error(
+                    "PurgeExpiredRecoveryEmailState: failed to purge {} ({}); continuing",
+                    description,
+                    purgeFailure.getClass().getName());
         }
     }
 }

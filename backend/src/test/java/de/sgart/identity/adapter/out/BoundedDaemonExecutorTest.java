@@ -31,6 +31,7 @@ class BoundedDaemonExecutorTest {
     void execute_whenTheQueueIsFull_discardsTheOverflowWithoutThrowing() throws Exception {
         CountDownLatch releaseWorker = new CountDownLatch(1);
         CountDownLatch workerBusy = new CountDownLatch(1);
+        CountDownLatch everyQueuedTaskRan = new CountDownLatch(BoundedDaemonExecutor.QUEUE_CAPACITY);
         AtomicInteger executedTasks = new AtomicInteger();
         try (BoundedDaemonExecutor executor = new BoundedDaemonExecutor("test-worker")) {
             executor.execute(() -> {
@@ -41,12 +42,34 @@ class BoundedDaemonExecutorTest {
 
             int overflowingTasks = 10;
             for (int task = 0; task < BoundedDaemonExecutor.QUEUE_CAPACITY + overflowingTasks; task++) {
-                executor.execute(executedTasks::incrementAndGet);
+                executor.execute(() -> {
+                    executedTasks.incrementAndGet();
+                    everyQueuedTaskRan.countDown();
+                });
             }
             releaseWorker.countDown();
+
+            assertThat(everyQueuedTaskRan.await(5, TimeUnit.SECONDS)).isTrue();
         }
 
+        // The overflow was dropped when it was submitted, so nothing beyond the queue's capacity ever ran.
         assertThat(executedTasks.get()).isEqualTo(BoundedDaemonExecutor.QUEUE_CAPACITY);
+    }
+
+    @Test
+    void close_letsTheQueuedTasksFinishBeforeStopping() {
+        // Relies on close() waiting for queued work within its grace period; these tasks are instant,
+        // so the grace period is never what decides the outcome.
+        BoundedDaemonExecutor executor = new BoundedDaemonExecutor("test-worker");
+        AtomicInteger executedTasks = new AtomicInteger();
+        int queuedTasks = 50;
+        for (int task = 0; task < queuedTasks; task++) {
+            executor.execute(executedTasks::incrementAndGet);
+        }
+
+        executor.close();
+
+        assertThat(executedTasks.get()).isEqualTo(queuedTasks);
     }
 
     @Test

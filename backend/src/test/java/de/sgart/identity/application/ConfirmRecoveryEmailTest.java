@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -27,6 +28,7 @@ class ConfirmRecoveryEmailTest {
     private static final Instant NOW = Instant.parse("2026-10-01T10:00:00Z");
     private static final String CALLER_ID = "caller-1";
     private static final KeycloakUserId CALLER = new KeycloakUserId(CALLER_ID);
+    private static final RecoveryCodeSubject CALLER_CODE_SUBJECT = RecoveryCodeSubject.forAccount(CALLER);
     private static final RecoveryEmailDigest FIRST_DIGEST = new RecoveryEmailDigest("first-digest");
     private static final RecoveryEmailDigest SECOND_DIGEST = new RecoveryEmailDigest("second-digest");
     private static final RecoveryEmailHint HINT = RecoveryEmailHint.masking("person@example.test");
@@ -46,13 +48,12 @@ class ConfirmRecoveryEmailTest {
 
         assertThat(bindings.findConfirmedFor(CALLER).orElseThrow().confirmedAt()).isEqualTo(NOW);
         assertThat(bindings.findPendingFor(CALLER)).isEmpty();
-        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(codeStore.find(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
     }
 
     @Test
     void confirm_replacesTheCallersPreviousConfirmedBinding() {
-        bindings.savePending(RecoveryEmailBinding.pending(FIRST_DIGEST, CALLER, HINT, NOW));
-        bindings.confirm(bindings.findPendingFor(CALLER).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(bindings, FIRST_DIGEST, CALLER, HINT, NOW);
         bindings.savePending(RecoveryEmailBinding.pending(SECOND_DIGEST, CALLER, HINT, NOW));
         storeCode("042817", NOW.plusSeconds(60), 0);
 
@@ -64,8 +65,7 @@ class ConfirmRecoveryEmailTest {
 
     @Test
     void confirm_whenTheCallerReattachedTheirAlreadyConfirmedAddress_succeedsAndConsumesTheCode() {
-        bindings.savePending(RecoveryEmailBinding.pending(FIRST_DIGEST, CALLER, HINT, NOW));
-        bindings.confirm(bindings.findPendingFor(CALLER).orElseThrow().confirm(NOW));
+        saveConfirmedBinding(bindings, FIRST_DIGEST, CALLER, HINT, NOW);
         bindings.savePending(RecoveryEmailBinding.pending(FIRST_DIGEST, CALLER, HINT, NOW.plusSeconds(5)));
         storeCode("042817", NOW.plusSeconds(60), 0);
 
@@ -73,7 +73,7 @@ class ConfirmRecoveryEmailTest {
 
         assertThat(bindings.all()).extracting(RecoveryEmailBinding::digest).containsExactly(FIRST_DIGEST);
         assertThat(bindings.hasConfirmedBindingFor(CALLER)).isTrue();
-        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(codeStore.find(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
     }
 
     @Test
@@ -117,9 +117,9 @@ class ConfirmRecoveryEmailTest {
     }
 
     private void storeCode(String code, Instant expiresAt, int attempts) {
-        codeStore.store(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM, hasher.hash(code), expiresAt, NOW);
+        codeStore.store(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM, hasher.hash(code), expiresAt, NOW);
         for (int attempt = 0; attempt < attempts; attempt++) {
-            codeStore.incrementAttempts(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM);
+            codeStore.incrementAttempts(CALLER_CODE_SUBJECT, RecoveryCodePurpose.ATTACH_CONFIRM);
         }
     }
 }

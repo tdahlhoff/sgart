@@ -21,14 +21,15 @@ class JavaMailSenderRecoveryCodeEmailTest {
             new JavaMailSenderRecoveryCodeEmail(javaMailSender, "no-reply@sgart.example");
 
     @Test
-    void attachConfirmationMail_containsTheCodeAndTheLifetimeButNoLink() {
+    void attachConfirmationMail_containsTheCodeAndTheLifetimeButNoLinkHouseholdNameOrNickname() {
         adapter.sendAttachConfirmationCode("person@example.test", "042817");
 
         SimpleMailMessage sent = capturedMail();
         assertThat(sent.getTo()).containsExactly("person@example.test");
         assertThat(sent.getFrom()).isEqualTo("no-reply@sgart.example");
         assertThat(sent.getText()).contains("042817").contains("15 Minuten").contains("ignoriere diese E-Mail");
-        assertThat(sent.getText()).doesNotContain("http");
+        assertThat(sent.getText()).doesNotContain("Haushalt").doesNotContain("Spitzname");
+        assertContainsNoLink(sent.getText());
     }
 
     @Test
@@ -38,7 +39,12 @@ class JavaMailSenderRecoveryCodeEmailTest {
         SimpleMailMessage sent = capturedMail();
         assertThat(sent.getTo()).containsExactly("person@example.test");
         assertThat(sent.getText()).contains("042817").contains("15 Minuten");
-        assertThat(sent.getText()).doesNotContain("http").doesNotContain("Haushalt").doesNotContain("Spitzname");
+        assertThat(sent.getText()).doesNotContain("Haushalt").doesNotContain("Spitzname");
+        assertContainsNoLink(sent.getText());
+    }
+
+    private static void assertContainsNoLink(String mailText) {
+        assertThat(mailText).doesNotContain("http").doesNotContain("://").doesNotContain("www.");
     }
 
     private SimpleMailMessage capturedMail() {

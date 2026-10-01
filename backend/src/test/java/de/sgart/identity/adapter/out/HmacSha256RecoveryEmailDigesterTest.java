@@ -26,10 +26,31 @@ class HmacSha256RecoveryEmailDigesterTest {
     }
 
     @Test
+    void digest_ofAKnownAddressAndPepper_matchesTheKnownAnswer() {
+        // HMAC-SHA256, key = the pepper's UTF-8 bytes, message = the address's UTF-8 bytes, lowercase hex.
+        // Pins the algorithm and encoding: changing either would silently orphan every stored binding.
+        String knownAnswer = "5d1d4f0e4f925059c77746f6bf78fe408b780a6b52bb242f685fd247b6df1292";
+
+        assertThat(new HmacSha256RecoveryEmailDigester(PEPPER).digest(ADDRESS).value()).isEqualTo(knownAnswer);
+    }
+
+    @Test
+    void digest_differsPerAddress() {
+        HmacSha256RecoveryEmailDigester digester = new HmacSha256RecoveryEmailDigester(PEPPER);
+
+        assertThat(digester.digest(ADDRESS)).isNotEqualTo(digester.digest("other.tester@example.test"));
+    }
+
+    @Test
     void digest_neverContainsTheAddress() {
         assertThat(new HmacSha256RecoveryEmailDigester(PEPPER).digest(ADDRESS).value())
                 .doesNotContain("tester")
                 .doesNotContain("example");
+    }
+
+    @Test
+    void constructor_rejectsAMissingPepper() {
+        assertThatThrownBy(() -> new HmacSha256RecoveryEmailDigester(null)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

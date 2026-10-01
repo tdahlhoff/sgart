@@ -8,13 +8,37 @@ import org.junit.jupiter.api.Test;
 class RecoveryEmailHintTest {
 
     @Test
-    void masking_keepsTheFirstCharacterAndTheDomain() {
-        assertThat(RecoveryEmailHint.masking("tester@example.test").value()).isEqualTo("t***@example.test");
+    void masking_keepsTheFirstCharacterOfTheLocalPartAndOfTheDomainNameAndTheTopLevelDomain() {
+        assertThat(RecoveryEmailHint.masking("tester@example.test").value()).isEqualTo("t***@e***.test");
+    }
+
+    @Test
+    void masking_aCommonProvider_keepsOnlyTheFirstCharacterOfTheProviderName() {
+        assertThat(RecoveryEmailHint.masking("tester@gmail.com").value()).isEqualTo("t***@g***.com");
+        assertThat(RecoveryEmailHint.masking("tester@lastname.de").value()).isEqualTo("t***@l***.de");
+    }
+
+    @Test
+    void masking_aDomainWithSubdomains_keepsOnlyTheTextAfterTheLastDotAsTopLevelDomain() {
+        assertThat(RecoveryEmailHint.masking("tester@mail.example.test").value()).isEqualTo("t***@m***.test");
+    }
+
+    @Test
+    void masking_aDomainWithoutADot_masksEverythingAfterItsFirstCharacter() {
+        assertThat(RecoveryEmailHint.masking("tester@localhost").value()).isEqualTo("t***@l***");
+    }
+
+    @Test
+    void masking_aSupplementaryCharacterStartingTheDomainName_keepsTheWholeCharacter() {
+        String supplementaryCharacter = "\uD835\uDC00";
+
+        assertThat(RecoveryEmailHint.masking("tester@" + supplementaryCharacter + "domain.test").value())
+                .isEqualTo("t***@" + supplementaryCharacter + "***.test");
     }
 
     @Test
     void masking_aOneCharacterLocalPart_stillMasks() {
-        assertThat(RecoveryEmailHint.masking("t@example.test").value()).isEqualTo("t***@example.test");
+        assertThat(RecoveryEmailHint.masking("t@example.test").value()).isEqualTo("t***@e***.test");
     }
 
     @Test
@@ -33,7 +57,7 @@ class RecoveryEmailHintTest {
         String supplementaryCharacter = "\uD835\uDC00";
 
         assertThat(RecoveryEmailHint.masking(supplementaryCharacter + "tester@example.test").value())
-                .isEqualTo(supplementaryCharacter + "***@example.test");
+                .isEqualTo(supplementaryCharacter + "***@e***.test");
     }
 
     @Test

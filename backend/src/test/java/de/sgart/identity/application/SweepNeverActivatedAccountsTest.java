@@ -1,5 +1,6 @@
 package de.sgart.identity.application;
 
+import static de.sgart.identity.RecoveryEmailBindingFixtures.saveConfirmedBinding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
@@ -50,31 +51,35 @@ class SweepNeverActivatedAccountsTest {
 
     @Test
     void sweep_keepsAnAccountWithAConfirmedBinding() {
-        KeycloakUserId confirmedEmail = new KeycloakUserId("confirmed-email");
-        provisionedAccountRepository.recordIfAbsent(confirmedEmail, NOW.minus(Duration.ofDays(100)));
-        recoveryEmailBindings.savePending(pendingBindingFor(confirmedEmail));
-        recoveryEmailBindings.confirm(recoveryEmailBindings.findPendingFor(confirmedEmail).orElseThrow().confirm(NOW));
+        KeycloakUserId accountWithConfirmedBinding = new KeycloakUserId("account-with-confirmed-binding");
+        provisionedAccountRepository.recordIfAbsent(accountWithConfirmedBinding, NOW.minus(Duration.ofDays(100)));
+        saveConfirmedBinding(
+                recoveryEmailBindings,
+                new RecoveryEmailDigest("digest-of-" + accountWithConfirmedBinding.value()),
+                accountWithConfirmedBinding,
+                RecoveryEmailHint.masking("person@example.test"),
+                NOW);
 
         sweep.sweep();
 
-        assertThat(provisionedAccountRepository.contains(confirmedEmail)).isTrue();
+        assertThat(provisionedAccountRepository.contains(accountWithConfirmedBinding)).isTrue();
         assertThat(deleteAccount.deletedIds).isEmpty();
     }
 
     @Test
     void sweep_deletesAShellWithOnlyAPendingBindingAndRemovesThatBinding() {
-        KeycloakUserId unconfirmedAttach = new KeycloakUserId("unconfirmed-attach");
-        provisionedAccountRepository.recordIfAbsent(unconfirmedAttach, NOW.minus(Duration.ofDays(15)));
-        recoveryEmailBindings.savePending(pendingBindingFor(unconfirmedAttach));
-        emailRecoveryCodeStore.store(
-                RecoveryCodeSubject.forAccount(unconfirmedAttach), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
+        KeycloakUserId accountWithPendingBinding = new KeycloakUserId("account-with-pending-binding");
+        provisionedAccountRepository.recordIfAbsent(accountWithPendingBinding, NOW.minus(Duration.ofDays(15)));
+        recoveryEmailBindings.savePending(pendingBindingFor(accountWithPendingBinding));
+        RecoveryCodeSubject attachCodeSubject = RecoveryCodeSubject.forAccount(accountWithPendingBinding);
+        emailRecoveryCodeStore.store(attachCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.plusSeconds(60), NOW);
 
         sweep.sweep();
 
-        assertThat(provisionedAccountRepository.contains(unconfirmedAttach)).isFalse();
-        assertThat(deleteAccount.deletedIds).containsExactly(unconfirmedAttach);
-        assertThat(emailRecoveryCodeStore.find(RecoveryCodeSubject.forAccount(unconfirmedAttach), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
-        assertThat(recoveryEmailBindings.findAllFor(unconfirmedAttach)).isEmpty();
+        assertThat(provisionedAccountRepository.contains(accountWithPendingBinding)).isFalse();
+        assertThat(deleteAccount.deletedIds).containsExactly(accountWithPendingBinding);
+        assertThat(emailRecoveryCodeStore.find(attachCodeSubject, RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+        assertThat(recoveryEmailBindings.findAllFor(accountWithPendingBinding)).isEmpty();
     }
 
     @Test
