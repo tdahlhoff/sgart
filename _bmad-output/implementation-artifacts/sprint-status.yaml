@@ -337,14 +337,13 @@ development_status:
   # Epic 5; depends only on Epic 1 (an authenticated person). Browserless custom Direct-Grant login +
   # silent Admin-API provisioning; supersedes shipped 1.4 sign-in transport + 4.1 email invites (see the
   # forward-pointers in epics.md Stories 1.4/1.11/4.1/4.2).
-  epic-7: in-progress
+  epic-7: done
   7-0-choose-browserless-token-mechanism-spike: backlog  # decision RESOLVED 2026-09-13 (custom Direct-Grant SPI); acceptance test lands at build
   7-1-silent-account-provisioning-on-first-launch: done
   7-2-recovery-phrase-reveal-and-profile-re-view: done
   7-3-recover-by-email-opt-in: done
   7-4-consent-capture: done
   7-5-invite-by-code-or-link-retire-email-path: done  # dev-story + 7 review patches + patch-round re-review (2 more patches, 8 rejected) all applied 2026-09-18; both suites green
-  epic-7-retrospective: optional
 
   # Epic 5: Offline Resilience & Conflict
   epic-5: backlog
@@ -363,7 +362,7 @@ development_status:
   # Epic 8: Beta Hardening (pre-beta fixes from manual testing 2026-09-20). Epic numbers are stable
   # IDs, NOT execution order — this runs BEFORE Epics 5 & 6. Execution order: 1→2→3→4→7→8→5→6
   # (see epics.md "Execution order" note). Epic 8 = next up (pre-beta).
-  epic-8: in-progress
+  epic-8: done
   8-1-fix-manage-household-crash-invites-reachable: done
   8-2-session-never-expires-silent-device-reauth: done
   8-3-display-name-at-onboarding-used-everywhere: done
@@ -373,7 +372,6 @@ development_status:
   8-7-hide-household-selector-on-profile: done
   8-8-fix-live-sync-projector-stream-filter-throw: done
   8-9-provisioning-epic-critical-path-tests: done
-  epic-8-retrospective: optional
 
 action_items:
   - epic: 1
