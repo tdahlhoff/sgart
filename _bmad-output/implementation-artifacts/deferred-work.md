@@ -421,3 +421,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture.md`
   summary: Automated verification of the native `FLAG_SECURE` channel handler in `MainActivity.kt`.
   evidence: [MEDIUM] No Android instrumentation or integration-test setup exists; Dart tests mock the channel only. Gate for now: manual emulator check — open Profil → recovery token and try a screenshot.
+
+## Deferred from: review of spec-beta-hardening-rebind-compensation-and-retract-race (2026-10-01)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-rebind-compensation-and-retract-race.md`
+  summary: Close the remaining TOCTOU window in the accept compensation: `AcceptInviteHandler`'s `hasJoined` re-read and the `retract` are not atomic.
+  evidence: [HIGH, narrowed from the earlier entry] A same-person retry that has read the mapping but not yet appended `MemberJoined` still sees "not joined"; the failed winner then retracts and the retry commits a member with no mapping. Needs an atomic retract-if-unjoined (or mapping written together with the event).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-rebind-compensation-and-retract-race.md`
+  summary: Remove consent and recovery-code rows keyed by a deleted throwaway account's Keycloak id when the throwaway is deleted.
+  evidence: [LOW, pre-existing] `ConfirmEmailRecovery` deletes the throwaway and its provisioned row but not `account_consent` / `EmailRecoveryCodeStore` rows for that id; the sweep cannot find them afterwards. Belongs with Epic 6 erasure.

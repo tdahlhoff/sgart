@@ -251,6 +251,92 @@ class AcceptInviteHandlerTest {
         assertThat(mappingRepository.findMemberId(anna, householdId)).contains(winnersMemberId);
     }
 
+    @Test
+    void aFailedWinnerAppendKeepsTheMappingWhenARetryOfTheSamePersonAlreadyJoinedWithTheSameId() {
+        InviteId inviteId = seedHouseholdWithActiveInvite();
+        KeycloakUserId anna = new KeycloakUserId("anna-sub");
+        EventStore retryCommitsFirst = new EventStore() {
+            private boolean retryHasRun;
+
+            @Override
+            public void append(AggregateVersion expectedVersion, List<DomainEvent> events, CommandId commandId) {
+                if (!retryHasRun) {
+                    retryHasRun = true;
+                    handler().handle("anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString());
+                }
+                eventStore.append(expectedVersion, events, commandId);
+            }
+
+            @Override
+            public List<DomainEvent> readStream(StreamId stream) {
+                return eventStore.readStream(stream);
+            }
+        };
+        AcceptInviteHandler winningHandler = new AcceptInviteHandler(retryCommitsFirst, issueMemberIdentity, alwaysConsentingGate());
+
+        assertThatThrownBy(() -> winningHandler.handle(
+                        "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(ConcurrencyConflictException.class);
+
+        assertThat(mappingRepository.findMemberId(anna, householdId)).isPresent();
+        Household household = Household.rehydrate(streamId, eventStore.readStream(streamId));
+        assertThat(household.isMember(mappingRepository.findMemberId(anna, householdId).orElseThrow())).isTrue();
+    }
+
+    @Test
+    void aFailedAppendStillRetractsTheFreshMappingWhenNobodyJoinedWithIt() {
+        InviteId inviteId = seedHouseholdWithActiveInvite();
+        KeycloakUserId anna = new KeycloakUserId("anna-sub");
+        EventStore alwaysConflicting = new EventStore() {
+            @Override
+            public void append(AggregateVersion expectedVersion, List<DomainEvent> events, CommandId commandId) {
+                throw new ConcurrencyConflictException(expectedVersion, expectedVersion);
+            }
+
+            @Override
+            public List<DomainEvent> readStream(StreamId stream) {
+                return eventStore.readStream(stream);
+            }
+        };
+        AcceptInviteHandler failingHandler = new AcceptInviteHandler(alwaysConflicting, issueMemberIdentity, alwaysConsentingGate());
+
+        assertThatThrownBy(() -> failingHandler.handle(
+                        "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(ConcurrencyConflictException.class);
+
+        assertThat(mappingRepository.findMemberId(anna, householdId)).isEmpty();
+    }
+
+    @Test
+    void aFailedAppendRetractsTheFreshMappingWhenTheCompensationReReadFails() {
+        InviteId inviteId = seedHouseholdWithActiveInvite();
+        KeycloakUserId anna = new KeycloakUserId("anna-sub");
+        EventStore failingAfterTheFirstRead = new EventStore() {
+            private int reads;
+
+            @Override
+            public void append(AggregateVersion expectedVersion, List<DomainEvent> events, CommandId commandId) {
+                throw new ConcurrencyConflictException(expectedVersion, expectedVersion);
+            }
+
+            @Override
+            public List<DomainEvent> readStream(StreamId stream) {
+                if (reads++ > 0) {
+                    throw new IllegalStateException("event store unavailable");
+                }
+                return eventStore.readStream(stream);
+            }
+        };
+        AcceptInviteHandler failingHandler =
+                new AcceptInviteHandler(failingAfterTheFirstRead, issueMemberIdentity, alwaysConsentingGate());
+
+        assertThatThrownBy(() -> failingHandler.handle(
+                        "anna-sub", householdId.toString(), inviteId.toString(), CommandId.generate().toString()))
+                .isInstanceOf(ConcurrencyConflictException.class);
+
+        assertThat(mappingRepository.findMemberId(anna, householdId)).isEmpty();
+    }
+
     /** Reports no mapping on the first lookup (the loser's stale read in {@code provision}), then the real state. */
     private static final class StaleFirstReadRepository implements MemberMappingRepository {
 

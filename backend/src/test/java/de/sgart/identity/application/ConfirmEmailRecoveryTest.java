@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
+import de.sgart.identity.application.RecoveryEmailTestSupport.FailingRebindAccountCredential;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeFindAccountByEmail;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeGetAccountDetails;
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
 import de.sgart.identity.application.RecoveryEmailTestSupport.OrderedDeleteAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.OrderedRebindAccountCredential;
+import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingCreateAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingRebindAccountCredential;
 import de.sgart.identity.domain.KeycloakUserId;
@@ -44,6 +46,7 @@ class ConfirmEmailRecoveryTest {
     private final InMemoryProvisionedAccountRepository provisionedAccountRepository =
             new InMemoryProvisionedAccountRepository();
     private final RecordingRebindAccountCredential rebindAccountCredential = new RecordingRebindAccountCredential();
+    private final RecordingCreateAccount createAccount = new RecordingCreateAccount();
     private final MutableClock clock = new MutableClock(NOW);
     private final ConfirmEmailRecovery confirmEmailRecovery = new ConfirmEmailRecovery(
             findAccountByEmail,
@@ -53,6 +56,7 @@ class ConfirmEmailRecoveryTest {
             deleteAccount,
             provisionedAccountRepository,
             rebindAccountCredential,
+            createAccount,
             clock);
 
     @Test
@@ -220,11 +224,85 @@ class ConfirmEmailRecoveryTest {
                 new OrderedDeleteAccount(sharedLog),
                 provisionedAccountRepository,
                 new OrderedRebindAccountCredential(sharedLog),
+                createAccount,
                 clock);
 
         orderedConfirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817");
 
         assertThat(sharedLog).containsExactly("delete:" + THROWAWAY_ID, "rebind:target-A1");
+    }
+
+    private ConfirmEmailRecovery confirmEmailRecoveryWithFailingRebind() {
+        return new ConfirmEmailRecovery(
+                findAccountByEmail,
+                emailRecoveryCodeStore,
+                hasher,
+                getAccountDetails,
+                deleteAccount,
+                provisionedAccountRepository,
+                new FailingRebindAccountCredential(),
+                createAccount,
+                clock);
+    }
+
+    private void seedRecoverableAccount() {
+        findAccountByEmail.registerAccount("person@example.com", TARGET);
+        emailRecoveryCodeStore.store(TARGET, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
+        getAccountDetails.register(THROWAWAY, "U2", "K2");
+        provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
+    }
+
+    @Test
+    void confirmEmailRecovery_whenTheRebindFails_restoresTheThrowawayAndKeepsTheCodeForARetry() {
+        seedRecoverableAccount();
+
+        assertThatThrownBy(() ->
+                        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817"))
+                .isInstanceOf(RecoveryRebindFailedException.class)
+                .hasCauseInstanceOf(IllegalStateException.class);
+
+        assertThat(deleteAccount.deletedIds).containsExactly(THROWAWAY);
+        assertThat(createAccount.creations).containsExactly(new RecordingCreateAccount.Creation("U2", "K2"));
+        assertThat(provisionedAccountRepository.contains(THROWAWAY)).isFalse();
+        assertThat(provisionedAccountRepository.contains(new KeycloakUserId("restored-U2"))).isTrue();
+        assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isPresent();
+    }
+
+    @Test
+    void confirmEmailRecovery_whenTheRebindAndTheRestoreBothFail_stillRaisesTheCleanRetryableFailure() {
+        seedRecoverableAccount();
+        createAccount.shouldFail = true;
+
+        assertThatThrownBy(() ->
+                        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817"))
+                .isInstanceOf(RecoveryRebindFailedException.class)
+                .satisfies(failure -> assertThat(failure.getCause().getSuppressed()).hasSize(1));
+
+        assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isPresent();
+    }
+
+    @Test
+    void confirmEmailRecovery_whenTheCallersAccountNoLongerExists_isRejectedAsUnauthorizedAndChangesNothing() {
+        findAccountByEmail.registerAccount("person@example.com", TARGET);
+        emailRecoveryCodeStore.store(TARGET, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
+
+        assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817"))
+                .isInstanceOf(CallerAccountNotFoundException.class);
+
+        assertThat(deleteAccount.deletedIds).isEmpty();
+        assertThat(rebindAccountCredential.rebinds).isEmpty();
+        assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isPresent();
+    }
+
+    @Test
+    void confirmEmailRecovery_whenTheRebindWasAppliedButItsResponseWasLost_completesTheRecoveryInsteadOfFailing() {
+        seedRecoverableAccount();
+        createAccount.existingHolder = TARGET;
+
+        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.com", "042817");
+
+        assertThat(provisionedAccountRepository.contains(TARGET)).isFalse();
+        assertThat(emailRecoveryCodeStore.find(TARGET, RecoveryCodePurpose.RECOVER)).isEmpty();
     }
 
     /** Lets {@code confirmEmailRecovery_withExpiredCode_isRejectedAndChangesNothing} move past a TTL without a sleep. */

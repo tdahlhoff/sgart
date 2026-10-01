@@ -42,6 +42,7 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'governance.notPermitted' => localizations.membersGovernanceNotPermittedError,
     'membership.lastAdmin' => localizations.membersLastAdminError,
     'membership.mappingConflict' => localizations.membershipMappingConflictError,
+    'account.recoveryRebindFailed' => localizations.accountRecoveryRebindFailedError,
     'auth.unauthorized' => localizations.authSessionExpiredError,
     'auth.invalidRecoveryToken' => localizations.recoveryTokenRestoreInvalidTokenError,
     'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,

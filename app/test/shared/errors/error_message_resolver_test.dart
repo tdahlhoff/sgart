@@ -27,6 +27,13 @@ void main() {
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 
+    test('accountRecoveryRebindFailedResolvesToItsOwnRetryCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryRebindFailed');
+
+      expect(resolved, localizations.accountRecoveryRebindFailedError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('itemNotDuringTripResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'item.notDuringTrip');
 

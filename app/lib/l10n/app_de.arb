@@ -26,6 +26,11 @@
     "description": "Shown when the same person's first-time household join or create runs twice at once and this attempt lost the race (membership.mappingConflict); a manual retry succeeds."
   },
 
+  "accountRecoveryRebindFailedError": "Die Wiederherstellung hat gerade nicht geklappt. Dein Code bleibt gültig, bitte versuche es gleich noch einmal.",
+  "@accountRecoveryRebindFailedError": {
+    "description": "Shown when the account recovery's rebind failed on the server after the code was verified (account.recoveryRebindFailed); the code is kept, so a retry works."
+  },
+
   "authSignedInAsLabel": "Angemeldet als {displayName}",
   "@authSignedInAsLabel": {
     "description": "Shown on the authenticated placeholder screen with the live display name from GET /identity/me.",

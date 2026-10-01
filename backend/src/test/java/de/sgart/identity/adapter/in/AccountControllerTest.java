@@ -203,14 +203,19 @@ class AccountControllerTest {
         record Rebind(String keycloakUserId, String username, String publicKey) {}
 
         final List<Rebind> rebinds = new ArrayList<>();
+        boolean shouldFail;
 
         @Override
         public void rebind(KeycloakUserId keycloakUserId, String username, String publicKey) {
+            if (shouldFail) {
+                throw new IllegalStateException("keycloak unavailable");
+            }
             rebinds.add(new Rebind(keycloakUserId.value(), username, publicKey));
         }
 
         void clear() {
             rebinds.clear();
+            shouldFail = false;
         }
     }
 
@@ -440,6 +445,48 @@ class AccountControllerTest {
                         .content("{\"email\":\"nobody@example.com\",\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("account.recoveryCodeInvalid"));
+    }
+
+    @Test
+    void confirmRecovery_whenTheCallersAccountNoLongerExists_returns401SoTheAppReSignsIn() throws Exception {
+        String code = requestRecoveryCodeAsThrowaway("device-2-sub");
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\",\"code\":\"" + code
+                                + "\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
+    }
+
+    @Test
+    void confirmRecovery_whenTheRebindFails_returns503AndKeepsTheCodeForARetry() throws Exception {
+        String throwawayAccountId = "device-2-sub";
+        getAccountDetails.register(throwawayAccountId, "throwaway-username", "throwaway-public-key");
+        String code = requestRecoveryCodeAsThrowaway(throwawayAccountId);
+        rebindAccountCredential.shouldFail = true;
+
+        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                        .with(jwt().jwt(jwt -> jwt.subject(throwawayAccountId)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\",\"code\":\"" + code
+                                + "\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("account.recoveryRebindFailed"));
+
+        assertThat(emailRecoveryCodeStore.find(
+                        new KeycloakUserId(TestFindAccountByEmail.REGISTERED_ACCOUNT_ID), RecoveryCodePurpose.RECOVER))
+                .isPresent();
+    }
+
+    private String requestRecoveryCodeAsThrowaway(String throwawayAccountId) throws Exception {
+        mockMvc.perform(post("/api/v1/account/recovery/email")
+                        .with(jwt().jwt(jwt -> jwt.subject(throwawayAccountId)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + TestFindAccountByEmail.REGISTERED_EMAIL + "\"}"))
+                .andExpect(status().isAccepted());
+        return sendRecoveryCodeEmail.lastCode();
     }
 
     @Test

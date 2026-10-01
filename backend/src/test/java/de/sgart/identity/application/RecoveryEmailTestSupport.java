@@ -183,4 +183,30 @@ final class RecoveryEmailTestSupport {
             sharedLog.add("rebind:" + keycloakUserId.value());
         }
     }
+
+    /** A rebind that fails after the throwaway is already deleted (Keycloak 5xx / network). */
+    static final class FailingRebindAccountCredential implements RebindAccountCredential {
+        @Override
+        public void rebind(KeycloakUserId keycloakUserId, String username, String publicKey) {
+            throw new IllegalStateException("keycloak unavailable");
+        }
+    }
+
+    static final class RecordingCreateAccount implements CreateAccount {
+        record Creation(String username, String publicKey) {}
+
+        final List<Creation> creations = new ArrayList<>();
+        boolean shouldFail;
+        /** When set, the "account" already exists under this id — Keycloak's idempotent 409 path. */
+        KeycloakUserId existingHolder;
+
+        @Override
+        public KeycloakUserId create(String username, String publicKey) {
+            if (shouldFail) {
+                throw new IllegalStateException("keycloak still unavailable");
+            }
+            creations.add(new Creation(username, publicKey));
+            return existingHolder != null ? existingHolder : new KeycloakUserId("restored-" + username);
+        }
+    }
 }

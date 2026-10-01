@@ -333,6 +333,7 @@ public class IdentityBeansConfig {
             DeleteAccount deleteAccount,
             ProvisionedAccountRepository provisionedAccountRepository,
             RebindAccountCredential rebindAccountCredential,
+            CreateAccount createAccount,
             Clock clock) {
         return new ConfirmEmailRecovery(
                 findAccountByEmail,
@@ -342,6 +343,7 @@ public class IdentityBeansConfig {
                 deleteAccount,
                 provisionedAccountRepository,
                 rebindAccountCredential,
+                createAccount,
                 clock);
     }
 

@@ -108,11 +108,24 @@ public final class AcceptInviteHandler {
             // wrote the mapping. Left as-is, a stranger who lost a concurrent redemption of the same
             // bearer invite would keep durable household access despite the retry rejecting them
             // (409) — the exact F1 leak. Roll the mapping back, but only when *this* attempt freshly
-            // provisioned it: an existing member's real mapping must never be deleted (AD-5).
-            if (provisioned.freshlyProvisioned()) {
+            // provisioned it: an existing member's real mapping must never be deleted (AD-5). Not
+            // even then when a concurrent retry of the same person has since committed their join
+            // with this very id — that member depends on the mapping. The re-read and the retract
+            // are not atomic: a retry that has read the mapping but not yet appended can still lose
+            // it (tracked in deferred-work.md).
+            if (provisioned.freshlyProvisioned() && !hasJoined(streamId, joiner)) {
                 issueMemberIdentity.retract(keycloakUserId, householdId);
             }
             throw appendFailed;
+        }
+    }
+
+    /** A failed re-read counts as "not joined": the compensation then behaves as it always did. */
+    private boolean hasJoined(StreamId streamId, MemberId joiner) {
+        try {
+            return Household.rehydrate(streamId, eventStore.readStream(streamId)).isMember(joiner);
+        } catch (RuntimeException readFailed) {
+            return false;
         }
     }
 }
