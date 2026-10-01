@@ -1,13 +1,16 @@
 package de.sgart.identity.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import de.sgart.identity.adapter.out.InMemoryEmailRecoveryCodeStore;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
+import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
 import java.time.Clock;
@@ -62,5 +65,44 @@ class PurgeExpiredRecoveryEmailStateTest {
 
         assertThat(codeStore.find(RecoveryCodeSubject.forAccount(STALE_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
         assertThat(codeStore.find(RecoveryCodeSubject.forAccount(FRESH_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM)).isPresent();
+    }
+
+    @Test
+    void purge_whenThePendingBindingCleanupFails_stillDeletesTheExpiredCodes() {
+        codeStore.store(RecoveryCodeSubject.forAccount(STALE_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM, "hash", NOW.minusSeconds(1), NOW.minusSeconds(901));
+        PurgeExpiredRecoveryEmailState withFailingBindings = new PurgeExpiredRecoveryEmailState(
+                RecoveryEmailTestSupport.failingOn(
+                        RecoveryEmailBindingRepository.class, bindings, "deletePendingCreatedBefore"),
+                codeStore,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        withFailingBindings.purge();
+
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(STALE_ACCOUNT), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+    }
+
+    @Test
+    void purge_whenTheExpiredCodeCleanupFails_stillDeletesTheStalePendingBindings() {
+        bindings.savePending(RecoveryEmailBinding.pending(
+                new RecoveryEmailDigest("d1"), STALE_ACCOUNT, HINT, NOW.minus(RecoveryCode.TTL).minusSeconds(1)));
+        PurgeExpiredRecoveryEmailState withFailingCodes = new PurgeExpiredRecoveryEmailState(
+                bindings,
+                RecoveryEmailTestSupport.failingOn(EmailRecoveryCodeStore.class, codeStore, "deleteExpiredBefore"),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        withFailingCodes.purge();
+
+        assertThat(bindings.findPendingFor(STALE_ACCOUNT)).isEmpty();
+    }
+
+    @Test
+    void purge_whenBothCleanupsFail_neverThrows() {
+        PurgeExpiredRecoveryEmailState withEverythingFailing = new PurgeExpiredRecoveryEmailState(
+                RecoveryEmailTestSupport.failingOn(
+                        RecoveryEmailBindingRepository.class, bindings, "deletePendingCreatedBefore"),
+                RecoveryEmailTestSupport.failingOn(EmailRecoveryCodeStore.class, codeStore, "deleteExpiredBefore"),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThatCode(withEverythingFailing::purge).doesNotThrowAnyException();
     }
 }

@@ -61,7 +61,7 @@ An unconfirmed attach grants nothing and expires with the code TTL (15 min), so 
 |---|---|---|---|
 | Attach, per caller | caller `KeycloakUserId` | ≥ 60 s apart, ≤ 5 / 24 h (as today) | protects the caller's own flow; over budget → `429` |
 | Attach mails, per address | address digest | ≤ 3 / 24 h, then silent | stops inbox spam via free throwaway accounts; silent = constant 202 |
-| Recover, per address | address digest | small cap (e.g. 3 / 24 h) | a successful confirm resets it; an already-issued valid code stays usable |
+| Recover, per address | address digest | ≥ 60 s apart, ≤ 10 / 24 h (raised from 3 after review) | a successful confirm resets it; an already-issued valid code stays usable |
 
 **Accepted trade-off:** a stranger can use up the per-address attach cap and delay the owner's own attach by up to 24 h. They cannot read anything or touch recovery, because the budgets are separate.
 Code format, TTL (15 min), and the 5-attempt cap are unchanged. Throttles stay in-memory, keyed by digests and ids only (no PII); the proxy rate limit from ADR-0002 remains the outer layer.

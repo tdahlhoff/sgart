@@ -1,6 +1,7 @@
 package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryEmailBinding;
@@ -16,7 +17,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -56,7 +59,8 @@ class JdbcRecoveryEmailBindingRepositoryTest {
     @BeforeEach
     void setUp() {
         JdbcClient.create(dataSource).sql("TRUNCATE TABLE recovery_email_binding").update();
-        repository = new JdbcRecoveryEmailBindingRepository(JdbcClient.create(dataSource));
+        repository = new JdbcRecoveryEmailBindingRepository(
+                JdbcClient.create(dataSource), new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
     }
 
     @Test
@@ -154,5 +158,31 @@ class JdbcRecoveryEmailBindingRepositoryTest {
         assertThat(repository.hasConfirmedBindingFor(ACCOUNT_A)).isTrue();
         assertThat(repository.findPendingFor(ACCOUNT_B)).isEmpty();
         assertThat(repository.findPendingFor(new KeycloakUserId("account-c"))).isPresent();
+    }
+
+    @Test
+    void confirm_aBindingThatWasNeverSaved_failsAndKeepsTheAccountsConfirmedBinding() {
+        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
+        repository.confirm(repository.findPendingFor(ACCOUNT_A).orElseThrow().confirm(NOW));
+        RecoveryEmailBinding neverSaved = RecoveryEmailBinding.pending(OTHER_DIGEST, ACCOUNT_A, HINT, NOW).confirm(NOW);
+
+        assertThatThrownBy(() -> repository.confirm(neverSaved))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageNotContaining(OTHER_DIGEST.value())
+                .hasMessageNotContaining(ACCOUNT_A.value());
+
+        assertThat(repository.findConfirmedFor(ACCOUNT_A).orElseThrow().digest()).isEqualTo(SHARED_DIGEST);
+    }
+
+    @Test
+    void savePending_whenTheInsertFails_keepsTheAccountsEarlierPendingBinding() {
+        repository.savePending(RecoveryEmailBinding.pending(SHARED_DIGEST, ACCOUNT_A, HINT, NOW));
+        RecoveryEmailDigest digestTooLongForTheColumn = new RecoveryEmailDigest("x".repeat(65));
+
+        assertThatThrownBy(() -> repository.savePending(
+                        RecoveryEmailBinding.pending(digestTooLongForTheColumn, ACCOUNT_A, HINT, NOW)))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(repository.findPendingFor(ACCOUNT_A).orElseThrow().digest()).isEqualTo(SHARED_DIGEST);
     }
 }

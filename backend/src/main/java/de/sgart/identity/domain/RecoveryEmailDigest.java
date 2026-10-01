@@ -16,8 +16,9 @@ public record RecoveryEmailDigest(String value) {
         }
     }
 
+    /** Redacted: the digest is a stable handle on an address and stays out of logs and exception messages. */
     @Override
     public String toString() {
-        return value;
+        return "RecoveryEmailDigest[redacted]";
     }
 }

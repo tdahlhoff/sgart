@@ -63,6 +63,20 @@ class ConfirmRecoveryEmailTest {
     }
 
     @Test
+    void confirm_whenTheCallerReattachedTheirAlreadyConfirmedAddress_succeedsAndConsumesTheCode() {
+        bindings.savePending(RecoveryEmailBinding.pending(FIRST_DIGEST, CALLER, HINT, NOW));
+        bindings.confirm(bindings.findPendingFor(CALLER).orElseThrow().confirm(NOW));
+        bindings.savePending(RecoveryEmailBinding.pending(FIRST_DIGEST, CALLER, HINT, NOW.plusSeconds(5)));
+        storeCode("042817", NOW.plusSeconds(60), 0);
+
+        confirmRecoveryEmail.confirm(CALLER_ID, "042817");
+
+        assertThat(bindings.all()).extracting(RecoveryEmailBinding::digest).containsExactly(FIRST_DIGEST);
+        assertThat(bindings.hasConfirmedBindingFor(CALLER)).isTrue();
+        assertThat(codeStore.find(RecoveryCodeSubject.forAccount(CALLER), RecoveryCodePurpose.ATTACH_CONFIRM)).isEmpty();
+    }
+
+    @Test
     void confirm_withoutAPendingBinding_isRejectedLikeAWrongCode() {
         storeCode("042817", NOW.plusSeconds(60), 0);
 

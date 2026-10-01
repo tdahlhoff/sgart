@@ -15,8 +15,10 @@ import java.util.Objects;
  * Attaches a recovery email to the caller's own (real, authenticated) account: writes a
  * <em>pending</em> binding keyed by the address digest and mails a 6-digit code. Only a subsequent
  * {@link ConfirmRecoveryEmail} makes the binding count. The address is stored nowhere, and nothing
- * about it (already held by another account, over its mail budget) changes the outcome the caller
- * sees: the only visible refusals are a malformed address and the caller's own budget.
+ * about it (already held by another account, over its mail budget) changes the status or body the
+ * caller sees: the only visible refusals are a malformed address and the caller's own budget. The
+ * over-mail-budget branch returns before the writes, so response time can reveal that this address
+ * already received its attach mails today (accepted: a weak signal).
  */
 public final class AttachRecoveryEmail {
 

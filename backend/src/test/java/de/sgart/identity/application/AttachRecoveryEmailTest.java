@@ -62,6 +62,20 @@ class AttachRecoveryEmailTest {
     }
 
     @Test
+    void attachThenConfirm_reattachingTheCallersAlreadyConfirmedAddress_confirmsWithTheMailedCode() {
+        ConfirmRecoveryEmail confirmRecoveryEmail =
+                new ConfirmRecoveryEmail(bindings, codeStore, hasher, Clock.fixed(NOW, ZoneOffset.UTC));
+        attachRecoveryEmail.attach(CALLER_ID, ADDRESS);
+        confirmRecoveryEmail.confirm(CALLER_ID, mails.attachMailCodes.get(0));
+        attachRecoveryEmail.attach(CALLER_ID, ADDRESS);
+
+        confirmRecoveryEmail.confirm(CALLER_ID, mails.attachMailCodes.get(1));
+
+        assertThat(bindings.all()).extracting(RecoveryEmailBinding::digest).containsExactly(ADDRESS_DIGEST);
+        assertThat(bindings.hasConfirmedBindingFor(CALLER)).isTrue();
+    }
+
+    @Test
     void attach_toAnAddressConfirmedOnAnotherAccount_stillWritesAPendingBindingAndMailsACode() {
         KeycloakUserId otherAccount = new KeycloakUserId("other-account");
         bindings.savePending(RecoveryEmailBinding.pending(ADDRESS_DIGEST, otherAccount, RecoveryEmailHint.masking(ADDRESS), NOW));

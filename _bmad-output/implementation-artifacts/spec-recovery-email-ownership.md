@@ -52,7 +52,7 @@ context:
 | Profile status | `GET /api/v1/account/email` | `200 {addressHint}` for A's confirmed binding, or `200 {addressHint: null}` | Pending binding is never listed |
 | Recover request, confirmed bindings exist | Throwaway T, address with ≥1 confirmed binding | `202` at once; on the executor: per-address recover budget, one `RECOVER` code stored for the **digest**, one mail | — |
 | Recover request, unknown or pending-only address | T | `202`; nothing stored or sent | Same timing (whole issuance runs on the executor) |
-| Recover request, over per-address recover budget | 4th in 24 h, or within 60 s | `202`; nothing new stored or sent; an already-issued valid code stays usable | Silent |
+| Recover request, over per-address recover budget | 11th in 24 h, or within 60 s | `202`; nothing new stored or sent; an already-issued valid code stays usable | Silent |
 | Recover confirm, one candidate | T, correct code, digest → {A} | R1 rebind onto A; `RECOVER` code deleted; recover budget for the digest reset; T's own bindings and codes deleted; `204` | Rebind failure → existing 503 compensation |
 | Recover confirm, several candidates, no `accountId` | Digest → {A, C} | `200 {candidates:[{accountId, households:[{householdName, nickname}]}]}`, sorted by household count, highest first; code **kept**; nothing rebound | Wrong code → `400`, increments attempts |
 | Recover confirm, several candidates, chosen `accountId` | `accountId = C` ∈ candidates | Re-verify the code, then rebind onto C; `204` | `accountId` ∉ candidates → `400` (same as a wrong code) |
@@ -73,7 +73,7 @@ context:
 - **D5: normalization.** Trim, then lowercase the whole address (`Locale.ROOT`). There is no provider-specific folding (no Gmail dot or plus stripping), which keeps it KISS and predictable.
 - **D6: picker is stateless.** The first confirm call (several candidates, no `accountId`) verifies the code and returns candidates without consuming the code. The second call sends `{email, code, accountId}` and the server re-verifies everything. No server-side picker session exists. `accountId` is the candidate's pseudonymous Keycloak id, which is proven reachable only by someone holding the mailbox. **CQRS exception:** that first call returns read data from a command endpoint. This is justified because the note specifies a single confirm endpoint and the call has no side effect beyond the attempt counter.
 - **D7: timing.** Recover hands the **entire** post-validation issuance (lookup, budget, code store, send) to an executor. A digest that has bindings and one that has none then take the same time on the request thread. Attach keeps its writes synchronous (an authenticated, own-flow request) and hands off only the mail.
-- **D8: budgets.** Per-caller attach: 60 s cooldown and ≤ 5 / 24 h (unchanged). Per-address attach mail: ≤ 3 / 24 h, no cooldown. Per-address recover: 60 s cooldown and ≤ 3 / 24 h, reset on a successful rebind. All three are constants in one generic in-memory sliding-window class.
+- **D8: budgets.** Per-caller attach: 60 s cooldown and ≤ 5 / 24 h (unchanged). Per-address attach mail: ≤ 3 / 24 h, no cooldown. Per-address recover: 60 s cooldown and ≤ 10 / 24 h, reset on a successful rebind (raised from 3 after review, Timo 2026-10-01: a small cap let an attacker keep the owner locked out). All three are constants in one generic in-memory sliding-window class.
 
 ## Conflicts Between the Note and the Code
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.sgart.collaboration.domain.HouseholdName;
 import de.sgart.shared.HouseholdId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -30,5 +31,16 @@ class CollaborationHouseholdNamesTest {
     void namesFor_omitsAHouseholdWhoseNameIsNotProjectedYet() {
         assertThat(householdNames.namesFor(List.of(PROJECTED_HOUSEHOLD, NOT_YET_PROJECTED_HOUSEHOLD)))
                 .doesNotContainKey(NOT_YET_PROJECTED_HOUSEHOLD);
+    }
+
+    @Test
+    void namesFor_skipsAnEntryWhoseNameIsNull() {
+        Map<HouseholdId, HouseholdName> readModelAnswer = new HashMap<>();
+        readModelAnswer.put(PROJECTED_HOUSEHOLD, new HouseholdName("Test Flat"));
+        readModelAnswer.put(NOT_YET_PROJECTED_HOUSEHOLD, null);
+        CollaborationHouseholdNames withNullEntry = new CollaborationHouseholdNames(householdIds -> readModelAnswer);
+
+        assertThat(withNullEntry.namesFor(List.of(PROJECTED_HOUSEHOLD, NOT_YET_PROJECTED_HOUSEHOLD)))
+                .containsExactly(Map.entry(PROJECTED_HOUSEHOLD, "Test Flat"));
     }
 }

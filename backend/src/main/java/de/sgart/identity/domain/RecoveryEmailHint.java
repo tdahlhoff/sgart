@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * A masked display form of a recovery address (for example {@code t***@example.test}) so the
  * profile can show which address is attached without SGART storing the address itself. Computed
- * once when the address is typed; it reveals only the first character of the local part and the
+ * once when the address is typed; it reveals only the first character (code point) of the local part and the
  * domain.
  */
 public record RecoveryEmailHint(String value) {
@@ -26,12 +26,13 @@ public record RecoveryEmailHint(String value) {
         if (separatorIndex < 1) {
             throw new IllegalArgumentException("address must contain a local part and a domain");
         }
-        String firstCharacter = address.substring(0, 1);
+        String firstCharacter = address.substring(0, address.offsetByCodePoints(0, 1));
         return new RecoveryEmailHint(firstCharacter + MASK + address.substring(separatorIndex));
     }
 
+    /** Redacted: even a masked address stays out of logs and exception messages. */
     @Override
     public String toString() {
-        return value;
+        return "RecoveryEmailHint[redacted]";
     }
 }

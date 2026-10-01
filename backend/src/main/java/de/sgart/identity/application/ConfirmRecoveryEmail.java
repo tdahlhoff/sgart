@@ -8,12 +8,14 @@ import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Confirms ownership of an address just attached via {@link AttachRecoveryEmail}: on a correct,
  * unexpired, non-exhausted code, the caller's pending binding becomes confirmed (replacing the
  * caller's previous confirmed binding, since an account has one recovery email) and the code is
- * consumed (single-use).
+ * consumed (single-use). Re-attaching an address the caller already confirmed leaves it confirmed,
+ * and its code then succeeds without changing anything.
  */
 public final class ConfirmRecoveryEmail {
 
@@ -47,10 +49,14 @@ public final class ConfirmRecoveryEmail {
 
         verifyRecoveryCode.verify(RecoveryCodeSubject.forAccount(caller), RecoveryCodePurpose.ATTACH_CONFIRM, code);
 
-        RecoveryEmailBinding pendingBinding = recoveryEmailBindingRepository
-                .findPendingFor(caller)
-                .orElseThrow(() -> new RecoveryCodeRejectedException("no pending recovery email binding"));
-        recoveryEmailBindingRepository.confirm(pendingBinding.confirm(clock.instant()));
+        Optional<RecoveryEmailBinding> pendingBinding = recoveryEmailBindingRepository.findPendingFor(caller);
+        if (pendingBinding.isPresent()) {
+            recoveryEmailBindingRepository.confirm(pendingBinding.get().confirm(clock.instant()));
+        } else if (!recoveryEmailBindingRepository.hasConfirmedBindingFor(caller)) {
+            throw new RecoveryCodeRejectedException("no pending recovery email binding");
+        }
+        // Without a pending binding but with a confirmed one, the caller re-attached the address
+        // they already confirmed (attach never downgrades it): the correct code simply succeeds.
         emailRecoveryCodeStore.delete(RecoveryCodeSubject.forAccount(caller), RecoveryCodePurpose.ATTACH_CONFIRM);
     }
 }

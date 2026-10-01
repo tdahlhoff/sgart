@@ -27,4 +27,19 @@ class RecoveryEmailHintTest {
         assertThatThrownBy(() -> RecoveryEmailHint.masking("@example.test"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void masking_aLocalPartStartingWithASupplementaryCharacter_keepsTheWholeCharacter() {
+        String supplementaryCharacter = "\uD835\uDC00";
+
+        assertThat(RecoveryEmailHint.masking(supplementaryCharacter + "tester@example.test").value())
+                .isEqualTo(supplementaryCharacter + "***@example.test");
+    }
+
+    @Test
+    void toString_doesNotRevealTheMaskedAddress() {
+        assertThat(RecoveryEmailHint.masking("tester@example.test").toString())
+                .doesNotContain("t***")
+                .doesNotContain("example.test");
+    }
 }

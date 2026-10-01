@@ -3,6 +3,8 @@ package de.sgart.identity.application;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.shared.HouseholdId;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,6 +26,24 @@ import java.util.concurrent.Executor;
 final class RecoveryEmailTestSupport {
 
     private RecoveryEmailTestSupport() {}
+
+    /**
+     * Wraps {@code delegate} so that the named methods throw, like an unreachable database, while
+     * every other method still reaches the real double.
+     */
+    static <T> T failingOn(Class<T> type, T delegate, String... failingMethodNames) {
+        Set<String> failing = Set.of(failingMethodNames);
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (proxy, method, arguments) -> {
+            if (failing.contains(method.getName())) {
+                throw new IllegalStateException("unavailable: " + method.getName());
+            }
+            try {
+                return method.invoke(delegate, arguments);
+            } catch (InvocationTargetException failure) {
+                throw failure.getCause();
+            }
+        }));
+    }
 
     /** A trivial, test-only hasher (identity-prefixed) so tests can assert on the exact hash without real HMAC. */
     static final class IdentityRecoveryCodeHasher implements RecoveryCodeHasher {

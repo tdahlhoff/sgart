@@ -11,7 +11,7 @@ import java.util.Objects;
 
 /**
  * Builds the recovery picker's read model: for every candidate account its households as "household
- * name (nickname)" pairs, the account with the most households first. A query: it changes nothing.
+ * name (nickname)" pairs, the account with the most households first, ties ordered by account id so the picker is stable. A query: it changes nothing.
  */
 public final class ResolveRecoveryCandidates {
 
@@ -36,7 +36,8 @@ public final class ResolveRecoveryCandidates {
         return accounts.stream()
                 .map(this::candidateFor)
                 .sorted(Comparator.comparingInt((RecoveryCandidate candidate) -> candidate.households().size())
-                        .reversed())
+                        .reversed()
+                        .thenComparing(RecoveryCandidate::accountId))
                 .toList();
     }
 

@@ -29,4 +29,19 @@ class RecoveryEmailValidationTest {
         assertThatThrownBy(() -> RecoveryEmailValidation.validated(null))
                 .isInstanceOf(InvalidRecoveryEmailException.class);
     }
+
+    @Test
+    void validated_anAddressLongerThanTheMaximumLength_isRejected() {
+        String tooLongAddress = "a".repeat(250) + "@example.test";
+
+        assertThatThrownBy(() -> RecoveryEmailValidation.validated(tooLongAddress))
+                .isInstanceOf(InvalidRecoveryEmailException.class);
+    }
+
+    @Test
+    void validated_anAddressOfExactlyTheMaximumLength_isAccepted() {
+        String longestAddress = "a".repeat(254 - "@example.test".length()) + "@example.test";
+
+        assertThat(RecoveryEmailValidation.validated(longestAddress)).isEqualTo(longestAddress);
+    }
 }

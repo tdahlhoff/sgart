@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Durable PostgreSQL {@link RecoveryEmailBindingRepository}. Plain SQL over {@link JdbcClient}.
@@ -26,13 +27,24 @@ public final class JdbcRecoveryEmailBindingRepository implements RecoveryEmailBi
             "SELECT address_digest, keycloak_user_id, address_hint, confirmed_at, created_at FROM recovery_email_binding";
 
     private final JdbcClient jdbcClient;
+    private final TransactionOperations transactionOperations;
 
-    public JdbcRecoveryEmailBindingRepository(JdbcClient jdbcClient) {
+    /**
+     * @param transactionOperations runs the multi-statement writes atomically; it must use the same
+     *     data source as {@code jdbcClient}.
+     */
+    public JdbcRecoveryEmailBindingRepository(JdbcClient jdbcClient, TransactionOperations transactionOperations) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
+        this.transactionOperations =
+                Objects.requireNonNull(transactionOperations, "transactionOperations must not be null");
     }
 
     @Override
     public void savePending(RecoveryEmailBinding pendingBinding) {
+        transactionOperations.executeWithoutResult(status -> replacePendingBinding(pendingBinding));
+    }
+
+    private void replacePendingBinding(RecoveryEmailBinding pendingBinding) {
         jdbcClient
                 .sql("DELETE FROM recovery_email_binding WHERE keycloak_user_id = :keycloakUserId"
                         + " AND confirmed_at IS NULL")
@@ -63,13 +75,17 @@ public final class JdbcRecoveryEmailBindingRepository implements RecoveryEmailBi
 
     @Override
     public void confirm(RecoveryEmailBinding confirmedBinding) {
+        transactionOperations.executeWithoutResult(status -> confirmBinding(confirmedBinding));
+    }
+
+    private void confirmBinding(RecoveryEmailBinding confirmedBinding) {
         jdbcClient
                 .sql("DELETE FROM recovery_email_binding WHERE keycloak_user_id = :keycloakUserId"
                         + " AND confirmed_at IS NOT NULL AND address_digest <> :digest")
                 .param("keycloakUserId", confirmedBinding.keycloakUserId().value())
                 .param("digest", confirmedBinding.digest().value())
                 .update();
-        jdbcClient
+        int confirmedRows = jdbcClient
                 .sql("""
                         UPDATE recovery_email_binding SET confirmed_at = :confirmedAt
                         WHERE address_digest = :digest AND keycloak_user_id = :keycloakUserId
@@ -78,6 +94,10 @@ public final class JdbcRecoveryEmailBindingRepository implements RecoveryEmailBi
                 .param("digest", confirmedBinding.digest().value())
                 .param("keycloakUserId", confirmedBinding.keycloakUserId().value())
                 .update();
+        if (confirmedRows == 0) {
+            // Throwing rolls the transaction back, so the account's earlier confirmed binding survives.
+            throw new IllegalStateException("no recovery email binding to confirm");
+        }
     }
 
     @Override

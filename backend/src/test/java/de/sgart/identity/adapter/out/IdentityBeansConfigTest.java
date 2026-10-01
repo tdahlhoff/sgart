@@ -176,4 +176,20 @@ class IdentityBeansConfigTest {
             assertThat(recoveryIssuanceExecutor.executor()).isNotNull();
         }
     }
+
+    /** Executors the configuration starts must stop when the context closes. */
+    @Nested
+    class ExecutorLifecycle {
+
+        @Test
+        void destroy_stopsTheExecutorsTheConfigurationStarted() {
+            IdentityBeansConfig configuration = new IdentityBeansConfig();
+            BoundedDaemonExecutor issuanceExecutor =
+                    (BoundedDaemonExecutor) configuration.recoveryIssuanceExecutor().executor();
+
+            configuration.destroy();
+
+            assertThat(issuanceExecutor.isShutDown()).isTrue();
+        }
+    }
 }

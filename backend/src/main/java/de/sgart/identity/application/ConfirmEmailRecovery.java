@@ -114,17 +114,38 @@ public final class ConfirmEmailRecovery {
         verifyRecoveryCode.verify(codeSubject, RecoveryCodePurpose.RECOVER, code);
 
         if (chosenAccountId == null && candidates.size() > 1) {
+            // Audit trail for what the picker reveals (household names and nicknames): counts and the
+            // pseudonymous caller id only, never the address or any name.
+            log.info(
+                    "Recovery picker shown: {} candidate accounts for throwaway account {}",
+                    candidates.size(),
+                    throwawayCaller.value());
             return new EmailRecoveryOutcome.ChooseAccount(resolveRecoveryCandidates.resolve(candidates));
         }
         KeycloakUserId target = chosenAccountId == null ? candidates.get(0) : chooseAmong(candidates, chosenAccountId);
 
         rebind(throwawayCaller, target);
 
-        emailRecoveryCodeStore.delete(codeSubject, RecoveryCodePurpose.RECOVER);
-        recoveryRequestThrottle.reset(digest);
-        recoveryEmailBindingRepository.deleteAllFor(throwawayCaller);
-        emailRecoveryCodeStore.deleteAll(throwawayCaller);
+        cleanUpAfterRebind(
+                "delete the recovery code", () -> emailRecoveryCodeStore.delete(codeSubject, RecoveryCodePurpose.RECOVER));
+        cleanUpAfterRebind("reset the recovery budget", () -> recoveryRequestThrottle.reset(digest));
+        cleanUpAfterRebind(
+                "delete the throwaway's bindings", () -> recoveryEmailBindingRepository.deleteAllFor(throwawayCaller));
+        cleanUpAfterRebind("delete the throwaway's codes", () -> emailRecoveryCodeStore.deleteAll(throwawayCaller));
         return new EmailRecoveryOutcome.Rebound();
+    }
+
+    /**
+     * The rebind has succeeded and cannot be undone, so a failing cleanup step must not turn the
+     * recovery into an error: it is logged (class only, never the address) and the rest still runs.
+     */
+    private static void cleanUpAfterRebind(String description, Runnable cleanupStep) {
+        try {
+            cleanupStep.run();
+        } catch (RuntimeException cleanupFailure) {
+            log.error(
+                    "Recovery succeeded but failed to {}: {}", description, cleanupFailure.getClass().getName());
+        }
     }
 
     private static KeycloakUserId chooseAmong(List<KeycloakUserId> candidates, String chosenAccountId) {

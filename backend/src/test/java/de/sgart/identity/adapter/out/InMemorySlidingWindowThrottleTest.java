@@ -2,11 +2,13 @@ package de.sgart.identity.adapter.out;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Clock;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -100,30 +102,51 @@ class InMemorySlidingWindowThrottleTest {
         assertThat(throttle.tryAcquire("key-a")).isTrue();
     }
 
-    private static final class MutableClock extends Clock {
-        private Instant instant;
+    @Test
+    void tryAcquire_afterAKeysGrantsAllExpired_dropsThatKeyFromMemory() {
+        throttle.tryAcquire("key-a");
+        throttle.tryAcquire("key-b");
+        clock.advance(WINDOW.plusSeconds(1));
 
-        MutableClock(Instant instant) {
-            this.instant = instant;
-        }
+        throttle.tryAcquire("key-c");
 
-        void advance(Duration duration) {
-            instant = instant.plus(duration);
-        }
+        assertThat(throttle.trackedKeyCount()).isEqualTo(1);
+    }
 
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
+    @Test
+    void reset_runningConcurrentlyWithAcquisitions_neverLosesTheBudgetOfTheNextGrant() throws Exception {
+        InMemorySlidingWindowThrottle<String> singleGrant = new InMemorySlidingWindowThrottle<>(
+                clock, new InMemorySlidingWindowThrottle.Policy(Duration.ZERO, WINDOW, 1));
+        AtomicInteger grants = new AtomicInteger();
+        AtomicInteger resets = new AtomicInteger();
+        int rounds = 20_000;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(3);
 
-        @Override
-        public Clock withZone(ZoneId zone) {
-            throw new UnsupportedOperationException();
+        for (int acquirer = 0; acquirer < 2; acquirer++) {
+            threads.submit(() -> {
+                start.await();
+                for (int round = 0; round < rounds; round++) {
+                    if (singleGrant.tryAcquire("key-a")) {
+                        grants.incrementAndGet();
+                    }
+                }
+                return null;
+            });
         }
+        threads.submit(() -> {
+            start.await();
+            for (int round = 0; round < rounds; round++) {
+                resets.incrementAndGet();
+                singleGrant.reset("key-a");
+            }
+            return null;
+        });
+        start.countDown();
+        threads.shutdown();
+        assertThat(threads.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
 
-        @Override
-        public Instant instant() {
-            return instant;
-        }
+        // With a budget of one, every grant after the first needs a reset in between.
+        assertThat(grants.get()).isLessThanOrEqualTo(resets.get() + 1);
     }
 }

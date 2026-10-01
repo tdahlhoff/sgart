@@ -73,7 +73,8 @@ class AccountController {
     /**
      * Attach: writes a pending binding and mails a confirmation code. {@code 202} in every case
      * except a malformed address ({@code 400}) and the caller's own budget ({@code 429}); nothing
-     * about the address changes the response.
+     * about the address changes the status or body. Response time may still reveal that the address
+     * already received its attach mails today (accepted, weak signal).
      */
     @PostMapping("/api/v1/account/email")
     @ResponseStatus(HttpStatus.ACCEPTED)

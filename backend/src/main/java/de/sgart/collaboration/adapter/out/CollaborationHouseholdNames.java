@@ -26,6 +26,7 @@ public final class CollaborationHouseholdNames implements FindHouseholdNames {
     @Override
     public Map<HouseholdId, String> namesFor(List<HouseholdId> householdIds) {
         return householdNameReadModel.namesFor(householdIds).entrySet().stream()
+                .filter(entry -> entry.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().value()));
     }
 }

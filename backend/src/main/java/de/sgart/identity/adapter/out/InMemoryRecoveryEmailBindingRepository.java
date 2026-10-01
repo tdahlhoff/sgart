@@ -38,6 +38,10 @@ public final class InMemoryRecoveryEmailBindingRepository implements RecoveryEma
 
     @Override
     public synchronized void confirm(RecoveryEmailBinding confirmedBinding) {
+        // Like the durable adapter: confirming a claim that was never saved is a defect, not an insert.
+        if (bindings.stream().noneMatch(existing -> isSameClaim(existing, confirmedBinding))) {
+            throw new IllegalStateException("no recovery email binding to confirm");
+        }
         bindings.removeIf(existing -> existing.keycloakUserId().equals(confirmedBinding.keycloakUserId())
                 && existing.isConfirmed());
         bindings.removeIf(existing -> isSameClaim(existing, confirmedBinding));

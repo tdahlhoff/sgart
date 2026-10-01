@@ -42,13 +42,16 @@ import de.sgart.identity.domain.ProvisionedAccountRepository;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.client.RestClient;
 
@@ -59,7 +62,9 @@ import org.springframework.web.client.RestClient;
  * down.
  */
 @Configuration
-public class IdentityBeansConfig {
+public class IdentityBeansConfig implements DisposableBean {
+
+    private final List<BoundedDaemonExecutor> ownedExecutors = new CopyOnWriteArrayList<>();
 
     @Bean
     MemberMappingRepository memberMappingRepository(JdbcClient jdbcClient) {
@@ -244,7 +249,7 @@ public class IdentityBeansConfig {
     /**
      * The real SMTP adapter — active only when {@code sgart.identity.mail.enabled=true}. Mails are
      * handed to a single daemon thread so a request returns at once, whatever the address. The
-     * executor is deliberately not a bean: a user-defined {@link Executor} bean would switch off
+     * executor is deliberately not a bean: a user-defined {@code Executor} bean would switch off
      * Spring Boot's own task executor. Building the {@link JavaMailSender} performs no I/O; only
      * the first delivery reaches an SMTP server.
      */
@@ -252,13 +257,9 @@ public class IdentityBeansConfig {
     @ConditionalOnProperty(prefix = "sgart.identity.mail", name = "enabled", havingValue = "true")
     SendRecoveryCodeEmail javaMailSenderRecoveryCodeEmail(
             JavaMailSender javaMailSender, @Value("${sgart.identity.mail.from}") String fromAddress) {
-        Executor mailExecutor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "recovery-email-sender");
-            thread.setDaemon(true);
-            return thread;
-        });
         return new AsynchronousSendRecoveryCodeEmail(
-                new JavaMailSenderRecoveryCodeEmail(javaMailSender, fromAddress), mailExecutor);
+                new JavaMailSenderRecoveryCodeEmail(javaMailSender, fromAddress),
+                startDaemonExecutor("recovery-email-sender"));
     }
 
     /** The wired default — no build needs an SMTP server. */
@@ -272,8 +273,9 @@ public class IdentityBeansConfig {
     // --- Recovery-email ownership: the address as a digest index ------------------------------
 
     @Bean
-    RecoveryEmailBindingRepository recoveryEmailBindingRepository(JdbcClient jdbcClient) {
-        return new JdbcRecoveryEmailBindingRepository(jdbcClient);
+    RecoveryEmailBindingRepository recoveryEmailBindingRepository(
+            JdbcClient jdbcClient, PlatformTransactionManager transactionManager) {
+        return new JdbcRecoveryEmailBindingRepository(jdbcClient, new TransactionTemplate(transactionManager));
     }
 
     @Bean
@@ -343,16 +345,25 @@ public class IdentityBeansConfig {
     }
 
     /**
-     * Recovery issuances run on a single daemon thread so a request returns at once, whatever the
-     * address. The executor is deliberately not a bean (see {@link RecoveryIssuanceExecutor}).
+     * Recovery issuances run on a single bounded daemon thread so a request returns at once,
+     * whatever the address. The executor is deliberately not a bean (see {@link
+     * RecoveryIssuanceExecutor}).
      */
     @Bean
     RecoveryIssuanceExecutor recoveryIssuanceExecutor() {
-        return new RecoveryIssuanceExecutor(Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "recovery-code-issuer");
-            thread.setDaemon(true);
-            return thread;
-        }));
+        return new RecoveryIssuanceExecutor(startDaemonExecutor("recovery-code-issuer"));
+    }
+
+    private BoundedDaemonExecutor startDaemonExecutor(String threadName) {
+        BoundedDaemonExecutor executor = new BoundedDaemonExecutor(threadName);
+        ownedExecutors.add(executor);
+        return executor;
+    }
+
+    /** Stops the executors this configuration started when the context closes. */
+    @Override
+    public void destroy() {
+        ownedExecutors.forEach(BoundedDaemonExecutor::close);
     }
 
     @Bean

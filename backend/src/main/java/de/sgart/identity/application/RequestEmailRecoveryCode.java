@@ -81,8 +81,8 @@ public final class RequestEmailRecoveryCode {
                     clock.instant());
             sendRecoveryCodeEmail.sendRecoveryCode(address, code);
         } catch (RuntimeException issuanceFailure) {
-            // Never the address: neither in the message nor in the exception chain's own text.
-            log.error("Issuing a recovery code failed", issuanceFailure);
+            // Only the failure type: a mail or store exception's message and stack may quote the address.
+            log.error("Issuing a recovery code failed: {}", issuanceFailure.getClass().getName());
         }
     }
 }

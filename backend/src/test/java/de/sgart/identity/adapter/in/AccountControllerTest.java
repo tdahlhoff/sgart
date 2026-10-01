@@ -19,12 +19,15 @@ import de.sgart.identity.adapter.out.InMemoryRecoveryEmailThrottles;
 import de.sgart.identity.adapter.out.RecoveryIssuanceExecutor;
 import de.sgart.identity.application.AccountDetails;
 import de.sgart.identity.application.DeleteAccount;
+import de.sgart.identity.application.FindHouseholdNames;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.RebindAccountCredential;
 import de.sgart.identity.application.RecoveryEmailDigester;
 import de.sgart.identity.application.SendRecoveryCodeEmail;
 import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
+import de.sgart.identity.domain.MemberMapping;
+import de.sgart.identity.domain.MembershipNickname;
 import de.sgart.identity.domain.MembershipNicknameRepository;
 import de.sgart.identity.domain.ProvisionedAccountRepository;
 import de.sgart.identity.domain.RecoveryCodePurpose;
@@ -33,6 +36,8 @@ import de.sgart.identity.domain.RecoveryEmailBinding;
 import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
+import de.sgart.shared.HouseholdId;
+import de.sgart.shared.MemberId;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,6 +94,15 @@ class AccountControllerTest {
     private RecordingGetAccountDetails getAccountDetails;
 
     @Autowired
+    private InMemoryMemberMappingRepository memberMappingRepository;
+
+    @Autowired
+    private MembershipNicknameRepository membershipNicknameRepository;
+
+    @Autowired
+    private RecordingFindHouseholdNames findHouseholdNames;
+
+    @Autowired
     private RecordingDeleteAccount deleteAccount;
 
     @Autowired
@@ -128,6 +142,13 @@ class AccountControllerTest {
             return new InMemoryEmailRecoveryCodeStore();
         }
 
+        /** The real adapter reads a PostgreSQL read model; here the test seeds the household names itself. */
+        @Bean
+        @Primary
+        RecordingFindHouseholdNames testFindHouseholdNames() {
+            return new RecordingFindHouseholdNames();
+        }
+
         /** Captures the plaintext code that would have been emailed, so tests can confirm with it. */
         @Bean
         @Primary
@@ -165,6 +186,25 @@ class AccountControllerTest {
         @Primary
         RecordingRebindAccountCredential testRebindAccountCredential() {
             return new RecordingRebindAccountCredential();
+        }
+    }
+
+    static final class RecordingFindHouseholdNames implements FindHouseholdNames {
+        private final Map<HouseholdId, String> namesByHouseholdId = new HashMap<>();
+
+        void register(HouseholdId householdId, String householdName) {
+            namesByHouseholdId.put(householdId, householdName);
+        }
+
+        void clear() {
+            namesByHouseholdId.clear();
+        }
+
+        @Override
+        public Map<HouseholdId, String> namesFor(List<HouseholdId> householdIds) {
+            Map<HouseholdId, String> known = new HashMap<>(namesByHouseholdId);
+            known.keySet().retainAll(householdIds);
+            return known;
         }
     }
 
@@ -261,6 +301,7 @@ class AccountControllerTest {
         getAccountDetails.clear();
         deleteAccount.clear();
         rebindAccountCredential.clear();
+        findHouseholdNames.clear();
     }
 
     @Test
@@ -645,17 +686,30 @@ class AccountControllerTest {
     @Test
     void confirmRecovery_withSeveralCandidateAccounts_answers200WithTheCandidatesAndKeepsTheCode() throws Exception {
         confirmBindingOf("second-sub", RECOVERABLE_EMAIL);
+        HouseholdId household = HouseholdId.generate();
+        memberMappingRepository.seed(
+                new MemberMapping(household, MemberId.generate(), new KeycloakUserId(RECOVERABLE_ACCOUNT_ID)));
+        membershipNicknameRepository.save(
+                new MembershipNickname(new KeycloakUserId(RECOVERABLE_ACCOUNT_ID), household, "Tester"));
+        findHouseholdNames.register(household, "Test Flat");
         String code = requestRecoveryCodeAsThrowaway("device-2-sub");
 
-        mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
-                        .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code + "\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidates.length()").value(2))
-                .andExpect(jsonPath("$.candidates[*].accountId").value(
-                        org.hamcrest.Matchers.containsInAnyOrder(RECOVERABLE_ACCOUNT_ID, "second-sub")))
-                .andExpect(jsonPath("$.candidates[0].households").isArray());
+        try {
+            mockMvc.perform(post("/api/v1/account/recovery/email/confirm")
+                            .with(jwt().jwt(jwt -> jwt.subject("device-2-sub")))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"" + RECOVERABLE_EMAIL + "\",\"code\":\"" + code + "\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.candidates.length()").value(2))
+                    .andExpect(jsonPath("$.candidates[*].accountId").value(
+                            org.hamcrest.Matchers.containsInAnyOrder(RECOVERABLE_ACCOUNT_ID, "second-sub")))
+                    .andExpect(jsonPath("$.candidates[0].accountId").value(RECOVERABLE_ACCOUNT_ID))
+                    .andExpect(jsonPath("$.candidates[0].households[0].householdName").value("Test Flat"))
+                    .andExpect(jsonPath("$.candidates[0].households[0].nickname").value("Tester"));
+        } finally {
+            memberMappingRepository.deleteAllMappings(household);
+            membershipNicknameRepository.deleteAllForHousehold(household);
+        }
 
         assertThat(emailRecoveryCodeStore.find(recoveryCodeSubjectOf(RECOVERABLE_EMAIL), RecoveryCodePurpose.RECOVER))
                 .isPresent();

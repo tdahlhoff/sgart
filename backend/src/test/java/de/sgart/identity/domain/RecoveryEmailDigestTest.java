@@ -16,4 +16,9 @@ class RecoveryEmailDigestTest {
     void digest_withTheSameValue_isEqual() {
         assertThat(new RecoveryEmailDigest("abc")).isEqualTo(new RecoveryEmailDigest("abc"));
     }
+
+    @Test
+    void toString_doesNotRevealTheDigestValue() {
+        assertThat(new RecoveryEmailDigest("secret-digest-value").toString()).doesNotContain("secret-digest-value");
+    }
 }

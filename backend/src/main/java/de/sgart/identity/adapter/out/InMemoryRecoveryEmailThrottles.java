@@ -23,7 +23,7 @@ public final class InMemoryRecoveryEmailThrottles
     static final InMemorySlidingWindowThrottle.Policy ATTACH_MAIL_POLICY =
             new InMemorySlidingWindowThrottle.Policy(Duration.ZERO, DAY, 3);
     static final InMemorySlidingWindowThrottle.Policy RECOVERY_REQUEST_POLICY =
-            new InMemorySlidingWindowThrottle.Policy(Duration.ofSeconds(60), DAY, 3);
+            new InMemorySlidingWindowThrottle.Policy(Duration.ofSeconds(60), DAY, 10);
 
     private final InMemorySlidingWindowThrottle<KeycloakUserId> attachRequests;
     private final InMemorySlidingWindowThrottle<RecoveryEmailDigest> attachMails;

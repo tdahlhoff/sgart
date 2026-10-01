@@ -69,6 +69,17 @@ class RequestEmailRecoveryCodeTest {
     }
 
     @Test
+    void request_withADifferentlyCasedAddress_stillIssuesTheCode() {
+        bindConfirmed(FIRST_ACCOUNT);
+
+        requestEmailRecoveryCode.request("  Person@Example.TEST ");
+        executor.runPendingTasks();
+
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isPresent();
+        assertThat(sendRecoveryCodeEmail.recoveryMailRecipients).containsExactly(ADDRESS);
+    }
+
+    @Test
     void request_forAnAddressOnTwoAccounts_stillSendsExactlyOneMail() {
         bindConfirmed(FIRST_ACCOUNT);
         bindConfirmed(SECOND_ACCOUNT);

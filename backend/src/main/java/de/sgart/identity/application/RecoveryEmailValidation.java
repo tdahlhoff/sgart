@@ -11,6 +11,9 @@ import java.util.regex.Pattern;
  */
 final class RecoveryEmailValidation {
 
+    /** The longest address RFC 5321 allows. */
+    private static final int MAXIMUM_LENGTH = 254;
+
     private static final Pattern PLAUSIBLE_EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private RecoveryEmailValidation() {}
@@ -18,14 +21,14 @@ final class RecoveryEmailValidation {
     /**
      * @return the normalized address: trimmed and lowercased as a whole. There is deliberately no
      *     provider-specific folding (no dot or plus-tag stripping), which keeps it predictable.
-     * @throws InvalidRecoveryEmailException if blank or not plausible.
+     * @throws InvalidRecoveryEmailException if blank, too long, or not plausible.
      */
     static String validated(String rawEmail) {
         if (rawEmail == null || rawEmail.isBlank()) {
             throw new InvalidRecoveryEmailException("account.recoveryEmailRequired", "email must be provided");
         }
         String trimmed = rawEmail.trim();
-        if (!PLAUSIBLE_EMAIL.matcher(trimmed).matches()) {
+        if (trimmed.length() > MAXIMUM_LENGTH || !PLAUSIBLE_EMAIL.matcher(trimmed).matches()) {
             throw new InvalidRecoveryEmailException("account.recoveryEmailInvalid", "email must be a plausible address");
         }
         return trimmed.toLowerCase(Locale.ROOT);

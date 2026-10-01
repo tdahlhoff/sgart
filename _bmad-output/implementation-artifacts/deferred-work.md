@@ -431,3 +431,29 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-rebind-compensation-and-retract-race.md`
   summary: Remove consent and recovery-code rows keyed by a deleted throwaway account's Keycloak id when the throwaway is deleted.
   evidence: [LOW, pre-existing] `ConfirmEmailRecovery` deletes the throwaway and its provisioned row but not `account_consent` / `EmailRecoveryCodeStore` rows for that id; the sweep cannot find them afterwards. Belongs with Epic 6 erasure.
+
+## Deferred from: review of spec-recovery-email-ownership (2026-10-01)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: No pepper rotation: recovery-email digests carry no key version, so rotating `address-pepper` invalidates every binding.
+  evidence: [LOW] Known limit. If rotation is ever needed, add a key-id column to `recovery_email_binding` and verify against the matching pepper.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Wire `RecoveryEmailBindingRepository.findAllFor` / `RecoveryEmailBindingExport` into the Epic 6 data export and erasure.
+  evidence: [LOW] Both exist and are tested but have no production caller yet.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Configure SMTP connect/read/write timeouts for the mail sender.
+  evidence: [LOW] `JavaMailSenderRecoveryCodeEmail` uses the JavaMail defaults (no timeout), so a hung SMTP server can block the mail executor.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Two devices can redeem the same recover code concurrently.
+  evidence: [LOW] Both need the mailbox code anyway; consume the code atomically (delete-and-return) if this ever matters.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: A failed-then-restored rebind leaves bindings and codes keyed by the deleted throwaway id.
+  evidence: [LOW] `ConfirmEmailRecovery` compensation restores the throwaway under a new Keycloak id; its old-id bindings/codes are orphaned until the purge or erasure work removes them.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Privacy-notice wording for shared mailboxes and the household-name picker, plus a contact address.
+  evidence: [MEDIUM] The recovery picker shows household names and nicknames to whoever holds the mailbox code; the notice must say so. Belongs to the privacy-notice work.

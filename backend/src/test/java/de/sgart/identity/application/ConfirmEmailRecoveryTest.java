@@ -19,12 +19,14 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingCreateAcc
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingRebindAccountCredential;
 import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmailDigester;
+import de.sgart.identity.domain.EmailRecoveryCodeStore;
 import de.sgart.identity.domain.KeycloakUserId;
 import de.sgart.identity.domain.MemberMapping;
 import de.sgart.identity.domain.MembershipNickname;
 import de.sgart.identity.domain.RecoveryCodePurpose;
 import de.sgart.identity.domain.RecoveryCodeSubject;
 import de.sgart.identity.domain.RecoveryEmailBinding;
+import de.sgart.identity.domain.RecoveryEmailBindingRepository;
 import de.sgart.identity.domain.RecoveryEmailDigest;
 import de.sgart.identity.domain.RecoveryEmailHint;
 import de.sgart.shared.HouseholdId;
@@ -456,6 +458,79 @@ class ConfirmEmailRecoveryTest {
                         RecoveryCodeSubject.forAccount(THROWAWAY), RecoveryCodePurpose.ATTACH_CONFIRM))
                 .isEmpty();
         assertThat(bindings.findConfirmedFor(TARGET)).isPresent();
+    }
+
+    @Test
+    void confirm_withADifferentlyCasedAddress_rebindsOntoTheCandidate() {
+        seedRecoverableAccount();
+
+        EmailRecoveryOutcome outcome =
+                confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "  Person@Example.TEST ", "042817", NO_CHOICE);
+
+        assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
+        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+    }
+
+    @Test
+    void confirm_whenEveryCleanupStepFailsAfterTheRebind_stillReturnsRebound() {
+        seedRecoverableAccount();
+        ConfirmEmailRecovery withFailingCleanup = new ConfirmEmailRecovery(
+                RecoveryEmailTestSupport.failingOn(RecoveryEmailBindingRepository.class, bindings, "deleteAllFor"),
+                new Sha256RecoveryEmailDigester(),
+                new FailingResetThrottles(),
+                candidateResolver,
+                RecoveryEmailTestSupport.failingOn(
+                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, "delete", "deleteAll"),
+                hasher,
+                getAccountDetails,
+                deleteAccount,
+                provisionedAccountRepository,
+                rebindAccountCredential,
+                createAccount,
+                clock);
+
+        EmailRecoveryOutcome outcome =
+                withFailingCleanup.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
+
+        assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
+        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+    }
+
+    @Test
+    void confirm_whenOnlyTheCodeDeletionFailsAfterTheRebind_theRemainingCleanupStepsStillRun() {
+        seedRecoverableAccount();
+        bindConfirmed(THROWAWAY, "throwaway@example.test");
+        ConfirmEmailRecovery withFailingCodeDeletion = new ConfirmEmailRecovery(
+                bindings,
+                new Sha256RecoveryEmailDigester(),
+                throttles,
+                candidateResolver,
+                RecoveryEmailTestSupport.failingOn(
+                        EmailRecoveryCodeStore.class, emailRecoveryCodeStore, "delete", "deleteAll"),
+                hasher,
+                getAccountDetails,
+                deleteAccount,
+                provisionedAccountRepository,
+                rebindAccountCredential,
+                createAccount,
+                clock);
+
+        withFailingCodeDeletion.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
+
+        assertThat(throttles.resetDigests).containsExactly(ADDRESS_DIGEST);
+        assertThat(bindings.findAllFor(THROWAWAY)).isEmpty();
+    }
+
+    private static final class FailingResetThrottles implements RecoveryRequestThrottle {
+        @Override
+        public boolean tryRequest(RecoveryEmailDigest digest) {
+            return true;
+        }
+
+        @Override
+        public void reset(RecoveryEmailDigest digest) {
+            throw new IllegalStateException("throttle unavailable");
+        }
     }
 
     @Test
