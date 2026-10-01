@@ -246,12 +246,12 @@
 
 ## Deferred from: code review of 7-3-recover-by-email-opt-in (2026-09-16)
 
-- **Attach with an already-registered email → possible 500 + enumeration** [backend/src/main/java/de/sgart/identity/application/AttachRecoveryEmail.java] — maybe-false, would be medium. `setEmail`'s Admin-API PUT has no 4xx handler; if the Keycloak realm enforces unique emails, attaching an address already on another account errors → unmapped 500 that also differs from the 202 success path (an enumeration oracle on the authenticated attach endpoint). Settle by checking the realm's duplicate-email / login-with-email setting; if duplicates are allowed there is no error but the ambiguous-lookup (`findByEmail length != 1 → empty`) breakage applies instead.
-- **No throttling on `attach` / `requestRecoveryCode`** [backend/src/main/java/de/sgart/identity/adapter/in/AccountController.java] — pre-existing architectural posture: rate limiting is delegated to the ADR-0002 gateway seam, not enforced in app code. Until that seam exists, an attacker who knows a victim address can spam their inbox and repeatedly reset the code TTL / 5-attempt counter (the store upserts `attempts = 0`).
+- **✅ RESOLVED (2026-10-01, `spec-recovery-email-ownership.md`) — Attach with an already-registered email → possible 500 + enumeration** [backend/src/main/java/de/sgart/identity/application/AttachRecoveryEmail.java] — maybe-false, would be medium. `setEmail`'s Admin-API PUT has no 4xx handler; if the Keycloak realm enforces unique emails, attaching an address already on another account errors → unmapped 500 that also differs from the 202 success path (an enumeration oracle on the authenticated attach endpoint). Settle by checking the realm's duplicate-email / login-with-email setting; if duplicates are allowed there is no error but the ambiguous-lookup (`findByEmail length != 1 → empty`) breakage applies instead.
+- **◐ PARTLY RESOLVED (2026-10-01, `spec-recovery-email-ownership.md`: in-app budgets per caller and per address now exist; the proxy-layer rate limit stays open with the beta infra) — No throttling on `attach` / `requestRecoveryCode`** [backend/src/main/java/de/sgart/identity/adapter/in/AccountController.java] — pre-existing architectural posture: rate limiting is delegated to the ADR-0002 gateway seam, not enforced in app code. Until that seam exists, an attacker who knows a victim address can spam their inbox and repeatedly reset the code TTL / 5-attempt counter (the store upserts `attempts = 0`).
 
 ## Deferred from: code review of 7-3-recover-by-email-opt-in — D1 hardening (2026-09-16)
 
-- **`confirmAndRebind` partial-failure compensation** [backend/src/main/java/de/sgart/identity/application/ConfirmEmailRecovery.java] — Timo accepted the risk for now (2026-09-16, infra-failure-only, rare) with an inline documenting comment. Follow-up hardening: on `rebind` failure after the throwaway is already deleted, either best-effort re-provision the throwaway or surface a clean 4xx and keep the RECOVER code row so the device can retry, plus a mid-sequence-failure test. Today a rebind failure mid-sequence bricks the device (authenticates into nothing).
+- **✅ RESOLVED (2026-10-01, commit `8666e93`) — `confirmAndRebind` partial-failure compensation** [backend/src/main/java/de/sgart/identity/application/ConfirmEmailRecovery.java] — Timo accepted the risk for now (2026-09-16, infra-failure-only, rare) with an inline documenting comment. Follow-up hardening: on `rebind` failure after the throwaway is already deleted, either best-effort re-provision the throwaway or surface a clean 4xx and keep the RECOVER code row so the device can retry, plus a mid-sequence-failure test. Today a rebind failure mid-sequence bricks the device (authenticates into nothing).
 
 ## Deferred from: 7-4-consent-capture (2026-09-17)
 
@@ -383,6 +383,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/8-6-real-recovery-emails-smtp-and-mailpit.md`
   summary: Rethink the recovery-email ownership model (follow-up design task) — attaching an address already on another account (pre-8.6 an unmapped 500; 8.6 makes it a silent 202 as a stop-gap — realm `duplicateEmailsAllowed: false` → Keycloak 409 from `KeycloakAdminCreateAccount.updateUser`); choosing between a silent 202 (no registration oracle, but a same-person second account waits for a code that never comes) and an explicit 409 (clear UX, but an open "does this address have an account" oracle, since provisioning is unauthenticated); and address squatting — an unconfirmed attach already claims the address on Keycloak, so an attacker can block the real owner (e.g. expire/release unconfirmed claims, or only write the email to Keycloak on confirm). Also in scope (added from the 8.6 review, Timo 2026-09-28): recovery-budget lockout — 8.6's per-target throttle shares one budget across attach+recover, so anyone who knows a victim's address can send 5 recover requests and block that account's recover-by-email AND its own attach for 24 h; consider a separate attach budget and how lockout interacts with the ownership model.
   evidence: Interim in Story 8.6 (Timo, 2026-09-28): duplicate-address attach answers a silent 202 and sends nothing (D2); the full design is "not yet totally well thought out"; wants a dedicated follow-up task rather than a quick patch inside 8.6. Supersedes the narrower 7.3 deferred item "Attach with an already-registered email → possible 500 + enumeration".
+  resolution: ✅ RESOLVED (2026-10-01, `spec-recovery-email-ownership.md`): the address became an HMAC-indexed, multi-valued binding (no uniqueness conflict, no oracle, no squatting), with separate attach and recover budgets. Per-address recover cap is 10/24 h, so a stranger can still delay an owner's recovery up to a day (accepted, Timo).
 - source_spec: `_bmad-output/implementation-artifacts/8-6-real-recovery-emails-smtp-and-mailpit.md`
   summary: Assert the secure SMTP defaults (`mail.smtp.auth` / `mail.smtp.starttls.enable` resolve to `true` when `SGART_SMTP_AUTH`/`SGART_SMTP_STARTTLS` are unset) with a property-binding test.
   evidence: 8.6 made both env-overridable for Mailpit; no test reads the mail properties, so flipping a default would silently allow plaintext/unauthenticated prod SMTP. Land with the deferred beta-SMTP story (8.6 D1).
@@ -399,10 +400,12 @@
 - source_spec: none
   summary: Fix `ConfirmEmailRecovery.confirmAndRebind` partial failure — on rebind failure after the throwaway account is deleted, surface a clean 4xx and keep the RECOVER code row so the device can retry, with a mid-sequence-failure test.
   evidence: Split from the beta code should-fixes intent (2026-10-01); today a mid-sequence rebind failure bricks the device (authenticates into nothing). Shares classes with the recovery-email ownership goal below.
+  resolution: ✅ RESOLVED (2026-10-01, commit `8666e93`): compensation keeps the RECOVER code and surfaces a clean 503.
 
 - source_spec: none
   summary: Design and implement the recovery-email ownership model — duplicate-address attach (possible 500 + enumeration oracle; check the realm's duplicate-email setting), address squatting, and recovery budget lockout.
   evidence: Split from the beta code should-fixes intent (2026-10-01); a design-first task needing product decisions from Timo, too large for the same spec as the small fixes.
+  resolution: ✅ RESOLVED (2026-10-01, `spec-recovery-email-ownership.md`; commits 4e9da90, 73f97c6, b4f6f9c, 7898fa5, 45a7857, d847753). Manual Mailpit/emulator check still open (Timo, planned).
 
 ## Deferred from: review of spec-beta-hardening-sub-claim-concurrent-accept-reveal-capture (2026-10-01)
 
@@ -431,6 +434,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-beta-hardening-rebind-compensation-and-retract-race.md`
   summary: Remove consent and recovery-code rows keyed by a deleted throwaway account's Keycloak id when the throwaway is deleted.
   evidence: [LOW, pre-existing] `ConfirmEmailRecovery` deletes the throwaway and its provisioned row but not `account_consent` / `EmailRecoveryCodeStore` rows for that id; the sweep cannot find them afterwards. Belongs with Epic 6 erasure.
+  resolution: ◐ PARTLY RESOLVED (2026-10-01, `spec-recovery-email-ownership.md`): the throwaway's recovery bindings and codes are removed after a successful rebind. `account_consent` rows stay with Epic 6.
 
 ## Deferred from: review of spec-recovery-email-ownership (2026-10-01)
 
