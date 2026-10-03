@@ -43,6 +43,8 @@ String localizedMessageForErrorCode(AppLocalizations localizations, String code)
     'membership.lastAdmin' => localizations.membersLastAdminError,
     'membership.mappingConflict' => localizations.membershipMappingConflictError,
     'account.recoveryRebindFailed' => localizations.accountRecoveryRebindFailedError,
+    'account.recoveryRestoreFailed' => localizations.accountRecoveryRestoreFailedError,
+    'identity.notAMember' => localizations.householdsMembershipLostError,
     'auth.unauthorized' => localizations.authSessionExpiredError,
     'auth.invalidRecoveryToken' => localizations.recoveryTokenRestoreInvalidTokenError,
     'account.recoveryEmailRequired' => localizations.accountRecoveryEmailRequiredError,

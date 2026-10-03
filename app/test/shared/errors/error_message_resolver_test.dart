@@ -34,6 +34,20 @@ void main() {
       expect(resolved, isNot(localizations.errorGenericFallback));
     });
 
+    test('accountRecoveryRestoreFailedResolvesToItsOwnRetryCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'account.recoveryRestoreFailed');
+
+      expect(resolved, localizations.accountRecoveryRestoreFailedError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
+    test('notAMemberResolvesToTheMembershipLostCopyNotTheGenericFallback', () {
+      final resolved = localizedMessageForErrorCode(localizations, 'identity.notAMember');
+
+      expect(resolved, localizations.householdsMembershipLostError);
+      expect(resolved, isNot(localizations.errorGenericFallback));
+    });
+
     test('itemNotDuringTripResolvesToItsOwnLocalizedCopyNotTheGenericFallback', () {
       final resolved = localizedMessageForErrorCode(localizations, 'item.notDuringTrip');
 

@@ -30,6 +30,14 @@
   "@accountRecoveryRebindFailedError": {
     "description": "Shown when the account recovery's rebind failed on the server after the code was verified (account.recoveryRebindFailed); the code is kept, so a retry works."
   },
+  "accountRecoveryRestoreFailedError": "Die Wiederherstellung hat nicht geklappt und dein Gerät konnte nicht zurückgesetzt werden. Bitte versuche es sofort noch einmal, dein Code bleibt gültig.",
+  "@accountRecoveryRestoreFailedError": {
+    "description": "Shown when the account recovery failed and the device's own account could not be restored either (account.recoveryRestoreFailed); the code is kept and an immediate retry heals it."
+  },
+  "householdsMembershipLostError": "Du bist in diesem Haushalt nicht mehr angemeldet. Die Haushalte werden neu geladen.",
+  "@householdsMembershipLostError": {
+    "description": "Shown when a household call is refused because the signed-in account is not a member of the household the app showed (identity.notAMember); the app re-resolves the caller's households."
+  },
 
   "authSignedInAsLabel": "Angemeldet als {displayName}",
   "@authSignedInAsLabel": {

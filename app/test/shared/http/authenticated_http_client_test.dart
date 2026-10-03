@@ -44,6 +44,43 @@ ResponseBody _jsonArrayResponse(List<dynamic> json, int statusCode) {
 
 void main() {
   group('AuthenticatedHttpClient', () {
+    test('getJson_reportsMembershipLossWhenAHouseholdCallIsRefusedAsNotAMember', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'identity.notAMember', 'message': 'not a member'}, 403),
+      );
+      var membershipLossReports = 0;
+      final client = AuthenticatedHttpClient(
+        dio: dio,
+        accessTokenProvider: () async => 'the-access-token',
+        onMembershipLost: () => membershipLossReports++,
+      );
+
+      await expectLater(
+        client.getJson('/api/v1/households/h-1/lists'),
+        throwsA(isA<AppException>().having((exception) => exception.error.code, 'code', 'identity.notAMember')),
+      );
+
+      expect(membershipLossReports, 1);
+    });
+
+    test('getJson_doesNotReportMembershipLossForOtherRefusals', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
+      dio.httpClientAdapter = _FakeHttpClientAdapter(
+        (options) async => _jsonResponse({'code': 'governance.notPermitted', 'message': 'no'}, 403),
+      );
+      var membershipLossReports = 0;
+      final client = AuthenticatedHttpClient(
+        dio: dio,
+        accessTokenProvider: () async => 'the-access-token',
+        onMembershipLost: () => membershipLossReports++,
+      );
+
+      await expectLater(client.getJson('/api/v1/households/h-1/members'), throwsA(isA<AppException>()));
+
+      expect(membershipLossReports, 0);
+    });
+
     test('getJson_attachesTheBearerTokenFromTheAccessTokenProvider', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://backend.example.test'));
       final adapter = _FakeHttpClientAdapter(

@@ -29,6 +29,7 @@ class AuthenticatedHttpClient {
     required this._dio,
     required AccessTokenProvider accessTokenProvider,
     this.refreshTokens,
+    this.onMembershipLost,
   }) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -48,6 +49,8 @@ class AuthenticatedHttpClient {
   /// no-token request rather than merely skipping the refresh-retry wrapper.
   static const _skipAuthExtraKey = 'sgart.skipAuth';
 
+  static const _notAMemberCode = 'identity.notAMember';
+
   final Dio _dio;
 
   /// Optional (nullable) — mirrors `AuthCubit.pushNotifications`'s existing "optional dependency"
@@ -55,6 +58,12 @@ class AuthenticatedHttpClient {
   /// no changes. When present, a request that 401s is retried exactly once after a successful
   /// refresh (see [_withRefreshRetry]).
   final TokenRefresher? refreshTokens;
+
+  /// Called when a request is refused with `identity.notAMember`: the signed-in account is not (or
+  /// no longer) a member of the household the app still shows — e.g. after a recovery or silent
+  /// re-auth landed on a different account. The owner re-resolves the caller's households; the
+  /// [AppException] still propagates so the failed action reports itself.
+  final void Function()? onMembershipLost;
 
   Future<Map<String, dynamic>> getJson(String path) {
     return _withRefreshRetry(() => _getJson(path));
@@ -162,6 +171,9 @@ class AuthenticatedHttpClient {
     } on AppException catch (exception) {
       if (exception.error.code == 'auth.unauthorized' && refreshTokens != null && await refreshTokens!()) {
         return send();
+      }
+      if (exception.error.code == _notAMemberCode) {
+        onMembershipLost?.call();
       }
       rethrow;
     }

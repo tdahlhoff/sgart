@@ -65,7 +65,7 @@ void main() {
     });
 
     testWidgets('showsALocalizedErrorMessageAndARetryButtonWhenSignInFails', (tester) async {
-      oidcClient.signInErrorToThrow = const AppException(AppError(code: 'identity.notAMember', message: 'debug'));
+      oidcClient.signInErrorToThrow = const AppException(AppError(code: 'some.unmappedCode', message: 'debug'));
       await tester.pumpWidget(buildSubject());
 
       await cubit.bootstrap();

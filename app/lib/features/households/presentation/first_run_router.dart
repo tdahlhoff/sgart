@@ -51,6 +51,7 @@ class FirstRunRouter extends StatefulWidget {
 class _FirstRunRouterState extends State<FirstRunRouter> {
   late final Dio _dio;
   late final AuthenticatedHttpClient _httpClient;
+  late final HouseholdsCubit _householdsCubit;
   late final HouseholdsApi _householdsApi;
   late final ConsentApi _consentApi;
   late final StoresApi _storesApi;
@@ -74,6 +75,9 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
       dio: _dio,
       accessTokenProvider: () async => authCubit.currentAccessToken,
       refreshTokens: () => authCubit.tryReauthenticate(),
+      // Re-resolves the caller's households when a call is refused as "not a member", so a stale
+      // household selection is replaced instead of failing every call from then on.
+      onMembershipLost: () => unawaited(_householdsCubit.bootstrap()),
     );
     _householdsApi = HttpHouseholdsApi(_httpClient);
     _consentApi = HttpConsentApi(_httpClient);
@@ -85,10 +89,15 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
     _itemsApi = HttpItemsApi(_httpClient);
     _itemSuggestionsApi = HttpItemSuggestionsApi(_httpClient);
     _tripsApi = HttpTripsApi(_httpClient);
+    _householdsCubit = HouseholdsCubit(
+      householdsApi: _householdsApi,
+      activeHouseholdStore: _activeHouseholdStore,
+    )..bootstrap();
   }
 
   @override
   void dispose() {
+    unawaited(_householdsCubit.close());
     _dio.close();
     super.dispose();
   }
@@ -123,11 +132,8 @@ class _FirstRunRouterState extends State<FirstRunRouter> {
         // The list detail screen's "Einkauf starten" action reads this to start a trip (Story 3.1).
         RepositoryProvider<TripsApi>.value(value: _tripsApi),
       ],
-      child: BlocProvider(
-        create: (_) => HouseholdsCubit(
-          householdsApi: _householdsApi,
-          activeHouseholdStore: _activeHouseholdStore,
-        )..bootstrap(),
+      child: BlocProvider.value(
+        value: _householdsCubit,
         child: const FirstRunRouterBody(),
       ),
     );
