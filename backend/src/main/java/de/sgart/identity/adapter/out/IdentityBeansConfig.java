@@ -408,7 +408,6 @@ public class IdentityBeansConfig implements DisposableBean {
             DeleteAccount deleteAccount,
             ProvisionedAccountRepository provisionedAccountRepository,
             RebindAccountCredential rebindAccountCredential,
-            CreateAccount createAccount,
             Clock clock) {
         return new ConfirmEmailRecovery(
                 recoveryEmailBindingRepository,
@@ -421,7 +420,6 @@ public class IdentityBeansConfig implements DisposableBean {
                 deleteAccount,
                 provisionedAccountRepository,
                 rebindAccountCredential,
-                createAccount,
                 clock);
     }
 

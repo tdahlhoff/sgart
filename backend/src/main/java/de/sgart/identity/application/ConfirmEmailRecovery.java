@@ -11,18 +11,19 @@ import de.sgart.identity.domain.RecoveryEmailDigest;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * The R1 rebind (Story 7.3, design §1.1, AC2): verifies the recovery code for the mailbox the
  * person typed, resolves which account to recover, then — <strong>in this exact order</strong> —
- * deletes the caller's own throwaway account (freeing its username, which Keycloak's uniqueness
- * constraint would otherwise reject the rebind on) and rebinds the target account's {@code
- * username}/{@code publicKey} to the throwaway device's own credential. The target's {@link
- * KeycloakUserId} is preserved across the recovery — only the throwaway device's own account is
- * deleted, never the target's.
+ * parks the caller's own throwaway account under a different username (freeing its username, which
+ * Keycloak's uniqueness constraint would otherwise reject the rebind on), rebinds the target
+ * account's {@code username}/{@code publicKey} to the throwaway device's own credential, and only
+ * then deletes the throwaway. The target's {@link KeycloakUserId} is preserved across the recovery,
+ * and a failed rebind gives the throwaway its username back under the <em>same</em> id — a
+ * recreated account would get a new id and orphan everything keyed by the old one (a household the
+ * throwaway created, its consent, its nickname).
  *
  * <p>A mailbox may be bound to several accounts. The caller's own throwaway is never a candidate.
  * With one candidate the rebind runs at once; with several, the first call verifies the code and
@@ -33,6 +34,9 @@ public final class ConfirmEmailRecovery {
 
     private static final Logger log = LoggerFactory.getLogger(ConfirmEmailRecovery.class);
 
+    /** Never a derived device username (those are bare base64url), so a parked name cannot collide. */
+    private static final String PARKED_USERNAME_PREFIX = "recovering-";
+
     private final RecoveryEmailBindingRepository recoveryEmailBindingRepository;
     private final RecoveryEmailDigester recoveryEmailDigester;
     private final RecoveryRequestThrottle recoveryRequestThrottle;
@@ -42,7 +46,6 @@ public final class ConfirmEmailRecovery {
     private final DeleteAccount deleteAccount;
     private final ProvisionedAccountRepository provisionedAccountRepository;
     private final RebindAccountCredential rebindAccountCredential;
-    private final CreateAccount createAccount;
     private final Clock clock;
     private final VerifyRecoveryCode verifyRecoveryCode;
 
@@ -57,7 +60,6 @@ public final class ConfirmEmailRecovery {
             DeleteAccount deleteAccount,
             ProvisionedAccountRepository provisionedAccountRepository,
             RebindAccountCredential rebindAccountCredential,
-            CreateAccount createAccount,
             Clock clock) {
         this.recoveryEmailBindingRepository = Objects.requireNonNull(
                 recoveryEmailBindingRepository, "recoveryEmailBindingRepository must not be null");
@@ -75,7 +77,6 @@ public final class ConfirmEmailRecovery {
                 Objects.requireNonNull(provisionedAccountRepository, "provisionedAccountRepository must not be null");
         this.rebindAccountCredential =
                 Objects.requireNonNull(rebindAccountCredential, "rebindAccountCredential must not be null");
-        this.createAccount = Objects.requireNonNull(createAccount, "createAccount must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.verifyRecoveryCode = new VerifyRecoveryCode(emailRecoveryCodeStore, recoveryCodeHasher, clock);
     }
@@ -90,8 +91,10 @@ public final class ConfirmEmailRecovery {
      *     attempt-exhausted, or {@code chosenAccountId} is not one of the candidates.
      * @throws CallerAccountNotFoundException if the caller's own account no longer exists (401 —
      *     the app's {@code AuthenticatedHttpClient} then re-signs-in silently and retries once).
-     * @throws RecoveryRebindFailedException if the rebind failed after the throwaway was deleted;
-     *     the throwaway is restored best-effort and the code row is kept for a retry.
+     * @throws RecoveryRebindFailedException if the rebind failed; the throwaway got its username
+     *     back and the code row is kept for a retry.
+     * @throws RecoveryThrowawayRestoreFailedException if the rebind failed and the throwaway could
+     *     not be given its username back either; the code row is kept for a retry.
      */
     public EmailRecoveryOutcome confirmAndRebind(
             String throwawayKeycloakUserId, String rawEmail, String code, String chosenAccountId) {
@@ -126,6 +129,7 @@ public final class ConfirmEmailRecovery {
 
         rebind(throwawayCaller, target);
 
+        cleanUpAfterRebind("delete the throwaway account", () -> deleteThrowaway(throwawayCaller));
         cleanUpAfterRebind(
                 "delete the recovery code", () -> emailRecoveryCodeStore.delete(codeSubject, RecoveryCodePurpose.RECOVER));
         cleanUpAfterRebind("reset the recovery budget", () -> recoveryRequestThrottle.reset(digest));
@@ -161,50 +165,59 @@ public final class ConfirmEmailRecovery {
                 .orElseThrow(() -> new CallerAccountNotFoundException(
                         "the caller's account no longer exists"));
 
-        // Delete-then-rebind order is load-bearing (design §1.1): Keycloak's username uniqueness
-        // constraint means `target` cannot take `U2` while the throwaway still holds it. If the
-        // rebind then fails (Keycloak 5xx/network), the throwaway is restored from the details read
-        // above so the device can authenticate again, and the RECOVER code row is kept (it is only
-        // deleted after a successful rebind) so the person can retry without a new code.
-        deleteAccount.delete(throwawayCaller);
-
+        // Park-rebind-delete order is load-bearing (design §1.1): Keycloak's username uniqueness
+        // constraint means `target` cannot take `U2` while the throwaway still holds it, so the
+        // throwaway is renamed out of the way first. Deleting it only after the rebind succeeded is
+        // what keeps its id — and everything keyed by it — alive when the rebind fails.
+        String originalUsername = throwawayDetails.username();
         try {
-            provisionedAccountRepository.delete(throwawayCaller);
-            rebindAccountCredential.rebind(target, throwawayDetails.username(), throwawayDetails.publicKey());
+            rebindAccountCredential.rebind(
+                    throwawayCaller, PARKED_USERNAME_PREFIX + originalUsername, throwawayDetails.publicKey());
+            rebindAccountCredential.rebind(target, originalUsername, throwawayDetails.publicKey());
         } catch (RuntimeException rebindFailure) {
-            Optional<KeycloakUserId> restored = restoreThrowaway(target, throwawayDetails, rebindFailure);
-            if (restored.isPresent() && restored.get().equals(target)) {
-                // The username already belongs to the target: the rebind was applied and only its
-                // response was lost. That is a successful recovery, not a failure to retry.
+            if (holdsUsername(target, originalUsername)) {
+                // The rebind was applied and only its response was lost: a successful recovery.
                 log.warn("Recovery rebind was applied although its call failed; completing the recovery", rebindFailure);
-            } else {
-                log.error(
-                        "Recovery rebind failed after the throwaway account was deleted; throwaway restored: {}",
-                        restored.isPresent(),
-                        rebindFailure);
-                throw new RecoveryRebindFailedException(rebindFailure);
+                return;
             }
+            giveThrowawayItsUsernameBack(throwawayCaller, throwawayDetails, rebindFailure);
+            log.error("Recovery rebind failed; the throwaway account kept its id and username", rebindFailure);
+            throw new RecoveryRebindFailedException(rebindFailure);
+        }
+    }
+
+    private boolean holdsUsername(KeycloakUserId account, String username) {
+        try {
+            return getAccountDetails
+                    .findById(account)
+                    .map(details -> details.username().equals(username))
+                    .orElse(false);
+        } catch (RuntimeException lookupFailure) {
+            return false;
         }
     }
 
     /**
-     * Best effort: a failure here is attached to the rebind failure rather than masking it, and the
-     * device then stays unprovisioned until its next launch re-provisions it (7.1). Returns the
-     * id of the account now holding the throwaway's username — the {@code target} itself when the
-     * rebind had in fact been applied — or empty when the restore failed. Only a genuinely
-     * restored throwaway is recorded as a provisioned shell.
+     * Gives the throwaway its username back under its own, unchanged id. When even that fails the
+     * device cannot sign in until a retry succeeds, which is surfaced as its own failure rather than
+     * hidden — the code row is kept, so an immediate retry heals it.
      */
-    private Optional<KeycloakUserId> restoreThrowaway(
-            KeycloakUserId target, AccountDetails throwawayDetails, RuntimeException rebindFailure) {
+    private void giveThrowawayItsUsernameBack(
+            KeycloakUserId throwawayCaller, AccountDetails throwawayDetails, RuntimeException rebindFailure) {
         try {
-            KeycloakUserId holder = createAccount.create(throwawayDetails.username(), throwawayDetails.publicKey());
-            if (!holder.equals(target)) {
-                provisionedAccountRepository.recordIfAbsent(holder, clock.instant());
+            rebindAccountCredential.rebind(throwawayCaller, throwawayDetails.username(), throwawayDetails.publicKey());
+        } catch (RuntimeException unparkFailure) {
+            if (holdsUsername(throwawayCaller, throwawayDetails.username())) {
+                return; // Parking never took effect, so there was nothing to give back.
             }
-            return Optional.of(holder);
-        } catch (RuntimeException restoreFailure) {
-            rebindFailure.addSuppressed(restoreFailure);
-            return Optional.empty();
+            rebindFailure.addSuppressed(unparkFailure);
+            log.error("Recovery rebind failed and the throwaway account could not get its username back", rebindFailure);
+            throw new RecoveryThrowawayRestoreFailedException(rebindFailure);
         }
+    }
+
+    private void deleteThrowaway(KeycloakUserId throwawayCaller) {
+        deleteAccount.delete(throwawayCaller);
+        provisionedAccountRepository.delete(throwawayCaller);
     }
 }

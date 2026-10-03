@@ -455,9 +455,19 @@
   evidence: [LOW] Both need the mailbox code anyway; consume the code atomically (delete-and-return) if this ever matters.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
-  summary: A failed-then-restored rebind leaves bindings and codes keyed by the deleted throwaway id.
-  evidence: [LOW] `ConfirmEmailRecovery` compensation restores the throwaway under a new Keycloak id; its old-id bindings/codes are orphaned until the purge or erasure work removes them.
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
   summary: Privacy-notice wording for shared mailboxes and the household-name picker, plus a contact address.
   evidence: [MEDIUM] The recovery picker shows household names and nicknames to whoever holds the mailbox code; the notice must say so. Belongs to the privacy-notice work.
+
+## Refined from: manual test 2026-10-03 — a failed recovery rebind swapped the caller's identity
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: FIXED — `ConfirmEmailRecovery` now parks the throwaway (`recovering-<username>`), rebinds the target, and deletes the throwaway only afterwards; a failed rebind renames it back under the same Keycloak id. Supersedes the LOW "restored under a new id" entry.
+  evidence: Keycloak 26.7 ignores `id` on `POST /users` (verified live), so recreating under the old id is impossible; a household created by the throwaway was orphaned on a failed rebind.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Residual risk: if the rebind AND the unpark both fail, the device has no account holding its username until a retry succeeds.
+  evidence: [LOW] Surfaced as 503 `account.recoveryRestoreFailed` (code kept, immediate retry heals). Until then a Direct-Grant sign-in finds no user and `ProvisionAccount` would create a new empty account.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-recovery-email-ownership.md`
+  summary: Silent re-auth (`AuthCubit._performReauthenticate`) can land on a different account without any state change; only `identity.notAMember` re-routes today.
+  evidence: [LOW] The backend fix removes the known cause; comparing the token `sub` before/after re-auth was left out (YAGNI).

@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.sgart.identity.adapter.out.RecoveryIssuanceExecutor;
 import de.sgart.identity.application.AccountDetails;
-import de.sgart.identity.application.CreateAccount;
 import de.sgart.identity.application.DeleteAccount;
 import de.sgart.identity.application.GetAccountDetails;
 import de.sgart.identity.application.RebindAccountCredential;
@@ -111,12 +110,6 @@ class RecoverByEmailEndToEndTest {
                     ? Optional.of(new AccountDetails("throwaway-username", "throwaway-public-key"))
                     : Optional.empty();
         }
-
-        @Bean
-        @Primary
-        CreateAccount unusedCreateAccount() {
-            return (username, publicKey) -> new KeycloakUserId("restored-" + username);
-        }
     }
 
     static final class CapturingMail implements SendRecoveryCodeEmail {
@@ -180,7 +173,9 @@ class RecoverByEmailEndToEndTest {
 
         assertThat(recordingDelete.deletedAccountIds).containsExactly(THROWAWAY_T);
         assertThat(recordingRebind.rebinds)
-                .containsExactly(new RecordingRebind.Rebind(ACCOUNT_A, "throwaway-username", "throwaway-public-key"));
+                .containsExactly(
+                        new RecordingRebind.Rebind(THROWAWAY_T, "recovering-throwaway-username", "throwaway-public-key"),
+                        new RecordingRebind.Rebind(ACCOUNT_A, "throwaway-username", "throwaway-public-key"));
         assertNoTableHoldsThePlaintextAddress();
     }
 

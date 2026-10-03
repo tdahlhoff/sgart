@@ -10,7 +10,7 @@ import de.sgart.identity.adapter.out.InMemoryMembershipNicknameRepository;
 import de.sgart.identity.adapter.out.InMemoryProvisionedAccountRepository;
 import de.sgart.identity.adapter.out.InMemoryRecoveryEmailBindingRepository;
 import de.sgart.identity.CapturedLogs;
-import de.sgart.identity.application.RecoveryEmailTestSupport.FailingRebindAccountCredential;
+import de.sgart.identity.application.RecoveryEmailTestSupport.InMemoryKeycloakAccounts;
 import de.sgart.identity.application.RecoveryEmailTestSupport.InjectedFailures;
 import de.sgart.identity.application.RecoveryEmailTestSupport.ConfigurableThrottles;
 import de.sgart.identity.application.RecoveryEmailTestSupport.FakeFindHouseholdNames;
@@ -18,7 +18,6 @@ import de.sgart.identity.application.RecoveryEmailTestSupport.FakeGetAccountDeta
 import de.sgart.identity.application.RecoveryEmailTestSupport.IdentityRecoveryCodeHasher;
 import de.sgart.identity.application.RecoveryEmailTestSupport.OrderedDeleteAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.OrderedRebindAccountCredential;
-import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingCreateAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingDeleteAccount;
 import de.sgart.identity.application.RecoveryEmailTestSupport.RecordingRebindAccountCredential;
 import de.sgart.identity.application.RecoveryEmailTestSupport.Sha256RecoveryEmailDigester;
@@ -74,7 +73,6 @@ class ConfirmEmailRecoveryTest {
     private final InMemoryProvisionedAccountRepository provisionedAccountRepository =
             new InMemoryProvisionedAccountRepository();
     private final RecordingRebindAccountCredential rebindAccountCredential = new RecordingRebindAccountCredential();
-    private final RecordingCreateAccount createAccount = new RecordingCreateAccount();
     private final MutableClock clock = new MutableClock(NOW);
     private final ConfirmEmailRecovery confirmEmailRecovery =
             confirmEmailRecoveryUsing(bindings, throttles, emailRecoveryCodeStore, deleteAccount, rebindAccountCredential);
@@ -86,6 +84,27 @@ class ConfirmEmailRecoveryTest {
             EmailRecoveryCodeStore codeStore,
             DeleteAccount accountDeletion,
             RebindAccountCredential credentialRebind) {
+        return confirmEmailRecoveryUsing(
+                recoveryEmailBindingRepository,
+                recoveryRequestThrottle,
+                codeStore,
+                getAccountDetails,
+                accountDeletion,
+                credentialRebind);
+    }
+
+    private ConfirmEmailRecovery confirmEmailRecoveryOver(InMemoryKeycloakAccounts keycloakAccounts) {
+        return confirmEmailRecoveryUsing(
+                bindings, throttles, emailRecoveryCodeStore, keycloakAccounts, keycloakAccounts, keycloakAccounts);
+    }
+
+    private ConfirmEmailRecovery confirmEmailRecoveryUsing(
+            RecoveryEmailBindingRepository recoveryEmailBindingRepository,
+            RecoveryRequestThrottle recoveryRequestThrottle,
+            EmailRecoveryCodeStore codeStore,
+            GetAccountDetails accountDetailsLookup,
+            DeleteAccount accountDeletion,
+            RebindAccountCredential credentialRebind) {
         return new ConfirmEmailRecovery(
                 recoveryEmailBindingRepository,
                 new Sha256RecoveryEmailDigester(),
@@ -93,16 +112,15 @@ class ConfirmEmailRecoveryTest {
                 candidateResolver,
                 codeStore,
                 hasher,
-                getAccountDetails,
+                accountDetailsLookup,
                 accountDeletion,
                 provisionedAccountRepository,
                 credentialRebind,
-                createAccount,
                 clock);
     }
 
     @Test
-    void confirmEmailRecovery_deletesThrowawayThenRebindsTargetUsernameAndPublicKey() {
+    void confirmEmailRecovery_parksTheThrowawayThenRebindsTargetUsernameAndPublicKeyThenDeletesTheThrowaway() {
         bindConfirmed(TARGET, "person@example.test");
         emailRecoveryCodeStore.store(CODE_SUBJECT, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
         getAccountDetails.register(THROWAWAY, "U2", "K2");
@@ -112,8 +130,12 @@ class ConfirmEmailRecoveryTest {
 
         assertThat(deleteAccount.deletionOrder).containsExactly(THROWAWAY);
         assertThat(provisionedAccountRepository.contains(THROWAWAY)).isFalse();
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
-        var rebind = rebindAccountCredential.rebinds.get(0);
+        assertThat(rebindAccountCredential.rebinds).hasSize(2);
+        var parking = rebindAccountCredential.rebinds.get(0);
+        assertThat(parking.keycloakUserId()).isEqualTo(THROWAWAY);
+        assertThat(parking.username()).isNotEqualTo("U2");
+        assertThat(parking.publicKey()).isEqualTo("K2");
+        var rebind = targetRebinds().get(0);
         assertThat(rebind.keycloakUserId()).isEqualTo(TARGET);
         assertThat(rebind.username()).isEqualTo("U2");
         assertThat(rebind.publicKey()).isEqualTo("K2");
@@ -128,7 +150,7 @@ class ConfirmEmailRecoveryTest {
 
         confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
 
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(TARGET);
         assertThat(deleteAccount.deletedIds).doesNotContain(TARGET);
     }
 
@@ -218,7 +240,7 @@ class ConfirmEmailRecoveryTest {
 
         confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
 
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+        assertThat(targetRebinds()).hasSize(1);
     }
 
     @Test
@@ -232,7 +254,7 @@ class ConfirmEmailRecoveryTest {
 
         assertThatThrownBy(() -> confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
                 .isInstanceOf(RecoveryCodeRejectedException.class);
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+        assertThat(targetRebinds()).hasSize(1);
     }
 
     @Test
@@ -251,11 +273,8 @@ class ConfirmEmailRecoveryTest {
     }
 
     @Test
-    void confirmEmailRecovery_deletesTheThrowawayBeforeRebindingTheTarget() {
-        bindConfirmed(TARGET, "person@example.test");
-        emailRecoveryCodeStore.store(CODE_SUBJECT, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
-        getAccountDetails.register(THROWAWAY, "U2", "K2");
-        provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
+    void confirmEmailRecovery_freesTheUsernameByParkingTheThrowawayAndDeletesItOnlyAfterTheRebindSucceeded() {
+        seedRecoverableAccount();
 
         List<String> sharedLog = new ArrayList<>();
         ConfirmEmailRecovery orderedConfirmEmailRecovery = confirmEmailRecoveryUsing(
@@ -267,12 +286,8 @@ class ConfirmEmailRecoveryTest {
 
         orderedConfirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
 
-        assertThat(sharedLog).containsExactly("delete:" + THROWAWAY_ID, "rebind:target-A1");
-    }
-
-    private ConfirmEmailRecovery confirmEmailRecoveryWithFailingRebind() {
-        return confirmEmailRecoveryUsing(
-                bindings, throttles, emailRecoveryCodeStore, deleteAccount, new FailingRebindAccountCredential());
+        assertThat(sharedLog)
+                .containsExactly("rebind:" + THROWAWAY_ID, "rebind:target-A1", "delete:" + THROWAWAY_ID);
     }
 
     private void seedRecoverableAccount() {
@@ -282,33 +297,75 @@ class ConfirmEmailRecoveryTest {
         provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
     }
 
-    @Test
-    void confirmEmailRecovery_whenTheRebindFails_restoresTheThrowawayAndKeepsTheCodeForARetry() {
-        seedRecoverableAccount();
+    private InMemoryKeycloakAccounts seedKeycloakAccountsForRecovery() {
+        bindConfirmed(TARGET, "person@example.test");
+        emailRecoveryCodeStore.store(CODE_SUBJECT, RecoveryCodePurpose.RECOVER, hasher.hash("042817"), NOW.plusSeconds(60), NOW);
+        provisionedAccountRepository.recordIfAbsent(THROWAWAY, NOW.minusSeconds(60));
+        InMemoryKeycloakAccounts keycloakAccounts = new InMemoryKeycloakAccounts();
+        keycloakAccounts.register(THROWAWAY, "U2", "K2");
+        keycloakAccounts.register(TARGET, "U1", "K1");
+        return keycloakAccounts;
+    }
 
-        assertThatThrownBy(() ->
-                        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
+    @Test
+    void confirmEmailRecovery_whenTheRebindFails_keepsTheCallersAccountIdAndItsHouseholdMembership() {
+        InMemoryKeycloakAccounts keycloakAccounts = seedKeycloakAccountsForRecovery();
+        HouseholdId householdCreatedByTheThrowaway = HouseholdId.generate();
+        joinHousehold(THROWAWAY, householdCreatedByTheThrowaway);
+        keycloakAccounts.failRebindsOf(TARGET, 0);
+
+        assertThatThrownBy(() -> confirmEmailRecoveryOver(keycloakAccounts)
+                        .confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
                 .isInstanceOf(RecoveryRebindFailedException.class)
                 .hasCauseInstanceOf(IllegalStateException.class);
 
-        assertThat(deleteAccount.deletedIds).containsExactly(THROWAWAY);
-        assertThat(createAccount.creations).containsExactly(new RecordingCreateAccount.Creation("U2", "K2"));
-        assertThat(provisionedAccountRepository.contains(THROWAWAY)).isFalse();
-        assertThat(provisionedAccountRepository.contains(new KeycloakUserId("restored-U2"))).isTrue();
+        assertThat(keycloakAccounts.deletedAccounts).isEmpty();
+        assertThat(keycloakAccounts.usernameOf(THROWAWAY)).isEqualTo("U2");
+        assertThat(memberMappings.householdIdsFor(THROWAWAY)).containsExactly(householdCreatedByTheThrowaway);
+        assertThat(provisionedAccountRepository.contains(THROWAWAY)).isTrue();
         assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isPresent();
     }
 
     @Test
-    void confirmEmailRecovery_whenTheRebindAndTheRestoreBothFail_stillRaisesTheCleanRetryableFailure() {
-        seedRecoverableAccount();
-        createAccount.shouldFail = true;
+    void confirmEmailRecovery_whenTheRebindAndTheUnparkingBothFail_failsWithoutEverCreatingAnotherAccount() {
+        InMemoryKeycloakAccounts keycloakAccounts = seedKeycloakAccountsForRecovery();
+        keycloakAccounts.failRebindsOf(TARGET, 0);
+        keycloakAccounts.failRebindsOf(THROWAWAY, 1);
 
-        assertThatThrownBy(() ->
-                        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
-                .isInstanceOf(RecoveryRebindFailedException.class)
+        assertThatThrownBy(() -> confirmEmailRecoveryOver(keycloakAccounts)
+                        .confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
+                .isInstanceOf(RecoveryThrowawayRestoreFailedException.class)
                 .satisfies(failure -> assertThat(failure.getCause().getSuppressed()).hasSize(1));
 
+        assertThat(keycloakAccounts.deletedAccounts).isEmpty();
         assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isPresent();
+    }
+
+    @Test
+    void confirmEmailRecovery_whenParkingTheThrowawayFails_failsRetryablyBecauseNothingChanged() {
+        InMemoryKeycloakAccounts keycloakAccounts = seedKeycloakAccountsForRecovery();
+        keycloakAccounts.failRebindsOf(THROWAWAY, 0);
+
+        assertThatThrownBy(() -> confirmEmailRecoveryOver(keycloakAccounts)
+                        .confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE))
+                .isInstanceOf(RecoveryRebindFailedException.class);
+
+        assertThat(keycloakAccounts.usernameOf(THROWAWAY)).isEqualTo("U2");
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isPresent();
+    }
+
+    @Test
+    void confirmEmailRecovery_whenTheRebindWasAppliedButItsResponseWasLost_completesTheRecoveryInsteadOfFailing() {
+        InMemoryKeycloakAccounts keycloakAccounts = seedKeycloakAccountsForRecovery();
+        keycloakAccounts.applyRebindOfThenFail(TARGET);
+
+        confirmEmailRecoveryOver(keycloakAccounts)
+                .confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
+
+        assertThat(keycloakAccounts.usernameOf(TARGET)).isEqualTo("U2");
+        assertThat(keycloakAccounts.exists(THROWAWAY)).isFalse();
+        assertThat(provisionedAccountRepository.contains(THROWAWAY)).isFalse();
+        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isEmpty();
     }
 
     @Test
@@ -324,15 +381,10 @@ class ConfirmEmailRecoveryTest {
         assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isPresent();
     }
 
-    @Test
-    void confirmEmailRecovery_whenTheRebindWasAppliedButItsResponseWasLost_completesTheRecoveryInsteadOfFailing() {
-        seedRecoverableAccount();
-        createAccount.existingHolder = TARGET;
-
-        confirmEmailRecoveryWithFailingRebind().confirmAndRebind(THROWAWAY_ID, "person@example.test", "042817", NO_CHOICE);
-
-        assertThat(provisionedAccountRepository.contains(TARGET)).isFalse();
-        assertThat(emailRecoveryCodeStore.find(CODE_SUBJECT, RecoveryCodePurpose.RECOVER)).isEmpty();
+    private List<RecordingRebindAccountCredential.Rebind> targetRebinds() {
+        return rebindAccountCredential.rebinds.stream()
+                .filter(rebind -> !rebind.keycloakUserId().equals(THROWAWAY))
+                .toList();
     }
 
     private static final KeycloakUserId OTHER_TARGET = new KeycloakUserId("target-B1");
@@ -362,7 +414,7 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(TARGET);
     }
 
     @Test
@@ -391,8 +443,8 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", OTHER_TARGET.value());
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(OTHER_TARGET);
+        assertThat(targetRebinds()).hasSize(1);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(OTHER_TARGET);
     }
 
     @Test
@@ -415,7 +467,7 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(TARGET);
     }
 
     @Test
@@ -429,9 +481,10 @@ class ConfirmEmailRecoveryTest {
 
     @Test
     void confirm_whenTheRebindFails_doesNotResetTheAddressRecoveryBudget() {
-        seedRecoverableAccount();
+        InMemoryKeycloakAccounts keycloakAccounts = seedKeycloakAccountsForRecovery();
+        keycloakAccounts.failRebindsOf(TARGET, 0);
 
-        assertThatThrownBy(() -> confirmEmailRecoveryWithFailingRebind()
+        assertThatThrownBy(() -> confirmEmailRecoveryOver(keycloakAccounts)
                         .confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE))
                 .isInstanceOf(RecoveryRebindFailedException.class);
 
@@ -461,7 +514,7 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, "  Person@Example.TEST ", "042817", NO_CHOICE);
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(TARGET);
     }
 
     @Test
@@ -481,7 +534,7 @@ class ConfirmEmailRecoveryTest {
                 withFailingCleanup.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", NO_CHOICE);
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
+        assertThat(targetRebinds()).hasSize(1);
         assertThat(injectedFailures.firedMethodNames()).containsExactlyInAnyOrder("delete", "deleteAll", "deleteAllFor");
     }
 
@@ -603,7 +656,7 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", TARGET.value());
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(TARGET);
     }
 
     @Test
@@ -630,7 +683,7 @@ class ConfirmEmailRecoveryTest {
                 confirmEmailRecovery.confirmAndRebind(THROWAWAY_ID, ADDRESS, "042817", OTHER_TARGET.value());
 
         assertThat(outcome).isInstanceOf(EmailRecoveryOutcome.Rebound.class);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(OTHER_TARGET);
+        assertThat(targetRebinds().get(0).keycloakUserId()).isEqualTo(OTHER_TARGET);
     }
 
     @Test

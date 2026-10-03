@@ -733,8 +733,8 @@ class AccountControllerTest {
                 .andExpect(status().isNoContent());
 
         assertThat(deleteAccount.deletedIds).containsExactly(throwawayAccountId);
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
-        RecordingRebindAccountCredential.Rebind rebind = rebindAccountCredential.rebinds.get(0);
+        assertThat(rebindAccountCredential.rebinds).hasSize(2);
+        RecordingRebindAccountCredential.Rebind rebind = rebindAccountCredential.rebinds.get(1);
         assertThat(rebind.keycloakUserId()).isEqualTo(RECOVERABLE_ACCOUNT_ID);
         assertThat(rebind.username()).isEqualTo("throwaway-username");
         assertThat(rebind.publicKey()).isEqualTo("throwaway-public-key");
@@ -822,7 +822,7 @@ class AccountControllerTest {
                                 + "\",\"accountId\":\"second-sub\"}"))
                 .andExpect(status().isNoContent());
 
-        assertThat(rebindAccountCredential.rebinds).hasSize(1);
-        assertThat(rebindAccountCredential.rebinds.get(0).keycloakUserId()).isEqualTo(SECOND_ACCOUNT_ID);
+        assertThat(rebindAccountCredential.rebinds).hasSize(2);
+        assertThat(rebindAccountCredential.rebinds.get(1).keycloakUserId()).isEqualTo(SECOND_ACCOUNT_ID);
     }
 }

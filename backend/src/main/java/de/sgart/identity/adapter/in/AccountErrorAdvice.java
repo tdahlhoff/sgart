@@ -6,6 +6,7 @@ import de.sgart.identity.application.InvalidRecoveryEmailException;
 import de.sgart.identity.application.RecoveryCodeRateLimitedException;
 import de.sgart.identity.application.RecoveryCodeRejectedException;
 import de.sgart.identity.application.RecoveryRebindFailedException;
+import de.sgart.identity.application.RecoveryThrowawayRestoreFailedException;
 import de.sgart.shared.ErrorDescriptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,12 @@ class AccountErrorAdvice {
 
     @ExceptionHandler(RecoveryRebindFailedException.class)
     ResponseEntity<ErrorDescriptor> handleRecoveryRebindFailed(RecoveryRebindFailedException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(exception.errorDescriptor());
+    }
+
+    @ExceptionHandler(RecoveryThrowawayRestoreFailedException.class)
+    ResponseEntity<ErrorDescriptor> handleRecoveryThrowawayRestoreFailed(
+            RecoveryThrowawayRestoreFailedException exception) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(exception.errorDescriptor());
     }
 

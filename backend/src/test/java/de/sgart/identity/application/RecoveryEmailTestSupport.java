@@ -261,29 +261,67 @@ final class RecoveryEmailTestSupport {
         }
     }
 
-    /** A rebind that fails after the throwaway is already deleted (Keycloak 5xx / network). */
-    static final class FailingRebindAccountCredential implements RebindAccountCredential {
+    /**
+     * A stateful stand-in for the Keycloak accounts: unlike the recording doubles it enforces the
+     * username uniqueness the R1 rebind has to work around, so a test can assert which account ends
+     * up holding which username. Failures are injected per account, never globally.
+     */
+    static final class InMemoryKeycloakAccounts implements GetAccountDetails, RebindAccountCredential, DeleteAccount {
+        private final Map<KeycloakUserId, AccountDetails> accounts = new HashMap<>();
+        private final Map<KeycloakUserId, Integer> remainingRebindsBeforeFailure = new HashMap<>();
+        private final Set<KeycloakUserId> accountsWhoseRebindIsAppliedBeforeFailing = new HashSet<>();
+        final List<KeycloakUserId> deletedAccounts = new ArrayList<>();
+
+        void register(KeycloakUserId id, String username, String publicKey) {
+            accounts.put(id, new AccountDetails(username, publicKey));
+        }
+
+        void failRebindsOf(KeycloakUserId id, int afterSuccessfulRebinds) {
+            remainingRebindsBeforeFailure.put(id, afterSuccessfulRebinds);
+        }
+
+        void applyRebindOfThenFail(KeycloakUserId id) {
+            accountsWhoseRebindIsAppliedBeforeFailing.add(id);
+        }
+
+        String usernameOf(KeycloakUserId id) {
+            return accounts.get(id).username();
+        }
+
+        boolean exists(KeycloakUserId id) {
+            return accounts.containsKey(id);
+        }
+
+        @Override
+        public Optional<AccountDetails> findById(KeycloakUserId keycloakUserId) {
+            return Optional.ofNullable(accounts.get(keycloakUserId));
+        }
+
         @Override
         public void rebind(KeycloakUserId keycloakUserId, String username, String publicKey) {
-            throw new IllegalStateException("keycloak unavailable");
+            Integer remaining = remainingRebindsBeforeFailure.get(keycloakUserId);
+            if (remaining != null && remaining == 0) {
+                throw new IllegalStateException("keycloak unavailable");
+            }
+            if (remaining != null) {
+                remainingRebindsBeforeFailure.put(keycloakUserId, remaining - 1);
+            }
+            boolean usernameHeldByAnotherAccount = accounts.entrySet().stream()
+                    .anyMatch(entry -> !entry.getKey().equals(keycloakUserId)
+                            && entry.getValue().username().equals(username));
+            if (usernameHeldByAnotherAccount) {
+                throw new IllegalStateException("username already exists");
+            }
+            accounts.put(keycloakUserId, new AccountDetails(username, publicKey));
+            if (accountsWhoseRebindIsAppliedBeforeFailing.contains(keycloakUserId)) {
+                throw new IllegalStateException("response lost");
+            }
         }
-    }
-
-    static final class RecordingCreateAccount implements CreateAccount {
-        record Creation(String username, String publicKey) {}
-
-        final List<Creation> creations = new ArrayList<>();
-        boolean shouldFail;
-        /** When set, the "account" already exists under this id — Keycloak's idempotent 409 path. */
-        KeycloakUserId existingHolder;
 
         @Override
-        public KeycloakUserId create(String username, String publicKey) {
-            if (shouldFail) {
-                throw new IllegalStateException("keycloak still unavailable");
-            }
-            creations.add(new Creation(username, publicKey));
-            return existingHolder != null ? existingHolder : new KeycloakUserId("restored-" + username);
+        public void delete(KeycloakUserId keycloakUserId) {
+            accounts.remove(keycloakUserId);
+            deletedAccounts.add(keycloakUserId);
         }
     }
 }
