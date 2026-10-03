@@ -112,6 +112,37 @@ app dies on first launch with a generic error; boots the `sgart_pixel` AVD and w
 (logs under `.run/`, which is gitignored); `Ctrl-C` stops only `flutter run`, so use `stop.sh` to
 shut the rest down. The scripts are **dev-only** and assume the local WSL2 + emulator setup.
 
+### Debugging a local run
+
+Where to look when something fails (all paths relative to the repo root):
+
+| What | Where |
+| --- | --- |
+| Backend log (stdout/stderr of `bootRun`) | `.run/backend.log` |
+| Emulator log | `.run/emulator.log` |
+| App log (device) | `adb logcat -d \| grep -iE 'flutter\|de.sgart'` |
+| Recovery/invite emails | Mailpit UI, <http://localhost:8025> |
+| Keycloak admin console | <http://localhost:8080> (admin credentials in `.env`) |
+
+**Request log.** `start.sh` starts the backend with an access log: one line per request in
+`.run/backend.log`, e.g. `"POST /api/v1/households/…/lists" 403 6150us` — method, path without query,
+status and duration in microseconds, never headers, bodies or tokens (they are personal data).
+Without it a handled `4xx` leaves no trace, so a missing log line does not mean the request never
+arrived. Switch it off with `SGART_ACCESS_LOG_ENABLED=false scripts/start.sh`; it is off by default
+for any other way of running the backend.
+
+**Restart only the backend** (`stop.sh` would also kill the emulator and the containers): kill the
+process in `.run/backend.pid` and its children, then run `scripts/start.sh --no-app`; it reuses the
+running emulator and containers.
+
+**Inspect state** while it runs:
+
+```bash
+docker exec sgart-postgres-1 psql -U sgart -d sgart -c 'select * from household_read_model'
+curl -s localhost:8081/actuator/health
+adb reverse --list          # must list tcp:8081 and tcp:8080
+```
+
 ### Keycloak dev realm
 
 Keycloak imports the **`sgart`** realm from [`keycloak/realm-sgart.json`](keycloak/realm-sgart.json)

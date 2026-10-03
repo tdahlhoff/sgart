@@ -2,6 +2,19 @@ server:
   # Keycloak already owns port 8080 in local dev (docker-compose.yml) — the backend needs a
   # different port so `./gradlew bootRun` and `docker compose up` can run side by side.
   port: ${SGART_SERVER_PORT:8081}
+  # Off unless a local run asks for it (scripts/start.sh does). One line per request on stdout:
+  # time, method, path WITHOUT query string, status, duration in microseconds — never headers, bodies or tokens
+  # (receipt contents and household membership are personal data, CLAUDE.md §5).
+  tomcat:
+    accesslog:
+      enabled: ${SGART_ACCESS_LOG_ENABLED:false}
+      directory: /dev
+      prefix: stdout
+      suffix: ""
+      file-date-format: ""
+      rotate: false
+      buffered: false
+      pattern: '%t "%m %U" %s %Dus'
 
 management:
   health:
