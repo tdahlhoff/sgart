@@ -117,10 +117,14 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('item-row-stripe-i0')), findsNothing);
-      expect(find.byKey(const Key('item-row-stripe-i1')), findsOneWidget);
-      expect(find.byKey(const Key('item-row-stripe-i2')), findsNothing);
-      expect(find.byKey(const Key('item-row-stripe-i3')), findsOneWidget);
+      Finder tintAround(String itemId) => find.ancestor(
+            of: find.byKey(Key('item-row-$itemId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('i0'), findsNothing);
+      expect(tintAround('i1'), findsOneWidget);
+      expect(tintAround('i2'), findsNothing);
+      expect(tintAround('i3'), findsOneWidget);
     });
 
     testWidgets('addingAnItemToALongListScrollsTheNewItemIntoView', (tester) async {

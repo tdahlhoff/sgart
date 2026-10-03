@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../l10n/gen/app_localizations.dart';
 import '../../../../shared/errors/error_message_resolver.dart';
+import '../../../../shared/widgets/striped_row.dart';
 import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../shared/widgets/status_label.dart';
+import '../../../../theme/sgart_theme_access.dart';
 import '../../../../theme/tokens/sgart_shapes.dart';
 import '../../data/shopping_list_summary.dart';
 import '../../../trips/presentation/trip_screen.dart';
@@ -28,8 +30,7 @@ class ListsView extends StatelessWidget {
     return BlocBuilder<ShoppingListsCubit, ShoppingListsState>(
       builder: (context, state) {
         return switch (state.status) {
-          ShoppingListsStatus.loading =>
-            const Center(child: CircularProgressIndicator(key: Key('lists-loading'))),
+          ShoppingListsStatus.loading => const Center(child: CircularProgressIndicator(key: Key('lists-loading'))),
           ShoppingListsStatus.failure => const _FailureBody(),
           ShoppingListsStatus.ready => _ReadyBody(state: state),
         };
@@ -45,35 +46,94 @@ class _ReadyBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
     final cubit = context.read<ShoppingListsCubit>();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SegmentedButton<ListFilter>(
-            key: const Key('lists-filter-segmented-button'),
-            segments: [
-              ButtonSegment(
-                value: ListFilter.open,
-                label: Text(localizations.listsFilterOpen),
-              ),
-              ButtonSegment(
-                value: ListFilter.done,
-                label: Text(localizations.listsFilterDone),
-              ),
-            ],
-            selected: {state.filter},
-            onSelectionChanged: (selection) => cubit.selectFilter(selection.first),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FilterBar(state: state, cubit: cubit),
+        Expanded(
+          child: SingleChildScrollView(
+            // Rows run edge to edge so their alternating background bands do too; everything else — and
+            // each row's own content — is inset by the card padding.
+            padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
+            child: switch (state.filter) {
+              ListFilter.open => _OpenListsBody(state: state, cubit: cubit),
+              ListFilter.done => _DoneArchiveBody(state: state),
+            },
           ),
-          const SizedBox(height: SgartShapes.space4),
-          switch (state.filter) {
-            ListFilter.open => _OpenListsBody(state: state, cubit: cubit),
-            ListFilter.done => _DoneArchiveBody(state: state),
-          },
-        ],
+        ),
+        if (state.filter == ListFilter.open) _CreateListBar(state: state, cubit: cubit),
+      ],
+    );
+  }
+}
+
+/// The Offen/Erledigt switch on the white chrome surface with a hairline below — like the other bars
+/// that frame the tinted list, and a better backdrop for the selected segment than the page colour.
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({required this.state, required this.cubit});
+
+  final ShoppingListsState state;
+  final ShoppingListsCubit cubit;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('lists-filter-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          bottom: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: SegmentedButton<ListFilter>(
+          key: const Key('lists-filter-segmented-button'),
+          segments: [
+            ButtonSegment(value: ListFilter.open, label: Text(localizations.listsFilterOpen)),
+            ButtonSegment(value: ListFilter.done, label: Text(localizations.listsFilterDone)),
+          ],
+          selected: {state.filter},
+          onSelectionChanged: (selection) => cubit.selectFilter(selection.first),
+        ),
+      ),
+    );
+  }
+}
+
+/// The create action pinned to the bottom, in the thumb zone and always in the same place however
+/// many lists there are — the same white bar with a hairline above as the fast-add bar in list detail.
+class _CreateListBar extends StatelessWidget {
+  const _CreateListBar({required this.state, required this.cubit});
+
+  final ShoppingListsState state;
+  final ShoppingListsCubit cubit;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('lists-create-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          top: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: SgartButton(
+          key: const Key('lists-create-button'),
+          label: localizations.listsCreateAction,
+          onPressed: state.isSubmitting ? null : () => showCreateListSheet(context, cubit),
+        ),
       ),
     );
   }
@@ -93,69 +153,77 @@ class _OpenListsBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (state.lists.isEmpty)
-          Text(localizations.listsEmptyState, key: const Key('lists-empty-state'))
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+            child: Text(localizations.listsEmptyState, key: const Key('lists-empty-state')),
+          )
         else
           for (final (index, list) in state.lists.indexed)
-            _ListRow(
-              list: list,
-              // The AC2 ordinal is the 1-based position in the creation-ordered array the query
-              // already returns — counting named lists too (derivation lives on the client).
-              orderIndex: index + 1,
-              onRename: () => showRenameListSheet(
-                context,
-                cubit,
-                listId: list.listId,
-                currentName: list.name ?? localizations.listsDefaultName(index + 1),
-              ),
-              onOpen: () async {
-                final displayName = list.name ?? localizations.listsDefaultName(index + 1);
-                // An „Im Einkauf" row opens the trip screen directly (Story 3.2, AC4) — the
-                // list-detail's own item edits are off-trip only (Story 3.1, AC6). A still-Open row
-                // opens list detail, which may itself transition In-Trip mid-session ("Einkauf
-                // starten") and navigate on from there (Story 3.2, Cl. 3).
-                final activeTripId = list.activeTripId;
-                if (list.status == 'IN_TRIP' && activeTripId != null) {
-                  final completed = await TripScreen.push(context, householdId: cubit.householdId, listId: list.listId, listTitle: displayName);
-                  // Story 3.4, AC7 — invalidate the Done archive so the completed list appears
-                  // immediately in the "Erledigt" tab without the user needing to select it twice.
-                  if (completed == true && context.mounted) {
-                    cubit.invalidateArchive();
-                    cubit.refresh();
-                  }
-                  return;
-                }
-                ListDetailPage.push(
+            StripedRow(
+              index: index,
+              child: _ListRow(
+                list: list,
+                // The AC2 ordinal is the 1-based position in the creation-ordered array the query
+                // already returns — counting named lists too (derivation lives on the client).
+                orderIndex: index + 1,
+                onRename: () => showRenameListSheet(
                   context,
-                  householdId: cubit.householdId,
+                  cubit,
                   listId: list.listId,
-                  title: displayName,
-                  isReadOnly: list.status != 'OPEN',
-                  // On return from an editable (Open) list, refresh the overview so each row's
-                  // itemCount reflects any add/remove the user just made (the count is a server-side
-                  // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
-                  // just-started trip's In-Trip label appears (Story 3.1, AC5).
-                  // Also invalidate the Done archive: if the list went to In-Trip and the trip was
-                  // completed inside list-detail, the archive needs a refetch (Story 3.4, AC7).
-                  onEditableReturn: () {
-                    cubit.refresh();
-                    cubit.invalidateArchive();
-                  },
-                );
-              },
+                  currentName: list.name ?? localizations.listsDefaultName(index + 1),
+                ),
+                onOpen: () async {
+                  final displayName = list.name ?? localizations.listsDefaultName(index + 1);
+                  // An „Im Einkauf" row opens the trip screen directly (Story 3.2, AC4) — the
+                  // list-detail's own item edits are off-trip only (Story 3.1, AC6). A still-Open row
+                  // opens list detail, which may itself transition In-Trip mid-session ("Einkauf
+                  // starten") and navigate on from there (Story 3.2, Cl. 3).
+                  final activeTripId = list.activeTripId;
+                  if (list.status == 'IN_TRIP' && activeTripId != null) {
+                    final completed = await TripScreen.push(
+                      context,
+                      householdId: cubit.householdId,
+                      listId: list.listId,
+                      listTitle: displayName,
+                    );
+                    // Story 3.4, AC7 — invalidate the Done archive so the completed list appears
+                    // immediately in the "Erledigt" tab without the user needing to select it twice.
+                    if (completed == true && context.mounted) {
+                      cubit.invalidateArchive();
+                      cubit.refresh();
+                    }
+                    return;
+                  }
+                  ListDetailPage.push(
+                    context,
+                    householdId: cubit.householdId,
+                    listId: list.listId,
+                    title: displayName,
+                    isReadOnly: list.status != 'OPEN',
+                    // On return from an editable (Open) list, refresh the overview so each row's
+                    // itemCount reflects any add/remove the user just made (the count is a server-side
+                    // COUNT, not mutated by the detail cubit — otherwise it reads stale), and so a
+                    // just-started trip's In-Trip label appears (Story 3.1, AC5).
+                    // Also invalidate the Done archive: if the list went to In-Trip and the trip was
+                    // completed inside list-detail, the archive needs a refetch (Story 3.4, AC7).
+                    onEditableReturn: () {
+                      cubit.refresh();
+                      cubit.invalidateArchive();
+                    },
+                  );
+                },
+              ),
             ),
         if (state.actionError != null) ...[
           const SizedBox(height: SgartShapes.space4),
-          Text(
-            localizedMessageForErrorCode(localizations, state.actionError!.code),
-            key: const Key('lists-action-error'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+            child: Text(
+              localizedMessageForErrorCode(localizations, state.actionError!.code),
+              key: const Key('lists-action-error'),
+            ),
           ),
         ],
-        const SizedBox(height: SgartShapes.space4),
-        SgartButton(
-          key: const Key('lists-create-button'),
-          label: localizations.listsCreateAction,
-          onPressed: state.isSubmitting ? null : () => showCreateListSheet(context, cubit),
-        ),
       ],
     );
   }
@@ -176,7 +244,7 @@ class _ListRow extends StatelessWidget {
 
     return ListTile(
       key: Key('list-row-${list.listId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       onTap: onOpen,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,9 +290,11 @@ class _DoneArchiveBody extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
 
     return switch (state.archiveStatus) {
-      ArchiveStatus.idle || ArchiveStatus.loading =>
-        const Center(child: CircularProgressIndicator(key: Key('lists-archive-loading'))),
-      ArchiveStatus.failure => Column(
+      ArchiveStatus.idle ||
+      ArchiveStatus.loading => const Center(child: CircularProgressIndicator(key: Key('lists-archive-loading'))),
+      ArchiveStatus.failure => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
@@ -239,14 +309,20 @@ class _DoneArchiveBody extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ArchiveStatus.ready => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (state.doneLists.isEmpty)
-              Text(localizations.listsArchiveEmptyState, key: const Key('lists-archive-empty-state'))
-            else
-              for (final list in state.doneLists)
-                _ArchiveRow(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (state.doneLists.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+              child: Text(localizations.listsArchiveEmptyState, key: const Key('lists-archive-empty-state')),
+            )
+          else
+            for (final (index, list) in state.doneLists.indexed)
+              StripedRow(
+                index: index,
+                child: _ArchiveRow(
                   list: list,
                   onOpen: () => ListDetailPage.push(
                     context,
@@ -259,8 +335,9 @@ class _DoneArchiveBody extends StatelessWidget {
                     // to the Open filter, snapping the user off the Done archive they were browsing).
                   ),
                 ),
-          ],
-        ),
+              ),
+        ],
+      ),
     };
   }
 }
@@ -280,17 +357,14 @@ class _ArchiveRow extends StatelessWidget {
 
     return ListTile(
       key: Key('list-archive-row-${list.listId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       onTap: onOpen,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(displayName),
           const SizedBox(height: SgartShapes.spaceHalfUnit),
-          StatusLabel(
-            key: Key('list-status-${list.listId}'),
-            text: localizations.listStatusDone,
-          ),
+          StatusLabel(key: Key('list-status-${list.listId}'), text: localizations.listStatusDone),
         ],
       ),
     );

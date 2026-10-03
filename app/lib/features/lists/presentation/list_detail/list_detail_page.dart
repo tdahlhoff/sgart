@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../item_display_text.dart';
 import '../../../../l10n/gen/app_localizations.dart';
 import '../../../../shared/widgets/inline_action_error_text.dart';
+import '../../../../shared/widgets/striped_row.dart';
 import '../../../../shared/widgets/sgart_app_bar.dart';
 import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../theme/sgart_theme_access.dart';
@@ -372,10 +373,6 @@ class _ActionButtonsBar extends StatelessWidget {
   }
 }
 
-/// Opacity of the neutral tint on every second item row — enough to separate rows, quiet enough
-/// that the text stays the hero.
-const double _stripeAlpha = 0.06;
-
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
@@ -475,16 +472,7 @@ class _ItemRow extends StatelessWidget {
             ),
     );
 
-    if (!isTerminal && !isPending) {
-      if (index.isEven) {
-        return tile;
-      }
-      return ColoredBox(
-        key: Key('item-row-stripe-${item.itemId}'),
-        color: colors.textSecondary.withValues(alpha: _stripeAlpha),
-        child: tile,
-      );
-    }
+    if (!isTerminal && !isPending) return StripedRow(index: index, child: tile);
     return ColoredBox(
       key: isPending ? Key('item-row-pending-${item.itemId}') : null,
       color: isPending

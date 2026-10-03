@@ -13,6 +13,7 @@ import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/features/trips/data/trips_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
@@ -186,6 +187,79 @@ void main() {
 
       expect(find.byKey(const Key('lists-create-button')), findsOneWidget);
       expect(find.byKey(const Key('lists-archive-empty-state')), findsNothing);
+    });
+
+    testWidgets('everySecondOpenListRowHasATintedBackground', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Eins', status: 'OPEN'),
+        ShoppingListSummary(listId: 'l2', name: 'Zwei', status: 'OPEN'),
+        ShoppingListSummary(listId: 'l3', name: 'Drei', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      Finder tintAround(String listId) => find.ancestor(
+            of: find.byKey(Key('list-row-$listId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('l1'), findsNothing);
+      expect(tintAround('l2'), findsOneWidget);
+      expect(tintAround('l3'), findsNothing);
+    });
+
+    testWidgets('everySecondDoneListRowHasATintedBackground', (tester) async {
+      shoppingListsApi.doneListsToReturn = const [
+        ShoppingListSummary(listId: 'd1', name: 'Alt eins', status: 'DONE'),
+        ShoppingListSummary(listId: 'd2', name: 'Alt zwei', status: 'DONE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      Finder tintAround(String listId) => find.ancestor(
+            of: find.byKey(Key('list-archive-row-$listId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('d1'), findsNothing);
+      expect(tintAround('d2'), findsOneWidget);
+    });
+
+    testWidgets('theFilterSitsOnAWhiteStripWithAHairlineBelow', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final strip = tester.widget<DecoratedBox>(find.byKey(const Key('lists-filter-bar')));
+      final decoration = strip.decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).bottom.color, SgartColors.light().border);
+    });
+
+    testWidgets('theCreateButtonIsPinnedToTheBottomOnAWhiteBarWithAHairlineAbove', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Eins', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<DecoratedBox>(find.byKey(const Key('lists-create-bar')));
+      final decoration = bar.decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).top.color, SgartColors.light().border);
+      final screenBottom = tester.getRect(find.byType(Scaffold)).bottom;
+      final button = tester.getRect(find.byKey(const Key('lists-create-button')));
+      expect(screenBottom - button.bottom, lessThan(32), reason: 'the button sits at the bottom, not under the last row');
+    });
+
+    testWidgets('theCreateButtonStaysReachableWhenTheListOfListsIsLong', (tester) async {
+      shoppingListsApi.listsToReturn = [
+        for (var number = 0; number < 30; number++)
+          ShoppingListSummary(listId: 'l$number', name: 'Liste $number', status: 'OPEN'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('lists-create-button')).hitTestable(), findsOneWidget);
     });
 
     testWidgets('switchingToErledigtRendersTheArchiveReadOnly', (tester) async {
