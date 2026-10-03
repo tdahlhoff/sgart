@@ -37,6 +37,13 @@ class ItemSuggestionCache {
   /// own upsert: last-used casing/attributes win, keyed by the normalized name. Carries the existing
   /// entry's `defaultStoreId` forward unchanged (Story 2.6, Cl. 7 — an add/update never knows the
   /// store; only [withDefaultStore] writes it), mirroring the server's `recordUsage`/`store_id` split.
+  /// The suggestion whose name equals [name] (trimmed, case-insensitive), or `null` — unlike
+  /// [matching], a mere prefix is not enough: `Milch` must not remember `Milchreis`.
+  ItemSuggestion? exactMatch(List<ItemSuggestion> current, String name) {
+    final normalizedName = name.trim().toLowerCase();
+    return current.firstWhereOrNull((suggestion) => suggestion.name.trim().toLowerCase() == normalizedName);
+  }
+
   List<ItemSuggestion> upserted(List<ItemSuggestion> current, String name, String? note, String amount, String unit) {
     final normalizedName = name.trim().toLowerCase();
     final existingDefaultStoreId = current

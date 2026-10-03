@@ -5,6 +5,7 @@ import '../../../../l10n/formatting/quantity_formatter.dart' as formatting;
 import '../../../../l10n/gen/app_localizations.dart';
 import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../theme/tokens/sgart_shapes.dart';
+import '../../data/amount_input.dart';
 import '../../data/item.dart';
 import 'list_detail_cubit.dart';
 import 'list_detail_state.dart';
@@ -47,21 +48,13 @@ class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
     super.dispose();
   }
 
-  /// The amount as the backend expects it: the de-DE comma the user types (the whole UI renders
-  /// `0,5 kg`) is normalised to the `.` decimal separator `BigDecimal` parses. Without this a German
-  /// user could never enter a fractional quantity — the reason `Quantity` uses `BigDecimal` at all.
-  String get _normalizedAmount => _amountController.text.trim().replaceAll(',', '.');
-
-  /// A blank/non-numeric/non-positive amount is a pointless round-trip (the server would only reject
-  /// it with `item.quantityRequired`/`item.quantityInvalid`) — guard it client-side like the name.
-  bool get _isAmountValid {
-    final parsed = double.tryParse(_normalizedAmount);
-    return parsed != null && parsed > 0;
-  }
+  /// The typed amount as the backend expects it (see [normalizedPositiveAmount]), or `null` while
+  /// it is blank, non-numeric or non-positive — guarded client-side like the name.
+  String? get _validAmount => normalizedPositiveAmount(_amountController.text);
 
   Future<void> _submit() async {
     final navigator = Navigator.of(context);
-    final amount = _normalizedAmount;
+    final amount = _validAmount!;
     final unit = _selectedUnit.name.toUpperCase();
     final note = _noteController.text;
     // Pop only on success — a rejection keeps the sheet open (and the typed values) while the error
@@ -152,7 +145,7 @@ class _ItemFormSheetBodyState extends State<_ItemFormSheetBody> {
               animation: Listenable.merge([_nameController, _amountController]),
               builder: (context, _) {
                 final isNameBlank = _nameController.text.trim().isEmpty;
-                final canSubmit = !isNameBlank && _isAmountValid && !state.isSubmitting;
+                final canSubmit = !isNameBlank && _validAmount != null && !state.isSubmitting;
                 return SgartButton(
                   key: const Key('item-form-submit-button'),
                   label: localizations.itemEditSubmitButtonLabel,

@@ -28,6 +28,18 @@ void main() {
       expect(merged.map((suggestion) => suggestion.name), ['Apfel', 'birne', 'Zucker']);
     });
 
+    test('exactMatch_findsTheNameCaseInsensitivelyIgnoringSurroundingWhitespace', () {
+      const current = [ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE')];
+
+      expect(cache.exactMatch(current, '  milch '), current.single);
+    });
+
+    test('exactMatch_ignoresMerePrefixMatches', () {
+      const current = [ItemSuggestion(name: 'Milchreis', note: null, amount: '1', unit: 'PACK')];
+
+      expect(cache.exactMatch(current, 'Milch'), isNull);
+    });
+
     test('matching_returnsEmptyForABlankQuery', () {
       const current = [ItemSuggestion(name: 'Milch', note: null, amount: '1', unit: 'PIECE')];
 
