@@ -152,6 +152,33 @@ class DeviceSignedChallengeAcceptanceTest {
                                 .isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
+    @Test
+    void adminRebindOfAnAccountToANewUsername_isAcceptedByTheRealm() throws Exception {
+        KeyPair recoveredDeviceKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        String recoveredDeviceUsername = base64UrlPublicKey(recoveredDeviceKeyPair);
+        String adminAccessToken = fetchMasterRealmAdminToken();
+        String accountToRebindId = createUser(adminAccessToken, base64UrlPublicKey(KeyPairGenerator.getInstance("Ed25519").generateKeyPair()));
+
+        adminRestClient()
+                .put()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, accountToRebindId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminAccessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new CreateUserRequest(
+                        recoveredDeviceUsername,
+                        true,
+                        java.util.Map.of("publicKey", java.util.List.of(recoveredDeviceUsername))))
+                .retrieve()
+                .toBodilessEntity();
+
+        String accessToken = signInWithChallenge(
+                recoveredDeviceUsername,
+                recoveredDeviceKeyPair.getPrivate(),
+                Instant.now(),
+                UUID.randomUUID().toString());
+        assertThat(decoder().decode(accessToken).getSubject()).isEqualTo(accountToRebindId);
+    }
+
     private String signInWithChallenge(String username, PrivateKey privateKey, Instant timestamp, String nonce) {
         String signature = sign(privateKey, username, timestamp, nonce);
         return requestToken(username, timestamp, nonce, signature);
