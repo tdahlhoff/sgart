@@ -92,7 +92,9 @@ void main() {
       expect(light.lerp(dark, 1).onPrimaryTint, dark.onPrimaryTint);
       expect(light.lerp(dark, 1).onSuccessTint, dark.onSuccessTint);
       expect(light.lerp(dark, 1).onWarningTint, dark.onWarningTint);
+      expect(light.lerp(dark, 1).onErrorTint, dark.onErrorTint);
       expect(light.lerp(dark, 1).onNeutralTint, dark.onNeutralTint);
+      expect(light.lerp(dark, 1).chipBackground, dark.chipBackground);
       expect(light.lerp(null, 1), light);
     });
   });
@@ -122,6 +124,7 @@ void main() {
           colors.onPrimaryTint: colors.primary,
           colors.onSuccessTint: colors.success,
           colors.onWarningTint: colors.warning,
+          colors.onErrorTint: colors.error,
           colors.onNeutralTint: colors.textSecondary,
         };
 
@@ -136,6 +139,15 @@ void main() {
           });
         }
       });
+    });
+
+    test('chip text clears AA on the chip background of its mode', () {
+      for (final colors in [SgartColors.light(), SgartColors.dark()]) {
+        expect(
+          contrastRatio(colors.onNeutralTint, colors.chipBackground),
+          greaterThanOrEqualTo(minimumContrastForNormalText),
+        );
+      }
     });
 
     test('body text clears AA on the surfaces of its mode', () {

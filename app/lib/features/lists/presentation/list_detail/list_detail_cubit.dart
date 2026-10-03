@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:collection/collection.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../l10n/formatting/unit.dart';
 import '../../../../shared/commands/command_intent.dart';
 import '../../../../shared/errors/app_error.dart';
 import '../../../../shared/http/app_exception.dart';
@@ -11,6 +12,8 @@ import '../../../stores/data/stores_api.dart';
 import '../../../trips/data/trips_api.dart';
 import '../../data/item.dart';
 import '../../data/item_suggestion.dart';
+import '../../data/fast_add_entry.dart';
+import '../../data/fast_add_input_parser.dart';
 import '../../data/item_suggestions_api.dart';
 import '../../data/items_api.dart';
 import 'item_suggestion_cache.dart';
@@ -37,6 +40,7 @@ class ListDetailCubit extends Cubit<ListDetailState> {
     required this.listId,
     required bool isReadOnly,
     this.suggestionCache = const ItemSuggestionCache(),
+    this.fastAddInputParser = const FastAddInputParser(),
   }) : super(ListDetailState.loading(isReadOnly: isReadOnly));
 
   final ItemsApi itemsApi;
@@ -46,6 +50,7 @@ class ListDetailCubit extends Cubit<ListDetailState> {
   final String householdId;
   final String listId;
   final ItemSuggestionCache suggestionCache;
+  final FastAddInputParser fastAddInputParser;
 
   /// The add-item intent's ids: the command id plus one paired client-minted item id. Both are
   /// reused across retries of the same payload (idempotent retry, AD-8 — the optimistically-rendered
@@ -135,7 +140,8 @@ class ListDetailCubit extends Cubit<ListDetailState> {
 
   /// Matches [query] against the cached suggestions (Story 2.5, AC1, Cl. 2/6) via [suggestionCache].
   /// Pure — filters the in-memory cache only, no network call (lag-free).
-  List<ItemSuggestion> suggestionsMatching(String query) => suggestionCache.matching(state.suggestions, query);
+  List<ItemSuggestion> suggestionsMatching(String query) =>
+      suggestionCache.matching(state.suggestions, fastAddInputParser.parse(query).name);
 
   /// Resolves an item's [storeId] against the loaded active stores (Story 2.6, AC4): `null` for
   /// unassigned **or** an archived/absent id — both render as the „+ Geschäft" ghost chip, since the
@@ -165,28 +171,62 @@ class ListDetailCubit extends Cubit<ListDetailState> {
     return itemId != null;
   }
 
-  /// Adds an item pre-filled from [suggestion] (Story 2.5, AC2) and, when the suggestion carries a
-  /// last-used store that is still active (AC6), immediately assigns the just-added item to it —
-  /// add-then-assign, mirroring Story 2.4's create-then-move two-step. An archived (or otherwise
-  /// unresolvable) last-used store is silently skipped: the item stays unassigned (AC4), exactly as
-  /// a plain "add as new" would leave it. Returns whether the add itself succeeded (the assign, if
-  /// attempted, runs fire-and-forget through [assignStore] and surfaces its own `actionError`).
-  Future<bool> addItemFromSuggestion(ItemSuggestion suggestion) async {
+  /// Clears the shown [ListDetailState.actionError] without touching anything else — the member
+  /// closed the banner or started correcting the text that was rejected.
+  void dismissActionError() {
+    if (state.actionError != null) {
+      _safeEmit(state.copyWith(clearActionError: true));
+    }
+  }
+
+  /// What the fast-add field would add for [typedText] (`Butter`, `5 Milch`, `0,5 l Milch`): the
+  /// typed quantity and unit win; whatever is left open comes from the household's remembered
+  /// suggestion with that exact name (so `5 Milch` stays in litres), else 1 Stück. An exact name
+  /// match also carries over the remembered note and store, exactly like tapping that suggestion.
+  FastAddEntry fastAddEntryFor(String typedText) {
+    final input = fastAddInputParser.parse(typedText);
+    return _fastAddEntryFrom(input, input.name, suggestionCache.exactMatch(state.suggestions, input.name));
+  }
+
+  /// [suggestion] as tapped while [typedText] is still in the field: a quantity typed on top of the
+  /// name (`5 Mil`, then tapping Milch) replaces the suggestion's remembered amount.
+  FastAddEntry fastAddEntryForSuggestion(ItemSuggestion suggestion, String typedText) =>
+      _fastAddEntryFrom(fastAddInputParser.parse(typedText), suggestion.name, suggestion);
+
+  static FastAddEntry _fastAddEntryFrom(FastAddInput input, String name, ItemSuggestion? remembered) => FastAddEntry(
+        name: name,
+        amount: input.amount ?? remembered?.amount ?? '1',
+        unit: input.unit?.serverName ?? remembered?.unit ?? 'PIECE',
+        note: remembered?.note,
+        defaultStoreId: remembered?.defaultStoreId,
+      );
+
+  /// Adds the article [entry] describes (Story 2.5, AC2) and, when it carries a last-used store that
+  /// is still active (AC6), immediately assigns the just-added item to it — add-then-assign,
+  /// mirroring Story 2.4's create-then-move two-step. An archived (or otherwise unresolvable)
+  /// last-used store is silently skipped: the item stays unassigned (AC4). Returns whether the add
+  /// itself succeeded (the assign, if attempted, runs through [assignStore] and surfaces its own
+  /// `actionError`).
+  Future<bool> addFastAddEntry(FastAddEntry entry) async {
     final itemId = await _addItemInternal(
-      name: suggestion.name,
-      note: suggestion.note,
-      amount: suggestion.amount,
-      unit: suggestion.unit,
+      name: entry.name,
+      note: entry.note,
+      amount: entry.amount,
+      unit: entry.unit,
     );
     if (itemId == null) {
       return false;
     }
-    final defaultStoreId = suggestion.defaultStoreId;
+    final defaultStoreId = entry.defaultStoreId;
     if (defaultStoreId != null && storeFor(defaultStoreId) != null) {
       await assignStore(itemId, defaultStoreId);
     }
     return true;
   }
+
+  /// Adds an item pre-filled from [suggestion] exactly as it was last used (Story 2.5, AC2).
+  Future<bool> addItemFromSuggestion(ItemSuggestion suggestion) =>
+      addFastAddEntry(FastAddEntry.fromSuggestion(suggestion));
 
   /// Shared add path for [addItem]/[addItemFromSuggestion] — returns the added item's id on success,
   /// `null` on a client-side guard failure or a server rejection (surfaced as `actionError`).
@@ -225,6 +265,7 @@ class ListDetailCubit extends Cubit<ListDetailState> {
         items: [...state.items, added],
         isSubmitting: false,
         suggestions: suggestionCache.upserted(state.suggestions, trimmedName, noteOrNull, amount, unit),
+        lastAddedItemId: itemId,
       ));
       // A successful add completes this intent — the next add is a new intent and never reuses a
       // command id the server has already applied (which it would silently drop).

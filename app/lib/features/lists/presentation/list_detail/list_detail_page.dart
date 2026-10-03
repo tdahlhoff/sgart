@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../item_display_text.dart';
 import '../../../../l10n/gen/app_localizations.dart';
-import '../../../../shared/errors/error_message_resolver.dart';
+import '../../../../shared/widgets/inline_action_error_text.dart';
 import '../../../../shared/widgets/sgart_app_bar.dart';
 import '../../../../shared/widgets/sgart_button.dart';
 import '../../../../theme/sgart_theme_access.dart';
@@ -67,30 +67,32 @@ class ListDetailPage extends StatelessWidget {
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
     final tripsApi = context.read<TripsApi>();
     return Navigator.of(context)
-        .push(MaterialPageRoute<void>(
-          builder: (_) => RepositoryProvider<ItemsApi>.value(
-            value: itemsApi,
-            child: RepositoryProvider<ItemSuggestionsApi>.value(
-              value: itemSuggestionsApi,
-              child: RepositoryProvider<ShoppingListsApi>.value(
-                value: shoppingListsApi,
-                child: RepositoryProvider<StoresApi>.value(
-                  value: storesApi,
-                  child: RepositoryProvider<StoreChainReferenceCache>.value(
-                    value: storeChainReferenceCache,
-                    child: RepositoryProvider<TripsApi>.value(
-                      value: tripsApi,
-                      child: BlocProvider<ListDetailCubit>(
-                        create: (context) => ListDetailCubit(
-                          itemsApi: context.read<ItemsApi>(),
-                          itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
-                          storesApi: context.read<StoresApi>(),
-                          tripsApi: context.read<TripsApi>(),
-                          householdId: householdId,
-                          listId: listId,
-                          isReadOnly: isReadOnly,
-                        )..bootstrap(),
-                        child: ListDetailPage(title: title),
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => RepositoryProvider<ItemsApi>.value(
+              value: itemsApi,
+              child: RepositoryProvider<ItemSuggestionsApi>.value(
+                value: itemSuggestionsApi,
+                child: RepositoryProvider<ShoppingListsApi>.value(
+                  value: shoppingListsApi,
+                  child: RepositoryProvider<StoresApi>.value(
+                    value: storesApi,
+                    child: RepositoryProvider<StoreChainReferenceCache>.value(
+                      value: storeChainReferenceCache,
+                      child: RepositoryProvider<TripsApi>.value(
+                        value: tripsApi,
+                        child: BlocProvider<ListDetailCubit>(
+                          create: (context) => ListDetailCubit(
+                            itemsApi: context.read<ItemsApi>(),
+                            itemSuggestionsApi: context.read<ItemSuggestionsApi>(),
+                            storesApi: context.read<StoresApi>(),
+                            tripsApi: context.read<TripsApi>(),
+                            householdId: householdId,
+                            listId: listId,
+                            isReadOnly: isReadOnly,
+                          )..bootstrap(),
+                          child: ListDetailPage(title: title),
+                        ),
                       ),
                     ),
                   ),
@@ -98,7 +100,7 @@ class ListDetailPage extends StatelessWidget {
               ),
             ),
           ),
-        ))
+        )
         .then((_) {
           if (!isReadOnly) {
             onEditableReturn?.call();
@@ -127,8 +129,9 @@ class ListDetailPage extends StatelessWidget {
             child: BlocBuilder<ListDetailCubit, ListDetailState>(
               builder: (context, state) {
                 return switch (state.status) {
-                  ListDetailStatus.loading =>
-                    const Center(child: CircularProgressIndicator(key: Key('item-list-loading'))),
+                  ListDetailStatus.loading => const Center(
+                    child: CircularProgressIndicator(key: Key('item-list-loading')),
+                  ),
                   ListDetailStatus.failure => const _FailureBody(),
                   ListDetailStatus.ready => _ReadyBody(state: state, title: title),
                 };
@@ -139,10 +142,16 @@ class ListDetailPage extends StatelessWidget {
             builder: (context, state) {
               // The fast-add field is the only add surface on an Open list (AC4); a Done list shows
               // neither the field nor its suggestion panel (AC5).
-              if (state.status != ListDetailStatus.ready || state.isReadOnly) {
+              if (state.status != ListDetailStatus.ready) {
                 return const SizedBox.shrink();
               }
-              return FastAddField(cubit: context.read<ListDetailCubit>());
+              final cubit = context.read<ListDetailCubit>();
+              if (state.isReadOnly) {
+                // No add field here, but a rejected action (e.g. a trip that cannot start) still
+                // reports itself in the same place as everywhere else.
+                return InlineActionErrorText(error: state.actionError);
+              }
+              return FastAddField(cubit: cubit);
             },
           ),
         ],
@@ -151,63 +160,113 @@ class ListDetailPage extends StatelessWidget {
   }
 }
 
-class _ReadyBody extends StatelessWidget {
+class _ReadyBody extends StatefulWidget {
   const _ReadyBody({required this.state, required this.title});
 
   final ListDetailState state;
   final String title;
 
   @override
+  State<_ReadyBody> createState() => _ReadyBodyState();
+}
+
+class _ReadyBodyState extends State<_ReadyBody> {
+  static const int _maxScrollCorrections = 3;
+  static const int _extentSettleFrames = 12;
+
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// New items are appended, so showing the one just added means scrolling to the end — after the
+  /// frame that lays it out. The scroll extent can still change once that frame has settled (the row's
+  /// real height, the keyboard; a jump with animations off is clamped by it), so every scroll is
+  /// followed by a short wait (a few frames, not a timer) and a check that it really reached the end, and goes on if not.
+  void _scrollToTheEnd({int remainingCorrections = _maxScrollCorrections}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final end = _scrollController.position.maxScrollExtent;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(end);
+      } else {
+        await _scrollController.animateTo(end, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+      }
+      for (var frame = 0; frame < _extentSettleFrames; frame++) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      final isStillShort =
+          mounted &&
+          _scrollController.hasClients &&
+          _scrollController.position.pixels < _scrollController.position.maxScrollExtent - 1;
+      if (isStillShort && remainingCorrections > 0) {
+        _scrollToTheEnd(remainingCorrections: remainingCorrections - 1);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final localizations = AppLocalizations.of(context);
     final cubit = context.read<ListDetailCubit>();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.items.isEmpty)
-            Text(localizations.itemsEmptyState, key: const Key('item-list-empty-state'))
-          else
-            for (final item in state.items)
-              _ItemRow(
-                item: item,
-                isReadOnly: state.isReadOnly,
-                storeName: cubit.storeFor(item.storeId)?.name,
-                onEdit: () => showItemFormSheet(context, cubit, existingItem: item),
-                onRemove: () => cubit.removeItem(item.itemId),
-                onMove: () => showMoveTargetSheet(
-                  context,
-                  cubit: cubit,
-                  shoppingListsApi: context.read<ShoppingListsApi>(),
+    return BlocListener<ListDetailCubit, ListDetailState>(
+      listenWhen: (previous, current) =>
+          current.lastAddedItemId != null && current.lastAddedItemId != previous.lastAddedItemId,
+      listener: (context, state) => _scrollToTheEnd(),
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        // Rows run edge to edge so their alternating background bands do too; each row insets its own
+        // content by the card padding.
+        padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (state.items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+                child: Text(localizations.itemsEmptyState, key: const Key('item-list-empty-state')),
+              )
+            else
+              for (final (index, item) in state.items.indexed)
+                _ItemRow(
                   item: item,
-                  householdId: cubit.householdId,
-                  sourceListId: cubit.listId,
-                ),
-                onAssignStore: () async {
-                  final selected = await showStorePickerSheet(
+                  index: index,
+                  isReadOnly: state.isReadOnly,
+                  storeName: cubit.storeFor(item.storeId)?.name,
+                  onEdit: () => showItemFormSheet(context, cubit, existingItem: item),
+                  onRemove: () => cubit.removeItem(item.itemId),
+                  onMove: () => showMoveTargetSheet(
                     context,
-                    stores: state.stores,
-                    storesApi: context.read<StoresApi>(),
-                    referenceCache: context.read<StoreChainReferenceCache>(),
+                    cubit: cubit,
+                    shoppingListsApi: context.read<ShoppingListsApi>(),
+                    item: item,
                     householdId: cubit.householdId,
-                  );
-                  if (selected != null) {
-                    // Pass the returned store so an inline-created one is registered in state
-                    // (its chip resolves + a re-opened picker offers it) — Story 2.6 review patch.
-                    cubit.assignStore(item.itemId, selected.storeId, store: selected);
-                  }
-                },
-              ),
-          if (state.actionError != null) ...[
-            const SizedBox(height: SgartShapes.space4),
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('item-list-action-error'),
-            ),
+                    sourceListId: cubit.listId,
+                  ),
+                  onAssignStore: () async {
+                    final selected = await showStorePickerSheet(
+                      context,
+                      stores: state.stores,
+                      storesApi: context.read<StoresApi>(),
+                      referenceCache: context.read<StoreChainReferenceCache>(),
+                      householdId: cubit.householdId,
+                    );
+                    if (selected != null) {
+                      // Pass the returned store so an inline-created one is registered in state
+                      // (its chip resolves + a re-opened picker offers it) — Story 2.6 review patch.
+                      cubit.assignStore(item.itemId, selected.storeId, store: selected);
+                    }
+                  },
+                ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -234,9 +293,15 @@ class _ActionButtonsBar extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     final cubit = context.read<ListDetailCubit>();
 
+    final colors = context.sgartColors;
     return DecoratedBox(
+      key: const Key('list-detail-action-bar'),
+      // The same white surface as the header and the add bar below the list: the three chrome bars
+      // frame the tinted list, and the tonal buttons stand out more on white than on the faintly
+      // blue page background.
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline, width: SgartShapes.hairline)),
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.border, width: SgartShapes.hairline)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(SgartShapes.cardPadding),
@@ -263,8 +328,9 @@ class _ActionButtonsBar extends StatelessWidget {
                         }
                         final started = await cubit.startTrip(selection.map((store) => store.storeId).toList());
                         if (started && context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(localizations.tripStartedConfirmation)));
                           // Story 3.2, AC4, Cl. 3 — a started trip now navigates straight to the trip
                           // screen (3.1 deferred this; it used to end at the toast alone).
                           // Story 3.4: if the trip was completed, pop list-detail too (the list is now
@@ -306,9 +372,14 @@ class _ActionButtonsBar extends StatelessWidget {
   }
 }
 
+/// Opacity of the neutral tint on every second item row — enough to separate rows, quiet enough
+/// that the text stays the hero.
+const double _stripeAlpha = 0.06;
+
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
+    required this.index,
     required this.isReadOnly,
     required this.storeName,
     required this.onEdit,
@@ -318,6 +389,9 @@ class _ItemRow extends StatelessWidget {
   });
 
   final Item item;
+
+  /// The row's position in the list; every second row gets a tinted background.
+  final int index;
   final bool isReadOnly;
 
   /// The resolved active store's name, or `null` for unassigned/archived (Story 2.6, AC4) — the row
@@ -344,7 +418,7 @@ class _ItemRow extends StatelessWidget {
 
     final tile = ListTile(
       key: Key('item-row-${item.itemId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       title: Text(
         item.name,
         style: (isTerminal || isPending)
@@ -401,7 +475,16 @@ class _ItemRow extends StatelessWidget {
             ),
     );
 
-    if (!isTerminal && !isPending) return tile;
+    if (!isTerminal && !isPending) {
+      if (index.isEven) {
+        return tile;
+      }
+      return ColoredBox(
+        key: Key('item-row-stripe-${item.itemId}'),
+        color: colors.textSecondary.withValues(alpha: _stripeAlpha),
+        child: tile,
+      );
+    }
     return ColoredBox(
       key: isPending ? Key('item-row-pending-${item.itemId}') : null,
       color: isPending
@@ -416,6 +499,9 @@ class _ItemRow extends StatelessWidget {
 /// the ghost „+ Geschäft" label when unresolved (unassigned, or assigned to an archived/absent
 /// store — both render identically, AC4). Tappable only on an Open list ([isReadOnly] `false`) — a
 /// Done list's chip is inert and opens no picker (AC5), mirroring the row's other affordances.
+/// Tap area around the store chip, above and below it.
+const double _storeChipTapMargin = 6;
+
 class _StoreChip extends StatelessWidget {
   const _StoreChip({super.key, required this.storeName, required this.isReadOnly, required this.onTap});
 
@@ -427,26 +513,38 @@ class _StoreChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final label = storeName ?? localizations.itemStoreUnassignedChip;
+    final colors = context.sgartColors;
     final chip = DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        color: colors.chipBackground,
+        border: Border.all(color: colors.border),
         borderRadius: SgartShapes.pill,
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: SgartShapes.space3, vertical: SgartShapes.spaceHalfUnit),
-        child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+        padding: const EdgeInsets.symmetric(horizontal: SgartShapes.space4 - 2, vertical: SgartShapes.spaceUnit + 2),
+        child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colors.onNeutralTint)),
       ),
     );
     if (isReadOnly) {
       return chip;
     }
-    return Semantics(
-      button: true,
-      label: localizations.itemStoreAssignAction,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: SgartShapes.pill,
-        child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48), child: Center(child: chip)),
+    // The chip stays small and hugs the left edge of the row's text. The tap area reaches a few pixels
+    // past it — enough to hit comfortably, little enough that rows stay compact (well above WCAG 2.5.8's
+    // 24px minimum, below Material's 48dp ideal, which the row's icon buttons keep).
+    return Align(
+      alignment: Alignment.centerLeft,
+      widthFactor: 1,
+      child: Semantics(
+        button: true,
+        label: localizations.itemStoreAssignAction,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: _storeChipTapMargin),
+            child: InkWell(onTap: onTap, borderRadius: SgartShapes.pill, child: chip),
+          ),
+        ),
       ),
     );
   }

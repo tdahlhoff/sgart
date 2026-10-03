@@ -21,6 +21,8 @@ abstract final class SgartPalette {
   static const Color amberOnLightTint = Color(0xFF8A5515); // 5.04:1 on a light amber tint
   static const Color pink = Color(0xFFF45B69); // error (light)
   static const Color pinkForDarkMode = Color(0xFFF6717D); // error (dark)
+  static const Color pinkOnLightTint = Color(0xFFB0283A); // 5.14:1 on a light pink tint
+  static const Color pinkOnDarkTint = Color(0xFFF88A94); // 5.12:1 on a dark pink tint
 
   static const Color white = Color(0xFFFFFFFF); // the primary light content surface
   static const Color ghostWhite = Color(0xFFF2F4FF); // the one deliberately-cool surface
@@ -62,11 +64,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
     required this.onWarningTint,
     required this.error,
     required this.onError,
+    required this.onErrorTint,
     required this.background,
     required this.surface,
     required this.textPrimary,
     required this.textSecondary,
     required this.onNeutralTint,
+    required this.chipBackground,
     required this.border,
     required this.shadow,
   });
@@ -101,6 +105,10 @@ class SgartColors extends ThemeExtension<SgartColors> {
   final Color error;
   final Color onError;
 
+  /// Text on a [tintAlpha] tint of [error] — the saturated pink itself fails AA there (DESIGN §1:
+  /// pink is for fills, not for text or hairlines).
+  final Color onErrorTint;
+
   final Color background;
 
   /// Primary content surface.
@@ -111,6 +119,10 @@ class SgartColors extends ThemeExtension<SgartColors> {
 
   /// Text on a [tintAlpha] tint of [textSecondary] — the neutral status-label variant.
   final Color onNeutralTint;
+
+  /// Quiet warm-neutral fill for small label chips (the store chip) — the pastel beige of the draft;
+  /// [onNeutralTint] is the verified text colour on it.
+  final Color chipBackground;
 
   /// Hairline / divider color.
   final Color border;
@@ -130,11 +142,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
         onWarningTint: SgartPalette.amberOnLightTint,
         error: SgartPalette.pink,
         onError: SgartPalette.carbonBlack,
+        onErrorTint: SgartPalette.pinkOnLightTint,
         background: SgartPalette.ghostWhite,
         surface: SgartPalette.white,
         textPrimary: SgartPalette.carbonBlack,
         textSecondary: SgartPalette.neutral600,
         onNeutralTint: SgartPalette.neutral600,
+        chipBackground: SgartPalette.neutral100,
         border: SgartPalette.neutral200,
         shadow: SgartPalette.shadowOnLight,
       );
@@ -151,11 +165,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
         onWarningTint: SgartPalette.amberForDarkMode,
         error: SgartPalette.pinkForDarkMode,
         onError: SgartPalette.carbonBlack,
+        onErrorTint: SgartPalette.pinkOnDarkTint,
         background: SgartPalette.carbonBlack,
         surface: SgartPalette.neutral800,
         textPrimary: SgartPalette.ghostWhite,
         textSecondary: SgartPalette.neutral300,
         onNeutralTint: SgartPalette.neutral300,
+        chipBackground: SgartPalette.neutral700,
         border: SgartPalette.neutral700,
         shadow: SgartPalette.shadowOnDark,
       );
@@ -173,11 +189,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
     Color? onWarningTint,
     Color? error,
     Color? onError,
+    Color? onErrorTint,
     Color? background,
     Color? surface,
     Color? textPrimary,
     Color? textSecondary,
     Color? onNeutralTint,
+    Color? chipBackground,
     Color? border,
     Color? shadow,
   }) {
@@ -193,11 +211,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
       onWarningTint: onWarningTint ?? this.onWarningTint,
       error: error ?? this.error,
       onError: onError ?? this.onError,
+      onErrorTint: onErrorTint ?? this.onErrorTint,
       background: background ?? this.background,
       surface: surface ?? this.surface,
       textPrimary: textPrimary ?? this.textPrimary,
       textSecondary: textSecondary ?? this.textSecondary,
       onNeutralTint: onNeutralTint ?? this.onNeutralTint,
+      chipBackground: chipBackground ?? this.chipBackground,
       border: border ?? this.border,
       shadow: shadow ?? this.shadow,
     );
@@ -218,11 +238,13 @@ class SgartColors extends ThemeExtension<SgartColors> {
       onWarningTint: Color.lerp(onWarningTint, other.onWarningTint, t)!,
       error: Color.lerp(error, other.error, t)!,
       onError: Color.lerp(onError, other.onError, t)!,
+      onErrorTint: Color.lerp(onErrorTint, other.onErrorTint, t)!,
       background: Color.lerp(background, other.background, t)!,
       surface: Color.lerp(surface, other.surface, t)!,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       onNeutralTint: Color.lerp(onNeutralTint, other.onNeutralTint, t)!,
+      chipBackground: Color.lerp(chipBackground, other.chipBackground, t)!,
       border: Color.lerp(border, other.border, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
     );

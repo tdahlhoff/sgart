@@ -639,7 +639,7 @@
 
   "fastAddNewItemAction": "„{name}“ als neuen Artikel hinzufügen",
   "@fastAddNewItemAction": {
-    "description": "The always-present row in the fast-add suggestion panel that adds the typed name as a brand-new item (Story 2.5, AC3).",
+    "description": "The always-present row in the fast-add suggestion panel that adds the typed article as a brand-new item (Story 2.5, AC3); {name} is the article name with any leading quantity/unit already stripped, which the row shows separately as its trailing quantity.",
     "placeholders": {
       "name": {
         "type": "String",

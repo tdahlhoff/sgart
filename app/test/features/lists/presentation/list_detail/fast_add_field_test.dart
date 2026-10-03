@@ -8,6 +8,8 @@ import 'package:sgart/features/lists/presentation/list_detail/list_detail_cubit.
 import 'package:sgart/features/stores/data/store_summary.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
+import 'package:sgart/theme/tokens/sgart_shapes.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
@@ -47,7 +49,15 @@ void main() {
       return wrapForTesting(
         BlocProvider<ListDetailCubit>.value(
           value: cubit,
-          child: Scaffold(body: FastAddField(cubit: cubit)),
+          // Pinned at the bottom like on the real screen, with an empty "list" above it.
+          child: Scaffold(
+            body: Column(
+              children: [
+                const Expanded(child: SizedBox.expand(key: Key('list-area'))),
+                FastAddField(cubit: cubit),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -130,7 +140,7 @@ void main() {
       expect(find.byKey(const Key('fast-add-suggestion-store-milch')), findsNothing);
     });
 
-    testWidgets('theAddAsNewRowCallsAddItemWithStory23Defaults', (tester) async {
+    testWidgets('theAddAsNewRowAddsAnUnknownNameAsOnePiece', (tester) async {
       await tester.pumpWidget(buildSubject());
       await cubit.bootstrap();
       await tester.pumpAndSettle();
@@ -147,7 +157,7 @@ void main() {
       expect(itemsApi.lastAddedUnit, 'PIECE');
     });
 
-    testWidgets('keyboardSubmitCallsAddItemWithStory23Defaults', (tester) async {
+    testWidgets('keyboardSubmitAddsAnUnknownNameAsOnePiece', (tester) async {
       await tester.pumpWidget(buildSubject());
       await cubit.bootstrap();
       await tester.pumpAndSettle();
@@ -160,6 +170,252 @@ void main() {
       expect(itemsApi.lastAddedName, 'Käse');
       expect(itemsApi.lastAddedAmount, '1');
       expect(itemsApi.lastAddedUnit, 'PIECE');
+    });
+
+    Future<void> typeIntoTheField(WidgetTester tester, String text) async {
+      await tester.tap(find.byKey(const Key('fast-add-field')));
+      await tester.enterText(find.byKey(const Key('fast-add-field')), text);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('theAddAsNewRowPreviewsTheParsedNameAndQuantity', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, '0,5 l Milch');
+
+      expect(find.text('„Milch“ als neuen Artikel hinzufügen'), findsOneWidget);
+      expect(find.byKey(const Key('fast-add-new-row-quantity')), findsOneWidget);
+      expect(find.text('0,5 l'), findsOneWidget);
+    });
+
+    testWidgets('theAddAsNewRowPreviewsTheRememberedUnitForATypedQuantity', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, '5 Milch');
+
+      expect(
+        find.descendant(of: find.byKey(const Key('fast-add-new-row')), matching: find.text('5 l')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('keyboardSubmitSendsTheParsedAmountAndUnit', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, '500 g Mehl');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.lastAddedName, 'Mehl');
+      expect(itemsApi.lastAddedAmount, '500');
+      expect(itemsApi.lastAddedUnit, 'GRAM');
+    });
+
+    testWidgets('typingAQuantityStillMatchesSuggestionsByTheNamePart', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+        ItemSuggestion(name: 'Brot', note: null, amount: '1', unit: 'PACK'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, '5 Mil');
+
+      expect(find.byKey(const Key('fast-add-suggestion-milch')), findsOneWidget);
+      expect(find.byKey(const Key('fast-add-suggestion-brot')), findsNothing);
+    });
+
+    testWidgets('tappingASuggestionWhileAQuantityIsTypedUsesTheTypedQuantity', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, '5 Mil');
+      await tester.tap(find.byKey(const Key('fast-add-suggestion-milch')));
+      await tester.pumpAndSettle();
+
+      expect(itemsApi.lastAddedName, 'Milch');
+      expect(itemsApi.lastAddedAmount, '5');
+      expect(itemsApi.lastAddedUnit, 'LITRE');
+      expect(itemsApi.lastAddedNote, 'Bio');
+    });
+
+    Future<void> addDuplicateMilch(WidgetTester tester) async {
+      itemsApi.addError = const AppException(AppError(code: 'item.duplicate', message: 'debug'));
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+      await typeIntoTheField(tester, 'Milch');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('aDuplicateRejectionShowsTheErrorTextDirectlyAboveTheTextField', (tester) async {
+      await addDuplicateMilch(tester);
+
+      final errorText = tester.getRect(find.byKey(const Key('item-list-action-error')));
+      final textField = tester.getRect(find.byKey(const Key('fast-add-field')));
+      expect(errorText.bottom, lessThanOrEqualTo(textField.top));
+      expect(textField.top - errorText.bottom, lessThan(48), reason: 'the message hugs the field');
+    });
+
+    testWidgets('theErrorTextHugsTheFieldWithRoomUnderTheSuggestions', (tester) async {
+      await addDuplicateMilch(tester);
+
+      final panelBottom = tester.getRect(find.byKey(const Key('fast-add-panel-surface'))).bottom;
+      final errorText = tester.getRect(find.byKey(const Key('item-list-action-error')));
+      final fieldTop = tester.getRect(find.byKey(const Key('fast-add-field'))).top;
+
+      final gapAboveTheMessage = errorText.top - panelBottom;
+      final gapBelowTheMessage = fieldTop - errorText.bottom;
+      expect(gapAboveTheMessage, greaterThan(8), reason: 'breathing room under the suggestions');
+      expect(gapBelowTheMessage, closeTo(6, 0.5), reason: 'the message belongs to the input below it');
+    });
+
+    testWidgets('editingTheTypedTextDismissesTheErrorText', (tester) async {
+      await addDuplicateMilch(tester);
+
+      await tester.enterText(find.byKey(const Key('fast-add-field')), 'Milch 2');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-list-action-error')), findsNothing);
+    });
+
+    testWidgets('movingTheCursorWithoutEditingKeepsTheErrorText', (tester) async {
+      await addDuplicateMilch(tester);
+
+      tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: 'Milch',
+        selection: TextSelection.collapsed(offset: 0),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-list-action-error')), findsOneWidget);
+    });
+
+    testWidgets('thePanelFloatsOverTheListWithoutPushingTheFieldUp', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+        ItemSuggestion(name: 'Milchreis', note: null, amount: '1', unit: 'PACK'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+      final fieldTopBeforeTyping = tester.getTopLeft(find.byKey(const Key('fast-add-field'))).dy;
+      final listAreaHeightBeforeTyping = tester.getSize(find.byKey(const Key('list-area'))).height;
+
+      await typeIntoTheField(tester, 'Mil');
+
+      expect(tester.getTopLeft(find.byKey(const Key('fast-add-field'))).dy, fieldTopBeforeTyping);
+      expect(tester.getSize(find.byKey(const Key('list-area'))).height, listAreaHeightBeforeTyping);
+      final panel = tester.getRect(find.byKey(const Key('fast-add-panel-surface')));
+      expect(panel.bottom, lessThanOrEqualTo(fieldTopBeforeTyping));
+    });
+
+    testWidgets('thePanelIsAsTallAsItsRowsAndSitsOnTheFooter', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+      final fieldTop = tester.getTopLeft(find.byKey(const Key('fast-add-field'))).dy;
+
+      await typeIntoTheField(tester, 'Mil');
+
+      final panel = tester.getRect(find.byKey(const Key('fast-add-panel-surface')));
+      final rowsHeight = tester.getSize(find.byKey(const Key('fast-add-suggestion-milch'))).height +
+          tester.getSize(find.byKey(const Key('fast-add-new-row'))).height;
+      expect(panel.height, lessThan(rowsHeight + 24), reason: 'one suggestion plus the add row, not the screen');
+      expect(fieldTop - panel.bottom, lessThan(80), reason: 'the panel sits right above the footer');
+    });
+
+    testWidgets('thePanelOverlapsTheTopOfTheFooterByAFewPixels', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+      final footerTop = tester.getTopLeft(find.byKey(const Key('fast-add-field'))).dy - SgartShapes.cardPadding;
+
+      await typeIntoTheField(tester, 'Mil');
+
+      final panel = tester.getRect(find.byKey(const Key('fast-add-panel-surface')));
+      expect(panel.bottom - footerTop, closeTo(6, 0.5), reason: 'it dips 6px into the footer');
+    });
+
+    testWidgets('suggestionRowsSitInsideARoundedHairlineBorderedSurface', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, 'Mil');
+
+      final panel = tester.widget<Material>(find.byKey(const Key('fast-add-panel-surface')));
+      final shape = panel.shape! as RoundedRectangleBorder;
+      expect(panel.color, SgartColors.light().surface);
+      expect(shape.borderRadius, SgartShapes.card);
+      expect(shape.side.color, SgartColors.light().border);
+      expect(shape.side.width, SgartShapes.hairline);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('fast-add-panel-surface')),
+          matching: find.byKey(const Key('fast-add-suggestion-milch')),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('theAddAsNewRowIsTintedInThePrimaryHueAndLedByAPlusIcon', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, 'Käse');
+
+      final row = tester.widget<ListTile>(find.byKey(const Key('fast-add-new-row')));
+      expect(row.tileColor, SgartColors.light().primary.withValues(alpha: SgartColors.tintAlpha));
+      expect(
+        find.descendant(of: find.byKey(const Key('fast-add-new-row')), matching: find.byIcon(Icons.add)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('suggestionRowsMeetTheMinimumTapTargetHeight', (tester) async {
+      itemSuggestionsApi.suggestionsToReturn = const [
+        ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pumpAndSettle();
+
+      await typeIntoTheField(tester, 'Mil');
+
+      expect(
+        tester.getSize(find.byKey(const Key('fast-add-suggestion-milch'))).height,
+        greaterThanOrEqualTo(SgartShapes.minTapTarget),
+      );
+      expect(
+        tester.getSize(find.byKey(const Key('fast-add-new-row'))).height,
+        greaterThanOrEqualTo(SgartShapes.minTapTarget),
+      );
     });
 
     testWidgets('emptyOrLoadingSuggestionsStillAllowAddAsNew', (tester) async {

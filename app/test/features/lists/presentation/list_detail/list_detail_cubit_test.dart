@@ -865,6 +865,173 @@ void main() {
       });
     });
 
+    group('lastAddedItemId', () {
+      test('namesTheItemTheMemberJustAdded', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+        expect(cubit.state.lastAddedItemId, isNull);
+
+        await cubit.addItem(name: 'Milch', amount: '1', unit: 'PIECE');
+
+        expect(cubit.state.lastAddedItemId, cubit.state.items.single.itemId);
+        await cubit.close();
+      });
+
+      test('staysUnsetWhenTheAddIsRejected', () async {
+        itemsApi.addError = const AppException(AppError(code: 'item.duplicate', message: 'duplicate'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        await cubit.addItem(name: 'Milch', amount: '1', unit: 'PIECE');
+
+        expect(cubit.state.lastAddedItemId, isNull);
+        await cubit.close();
+      });
+    });
+
+    group('dismissActionError', () {
+      test('clearsTheActionErrorAndKeepsTheItems', () async {
+        itemsApi.addError = const AppException(AppError(code: 'item.duplicate', message: 'duplicate'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+        await cubit.addItem(name: 'Milch', amount: '1', unit: 'PIECE');
+        expect(cubit.state.actionError, isNotNull);
+
+        cubit.dismissActionError();
+
+        expect(cubit.state.actionError, isNull);
+        expect(cubit.state.status, ListDetailStatus.ready);
+        await cubit.close();
+      });
+    });
+
+    group('fastAddEntryFor', () {
+      const rememberedMilk = ItemSuggestion(
+        name: 'Milch',
+        note: 'Bio',
+        amount: '2',
+        unit: 'LITRE',
+        defaultStoreId: 's1',
+      );
+
+      Future<ListDetailCubit> buildCubitRemembering(List<ItemSuggestion> suggestions) async {
+        itemSuggestionsApi.suggestionsToReturn = suggestions;
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+        return cubit;
+      }
+
+      test('unknownNameDefaultsToOnePiece', () async {
+        final cubit = await buildCubitRemembering(const []);
+
+        final entry = cubit.fastAddEntryFor('Butter');
+
+        expect((entry.name, entry.amount, entry.unit), ('Butter', '1', 'PIECE'));
+        expect(entry.note, isNull);
+        expect(entry.defaultStoreId, isNull);
+        await cubit.close();
+      });
+
+      test('typedQuantityKeepsTheRememberedUnit', () async {
+        final cubit = await buildCubitRemembering(const [rememberedMilk]);
+
+        final entry = cubit.fastAddEntryFor('5 Milch');
+
+        expect((entry.name, entry.amount, entry.unit), ('Milch', '5', 'LITRE'));
+        await cubit.close();
+      });
+
+      test('explicitlyTypedUnitWinsOverTheRememberedUnit', () async {
+        final cubit = await buildCubitRemembering(const [rememberedMilk]);
+
+        final entry = cubit.fastAddEntryFor('500 ml Milch');
+
+        expect((entry.amount, entry.unit), ('500', 'MILLILITRE'));
+        await cubit.close();
+      });
+
+      test('exactMatchInheritsTheRememberedNoteAndStore', () async {
+        final cubit = await buildCubitRemembering(const [rememberedMilk]);
+
+        final entry = cubit.fastAddEntryFor('5 Milch');
+
+        expect((entry.note, entry.defaultStoreId), ('Bio', 's1'));
+        await cubit.close();
+      });
+
+      test('withoutATypedQuantityTheRememberedAmountIsUsed', () async {
+        final cubit = await buildCubitRemembering(const [rememberedMilk]);
+
+        final entry = cubit.fastAddEntryFor('Milch');
+
+        expect((entry.amount, entry.unit), ('2', 'LITRE'));
+        await cubit.close();
+      });
+
+      test('keepsTheCasingTheMemberTyped', () async {
+        final cubit = await buildCubitRemembering(const [rememberedMilk]);
+
+        final entry = cubit.fastAddEntryFor('3 milch');
+
+        expect(entry.name, 'milch');
+        await cubit.close();
+      });
+    });
+
+    group('fastAddEntryForSuggestion', () {
+      const suggestion = ItemSuggestion(name: 'Milch', note: 'Bio', amount: '2', unit: 'LITRE');
+
+      test('typedQuantityOverridesTheSuggestionsRememberedAmount', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final entry = cubit.fastAddEntryForSuggestion(suggestion, '5 Mil');
+
+        expect((entry.name, entry.amount, entry.unit, entry.note), ('Milch', '5', 'LITRE', 'Bio'));
+        await cubit.close();
+      });
+
+      test('withoutATypedQuantityTheSuggestionIsAddedAsRemembered', () async {
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final entry = cubit.fastAddEntryForSuggestion(suggestion, 'Mil');
+
+        expect((entry.amount, entry.unit), ('2', 'LITRE'));
+        await cubit.close();
+      });
+    });
+
+    group('addFastAddEntry', () {
+      test('assignsTheRememberedStoreWhenItIsStillActive', () async {
+        storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+        itemSuggestionsApi.suggestionsToReturn = const [
+          ItemSuggestion(name: 'Milch', note: null, amount: '2', unit: 'LITRE', defaultStoreId: 's1'),
+        ];
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.addFastAddEntry(cubit.fastAddEntryFor('5 Milch'));
+
+        expect(succeeded, isTrue);
+        expect((itemsApi.lastAddedAmount, itemsApi.lastAddedUnit), ('5', 'LITRE'));
+        expect(cubit.state.items.single.storeId, 's1');
+        await cubit.close();
+      });
+
+      test('aDuplicateNameIsStillRejected', () async {
+        itemsApi.addError = const AppException(AppError(code: 'item.duplicate', message: 'duplicate'));
+        final cubit = buildCubit();
+        await cubit.bootstrap();
+
+        final succeeded = await cubit.addFastAddEntry(cubit.fastAddEntryFor('5 Milch'));
+
+        expect(succeeded, isFalse);
+        expect(cubit.state.actionError?.code, 'item.duplicate');
+        await cubit.close();
+      });
+    });
+
     group('startTrip', () {
       test('optimisticallyFlipsIsReadOnlyToTrueOnAnOpenList', () async {
         final cubit = buildCubit();

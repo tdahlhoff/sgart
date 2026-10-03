@@ -28,6 +28,7 @@ class ListDetailState {
     this.actionError,
     this.suggestions = const [],
     this.stores = const [],
+    this.lastAddedItemId,
   });
 
   const ListDetailState.loading({required bool isReadOnly})
@@ -43,6 +44,7 @@ class ListDetailState {
     AppError? actionError,
     List<ItemSuggestion> suggestions = const [],
     List<StoreSummary> stores = const [],
+    String? lastAddedItemId,
   }) : this._(
           ListDetailStatus.ready,
           items: items,
@@ -51,6 +53,7 @@ class ListDetailState {
           actionError: actionError,
           suggestions: suggestions,
           stores: stores,
+          lastAddedItemId: lastAddedItemId,
         );
 
   final ListDetailStatus status;
@@ -62,6 +65,10 @@ class ListDetailState {
   final List<ItemSuggestion> suggestions;
   final List<StoreSummary> stores;
 
+  /// The item this member added most recently, so the screen can scroll it into view — kept (not
+  /// cleared) by later changes; a new add replaces it, and only a *change* of this id triggers a scroll.
+  final String? lastAddedItemId;
+
   ListDetailState copyWith({
     List<Item>? items,
     bool? isReadOnly,
@@ -70,6 +77,7 @@ class ListDetailState {
     bool clearActionError = false,
     List<ItemSuggestion>? suggestions,
     List<StoreSummary>? stores,
+    String? lastAddedItemId,
   }) {
     return ListDetailState.ready(
       items: items ?? this.items,
@@ -78,6 +86,7 @@ class ListDetailState {
       actionError: clearActionError ? null : (actionError ?? this.actionError),
       suggestions: suggestions ?? this.suggestions,
       stores: stores ?? this.stores,
+      lastAddedItemId: lastAddedItemId ?? this.lastAddedItemId,
     );
   }
 
@@ -91,7 +100,8 @@ class ListDetailState {
       other.loadError == loadError &&
       other.actionError == actionError &&
       const ListEquality<ItemSuggestion>().equals(other.suggestions, suggestions) &&
-      const ListEquality<StoreSummary>().equals(other.stores, stores);
+      const ListEquality<StoreSummary>().equals(other.stores, stores) &&
+      other.lastAddedItemId == lastAddedItemId;
 
   @override
   int get hashCode => Object.hash(
@@ -103,5 +113,6 @@ class ListDetailState {
         actionError,
         const ListEquality<ItemSuggestion>().hash(suggestions),
         const ListEquality<StoreSummary>().hash(stores),
+        lastAddedItemId,
       );
 }

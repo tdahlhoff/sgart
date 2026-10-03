@@ -14,6 +14,7 @@ import 'package:sgart/features/stores/data/stores_api.dart';
 import 'package:sgart/features/trips/data/trips_api.dart';
 import 'package:sgart/shared/errors/app_error.dart';
 import 'package:sgart/shared/http/app_exception.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 
 import '../../../../support/fake_item_suggestions_api.dart';
 import '../../../../support/fake_items_dependencies.dart';
@@ -104,6 +105,67 @@ void main() {
       expect(itemsApi.lastAddedUnit, 'PIECE');
       expect(itemsApi.lastAddedNote, isNull);
       expect(find.text('Milch'), findsOneWidget);
+    });
+
+    testWidgets('everySecondItemRowHasATintedBackgroundSoRowsAreEasyToTellApart', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i0', name: 'Apfel', note: null, amount: '1', unit: 'PIECE'),
+        Item(itemId: 'i1', name: 'Birne', note: null, amount: '1', unit: 'PIECE'),
+        Item(itemId: 'i2', name: 'Citrone', note: null, amount: '1', unit: 'PIECE'),
+        Item(itemId: 'i3', name: 'Dattel', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('item-row-stripe-i0')), findsNothing);
+      expect(find.byKey(const Key('item-row-stripe-i1')), findsOneWidget);
+      expect(find.byKey(const Key('item-row-stripe-i2')), findsNothing);
+      expect(find.byKey(const Key('item-row-stripe-i3')), findsOneWidget);
+    });
+
+    testWidgets('addingAnItemToALongListScrollsTheNewItemIntoView', (tester) async {
+      itemsApi.itemsToReturn = [
+        for (var number = 0; number < 30; number++)
+          Item(itemId: 'i$number', name: 'Artikel $number', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      expect(find.text('Zitrone').hitTestable(), findsNothing);
+
+      await tester.tap(find.byKey(const Key('fast-add-field')));
+      await tester.enterText(find.byKey(const Key('fast-add-field')), 'Zitrone');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Zitrone').hitTestable(), findsOneWidget);
+      final newRow = tester.getRect(find.ancestor(of: find.text('Zitrone'), matching: find.byType(ListTile)));
+      final visibleList = tester.getRect(find.byType(SingleChildScrollView).first);
+      expect(newRow.bottom, lessThanOrEqualTo(visibleList.bottom), reason: 'the whole row is in view, not half');
+      expect(newRow.top, greaterThanOrEqualTo(visibleList.top));
+    });
+
+    testWidgets('addingAnItemToALongListScrollsTheNewItemIntoViewWhenAnimationsAreOff', (tester) async {
+      itemsApi.itemsToReturn = [
+        for (var number = 0; number < 30; number++)
+          Item(itemId: 'i$number', name: 'Artikel $number', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      expect(find.text('Zitrone').hitTestable(), findsNothing);
+
+      await tester.tap(find.byKey(const Key('fast-add-field')));
+      await tester.enterText(find.byKey(const Key('fast-add-field')), 'Zitrone');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Zitrone').hitTestable(), findsOneWidget);
+      final newRow = tester.getRect(find.ancestor(of: find.text('Zitrone'), matching: find.byType(ListTile)));
+      final visibleList = tester.getRect(find.byType(SingleChildScrollView).first);
+      expect(newRow.bottom, lessThanOrEqualTo(visibleList.bottom), reason: 'the whole row is in view, not half');
+      expect(newRow.top, greaterThanOrEqualTo(visibleList.top));
     });
 
     testWidgets('addingANewItemViaKeyboardSubmitShowsItInTheList', (tester) async {
@@ -350,6 +412,64 @@ void main() {
           find.descendant(
               of: find.byKey(const Key('item-store-chip-i1')), matching: find.text('+ Geschäft')),
           findsOneWidget);
+    });
+
+    testWidgets('theActionButtonsBarSitsOnTheWhiteSurfaceLikeTheHeaderAndTheAddBar', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<DecoratedBox>(find.byKey(const Key('list-detail-action-bar')));
+      final decoration = bar.decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).bottom.color, SgartColors.light().border);
+    });
+
+    testWidgets('theStoreChipIsFilledWithTheQuietBeigeChipBackgroundAndUsesTheNeutralTextColour', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      final chip = find.byKey(const Key('item-store-chip-i1'));
+
+      final pill = tester.widget<DecoratedBox>(find.descendant(of: chip, matching: find.byType(DecoratedBox)).first);
+      final label = tester.widget<Text>(find.descendant(of: chip, matching: find.text('+ Geschäft')));
+      expect((pill.decoration as BoxDecoration).color, SgartColors.light().chipBackground);
+      expect(label.style?.color, SgartColors.light().onNeutralTint);
+    });
+
+    testWidgets('theStoreChipSitsAtTheLeftEdgeOfTheRowContentAndHugsItsLabel', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final chip = tester.getRect(find.byKey(const Key('item-store-chip-i1')));
+      final quantityLeft = tester.getTopLeft(find.byKey(const Key('item-quantity-i1'))).dx;
+      expect(chip.left, closeTo(quantityLeft, 1), reason: 'aligned with the text above it, not centred');
+      expect(chip.width, lessThan(160), reason: 'only as wide as its label, not a full-width button');
+    });
+
+    testWidgets('theStoreChipHasRoomInsideItAndOnlyALittleTapAreaAroundIt', (tester) async {
+      itemsApi.itemsToReturn = const [
+        Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE'),
+      ];
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+      final chip = find.byKey(const Key('item-store-chip-i1'));
+      final pill = find.descendant(of: chip, matching: find.byType(DecoratedBox)).first;
+      final label = find.descendant(of: chip, matching: find.text('+ Geschäft'));
+
+      final roomInsideTheChip = tester.getSize(pill).height - tester.getSize(label).height;
+      final roomOutsideTheChip = tester.getSize(chip).height - tester.getSize(pill).height;
+      expect(roomInsideTheChip, closeTo(12, 0.5), reason: '6px padding above and below the label');
+      expect(roomOutsideTheChip, closeTo(12, 0.5), reason: '6px above and below, much less than the old 48dp box');
+
+      await tester.tapAt(tester.getCenter(pill) + Offset(0, tester.getSize(pill).height / 2 + 3));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('store-picker-sheet')), findsOneWidget);
     });
 
     testWidgets('tappingTheStoreChipOnAnOpenListOpensThePickerAndAssigns', (tester) async {
