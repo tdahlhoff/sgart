@@ -3,9 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/formatting/quantity_formatter.dart' as formatting;
 import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
+import '../../../shared/errors/app_error.dart';
+import '../../../shared/widgets/inline_action_error_text.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../shared/widgets/sgart_button.dart';
+import '../../../shared/widgets/striped_row.dart';
 import '../../../theme/sgart_theme_access.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../lists/data/item.dart';
@@ -45,33 +47,35 @@ class TripScreen extends StatelessWidget {
     final storesApi = context.read<StoresApi>();
     final shoppingListsApi = context.read<ShoppingListsApi>();
     final storeChainReferenceCache = context.read<StoreChainReferenceCache>();
-    return Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
-      builder: (_) => RepositoryProvider<TripsApi>.value(
-        value: tripsApi,
-        child: RepositoryProvider<ItemsApi>.value(
-          value: itemsApi,
-          child: RepositoryProvider<StoresApi>.value(
-            value: storesApi,
-            child: RepositoryProvider<ShoppingListsApi>.value(
-              value: shoppingListsApi,
-              child: RepositoryProvider<StoreChainReferenceCache>.value(
-                value: storeChainReferenceCache,
-                child: BlocProvider<TripCubit>(
-                  create: (context) => TripCubit(
-                    tripsApi: context.read<TripsApi>(),
-                    itemsApi: context.read<ItemsApi>(),
-                    storesApi: context.read<StoresApi>(),
-                    householdId: householdId,
-                    listId: listId,
-                  )..bootstrap(),
-                  child: TripScreen(listTitle: listTitle),
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => RepositoryProvider<TripsApi>.value(
+          value: tripsApi,
+          child: RepositoryProvider<ItemsApi>.value(
+            value: itemsApi,
+            child: RepositoryProvider<StoresApi>.value(
+              value: storesApi,
+              child: RepositoryProvider<ShoppingListsApi>.value(
+                value: shoppingListsApi,
+                child: RepositoryProvider<StoreChainReferenceCache>.value(
+                  value: storeChainReferenceCache,
+                  child: BlocProvider<TripCubit>(
+                    create: (context) => TripCubit(
+                      tripsApi: context.read<TripsApi>(),
+                      itemsApi: context.read<ItemsApi>(),
+                      storesApi: context.read<StoresApi>(),
+                      householdId: householdId,
+                      listId: listId,
+                    )..bootstrap(),
+                    child: TripScreen(listTitle: listTitle),
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   @override
@@ -96,6 +100,9 @@ class TripScreen extends StatelessWidget {
   }
 }
 
+/// The side margin of everything on the trip screen that is not a full-width item row.
+const EdgeInsets _sideMargin = EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding);
+
 class _ReadyBody extends StatelessWidget {
   const _ReadyBody({required this.state});
 
@@ -106,52 +113,50 @@ class _ReadyBody extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     final cubit = context.read<TripCubit>();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(localizations.tripScreenTitle, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: SgartShapes.space2),
-          _ProgressHeader(doneCount: state.doneCount, totalCount: state.totalCount),
-          const SizedBox(height: SgartShapes.space4),
-          for (final group in state.groups)
-            _StoreGroupSection(
-              group: group,
-              storeName: cubit.state.storeFor(group.storeId)?.name ?? group.storeId,
-              onActions: (itemId) => _openItemActionsSheet(context, itemId),
-            ),
-          _UnassignedSection(
-            items: state.unassignedItems,
-            onActions: (itemId) => _openItemActionsSheet(context, itemId),
-          ),
-          if (state.actionError != null) ...[
-            const SizedBox(height: SgartShapes.space4),
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('trip-action-error'),
-            ),
-          ],
-          const SizedBox(height: SgartShapes.space4),
-          SgartButton(
-            key: const Key('trip-add-store'),
-            label: localizations.tripAddStoreAction,
-            variant: SgartButtonVariant.tonal,
-            onPressed: state.isSubmitting ? null : () => _openAddStorePicker(context),
-          ),
-          const SizedBox(height: SgartShapes.space2),
-          Semantics(
-            button: true,
-            label: localizations.tripCompleteAction,
-            child: SgartButton(
-              key: const Key('trip-complete-action'),
-              label: localizations.tripCompleteAction,
-              variant: SgartButtonVariant.tonal,
-              onPressed: state.isSubmitting ? null : () => _openCompletionDialog(context),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            // Item rows run edge to edge so their alternating bands do too; headings and the progress
+            // header carry the side margin themselves.
+            padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: _sideMargin,
+                  child: Text(localizations.tripScreenTitle, style: Theme.of(context).textTheme.titleMedium),
+                ),
+                const SizedBox(height: SgartShapes.space2),
+                Padding(
+                  padding: _sideMargin,
+                  child: _ProgressHeader(doneCount: state.doneCount, totalCount: state.totalCount),
+                ),
+                const SizedBox(height: SgartShapes.space4),
+                for (final group in state.groups)
+                  _StoreGroupSection(
+                    group: group,
+                    storeName: cubit.state.storeFor(group.storeId)?.name ?? group.storeId,
+                    onActions: (itemId) => _openItemActionsSheet(context, itemId),
+                  ),
+                _UnassignedSection(
+                  items: state.unassignedItems,
+                  onActions: (itemId) => _openItemActionsSheet(context, itemId),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        // The trip's two actions are pinned at the bottom in the thumb zone — the same white bar with a
+        // hairline above as the other screens' bottom actions — and so is their error message.
+        _TripActionsBar(
+          error: state.actionError,
+          isSubmitting: state.isSubmitting,
+          onAddStore: () => _openAddStorePicker(context),
+          onComplete: () => _openCompletionDialog(context),
+        ),
+      ],
     );
   }
 
@@ -199,6 +204,66 @@ class _ReadyBody extends StatelessWidget {
   }
 }
 
+class _TripActionsBar extends StatelessWidget {
+  const _TripActionsBar({
+    required this.error,
+    required this.isSubmitting,
+    required this.onAddStore,
+    required this.onComplete,
+  });
+
+  final AppError? error;
+  final bool isSubmitting;
+  final VoidCallback onAddStore;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('trip-actions-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          top: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (error != null) ...[
+              InlineActionErrorText(error: error, textKey: const Key('trip-action-error')),
+              const SizedBox(height: SgartShapes.space2),
+            ],
+            SgartButton(
+              key: const Key('trip-add-store'),
+              label: localizations.tripAddStoreAction,
+              variant: SgartButtonVariant.tonal,
+              onPressed: isSubmitting ? null : onAddStore,
+            ),
+            const SizedBox(height: SgartShapes.space2),
+            Semantics(
+              button: true,
+              label: localizations.tripCompleteAction,
+              child: SgartButton(
+                key: const Key('trip-complete-action'),
+                label: localizations.tripCompleteAction,
+                variant: SgartButtonVariant.tonal,
+                onPressed: isSubmitting ? null : onComplete,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ProgressHeader extends StatelessWidget {
   const _ProgressHeader({required this.doneCount, required this.totalCount});
 
@@ -215,21 +280,14 @@ class _ProgressHeader extends StatelessWidget {
       children: [
         Text(localizations.tripProgressLabel(doneCount, totalCount)),
         const SizedBox(height: SgartShapes.spaceHalfUnit),
-        LinearProgressIndicator(
-          key: const Key('trip-progress-bar'),
-          value: progress,
-        ),
+        LinearProgressIndicator(key: const Key('trip-progress-bar'), value: progress),
       ],
     );
   }
 }
 
 class _StoreGroupSection extends StatelessWidget {
-  const _StoreGroupSection({
-    required this.group,
-    required this.storeName,
-    required this.onActions,
-  });
+  const _StoreGroupSection({required this.group, required this.storeName, required this.onActions});
 
   final TripStoreGroup group;
   final String storeName;
@@ -243,23 +301,23 @@ class _StoreGroupSection extends StatelessWidget {
       key: Key('trip-store-group-${group.storeId}'),
       padding: const EdgeInsets.only(bottom: SgartShapes.space4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(storeName, style: Theme.of(context).textTheme.titleMedium),
-              Text(
-                localizations.tripStoreItemCount(group.items.length),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-          for (final item in group.items)
-            _TripItemRow(
-              item: item,
-              onActions: () => onActions(item.itemId),
+          Padding(
+            padding: _sideMargin,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(storeName, style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  localizations.tripStoreItemCount(group.items.length),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ),
+          ),
+          for (final (index, item) in group.items.indexed)
+            _TripItemRow(item: item, index: index, onActions: () => onActions(item.itemId)),
         ],
       ),
     );
@@ -280,20 +338,20 @@ class _UnassignedSection extends StatelessWidget {
       key: const Key('trip-unassigned-group'),
       padding: const EdgeInsets.only(bottom: SgartShapes.space4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(localizations.tripUnassignedGroupLabel, style: Theme.of(context).textTheme.titleMedium),
+          Padding(
+            padding: _sideMargin,
+            child: Text(localizations.tripUnassignedGroupLabel, style: Theme.of(context).textTheme.titleMedium),
+          ),
           if (items.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: SgartShapes.space2),
+              padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding, vertical: SgartShapes.space2),
               child: Text(localizations.tripUnassignedEmptyState, key: const Key('trip-unassigned-empty-state')),
             )
           else
-            for (final item in items)
-              _TripItemRow(
-                item: item,
-                onActions: () => onActions(item.itemId),
-              ),
+            for (final (index, item) in items.indexed)
+              _TripItemRow(item: item, index: index, onActions: () => onActions(item.itemId)),
         ],
       ),
     );
@@ -301,9 +359,12 @@ class _UnassignedSection extends StatelessWidget {
 }
 
 class _TripItemRow extends StatelessWidget {
-  const _TripItemRow({required this.item, required this.onActions});
+  const _TripItemRow({required this.item, required this.index, required this.onActions});
 
   final Item item;
+
+  /// The row's position in its group; every second normal row gets a tinted background.
+  final int index;
   final VoidCallback onActions;
 
   bool get _isDone => item.status == ItemStatus.done;
@@ -324,57 +385,59 @@ class _TripItemRow extends StatelessWidget {
 
     final checkboxSemantic = _isDone ? localizations.tripItemUncheckSemantic : localizations.tripItemCheckOffSemantic;
 
-    return ColoredBox(
-      key: _isPending
-          ? Key('trip-item-pending-${item.itemId}')
-          : (_isDone ? Key('trip-item-done-${item.itemId}') : (_isDiscarded ? Key('trip-item-discarded-${item.itemId}') : null)),
-      color: _isPending
-          ? colors.textSecondary.withValues(alpha: 0.08)
-          : (_isDone
-              ? colors.success.withValues(alpha: 0.12)
-              : (_isDiscarded ? colors.textSecondary.withValues(alpha: 0.08) : Colors.transparent)),
-      child: ListTile(
-        key: Key('trip-item-${item.itemId}'),
-        contentPadding: EdgeInsets.zero,
-        leading: Semantics(
-          label: checkboxSemantic,
-          child: Checkbox(
-            key: Key('trip-item-checkbox-${item.itemId}'),
-            value: _isDone,
-            onChanged: _isPending
-                ? null
-                : (_) {
-                    if (_isDone) {
-                      cubit.uncheck(item.itemId);
-                    } else {
-                      cubit.checkOff(item.itemId);
-                    }
-                  },
-          ),
+    final tile = ListTile(
+      key: Key('trip-item-${item.itemId}'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+      leading: Semantics(
+        label: checkboxSemantic,
+        child: Checkbox(
+          key: Key('trip-item-checkbox-${item.itemId}'),
+          value: _isDone,
+          onChanged: _isPending
+              ? null
+              : (_) {
+                  if (_isDone) {
+                    cubit.uncheck(item.itemId);
+                  } else {
+                    cubit.checkOff(item.itemId);
+                  }
+                },
         ),
-        title: Text(
-          item.name,
-          style: (_isDone || _isDiscarded || _isPending)
-              ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
-              : null,
-        ),
-        subtitle: _isPending
-            ? Text(
-                localizations.itemTransferPendingLabel,
-                key: Key('trip-item-pending-label-${item.itemId}'),
-                style: TextStyle(color: colors.textSecondary),
-              )
-            : (_isDiscarded
+      ),
+      title: Text(
+        item.name,
+        style: (_isDone || _isDiscarded || _isPending)
+            ? TextStyle(decoration: TextDecoration.lineThrough, color: colors.textSecondary)
+            : null,
+      ),
+      subtitle: _isPending
+          ? Text(
+              localizations.itemTransferPendingLabel,
+              key: Key('trip-item-pending-label-${item.itemId}'),
+              style: TextStyle(color: colors.textSecondary),
+            )
+          : (_isDiscarded
                 ? Text(localizations.itemDiscardedLabel, style: TextStyle(color: colors.textSecondary))
                 : Text(subtitle)),
-        // Status-dependent trailing (Story 3.4, Cl. 12; Story 3.6, AC5):
-        //   pending   → no trailing, non-interactive (mirrors the server's fail-fast lock)
-        //   OPEN      → ⋯ actions sheet (reroute / transfer / discard)
-        //   DONE      → no trailing (uncheck via checkbox only)
-        //   DISCARDED → UNDO button (→ OPEN) only, no ⋯
-        trailing: _buildTrailing(localizations, cubit),
-      ),
+      // Status-dependent trailing (Story 3.4, Cl. 12; Story 3.6, AC5):
+      //   pending   → no trailing, non-interactive (mirrors the server's fail-fast lock)
+      //   OPEN      → ⋯ actions sheet (reroute / transfer / discard)
+      //   DONE      → no trailing (uncheck via checkbox only)
+      //   DISCARDED → UNDO button (→ OPEN) only, no ⋯
+      trailing: _buildTrailing(localizations, cubit),
     );
+
+    // A pending, done or discarded row keeps its meaning-carrying colour; every other row alternates.
+    if (_isPending || _isDone || _isDiscarded) {
+      return ColoredBox(
+        key: _isPending
+            ? Key('trip-item-pending-${item.itemId}')
+            : (_isDone ? Key('trip-item-done-${item.itemId}') : Key('trip-item-discarded-${item.itemId}')),
+        color: _isDone ? colors.success.withValues(alpha: 0.12) : colors.textSecondary.withValues(alpha: 0.08),
+        child: tile,
+      );
+    }
+    return StripedRow(index: index, child: tile);
   }
 
   Widget? _buildTrailing(AppLocalizations localizations, TripCubit cubit) {
@@ -427,11 +490,7 @@ class _TripItemRow extends StatelessWidget {
 /// Übernehmen/Verwerfen choices → "Einkauf abschließen" confirm / "Doch noch weiter einkaufen"
 /// cancel. E4: no open items → skips straight to confirm.
 class _CompletionSheetBody extends StatelessWidget {
-  const _CompletionSheetBody({
-    required this.cubit,
-    required this.shoppingListsApi,
-    required this.parentContext,
-  });
+  const _CompletionSheetBody({required this.cubit, required this.shoppingListsApi, required this.parentContext});
 
   final TripCubit cubit;
   final ShoppingListsApi shoppingListsApi;

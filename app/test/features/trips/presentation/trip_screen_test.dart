@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 import 'package:sgart/features/lists/data/item.dart';
 import 'package:sgart/features/lists/data/items_api.dart';
 import 'package:sgart/features/lists/data/shopping_lists_api.dart';
@@ -146,6 +147,51 @@ void main() {
 
       expect(storesApi.lastAddedName, 'Netto');
       expect(tripsApi.addStoreToTripCallCount, 1);
+    });
+
+    testWidgets('everySecondOpenItemRowInAGroupHasATintedBackground', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [
+          Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka'),
+          Item(itemId: 'i2', name: 'Butter', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka'),
+          Item(itemId: 'i3', name: 'Käse', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka'),
+        ],
+      );
+      storesApi.storesToReturn = const [edeka];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      Finder tintAround(String itemId) => find.ancestor(
+            of: find.byKey(Key('trip-item-$itemId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('i1'), findsNothing);
+      expect(tintAround('i2'), findsOneWidget);
+      expect(tintAround('i3'), findsNothing);
+    });
+
+    testWidgets('theTripActionsArePinnedToTheBottomOnAWhiteBarWithAHairlineAbove', (tester) async {
+      tripsApi.tripViewToReturn = const TripView(
+        tripId: 'trip-1',
+        listId: 'list-1',
+        storeIds: ['store-edeka'],
+        items: [Item(itemId: 'i1', name: 'Milch', note: null, amount: '1', unit: 'PIECE', storeId: 'store-edeka')],
+      );
+      storesApi.storesToReturn = const [edeka];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final bar = find.byKey(const Key('trip-actions-bar'));
+      final decoration = tester.widget<DecoratedBox>(bar).decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).top.color, SgartColors.light().border);
+      expect(find.descendant(of: bar, matching: find.byKey(const Key('trip-add-store'))), findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.byKey(const Key('trip-complete-action'))), findsOneWidget);
+      final screenBottom = tester.getRect(find.byType(Scaffold)).bottom;
+      expect(screenBottom - tester.getRect(find.byKey(const Key('trip-complete-action'))).bottom, lessThan(48));
     });
 
     testWidgets('showsCompleteAction_whenTripIsReady', (tester) async {

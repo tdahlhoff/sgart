@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 import 'package:sgart/features/stores/data/store_chain.dart';
 import 'package:sgart/features/stores/data/store_chain_reference_cache.dart';
 import 'package:sgart/features/stores/data/store_summary.dart';
@@ -50,6 +51,39 @@ void main() {
       // The linked store shows a chain badge; the unlinked one does not.
       expect(find.byKey(const Key('store-chain-badge-s1')), findsOneWidget);
       expect(find.byKey(const Key('store-chain-badge-s2')), findsNothing);
+    });
+
+    testWidgets('everySecondStoreRowHasATintedBackground', (tester) async {
+      storesApi.storesToReturn = const [
+        StoreSummary(storeId: 's1', name: 'Edeka'),
+        StoreSummary(storeId: 's2', name: 'Netto'),
+        StoreSummary(storeId: 's3', name: 'Rewe'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      Finder tintAround(String storeId) => find.ancestor(
+            of: find.byKey(Key('store-row-$storeId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('s1'), findsNothing);
+      expect(tintAround('s2'), findsOneWidget);
+      expect(tintAround('s3'), findsNothing);
+    });
+
+    testWidgets('theAddFormIsPinnedToTheBottomOnAWhiteBarWithAHairlineAbove', (tester) async {
+      storesApi.storesToReturn = const [StoreSummary(storeId: 's1', name: 'Edeka')];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final bar = find.byKey(const Key('stores-add-bar'));
+      final decoration = tester.widget<DecoratedBox>(bar).decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).top.color, SgartColors.light().border);
+      expect(find.descendant(of: bar, matching: find.byKey(const Key('store-name-field'))), findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.byKey(const Key('store-add-button'))), findsOneWidget);
+      final screenBottom = tester.getRect(find.byType(Scaffold)).bottom;
+      expect(screenBottom - tester.getRect(find.byKey(const Key('store-add-button'))).bottom, lessThan(48));
     });
 
     testWidgets('showsTheEmptyStateWhenThereAreNoStores', (tester) async {
@@ -120,6 +154,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('stores-action-error')), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(const Key('stores-add-bar')), matching: find.byKey(const Key('stores-action-error'))),
+        findsOneWidget,
+        reason: 'the message sits with the form it belongs to',
+      );
     });
   });
 }

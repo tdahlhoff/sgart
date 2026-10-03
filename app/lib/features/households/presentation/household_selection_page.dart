@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
+import '../../../shared/widgets/striped_row.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/household_summary.dart';
@@ -22,14 +23,19 @@ class HouseholdSelectionPage extends StatelessWidget {
       appBar: SgartAppBar(title: localizations.householdsSelectionHeading),
       body: SafeArea(
         child: ListView.builder(
-          padding: const EdgeInsets.all(SgartShapes.cardPadding),
+          // Rows run edge to edge so their alternating bands do too; each row insets its own content.
+          padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
           itemCount: households.length,
           itemBuilder: (context, index) {
             final household = households[index];
-            return ListTile(
-              key: Key('household-selection-item-${household.householdId}'),
-              title: Text(household.name),
-              onTap: () => context.read<HouseholdsCubit>().selectHousehold(household),
+            return StripedRow(
+              index: index,
+              child: ListTile(
+                key: Key('household-selection-item-${household.householdId}'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+                title: Text(household.name),
+                onTap: () => context.read<HouseholdsCubit>().selectHousehold(household),
+              ),
             );
           },
         ),

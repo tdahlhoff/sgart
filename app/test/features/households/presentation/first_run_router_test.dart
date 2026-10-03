@@ -106,6 +106,23 @@ void main() {
       expect(find.text('WG Sonnenallee'), findsOneWidget);
     });
 
+    testWidgets('everySecondHouseholdOnTheSelectionScreenHasATintedBackground', (tester) async {
+      householdsApi.householdsToReturn = const [
+        HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),
+        HouseholdSummary(householdId: 'id-2', name: 'WG Sonnenallee'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await cubit.bootstrap();
+      await tester.pump();
+
+      Finder tintAround(String householdId) => find.ancestor(
+            of: find.byKey(Key('household-selection-item-$householdId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('id-1'), findsNothing);
+      expect(tintAround('id-2'), findsOneWidget);
+    });
+
     testWidgets('selectingAHouseholdFromTheSelectionScreenRoutesIntoIt', (tester) async {
       householdsApi.householdsToReturn = const [
         HouseholdSummary(householdId: 'id-1', name: 'Familie Muster'),

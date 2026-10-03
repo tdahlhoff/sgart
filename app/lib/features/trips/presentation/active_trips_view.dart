@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/widgets/sgart_button.dart';
+import '../../../shared/widgets/striped_row.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../lists/data/shopping_list_summary.dart';
 import '../../lists/presentation/list_overview/shopping_lists_cubit.dart';
@@ -22,8 +23,7 @@ class ActiveTripsView extends StatelessWidget {
     return BlocBuilder<ActiveTripsCubit, ActiveTripsState>(
       builder: (context, state) {
         return switch (state.status) {
-          ActiveTripsStatus.loading =>
-            const Center(child: CircularProgressIndicator(key: Key('active-trips-loading'))),
+          ActiveTripsStatus.loading => const Center(child: CircularProgressIndicator(key: Key('active-trips-loading'))),
           ActiveTripsStatus.failure => const _FailureBody(),
           ActiveTripsStatus.ready => _ReadyBody(state: state),
         };
@@ -55,32 +55,40 @@ class _ReadyBody extends StatelessWidget {
       );
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
+      // Rows run edge to edge so their alternating bands do too; the heading and each row inset their
+      // own content.
+      padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(localizations.shellTabShoppingActiveTitle, style: Theme.of(context).textTheme.titleMedium),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
+            child: Text(localizations.shellTabShoppingActiveTitle, style: Theme.of(context).textTheme.titleMedium),
+          ),
           const SizedBox(height: SgartShapes.space4),
-          for (final entry in state.entries)
-            _ActiveTripRow(
-              list: entry.summary,
-              // The „Liste N" ordinal derived from the full open-lists sequence (Cl. 3) — matches the
-              // overview so an unnamed In-Trip list carries the same number on both surfaces.
-              displayName: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
-              onTap: () async {
-                final completed = await TripScreen.push(
-                  context,
-                  householdId: householdId,
-                  listId: entry.summary.listId,
-                  listTitle: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
-                );
-                if (completed == true && context.mounted) {
-                  // Story 3.4, AC7 — completed trip removes the row from the Einkauf tab and
-                  // invalidates the Done archive so the "Erledigt" tab shows the completed list.
-                  context.read<ActiveTripsCubit>().refresh();
-                  context.read<ShoppingListsCubit>().invalidateArchive();
-                }
-              },
+          for (final (index, entry) in state.entries.indexed)
+            StripedRow(
+              index: index,
+              child: _ActiveTripRow(
+                list: entry.summary,
+                // The „Liste N" ordinal derived from the full open-lists sequence (Cl. 3) — matches the
+                // overview so an unnamed In-Trip list carries the same number on both surfaces.
+                displayName: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
+                onTap: () async {
+                  final completed = await TripScreen.push(
+                    context,
+                    householdId: householdId,
+                    listId: entry.summary.listId,
+                    listTitle: entry.summary.name ?? localizations.listsDefaultName(entry.ordinal),
+                  );
+                  if (completed == true && context.mounted) {
+                    // Story 3.4, AC7 — completed trip removes the row from the Einkauf tab and
+                    // invalidates the Done archive so the "Erledigt" tab shows the completed list.
+                    context.read<ActiveTripsCubit>().refresh();
+                    context.read<ShoppingListsCubit>().invalidateArchive();
+                  }
+                },
+              ),
             ),
         ],
       ),
@@ -101,7 +109,7 @@ class _ActiveTripRow extends StatelessWidget {
 
     return ListTile(
       key: Key('active-trip-row-${list.listId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       onTap: onTap,
       title: Text(displayName),
       subtitle: Text('${localizations.listStatusInTrip} · ${localizations.tripsIndexRowItemCount(list.itemCount)}'),

@@ -326,6 +326,8 @@ void main() {
       expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
       expect(find.text('Anna Testperson'), findsNothing);
       expect(find.byKey(const Key('profile-email')), findsNothing);
+      // The sections below the header are built once scrolled into view (the test viewport is short).
+      await tester.scrollUntilVisible(find.text('Sprache & Region'), 200, scrollable: find.byType(Scrollable));
       expect(find.text('Sprache & Region'), findsOneWidget);
       // Story 8.3's nickname section pushed the notifications section further down the Profil
       // ListView, past the default test viewport — scroll it into view before asserting.

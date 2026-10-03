@@ -181,8 +181,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: SgartShapes.space4),
             Text(
               localizations.profileNicknameSectionLabel(widget.activeHousehold.name),
-              style: Theme.of(context).textTheme.labelLarge,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
+            const SizedBox(height: SgartShapes.space2),
             ListTile(
               key: const Key('profile-nickname-row'),
               leading: const Icon(Icons.badge_outlined),
@@ -194,7 +195,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const Divider(height: SgartShapes.space4 * 2),
-            Text(localizations.profileAccountSectionLabel, style: Theme.of(context).textTheme.labelLarge),
+            Text(localizations.profileAccountSectionLabel, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: SgartShapes.space2),
             ListTile(
               key: const Key('profile-recovery-token-row'),
               leading: const Icon(Icons.key_outlined),
@@ -203,10 +205,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => openRecoveryTokenRevealPage(context),
             ),
             const Divider(height: SgartShapes.space4 * 2),
-            Text(localizations.profileRecoveryEmailSectionLabel, style: Theme.of(context).textTheme.labelLarge),
+            Text(localizations.profileRecoveryEmailSectionLabel, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: SgartShapes.space2),
             const _RecoveryEmailSection(),
             const Divider(height: SgartShapes.space4 * 2),
-            Text(localizations.profileDisplaySectionLabel, style: Theme.of(context).textTheme.labelLarge),
+            Text(localizations.profileDisplaySectionLabel, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: SgartShapes.space2),
             ListTile(
               key: const Key('profile-locale-row'),
               leading: const Icon(Icons.translate_outlined),
@@ -216,7 +220,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const LocaleSettingsPage())),
             ),
             const Divider(height: SgartShapes.space4 * 2),
-            Text(localizations.profileNotificationsSectionLabel, style: Theme.of(context).textTheme.labelLarge),
+            Text(localizations.profileNotificationsSectionLabel, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: SgartShapes.space2),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: SgartShapes.space2),
               child: Text(localizations.profileNotificationsInfo, key: const Key('profile-notifications-info')),

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
+import '../../../shared/errors/app_error.dart';
 import '../../../shared/widgets/sgart_app_bar.dart';
+import '../../../shared/widgets/inline_action_error_text.dart';
 import '../../../shared/widgets/sgart_button.dart';
+import '../../../shared/widgets/striped_row.dart';
+import '../../../theme/sgart_theme_access.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../../households/data/household_summary.dart';
 import '../../households/presentation/households_cubit.dart';
@@ -27,11 +30,9 @@ class MembersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => MembersCubit(
-        membersApi: context.read(),
-        householdsApi: context.read(),
-        householdId: household.householdId,
-      )..bootstrap(),
+      create: (_) =>
+          MembersCubit(membersApi: context.read(), householdsApi: context.read(), householdId: household.householdId)
+            ..bootstrap(),
       child: _MembersView(household: household),
     );
   }
@@ -60,8 +61,7 @@ class _MembersView extends StatelessWidget {
           child: BlocBuilder<MembersCubit, MembersState>(
             builder: (context, state) {
               return switch (state.status) {
-                MembersStatus.loading =>
-                  const Center(child: CircularProgressIndicator(key: Key('members-loading'))),
+                MembersStatus.loading => const Center(child: CircularProgressIndicator(key: Key('members-loading'))),
                 MembersStatus.failure => _FailureBody(errorText: localizations.membersLoadFailedError),
                 MembersStatus.ready => _ReadyBody(state: state, household: household),
               };
@@ -85,36 +85,46 @@ class _ReadyBody extends StatelessWidget {
     final self = state.self;
     final isAdmin = self?.role == 'ADMIN';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.actionError != null) ...[
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('members-action-error'),
+    final hasHouseholdAction = self != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            // Rows run edge to edge so their alternating bands do too; each row insets its own content.
+            padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, member) in state.members.indexed)
+                  StripedRow(
+                    index: index,
+                    child: _MemberRow(member: member, isCallerAdmin: isAdmin),
+                  ),
+              ],
             ),
-            const SizedBox(height: SgartShapes.space4),
-          ],
-          for (final member in state.members) _MemberRow(member: member, isCallerAdmin: isAdmin),
-          const SizedBox(height: SgartShapes.space4),
-          if (self != null && !isAdmin)
-            SgartButton(
-              key: const Key('members-leave-button'),
-              label: localizations.membersLeaveAction,
-              onPressed: state.isSubmitting ? null : () => _confirmAndLeave(context),
-            ),
-          if (isAdmin) ...[
-            SgartButton(
-              key: const Key('members-delete-household-button'),
-              label: localizations.membersDeleteHouseholdAction,
-              variant: SgartButtonVariant.secondary,
-              onPressed: state.isSubmitting ? null : () => _confirmAndDeleteHousehold(context),
-            ),
-          ],
-        ],
-      ),
+          ),
+        ),
+        // The household-level action (leave, or delete as an admin) is rare and consequential, so it sits
+        // pinned and quiet at the bottom — outlined, behind a confirmation — and so does its error.
+        if (hasHouseholdAction)
+          _HouseholdActionBar(
+            error: state.actionError,
+            child: isAdmin
+                ? SgartButton(
+                    key: const Key('members-delete-household-button'),
+                    label: localizations.membersDeleteHouseholdAction,
+                    variant: SgartButtonVariant.secondary,
+                    onPressed: state.isSubmitting ? null : () => _confirmAndDeleteHousehold(context),
+                  )
+                : SgartButton(
+                    key: const Key('members-leave-button'),
+                    label: localizations.membersLeaveAction,
+                    variant: SgartButtonVariant.secondary,
+                    onPressed: state.isSubmitting ? null : () => _confirmAndLeave(context),
+                  ),
+          ),
+      ],
     );
   }
 
@@ -204,6 +214,42 @@ class _DeleteHouseholdConfirmDialogState extends State<_DeleteHouseholdConfirmDi
   }
 }
 
+class _HouseholdActionBar extends StatelessWidget {
+  const _HouseholdActionBar({required this.error, required this.child});
+
+  final AppError? error;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('members-actions-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          top: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (error != null) ...[
+              InlineActionErrorText(error: error, textKey: const Key('members-action-error')),
+              const SizedBox(height: SgartShapes.space2),
+            ],
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MemberRow extends StatelessWidget {
   const _MemberRow({required this.member, required this.isCallerAdmin});
 
@@ -213,8 +259,7 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final roleLabel =
-        member.role == 'ADMIN' ? localizations.membersRoleAdmin : localizations.membersRoleParticipant;
+    final roleLabel = member.role == 'ADMIN' ? localizations.membersRoleAdmin : localizations.membersRoleParticipant;
     // Story 8.3: the resolved nickname is the row's primary label — a member with no nickname yet
     // shows the neutral fallback, never the raw member id (I/O matrix). The caller's own row still
     // adds "(Sie)" so they can tell themselves apart at a glance.
@@ -223,7 +268,7 @@ class _MemberRow extends StatelessWidget {
 
     return ListTile(
       key: Key('member-row-${member.memberId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       leading: const Icon(Icons.person_outline),
       title: Text(titleLabel),
       subtitle: Text(roleLabel),

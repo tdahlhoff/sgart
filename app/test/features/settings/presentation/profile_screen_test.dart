@@ -183,6 +183,17 @@ void main() {
         expect(find.text('Timo'), findsNWidgets(2)); // the header + the nickname section row
       });
 
+      testWidgets('theSectionLabelsAreHeadingsInTheTitleStyle', (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        final titleMedium = Theme.of(tester.element(find.byKey(const Key('profile-nickname-row')))).textTheme.titleMedium;
+        for (final heading in ['Konto', 'Darstellung', 'Benachrichtigungen']) {
+          expect(tester.widget<Text>(find.text(heading)).style, titleMedium, reason: 'heading "$heading"');
+        }
+        expect(tester.widget<Text>(find.textContaining('Dein Name in')).style, titleMedium);
+      });
+
       testWidgets('theNicknameDialogIsOnlyAsTallAsItsContent', (tester) async {
         await tester.pumpWidget(buildSubject(nicknameApi: FakeNicknameApi()));
 
@@ -214,6 +225,8 @@ void main() {
 
     testWidgets('showsTheFixedNotificationsInfoWithNoToggle', (tester) async {
       await tester.pumpWidget(buildSubject());
+      // The section is the last of a scrolling list: it is built once scrolled into view.
+      await tester.scrollUntilVisible(find.byKey(const Key('profile-notifications-info')), 200);
 
       expect(find.byKey(const Key('profile-notifications-info')), findsOneWidget);
       expect(find.byType(Switch), findsNothing);

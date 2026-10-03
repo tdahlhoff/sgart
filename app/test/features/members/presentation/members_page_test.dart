@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 import 'package:sgart/features/households/data/household_summary.dart';
 import 'package:sgart/features/households/data/households_api.dart';
 import 'package:sgart/features/households/presentation/households_cubit.dart';
@@ -85,6 +86,36 @@ void main() {
       expect(find.byKey(const Key('member-row-member-participant-menu')), findsOneWidget);
       expect(find.byKey(const Key('members-delete-household-button')), findsOneWidget);
       expect(find.byKey(const Key('members-leave-button')), findsNothing);
+    });
+
+    testWidgets('everySecondMemberRowHasATintedBackground', (tester) async {
+      membersApi.membersToReturn = const [
+        admin,
+        participant,
+        MemberView(memberId: 'member-third', role: 'PARTICIPANT', isSelf: false),
+      ];
+      await openMembersPage(tester);
+
+      Finder tintAround(String memberId) => find.ancestor(
+            of: find.byKey(Key('member-row-$memberId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('member-admin'), findsNothing);
+      expect(tintAround('member-participant'), findsOneWidget);
+      expect(tintAround('member-third'), findsNothing);
+    });
+
+    testWidgets('theHouseholdActionIsPinnedToTheBottomOnAWhiteBarWithAHairlineAbove', (tester) async {
+      membersApi.membersToReturn = const [admin, participant];
+      await openMembersPage(tester);
+
+      final bar = tester.widget<DecoratedBox>(find.byKey(const Key('members-actions-bar')));
+      final decoration = bar.decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).top.color, SgartColors.light().border);
+      final screenBottom = tester.getRect(find.byType(Scaffold).last).bottom;
+      final button = tester.getRect(find.byKey(const Key('members-delete-household-button')));
+      expect(screenBottom - button.bottom, lessThan(48), reason: 'at the bottom edge, not under the last member');
     });
 
     testWidgets('aParticipantSeesOnlyLeave', (tester) async {

@@ -15,9 +15,12 @@ import '../errors/error_message_resolver.dart';
 /// The text uses `onErrorTint`, not the raw pink: pink is a fill colour and fails AA as text
 /// (DESIGN §1).
 class InlineActionErrorText extends StatelessWidget {
-  const InlineActionErrorText({super.key, required this.error});
+  const InlineActionErrorText({super.key, required this.error, this.textKey = const Key('item-list-action-error')});
 
   final AppError? error;
+
+  /// The key of the message text, so each screen can keep the key its tests and tooling know.
+  final Key textKey;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +38,7 @@ class InlineActionErrorText extends StatelessWidget {
         excludeSemantics: true,
         child: Text(
           message,
-          key: const Key('item-list-action-error'),
+          key: textKey,
           style: bodySmall?.copyWith(color: context.sgartColors.onErrorTint),
         ),
       ),

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../l10n/gen/app_localizations.dart';
-import '../../../shared/errors/error_message_resolver.dart';
+import '../../../shared/widgets/inline_action_error_text.dart';
 import '../../../shared/widgets/sgart_button.dart';
 import '../../../shared/widgets/status_label.dart';
+import '../../../shared/widgets/striped_row.dart';
+import '../../../theme/sgart_theme_access.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/store_summary.dart';
 import 'stores_cubit.dart';
@@ -52,14 +54,9 @@ class _StoresManagementViewState extends State<StoresManagementView> {
     return BlocBuilder<StoresCubit, StoresState>(
       builder: (context, state) {
         return switch (state.status) {
-          StoresStatus.loading =>
-            const Center(child: CircularProgressIndicator(key: Key('stores-loading'))),
+          StoresStatus.loading => const Center(child: CircularProgressIndicator(key: Key('stores-loading'))),
           StoresStatus.failure => const _FailureBody(),
-          StoresStatus.ready => _ReadyBody(
-              state: state,
-              nameController: _nameController,
-              onSubmit: _submit,
-            ),
+          StoresStatus.ready => _ReadyBody(state: state, nameController: _nameController, onSubmit: _submit),
         };
       },
     );
@@ -77,77 +74,53 @@ class _ReadyBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.stores.isEmpty)
-            Text(localizations.storesEmptyStateLabel, key: const Key('stores-empty-state'))
-          else
-            for (final store in state.stores) _StoreRow(store: store, chainName: _chainNameFor(store)),
-          const SizedBox(height: SgartShapes.space2),
-          Text(
-            localizations.storesArchiveHelperText,
-            key: const Key('stores-archive-helper'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Divider(height: SgartShapes.space4),
-          TextField(
-            key: const Key('store-name-field'),
-            controller: nameController,
-            decoration: InputDecoration(labelText: localizations.storesAddFieldLabel),
-            onChanged: (value) => context.read<StoresCubit>().onNameChanged(value),
-          ),
-          if (state.chainSuggestion != null && !state.chainCleared) ...[
-            const SizedBox(height: SgartShapes.space2),
-            Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            // Rows run edge to edge so their alternating bands do too; each row insets its own content.
+            padding: const EdgeInsets.symmetric(vertical: SgartShapes.cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
+                if (state.stores.isEmpty)
+                  Padding(
+                    padding: _sideMargin,
+                    child: Text(localizations.storesEmptyStateLabel, key: const Key('stores-empty-state')),
+                  )
+                else
+                  for (final (index, store) in state.stores.indexed)
+                    StripedRow(
+                      index: index,
+                      child: _StoreRow(store: store, chainName: _chainNameFor(store)),
+                    ),
+                const SizedBox(height: SgartShapes.space2),
+                Padding(
+                  padding: _sideMargin,
                   child: Text(
-                    localizations.storesChainSuggestionLabel(state.chainSuggestion!.name),
-                    key: const Key('store-chain-suggestion'),
+                    localizations.storesArchiveHelperText,
+                    key: const Key('stores-archive-helper'),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ),
-                if (state.chains.isNotEmpty)
-                  TextButton(
-                    key: const Key('store-chain-change-button'),
-                    onPressed: () => _showChainPicker(context),
-                    child: Text(localizations.storesChainChangeButtonLabel),
-                  ),
-                TextButton(
-                  key: const Key('store-chain-clear-button'),
-                  onPressed: () => context.read<StoresCubit>().clearSuggestion(),
-                  child: Text(localizations.storesChainClearButtonLabel),
                 ),
               ],
             ),
-          ],
-          if (state.actionError != null) ...[
-            const SizedBox(height: SgartShapes.space4),
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('stores-action-error'),
-            ),
-          ],
-          const SizedBox(height: SgartShapes.space4),
-          // Disabled while an add is in flight or the field is blank (nothing to add) — rebuilds on
-          // every keystroke via the controller so the blank guard tracks the live text.
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: nameController,
-            builder: (context, value, _) {
-              final isBlank = value.text.trim().isEmpty;
-              return SgartButton(
-                key: const Key('store-add-button'),
-                label: localizations.storesAddSubmitButtonLabel,
-                onPressed: state.isSubmitting || isBlank ? null : () => onSubmit(),
-              );
-            },
           ),
-        ],
-      ),
+        ),
+        // Adding is the screen's main action, so its form is pinned at the bottom in the thumb zone —
+        // the same white bar with a hairline above as the other screens' bottom actions.
+        _AddStoreBar(
+          state: state,
+          nameController: nameController,
+          onSubmit: onSubmit,
+          onChangeChain: () => _showChainPicker(context),
+        ),
+      ],
     );
   }
+
+  static const EdgeInsets _sideMargin = EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding);
 
   /// Opens the chain-override picker (AC2 „ändern"): the member chooses a different chain than the
   /// auto-matched suggestion from the cached reference list. Selecting one records it on the cubit;
@@ -198,6 +171,91 @@ class _ReadyBody extends StatelessWidget {
   }
 }
 
+class _AddStoreBar extends StatelessWidget {
+  const _AddStoreBar({
+    required this.state,
+    required this.nameController,
+    required this.onSubmit,
+    required this.onChangeChain,
+  });
+
+  final StoresState state;
+  final TextEditingController nameController;
+  final Future<void> Function() onSubmit;
+  final VoidCallback onChangeChain;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('stores-add-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          top: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InlineActionErrorText(error: state.actionError, textKey: const Key('stores-action-error')),
+            if (state.actionError != null) const SizedBox(height: SgartShapes.space2),
+            TextField(
+              key: const Key('store-name-field'),
+              controller: nameController,
+              decoration: InputDecoration(labelText: localizations.storesAddFieldLabel),
+              onChanged: (value) => context.read<StoresCubit>().onNameChanged(value),
+            ),
+            if (state.chainSuggestion != null && !state.chainCleared) ...[
+              const SizedBox(height: SgartShapes.space2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      localizations.storesChainSuggestionLabel(state.chainSuggestion!.name),
+                      key: const Key('store-chain-suggestion'),
+                    ),
+                  ),
+                  if (state.chains.isNotEmpty)
+                    TextButton(
+                      key: const Key('store-chain-change-button'),
+                      onPressed: onChangeChain,
+                      child: Text(localizations.storesChainChangeButtonLabel),
+                    ),
+                  TextButton(
+                    key: const Key('store-chain-clear-button'),
+                    onPressed: () => context.read<StoresCubit>().clearSuggestion(),
+                    child: Text(localizations.storesChainClearButtonLabel),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: SgartShapes.space4),
+            // Disabled while an add is in flight or the field is blank (nothing to add) — rebuilds on
+            // every keystroke via the controller so the blank guard tracks the live text.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: nameController,
+              builder: (context, value, _) {
+                final isBlank = value.text.trim().isEmpty;
+                return SgartButton(
+                  key: const Key('store-add-button'),
+                  label: localizations.storesAddSubmitButtonLabel,
+                  onPressed: state.isSubmitting || isBlank ? null : () => onSubmit(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StoreRow extends StatelessWidget {
   const _StoreRow({required this.store, required this.chainName});
 
@@ -210,7 +268,7 @@ class _StoreRow extends StatelessWidget {
 
     return ListTile(
       key: Key('store-row-${store.storeId}'),
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: SgartShapes.cardPadding),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

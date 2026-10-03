@@ -22,6 +22,15 @@ void main() {
       expect(text.style?.fontSize, lessThan(bodyFontSize));
     });
 
+    testWidgets('carriesTheKeyTheOwningScreenGivesTheMessage', (tester) async {
+      await tester.pumpWidget(
+        wrapForTesting(const Scaffold(body: InlineActionErrorText(error: _duplicateError, textKey: Key('members-action-error')))),
+      );
+
+      expect(find.byKey(const Key('members-action-error')), findsOneWidget);
+      expect(find.byKey(const Key('item-list-action-error')), findsNothing);
+    });
+
     testWidgets('rendersNothingWhenThereIsNoError', (tester) async {
       await tester.pumpWidget(buildSubject(null));
 

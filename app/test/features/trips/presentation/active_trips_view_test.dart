@@ -58,6 +58,24 @@ void main() {
           ),
         );
 
+    testWidgets('everySecondInTripRowHasATintedBackground', (tester) async {
+      shoppingListsApi.listsToReturn = const [
+        ShoppingListSummary(listId: 'l1', name: 'Eins', status: 'IN_TRIP', activeTripId: 't1'),
+        ShoppingListSummary(listId: 'l2', name: 'Zwei', status: 'IN_TRIP', activeTripId: 't2'),
+        ShoppingListSummary(listId: 'l3', name: 'Drei', status: 'IN_TRIP', activeTripId: 't3'),
+      ];
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      Finder tintAround(String listId) => find.ancestor(
+            of: find.byKey(Key('active-trip-row-$listId')),
+            matching: find.byKey(const Key('striped-row-tint')),
+          );
+      expect(tintAround('l1'), findsNothing);
+      expect(tintAround('l2'), findsOneWidget);
+      expect(tintAround('l3'), findsNothing);
+    });
+
     testWidgets('showsOneRowPerInTripList_withItsNameAndItemCount', (tester) async {
       shoppingListsApi.listsToReturn = const [
         ShoppingListSummary(listId: 'l1', name: 'Getränke', status: 'OPEN'),
