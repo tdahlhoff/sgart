@@ -183,6 +183,19 @@ void main() {
         expect(find.text('Timo'), findsNWidgets(2)); // the header + the nickname section row
       });
 
+      testWidgets('theNicknameDialogIsOnlyAsTallAsItsContent', (tester) async {
+        await tester.pumpWidget(buildSubject(nicknameApi: FakeNicknameApi()));
+
+        await tester.tap(find.byKey(const Key('profile-nickname-edit-button')));
+        await tester.pumpAndSettle();
+
+        // The AlertDialog widget itself spans the whole route area; its Material is the visible card.
+        final dialogCard = find.descendant(of: find.byType(AlertDialog), matching: find.byType(Material)).first;
+        final dialogHeight = tester.getSize(dialogCard).height;
+        final screenHeight = tester.getSize(find.byType(Scaffold).first).height;
+        expect(dialogHeight, lessThan(screenHeight / 2), reason: 'a title, one field and two buttons — not the screen');
+      });
+
       testWidgets('aRejectedNicknameShowsInlineAndKeepsTheDialogOpen', (tester) async {
         final nicknameApi = FakeNicknameApi()
           ..setNicknameErrorToThrow = const AppException(AppError(code: 'nickname.tooLong', message: 'debug'));

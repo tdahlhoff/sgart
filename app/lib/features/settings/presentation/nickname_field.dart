@@ -25,6 +25,8 @@ class NicknameField extends StatelessWidget {
     return BlocBuilder<NicknameCubit, NicknameState>(
       builder: (context, state) {
         return Column(
+          // Shrink-wrapped: a default (max) column fills the whole height an AlertDialog offers its content.
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
