@@ -7,6 +7,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../../shared/errors/error_message_resolver.dart';
 import '../../../shared/http/invite_link_config.dart';
 import '../../../shared/widgets/sgart_button.dart';
+import '../../../theme/sgart_theme_access.dart';
 import '../../../theme/tokens/sgart_shapes.dart';
 import '../data/invite_link.dart';
 import 'invites_cubit.dart';
@@ -27,8 +28,7 @@ class InvitesView extends StatelessWidget {
     return BlocBuilder<InvitesCubit, InvitesState>(
       builder: (context, state) {
         return switch (state.status) {
-          InvitesStatus.loading =>
-            const Center(child: CircularProgressIndicator(key: Key('invites-loading'))),
+          InvitesStatus.loading => const Center(child: CircularProgressIndicator(key: Key('invites-loading'))),
           InvitesStatus.failure => const _FailureBody(),
           InvitesStatus.ready => _ReadyBody(state: state, householdId: context.read<InvitesCubit>().householdId),
         };
@@ -47,51 +47,56 @@ class _ReadyBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final code = InviteLink.codeFor(householdId: householdId, inviteId: state.inviteId);
-    final link =
-        InviteLink.linkFor(baseUrl: InviteLinkConfig.baseUrl, householdId: householdId, inviteId: state.inviteId);
+    final link = InviteLink.linkFor(
+      baseUrl: InviteLinkConfig.baseUrl,
+      householdId: householdId,
+      inviteId: state.inviteId,
+    );
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(SgartShapes.cardPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.actionError != null) ...[
-            Text(
-              localizedMessageForErrorCode(localizations, state.actionError!.code),
-              key: const Key('invite-action-error'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(SgartShapes.cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (state.actionError != null) ...[
+                  Text(
+                    localizedMessageForErrorCode(localizations, state.actionError!.code),
+                    key: const Key('invite-action-error'),
+                  ),
+                  const SizedBox(height: SgartShapes.space4),
+                ],
+                _ShareableRow(
+                  key: const Key('invite-code-row'),
+                  label: localizations.invitesCodeLabel,
+                  value: code,
+                  shareLabel: localizations.invitesShareCodeButtonLabel,
+                  copyKey: const Key('invite-code-copy-button'),
+                  shareKey: const Key('invite-code-share-button'),
+                  copiedMessage: localizations.invitesCopiedSnackBar,
+                ),
+                const SizedBox(height: _gapBetweenSections),
+                _ShareableRow(
+                  key: const Key('invite-link-row'),
+                  label: localizations.invitesLinkLabel,
+                  value: link,
+                  shareLabel: localizations.invitesShareLinkButtonLabel,
+                  copyKey: const Key('invite-link-copy-button'),
+                  shareKey: const Key('invite-link-share-button'),
+                  copiedMessage: localizations.invitesCopiedSnackBar,
+                ),
+              ],
             ),
-            const SizedBox(height: SgartShapes.space4),
-          ],
-          _ShareableRow(
-            key: const Key('invite-code-row'),
-            label: localizations.invitesCodeLabel,
-            value: code,
-            shareLabel: localizations.invitesShareCodeButtonLabel,
-            copyKey: const Key('invite-code-copy-button'),
-            shareKey: const Key('invite-code-share-button'),
-            copiedMessage: localizations.invitesCopiedSnackBar,
           ),
-          const SizedBox(height: SgartShapes.space2),
-          _ShareableRow(
-            key: const Key('invite-link-row'),
-            label: localizations.invitesLinkLabel,
-            value: link,
-            shareLabel: localizations.invitesShareLinkButtonLabel,
-            copyKey: const Key('invite-link-copy-button'),
-            shareKey: const Key('invite-link-share-button'),
-            copiedMessage: localizations.invitesCopiedSnackBar,
-          ),
-          if (state.canReplace) ...[
-            const SizedBox(height: SgartShapes.space4),
-            SgartButton(
-              key: const Key('invite-replace-button'),
-              label: localizations.invitesReplaceCodeButtonLabel,
-              variant: SgartButtonVariant.secondary,
-              onPressed: state.isSubmitting ? null : () => _confirmAndReplace(context),
-            ),
-          ],
-        ],
-      ),
+        ),
+        // Rarely needed and it invalidates the old code, so it sits out of the way of share and copy —
+        // quiet (outlined) and behind a confirmation — in the same pinned white bar as the other screens'
+        // bottom actions.
+        if (state.canReplace) _ReplaceCodeBar(onReplace: state.isSubmitting ? null : () => _confirmAndReplace(context)),
+      ],
     );
   }
 
@@ -117,6 +122,39 @@ class _ReadyBody extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await context.read<InvitesCubit>().replaceCode();
     }
+  }
+}
+
+/// The space between the Code section and the Link section.
+const double _gapBetweenSections = SgartShapes.space4 * 2;
+
+class _ReplaceCodeBar extends StatelessWidget {
+  const _ReplaceCodeBar({required this.onReplace});
+
+  final VoidCallback? onReplace;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.sgartColors;
+
+    return DecoratedBox(
+      key: const Key('invite-replace-bar'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          top: BorderSide(color: colors.border, width: SgartShapes.hairline),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(SgartShapes.cardPadding),
+        child: SgartButton(
+          key: const Key('invite-replace-button'),
+          label: AppLocalizations.of(context).invitesReplaceCodeButtonLabel,
+          variant: SgartButtonVariant.secondary,
+          onPressed: onReplace,
+        ),
+      ),
+    );
   }
 }
 
@@ -153,18 +191,14 @@ class _ShareableRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelMedium),
-        const SizedBox(height: SgartShapes.spaceUnit),
+        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: SgartShapes.space2),
         SelectableText(value),
         const SizedBox(height: SgartShapes.spaceUnit),
         Row(
           children: [
             Expanded(
-              child: SgartButton(
-                key: shareKey,
-                label: shareLabel,
-                onPressed: _share,
-              ),
+              child: SgartButton(key: shareKey, label: shareLabel, onPressed: _share),
             ),
             const SizedBox(width: SgartShapes.space2),
             IconButton(

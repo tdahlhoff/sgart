@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:share_plus_platform_interface/share_plus_platform_interface.dart';
 import 'package:sgart/features/invites/presentation/invites_cubit.dart';
 import 'package:sgart/features/invites/presentation/invites_view.dart';
+import 'package:sgart/theme/tokens/sgart_colors.dart';
 
 import '../../../support/fake_invites_dependencies.dart';
 import '../../../support/widget_test_harness.dart';
@@ -85,12 +86,39 @@ void main() {
       expect(find.byKey(const Key('invites-pending-empty-state')), findsNothing);
     });
 
+    testWidgets('codeAndLinkAreSectionHeadingsWithRoomBetweenTheTwoSections', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final titleMedium = Theme.of(tester.element(find.byKey(const Key('invite-code-row')))).textTheme.titleMedium;
+      expect(tester.widget<Text>(find.text('Code')).style, titleMedium);
+      expect(tester.widget<Text>(find.text('Link')).style, titleMedium);
+      final gapBetweenSections = tester.getTopLeft(find.byKey(const Key('invite-link-row'))).dy -
+          tester.getRect(find.byKey(const Key('invite-code-row'))).bottom;
+      expect(gapBetweenSections, greaterThanOrEqualTo(28));
+    });
+
+    testWidgets('theReplaceButtonIsPinnedToTheBottomOnAWhiteBarWithAHairlineAbove', (tester) async {
+      invitesApi.canReplaceToReturn = true;
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<DecoratedBox>(find.byKey(const Key('invite-replace-bar')));
+      final decoration = bar.decoration as BoxDecoration;
+      expect(decoration.color, SgartColors.light().surface);
+      expect((decoration.border! as Border).top.color, SgartColors.light().border);
+      final screenBottom = tester.getRect(find.byType(Scaffold)).bottom;
+      final button = tester.getRect(find.byKey(const Key('invite-replace-button')));
+      expect(screenBottom - button.bottom, lessThan(32), reason: 'at the bottom edge, not under the link block');
+    });
+
     testWidgets('theReplaceButtonIsHiddenForAParticipant', (tester) async {
       invitesApi.canReplaceToReturn = false;
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('invite-replace-button')), findsNothing);
+      expect(find.byKey(const Key('invite-replace-bar')), findsNothing);
     });
 
     testWidgets('anAdminCanReplaceTheCodeAfterConfirming', (tester) async {
